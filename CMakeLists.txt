@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
 project(k3x LANGUAGES CXX)
 
+option(K3X_ENABLE_CUDA "Build the CUDA backend" OFF)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -15,6 +17,19 @@ add_library(k3x_runtime
     runtime/src/profile.cpp
     runtime/src/backend_cpu.cpp
 )
+if(K3X_ENABLE_CUDA)
+    enable_language(CUDA)
+    find_package(CUDAToolkit 13.3 REQUIRED)
+    target_sources(k3x_runtime PRIVATE runtime/cuda/backend_cuda.cu)
+    target_link_libraries(k3x_runtime PUBLIC CUDA::cudart CUDA::cublasLt)
+    set_target_properties(k3x_runtime PROPERTIES
+        CUDA_ARCHITECTURES "120-real"
+        CUDA_STANDARD 20
+        CUDA_STANDARD_REQUIRED ON
+    )
+else()
+    target_sources(k3x_runtime PRIVATE runtime/src/backend_cuda_stub.cpp)
+endif()
 target_include_directories(k3x_runtime PUBLIC runtime/include)
 if(MSVC)
     target_compile_options(k3x_runtime PUBLIC /utf-8)
@@ -35,6 +50,17 @@ add_test(NAME profile COMMAND test_profile)
 add_executable(test_backend tests/cpp/test_backend.cpp)
 target_link_libraries(test_backend PRIVATE k3x_runtime)
 add_test(NAME backend COMMAND test_backend)
+
+if(NOT K3X_ENABLE_CUDA)
+    add_executable(test_backend_unavailable tests/cpp/test_backend_unavailable.cpp)
+    target_link_libraries(test_backend_unavailable PRIVATE k3x_runtime)
+    add_test(NAME backend_unavailable COMMAND test_backend_unavailable)
+else()
+    add_executable(test_cuda_device tests/cuda/test_cuda_device.cu)
+    target_link_libraries(test_cuda_device PRIVATE k3x_runtime)
+    set_target_properties(test_cuda_device PROPERTIES CUDA_ARCHITECTURES "120-real")
+    add_test(NAME cuda_device COMMAND test_cuda_device)
+endif()
 
 add_executable(test_reader tests/cpp/test_reader.cpp)
 target_link_libraries(test_reader PRIVATE k3x_runtime)
