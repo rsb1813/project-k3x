@@ -55,3 +55,4 @@
 - APOLLO, TITAN COUNCIL, AURORA, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO는 구현·benchmark 전까지 proposed이다. ATLAS, CHRONOS, BLACKSTAR는 역할 정의가 제공되지 않아 reserved proposed/undefined로 기록했다.
 - Windows에는 WSL distribution이 설치되어 있지 않다. WSL2 설치는 시스템 변경과 재부팅 가능성이 있으므로 명시적 사용자 승인 전에는 실행하지 않는다.
 - Milestone 1 구현 계획은 Linux GPU 실행 환경을 선행 관문으로 두고 profiler, CPU backend extraction, optional CUDA shell, cuBLASLt dense, custom MXFP4, end-to-end profiling, 최종 측정 순서로 작성했다.
+- 사용자가 inline execution과 WSL2 Ubuntu 24.04 설치를 명시적으로 승인했다. 비관리자 `wsl --install`은 기능 비활성 상태에서 exit 1로 종료됐고, 관리자 DISM으로 `Microsoft-Windows-Subsystem-Linux`와 `VirtualMachinePlatform`만 `/NoRestart` 활성화했다. 두 기능 모두 `InstallState=1`을 확인했으며 CBS/PendingFileRename 재부팅 대기 상태라 자동 재부팅 없이 중단했다.

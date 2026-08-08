@@ -23,25 +23,26 @@ The design is approved and the implementation plan is written. Production implem
 - Branch: `feat/milestone-one-runtime`.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
 - The next code task is not started; the written plan awaits execution-mode and Linux-environment authorization.
-- The immediate prerequisite is an executable Linux GPU development environment.
+- WSL and Virtual Machine Platform are enabled. The immediate prerequisite is a Windows reboot, followed by Ubuntu 24.04 installation and GPU passthrough verification.
 
 ## Known failures and blockers
 
 - Windows Smart App Control blocks the newly linked unsigned `build/k3x_run.exe` before process creation.
 - Code Integrity events 3033 and 3077 cite policy `{0283ac0f-fff1-49ae-ada1-8a933130cad6}` and an unmet Enterprise signing level.
 - Fresh Windows CTest binaries currently run, but five Python cross-language cases that launch `k3x_run.exe` are blocked. The observed local split is 41 passed and 5 blocked failures.
-- WSL is not installed. Installing WSL2/Ubuntu is a system change and requires explicit user authorization.
+- WSL and Virtual Machine Platform are enabled with explicit user authorization, but Windows reports pending CBS and file-rename reboot state. Ubuntu is not installed until that reboot completes.
 - No Linux GPU execution result exists yet, so no CUDA correctness or performance claim exists.
 - Direct cuBLASLt FP4 is rejected for exact K3 MXFP4 because NVIDIA requires UE4M3 scales per 16 FP4 values while K3 uses E8M0 scales per 32 values.
 
 ## Next concrete tasks
 
-1. Obtain explicit authorization for WSL2 Ubuntu 24.04 installation or use a user-provided Linux-native RTX 5080 environment.
-2. Reproduce the Milestone 0 Linux CPU baseline before changing production code.
-3. Make cross-language build-directory selection explicit through a RED-GREEN test.
-4. Implement deterministic profiling primitives through TDD.
-5. Extract the exact CPU compute backend without changing numerical output.
-6. Add the optional SM 12.0 CUDA backend, cuBLASLt dense baseline, and custom MXFP4 kernel in separate verified commits.
+1. Reboot Windows to finish the already-enabled WSL and Virtual Machine Platform features.
+2. Install and initialize Ubuntu 24.04, then verify RTX 5080 GPU passthrough.
+3. Reproduce the Milestone 0 Linux CPU baseline before changing production code.
+4. Make cross-language build-directory selection explicit through a RED-GREEN test.
+5. Implement deterministic profiling primitives through TDD.
+6. Extract the exact CPU compute backend without changing numerical output.
+7. Add the optional SM 12.0 CUDA backend, cuBLASLt dense baseline, and custom MXFP4 kernel in separate verified commits.
 
 ## Hardware assumptions
 

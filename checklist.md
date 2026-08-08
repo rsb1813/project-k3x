@@ -43,6 +43,8 @@
 - [x] 작성된 Milestone 1 설계 명세 사용자 검토 승인.
 - [x] TITAN LEDGER 지속성 문서 체계 초기화.
 - [x] Milestone 1 세부 구현 계획 작성.
+- [x] WSL과 Virtual Machine Platform Windows 기능 활성화.
+- [ ] Windows 재부팅 후 Ubuntu 24.04 배포판 설치와 GPU passthrough 검증.
 
 ## Milestone 1 구현
 
