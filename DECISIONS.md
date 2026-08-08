@@ -129,3 +129,14 @@
 - Benchmark result: none; CTest 3/3 and pytest 47/47 are correctness results.
 - Reason: explicit events keep measurement source and synchronization policy at the backend boundary while making summaries deterministic and comparable.
 - Revisit: add separate attempted-work counters if failed partial work becomes necessary for diagnosis; do not silently mix it into successful throughput totals.
+
+## D-012 — Isolate only matrix operations in the first compute backend boundary
+
+- Date: 2026-08-08.
+- Status: accepted.
+- Decision: move dense and native MXFP4 matrix-vector operations behind `ComputeBackend` while leaving attention, routing, recurrent state, residual, activation, and token-selection logic in the existing graph.
+- Alternatives considered: move the complete decoder layer behind a backend; introduce a general tensor abstraction; isolate only the two operations required by the approved CUDA baseline.
+- Evidence: literal CPU dense and MXFP4 tests pass, CTest passes 4/4, and Python/C++ layer, logits, state, and exact-token parity passes 47/47 with the explicit CPU backend.
+- Benchmark result: none; the backend is not yet connected to the benchmark profiler schema, and this refactor does not claim a throughput change.
+- Reason: the narrow boundary preserves the numerical oracle and limits CUDA parity work to independently testable operations without creating a generic framework.
+- Revisit: widen the boundary only after measured transfer or launch overhead identifies a specific fusion opportunity.
