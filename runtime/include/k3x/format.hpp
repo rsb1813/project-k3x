@@ -8,6 +8,8 @@
 namespace k3x {
 constexpr std::size_t superblock_bytes = 4096;
 constexpr std::size_t tensor_record_bytes = 128;
+constexpr std::size_t layer_record_bytes = 64;
+constexpr std::size_t expert_record_bytes = 64;
 constexpr std::size_t model_config_bytes = 256;
 
 struct Superblock {

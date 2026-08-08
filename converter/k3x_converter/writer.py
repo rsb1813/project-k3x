@@ -208,6 +208,23 @@ def convert(
         if ledger.converter_version != CONVERTER_VERSION or ledger.configuration_fingerprint != config_fingerprint:
             raise K3XError("RESUME_CONFIGURATION_MISMATCH")
         if not partial.exists():
+            if output.exists():
+                from .reader import K3XReader
+
+                finalized = K3XReader.open(output)
+                if (
+                    finalized.superblock.source_sha256 != source_fingerprint
+                    or finalized.superblock.file_uuid != bytes.fromhex(ledger.file_uuid)
+                    or finalized.model_config != config_bytes
+                ):
+                    raise K3XError("FINAL_ARTIFACT_MISMATCH")
+                resume_path.unlink()
+                return ConversionReport(
+                    True,
+                    tuple(item.extent_id for item in ledger.completed),
+                    maximum_read,
+                    output,
+                )
             raise K3XError("MISSING_PARTIAL_FILE")
         file_uuid = bytes.fromhex(ledger.file_uuid)
         with partial.open("rb") as stream:

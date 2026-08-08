@@ -37,3 +37,28 @@ def test_resume_rejects_changed_source(
         stream.write(bytes([original[0] ^ 1]))
     with pytest.raises(K3XError, match="SOURCE_FINGERPRINT_MISMATCH"):
         convert(synthetic_source, output, chunk_bytes=257)
+
+
+def test_resume_recovers_crash_after_final_rename(
+    synthetic_source: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "synthetic.k3x"
+    resume = output.with_suffix(".k3x.resume.json")
+    original_unlink = Path.unlink
+
+    def interrupt_ledger_cleanup(path: Path, *args, **kwargs) -> None:
+        if path == resume:
+            raise RuntimeError("simulated crash after final rename")
+        original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", interrupt_ledger_cleanup)
+    with pytest.raises(RuntimeError, match="simulated crash"):
+        convert(synthetic_source, output, chunk_bytes=257)
+    assert output.exists()
+    assert resume.exists()
+    assert not output.with_suffix(".k3x.partial").exists()
+
+    monkeypatch.setattr(Path, "unlink", original_unlink)
+    recovered = convert(synthetic_source, output, chunk_bytes=257)
+    assert recovered.completed is True
+    assert not resume.exists()

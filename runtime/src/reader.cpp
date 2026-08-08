@@ -8,7 +8,9 @@
 #include <cstring>
 #include <fstream>
 #include <limits>
+#include <optional>
 #include <span>
+#include <unordered_set>
 
 namespace k3x {
 namespace {
@@ -23,6 +25,27 @@ T little(std::span<const std::byte> bytes, std::size_t offset) {
 
 bool range_valid(std::uint64_t offset, std::uint64_t length, std::uint64_t limit) {
     return offset <= limit && length <= limit - offset;
+}
+
+bool all_zero(std::span<const std::byte> value) {
+    return std::all_of(value.begin(), value.end(), [](std::byte item) {
+        return item == std::byte{0};
+    });
+}
+
+std::optional<std::uint64_t> directory_count(std::span<const std::byte> directory,
+                                             const char (&tag)[5],
+                                             std::uint32_t record_size) {
+    if (directory.size() < 16 || std::memcmp(directory.data(), tag, 4) ||
+        little<std::uint32_t>(directory, 4) != record_size) {
+        return std::nullopt;
+    }
+    const auto count = little<std::uint64_t>(directory, 8);
+    if (count > (directory.size() - 16) / record_size ||
+        directory.size() != 16 + count * record_size) {
+        return std::nullopt;
+    }
+    return count;
 }
 
 Result<std::vector<std::byte>> read_raw(const std::filesystem::path& path,
@@ -94,6 +117,9 @@ Result<Reader> Reader::open(const std::filesystem::path& path, VerifyMode mode) 
     if (little<std::uint64_t>(block, 24) != 0) {
         return Result<Reader>::failure(ErrorCode::unsupported_required_feature);
     }
+    if (!all_zero(block.subspan(232, 4092 - 232))) {
+        return Result<Reader>::failure(ErrorCode::invalid_directory);
+    }
     Reader reader;
     reader.path_ = path;
     reader.superblock_.state = little<std::uint32_t>(block, 20);
@@ -136,19 +162,51 @@ Result<Reader> Reader::open(const std::filesystem::path& path, VerifyMode mode) 
         return Result<Reader>::failure(ErrorCode::invalid_directory);
     }
     const auto directory = std::span(tensor_directory.value());
-    if (directory.size() < 16 || std::memcmp(directory.data(), "TENS", 4) ||
-        little<std::uint32_t>(directory, 4) != tensor_record_bytes) {
+    const auto tensor_count = directory_count(directory, "TENS", tensor_record_bytes);
+    const auto layer_bytes = std::span(layer_directory.value());
+    const auto layer_count = directory_count(layer_bytes, "LAYR", layer_record_bytes);
+    const auto expert_bytes = std::span(expert_directory.value());
+    const auto expert_count = directory_count(expert_bytes, "EXPT", expert_record_bytes);
+    if (!tensor_count || !layer_count || !expert_count ||
+        little<std::uint32_t>(config.value(), 8) != *layer_count ||
+        !all_zero(std::span(config.value()).subspan(112)) ||
+        (little<std::uint32_t>(config.value(), 108) & ~3U)) {
         return Result<Reader>::failure(ErrorCode::invalid_directory);
     }
-    const auto count = little<std::uint64_t>(directory, 8);
-    if (count > (directory.size() - 16) / tensor_record_bytes ||
-        directory.size() != 16 + count * tensor_record_bytes) {
-        return Result<Reader>::failure(ErrorCode::invalid_directory);
-    }
-    std::vector<std::pair<std::uint64_t, std::uint64_t>> ranges;
-    for (std::size_t index = 0; index < count; ++index) {
-        auto record = decode_tensor(directory.subspan(16 + index * tensor_record_bytes, tensor_record_bytes));
-        if (record.rank > 4 || (record.dtype != 1 && record.dtype != 2) || record.quantization > 1) {
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> ranges{
+        {0, superblock_bytes},
+        {reader.superblock_.tensor_directory_offset,
+         reader.superblock_.tensor_directory_offset + reader.superblock_.tensor_directory_length},
+        {reader.superblock_.layer_directory_offset,
+         reader.superblock_.layer_directory_offset + reader.superblock_.layer_directory_length},
+        {reader.superblock_.expert_directory_offset,
+         reader.superblock_.expert_directory_offset + reader.superblock_.expert_directory_length},
+        {reader.superblock_.model_config_offset,
+         reader.superblock_.model_config_offset + reader.superblock_.model_config_length},
+    };
+    std::unordered_set<std::uint64_t> tensor_ids;
+    for (std::size_t index = 0; index < *tensor_count; ++index) {
+        const auto raw_record = directory.subspan(16 + index * tensor_record_bytes, tensor_record_bytes);
+        auto record = decode_tensor(raw_record);
+        if (record.rank > 4 || (record.dtype != 1 && record.dtype != 2) ||
+            record.quantization > 1 || little<std::uint32_t>(raw_record, 8) != 0 ||
+            little<std::uint8_t>(raw_record, 17) != 0 ||
+            little<std::uint16_t>(raw_record, 18) != 0 ||
+            little<std::uint32_t>(raw_record, 28) != 0 ||
+            !all_zero(raw_record.subspan(112)) || !tensor_ids.insert(record.tensor_id).second) {
+            return Result<Reader>::failure(ErrorCode::invalid_directory);
+        }
+        for (std::size_t dimension = record.rank; dimension < 4; ++dimension) {
+            if (record.dimensions[dimension]) {
+                return Result<Reader>::failure(ErrorCode::invalid_directory);
+            }
+        }
+        const bool plain = record.dtype == 1 && record.quantization == 0 &&
+                           record.auxiliary_length == 0 && record.auxiliary_offset == 0 &&
+                           record.auxiliary_crc32c == 0;
+        const bool mxfp4 = record.dtype == 2 && record.quantization == 1 &&
+                           record.auxiliary_length != 0;
+        if (!record.data_length || !record.logical_length || (!plain && !mxfp4)) {
             return Result<Reader>::failure(ErrorCode::invalid_directory);
         }
         for (const auto [offset, length] : {std::pair{record.data_offset, record.data_length},
@@ -163,6 +221,68 @@ Result<Reader> Reader::open(const std::filesystem::path& path, VerifyMode mode) 
             }
         }
         reader.tensors_.push_back(record);
+    }
+    const auto configured_experts = little<std::uint32_t>(config.value(), 48);
+    for (const auto& tensor : reader.tensors_) {
+        if (tensor.layer_id < -1 || tensor.layer_id >= static_cast<std::int32_t>(*layer_count) ||
+            tensor.expert_id < -1 || tensor.expert_id >= static_cast<std::int32_t>(configured_experts) ||
+            (tensor.expert_id >= 0 && tensor.layer_id < 0)) {
+            return Result<Reader>::failure(ErrorCode::invalid_directory);
+        }
+    }
+    for (std::size_t index = 0; index < *layer_count; ++index) {
+        const auto record = layer_bytes.subspan(16 + index * layer_record_bytes, layer_record_bytes);
+        const auto layer_index = little<std::uint32_t>(record, 0);
+        const auto attention_kind = little<std::uint16_t>(record, 4);
+        const auto ffn_kind = little<std::uint16_t>(record, 6);
+        const auto first_tensor = little<std::uint32_t>(record, 8);
+        const auto count = little<std::uint32_t>(record, 12);
+        const auto first_expert = little<std::uint32_t>(record, 16);
+        const auto experts = little<std::uint32_t>(record, 20);
+        if (layer_index != index || (attention_kind != 1 && attention_kind != 2) ||
+            (ffn_kind != 1 && ffn_kind != 2) || little<std::uint32_t>(record, 28) != 0 ||
+            !all_zero(record.subspan(32)) || first_tensor > *tensor_count ||
+            count > *tensor_count - first_tensor || first_expert > *expert_count ||
+            experts > *expert_count - first_expert) {
+            return Result<Reader>::failure(ErrorCode::invalid_directory);
+        }
+        for (std::size_t tensor = first_tensor; tensor < first_tensor + count; ++tensor) {
+            if (reader.tensors_[tensor].layer_id != static_cast<std::int32_t>(index)) {
+                return Result<Reader>::failure(ErrorCode::invalid_directory);
+            }
+        }
+    }
+    std::unordered_set<std::uint32_t> physical_orders;
+    for (std::size_t index = 0; index < *expert_count; ++index) {
+        const auto record = expert_bytes.subspan(16 + index * expert_record_bytes, expert_record_bytes);
+        const auto layer = little<std::uint32_t>(record, 0);
+        const auto expert = little<std::uint32_t>(record, 4);
+        const auto physical_order = little<std::uint32_t>(record, 8);
+        if (layer >= *layer_count || expert >= configured_experts ||
+            physical_order >= *expert_count || !physical_orders.insert(physical_order).second ||
+            little<std::uint32_t>(record, 12) != 0 ||
+            !all_zero(record.subspan(48))) {
+            return Result<Reader>::failure(ErrorCode::invalid_directory);
+        }
+        for (const auto offset : {16U, 24U, 32U}) {
+            const auto id = little<std::uint64_t>(record, offset);
+            const auto tensor = std::find_if(reader.tensors_.begin(), reader.tensors_.end(),
+                                             [id](const auto& item) { return item.tensor_id == id; });
+            if (tensor == reader.tensors_.end() || tensor->layer_id != static_cast<std::int32_t>(layer) ||
+                tensor->expert_id != static_cast<std::int32_t>(expert) || tensor->quantization != 1) {
+                return Result<Reader>::failure(ErrorCode::invalid_directory);
+            }
+        }
+    }
+    for (std::size_t layer = 0; layer < *layer_count; ++layer) {
+        const auto record = layer_bytes.subspan(16 + layer * layer_record_bytes, layer_record_bytes);
+        const auto first = little<std::uint32_t>(record, 16);
+        const auto count = little<std::uint32_t>(record, 20);
+        for (std::size_t expert = first; expert < first + count; ++expert) {
+            if (little<std::uint32_t>(expert_bytes, 16 + expert * expert_record_bytes) != layer) {
+                return Result<Reader>::failure(ErrorCode::invalid_directory);
+            }
+        }
     }
     std::sort(ranges.begin(), ranges.end());
     for (std::size_t index = 1; index < ranges.size(); ++index) {

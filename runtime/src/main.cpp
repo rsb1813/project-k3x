@@ -3,6 +3,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -10,6 +11,7 @@
 int main(int argc, char** argv) {
     std::filesystem::path model_path, output_path;
     std::string prompt_text, mode = "incremental";
+    bool diagnostics = false;
     std::size_t count = 0;
     for (int index = 1; index + 1 < argc; index += 2) {
         const std::string key = argv[index];
@@ -18,6 +20,7 @@ int main(int argc, char** argv) {
         else if (key == "--prompt-ids") prompt_text = value;
         else if (key == "--generate") count = std::stoull(value);
         else if (key == "--mode") mode = value;
+        else if (key == "--diagnostics") diagnostics = value == "true";
         else if (key == "--json") output_path = value;
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
     }
@@ -25,12 +28,22 @@ int main(int argc, char** argv) {
     std::stringstream parser(prompt_text);
     std::string item;
     while (std::getline(parser, item, ',')) prompt.push_back(static_cast<std::uint32_t>(std::stoul(item)));
-    auto reader = k3x::Reader::open(model_path, k3x::VerifyMode::metadata_only);
-    if (!reader) { std::cerr << reader.message() << '\n'; return 3; }
-    auto result = k3x::generate_greedy(reader.value(), prompt, count, mode == "incremental");
-    if (!result) { std::cerr << result.message() << '\n'; return 4; }
+    auto reader = k3x::Reader::open(model_path, k3x::VerifyMode::checksums);
+    if (!reader) {
+        std::cerr << (reader.message().empty() ? k3x::error_code_name(reader.error())
+                                               : reader.message()) << '\n';
+        return 3;
+    }
+    auto result = k3x::generate_greedy(
+        reader.value(), prompt, count, mode == "incremental", diagnostics);
+    if (!result) {
+        std::cerr << (result.message().empty() ? k3x::error_code_name(result.error())
+                                               : result.message()) << '\n';
+        return 4;
+    }
     std::ofstream output(output_path);
     if (!output) return 5;
+    output << std::setprecision(9);
     output << "{\"decode_nanoseconds\":" << result.value().decode_nanoseconds
            << ",\"prefill_nanoseconds\":" << result.value().prefill_nanoseconds
            << ",\"read_bytes\":" << reader.value().counters().completed_bytes
@@ -39,6 +52,26 @@ int main(int argc, char** argv) {
     for (std::size_t index = 0; index < result.value().per_layer_nanoseconds.size(); ++index) {
         if (index) output << ',';
         output << result.value().per_layer_nanoseconds[index];
+    }
+    output << "],\"prefill_layer_outputs\":[";
+    for (std::size_t layer = 0; layer < result.value().prefill_layer_outputs.size(); ++layer) {
+        if (layer) output << ',';
+        output << '[';
+        for (std::size_t index = 0; index < result.value().prefill_layer_outputs[layer].size(); ++index) {
+            if (index) output << ',';
+            output << result.value().prefill_layer_outputs[layer][index];
+        }
+        output << ']';
+    }
+    output << "],\"prefill_logits\":[";
+    for (std::size_t index = 0; index < result.value().prefill_logits.size(); ++index) {
+        if (index) output << ',';
+        output << result.value().prefill_logits[index];
+    }
+    output << "],\"prefill_state\":[";
+    for (std::size_t index = 0; index < result.value().prefill_state.size(); ++index) {
+        if (index) output << ',';
+        output << result.value().prefill_state[index];
     }
     output << "],\"token_ids\":[";
     for (std::size_t index = 0; index < result.value().token_ids.size(); ++index) {

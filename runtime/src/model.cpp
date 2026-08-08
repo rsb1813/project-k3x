@@ -95,7 +95,8 @@ public:
     ModelState empty_state() const { return state_template_; }
     const std::vector<std::uint64_t>& layer_nanoseconds() const { return layer_nanoseconds_; }
 
-    Vector forward(std::uint32_t token, ModelState& state) {
+    Vector forward(std::uint32_t token, ModelState& state,
+                   std::vector<Vector>* layer_outputs = nullptr) {
         const auto& embedding = tensor("model.embeddings");
         if (token >= config_.vocab) throw std::runtime_error("token out of range");
         Vector hidden(embedding.begin() + token * config_.hidden,
@@ -122,12 +123,35 @@ public:
                                                config_.epsilon);
             const auto ffn = layer == 0 ? dense(ffn_normed, layer) : moe(ffn_normed, layer);
             for (std::size_t index = 0; index < config_.hidden; ++index) hidden[index] = prefix_sum[index] + ffn[index];
+            if (layer_outputs) layer_outputs->push_back(hidden);
             layer_nanoseconds_[layer] += std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - layer_start).count();
         }
         hidden = attention_residual(hidden, sources, "model.output_residual");
         hidden = normalized(hidden, tensor("model.final_norm"), config_.epsilon);
         return matvec(tensor("model.lm_head"), config_.vocab, config_.hidden, hidden);
+    }
+
+    Vector flatten_state(const ModelState& state) const {
+        Vector values;
+        for (const auto& item : state.kda) {
+            for (const auto* tensor : {&item.conv_q, &item.conv_k, &item.conv_v, &item.recurrent}) {
+                values.insert(values.end(), tensor->begin(), tensor->end());
+            }
+        }
+        for (const auto [tensor, width] : {
+                 std::pair{&state.mla.keys, config_.q_main},
+                 std::pair{&state.mla.values, config_.value_dim}}) {
+            for (std::size_t head = 0; head < config_.mla_heads; ++head) {
+                for (std::size_t position = 0; position < state.mla.length; ++position) {
+                    const auto begin = tensor->begin() +
+                        (position * config_.mla_heads + head) * width;
+                    values.insert(values.end(), begin, begin + width);
+                }
+            }
+        }
+        values.insert(values.end(), state.mla.shared_keys.begin(), state.mla.shared_keys.end());
+        return values;
     }
 
 private:
@@ -376,7 +400,8 @@ std::uint32_t argmax(const Vector& values) {
 Result<GenerationResult> generate_greedy(Reader& reader,
                                          std::span<const std::uint32_t> prompt,
                                          std::size_t count,
-                                         bool incremental) {
+                                         bool incremental,
+                                         bool diagnostics) {
     if (prompt.empty()) return Result<GenerationResult>::failure(ErrorCode::invalid_extent, "empty prompt");
     try {
         Engine engine(reader);
@@ -384,18 +409,37 @@ Result<GenerationResult> generate_greedy(Reader& reader,
         if (incremental) {
             auto state = engine.empty_state();
             Vector logits;
+            if (diagnostics) result.prefill_layer_outputs.resize(engine.layer_nanoseconds().size());
             const auto prefill_start = std::chrono::steady_clock::now();
-            for (const auto token : prompt) logits = engine.forward(token, state);
+            for (const auto token : prompt) {
+                std::vector<Vector> token_layers;
+                logits = engine.forward(token, state, diagnostics ? &token_layers : nullptr);
+                if (diagnostics) {
+                    result.prefill_logits.insert(result.prefill_logits.end(), logits.begin(), logits.end());
+                    for (std::size_t layer = 0; layer < token_layers.size(); ++layer) {
+                        result.prefill_layer_outputs[layer].insert(
+                            result.prefill_layer_outputs[layer].end(),
+                            token_layers[layer].begin(), token_layers[layer].end());
+                    }
+                }
+            }
             result.prefill_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - prefill_start).count();
-            const auto decode_start = std::chrono::steady_clock::now();
-            for (std::size_t index = 0; index < count; ++index) {
-                const auto token = argmax(logits);
+            if (diagnostics) result.prefill_state = engine.flatten_state(state);
+            if (count) {
+                auto token = argmax(logits);
                 result.token_ids.push_back(token);
-                if (index + 1 < count) logits = engine.forward(token, state);
+                if (count > 1) {
+                    const auto decode_start = std::chrono::steady_clock::now();
+                    for (std::size_t index = 1; index < count; ++index) {
+                        logits = engine.forward(token, state);
+                        token = argmax(logits);
+                        result.token_ids.push_back(token);
+                    }
+                    result.decode_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - decode_start).count();
+                }
             }
-            result.decode_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::steady_clock::now() - decode_start).count();
         } else {
             std::vector<std::uint32_t> sequence(prompt.begin(), prompt.end());
             const auto decode_start = std::chrono::steady_clock::now();

@@ -171,6 +171,10 @@ class TensorRecord:
         if len(data) != TENSOR_RECORD_BYTES:
             raise K3XError("INVALID_TENSOR_RECORD")
         head = struct.unpack_from("<QIHHBBHiiI", data, 0)
+        if head[1]:
+            raise K3XError("UNSUPPORTED_TENSOR_ROLE")
+        if head[5]:
+            raise K3XError("UNSUPPORTED_TENSOR_FLAGS")
         if head[6] or head[9] or any(data[112:]):
             raise K3XError("NONZERO_RESERVED_BYTES")
         if head[4] > 4:
@@ -213,7 +217,12 @@ class LayerRecord:
     def decode(cls, data: bytes) -> "LayerRecord":
         if len(data) != LAYER_RECORD_BYTES or any(data[32:]):
             raise K3XError("INVALID_LAYER_RECORD")
-        return cls(*struct.unpack_from("<IHHIIIIiI", data, 0))
+        values = struct.unpack_from("<IHHIIIIiI", data, 0)
+        if values[1] not in (1, 2) or values[2] not in (1, 2):
+            raise K3XError("INVALID_LAYER_ENUM")
+        if values[8]:
+            raise K3XError("UNSUPPORTED_LAYER_FLAGS")
+        return cls(*values)
 
 
 @dataclass(frozen=True)
@@ -239,7 +248,10 @@ class ExpertRecord:
     def decode(cls, data: bytes) -> "ExpertRecord":
         if len(data) != EXPERT_RECORD_BYTES or any(data[48:]):
             raise K3XError("INVALID_EXPERT_RECORD")
-        return cls(*struct.unpack_from("<IIIIQQQQ", data, 0))
+        values = struct.unpack_from("<IIIIQQQQ", data, 0)
+        if values[3]:
+            raise K3XError("UNSUPPORTED_EXPERT_FLAGS")
+        return cls(*values)
 
 
 def encode_directory(tag: bytes, record_size: int, records: Iterable[bytes]) -> bytes:

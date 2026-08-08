@@ -10,7 +10,9 @@ import pytest
 from k3x_converter.format import (
     SUPERBLOCK_BYTES,
     DType,
+    ExpertRecord,
     K3XError,
+    LayerRecord,
     Quantization,
     Superblock,
     TensorRecord,
@@ -54,6 +56,26 @@ def test_tensor_record_is_exactly_128_bytes() -> None:
     assert len(encoded) == 128
     assert encoded[112:] == bytes(16)
     assert TensorRecord.decode(encoded) == record
+
+
+def test_directory_records_reject_unsupported_enums_and_flags() -> None:
+    layer = bytearray(LayerRecord(0, 1, 1, 0, 0, 0, 0, 0).encode())
+    struct.pack_into("<H", layer, 4, 99)
+    with pytest.raises(K3XError, match="INVALID_LAYER_ENUM"):
+        LayerRecord.decode(bytes(layer))
+
+    expert = bytearray(ExpertRecord(1, 2, 0, 0, 3, 4, 5).encode())
+    struct.pack_into("<I", expert, 12, 1)
+    with pytest.raises(K3XError, match="UNSUPPORTED_EXPERT_FLAGS"):
+        ExpertRecord.decode(bytes(expert))
+
+    tensor = bytearray(TensorRecord(
+        1, 0, DType.FP32, Quantization.NONE, (1,), -1, -1,
+        4096, 4, 4, 0, 0, 0, 0,
+    ).encode())
+    struct.pack_into("<I", tensor, 8, 1)
+    with pytest.raises(K3XError, match="UNSUPPORTED_TENSOR_ROLE"):
+        TensorRecord.decode(bytes(tensor))
 
 
 def test_extent_validation_rejects_unaligned_overlap_and_truncation() -> None:

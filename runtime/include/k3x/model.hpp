@@ -12,6 +12,9 @@ namespace k3x {
 struct GenerationResult {
     std::vector<std::uint32_t> token_ids;
     std::vector<std::uint64_t> per_layer_nanoseconds;
+    std::vector<std::vector<float>> prefill_layer_outputs;
+    std::vector<float> prefill_logits;
+    std::vector<float> prefill_state;
     std::uint64_t prefill_nanoseconds{};
     std::uint64_t decode_nanoseconds{};
 };
@@ -19,5 +22,6 @@ struct GenerationResult {
 Result<GenerationResult> generate_greedy(Reader& reader,
                                          std::span<const std::uint32_t> prompt,
                                          std::size_t count,
-                                         bool incremental);
+                                         bool incremental,
+                                         bool diagnostics = false);
 }
