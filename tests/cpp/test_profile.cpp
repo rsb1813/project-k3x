@@ -1,8 +1,6 @@
 // 런타임 프로파일 이벤트의 결정적 집계를 검증합니다.
 #include "k3x/profile.hpp"
 
-#include <cassert>
-
 int main() {
     k3x::Profiler profiler;
     profiler.record({k3x::ProfilePhase::prefill,
@@ -34,15 +32,16 @@ int main() {
                      false});
 
     const auto& events = profiler.events();
-    assert(events.size() == 3);
-    assert(events.front().precision == k3x::NumericPrecision::fp32);
-    assert(events.back().precision == k3x::NumericPrecision::mxfp4_e2m1_e8m0);
+    if (events.size() != 3) return 1;
+    if (events.front().precision != k3x::NumericPrecision::fp32) return 2;
+    if (events.back().precision != k3x::NumericPrecision::mxfp4_e2m1_e8m0) return 3;
 
     const auto summary = profiler.summary();
-    assert(summary.wall_nanoseconds == 130);
-    assert(summary.device_nanoseconds == 100);
-    assert(summary.logical_bytes == 64);
-    assert(summary.host_to_device_bytes == 256);
-    assert(summary.device_to_host_bytes == 0);
-    assert(summary.failed_operations == 1);
+    if (summary.wall_nanoseconds != 130) return 4;
+    if (summary.device_nanoseconds != 100) return 5;
+    if (summary.logical_bytes != 64) return 6;
+    if (summary.host_to_device_bytes != 256) return 7;
+    if (summary.device_to_host_bytes != 0) return 8;
+    if (summary.failed_operations != 1) return 9;
+    return 0;
 }
