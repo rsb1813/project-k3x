@@ -31,13 +31,25 @@ class BenchmarkRecord:
     ttft_ms: float
     peak_rss_bytes: int
     file_read_bytes_per_token: float
+    backend: str
+    device: str
+    dense_precision: str
+    kernel_nanoseconds: int
+    host_to_device_bytes: int
+    device_to_host_bytes: int
+    peak_vram_bytes: int | None
+    max_absolute_error: float | None
+    max_relative_error: float | None
     kda_state_bytes: int
     mla_kv_bytes: int
     per_layer_nanoseconds: tuple[int, ...]
 
     def __post_init__(self) -> None:
-        if self.scope != "synthetic-milestone-zero":
-            raise ValueError("measured records must use synthetic-milestone-zero scope")
+        if self.scope not in {
+            "synthetic-milestone-zero",
+            "synthetic-milestone-one",
+        }:
+            raise ValueError("measured records must use a synthetic-milestone scope")
         if self.evidence != "measured":
             raise ValueError("benchmark evidence must be measured")
 
@@ -60,13 +72,22 @@ def write_results(record: BenchmarkRecord, json_path: Path, csv_path: Path) -> N
 
 
 def _run_process(
-    artifact: Path, runner: Path, generated_tokens: int, output: Path
+    artifact: Path,
+    runner: Path,
+    generated_tokens: int,
+    output: Path,
+    backend: str,
+    dense_precision: str,
+    diagnostics: bool = False,
 ) -> tuple[dict, int, float]:
     command = [
         str(runner), "--model", str(artifact), "--prompt-ids", "1,7,3,9",
         "--generate", str(generated_tokens), "--mode", "incremental",
-        "--json", str(output),
+        "--backend", backend, "--dense-precision", dense_precision,
     ]
+    if diagnostics:
+        command.extend(["--diagnostics", "true"])
+    command.extend(["--json", str(output)])
     started = time.perf_counter_ns()
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     observed_peak = 0
@@ -101,11 +122,42 @@ def _state_sizes(artifact: Path, context_tokens: int) -> tuple[int, int]:
     return kda_layers * kda_per_layer, context_tokens * mla_per_token
 
 
+def _flatten_numbers(value: object) -> list[float]:
+    if isinstance(value, list):
+        flattened: list[float] = []
+        for item in value:
+            flattened.extend(_flatten_numbers(item))
+        return flattened
+    return [float(value)]
+
+
+def _numerical_errors(reference: dict, candidate: dict) -> tuple[float, float]:
+    if candidate["token_ids"] != reference["token_ids"]:
+        raise RuntimeError("backend token sequence diverged from the CPU reference")
+    reference_values: list[float] = []
+    candidate_values: list[float] = []
+    for key in ("prefill_layer_outputs", "prefill_logits", "prefill_state"):
+        reference_values.extend(_flatten_numbers(reference[key]))
+        candidate_values.extend(_flatten_numbers(candidate[key]))
+    if len(reference_values) != len(candidate_values):
+        raise RuntimeError("backend diagnostic shape diverged from the CPU reference")
+    maximum_absolute = 0.0
+    maximum_relative = 0.0
+    for expected, actual in zip(reference_values, candidate_values, strict=True):
+        absolute = abs(actual - expected)
+        relative = absolute / max(abs(expected), 1.0e-30)
+        maximum_absolute = max(maximum_absolute, absolute)
+        maximum_relative = max(maximum_relative, relative)
+    return maximum_absolute, maximum_relative
+
+
 def benchmark_once(
     artifact: Path,
     runner: Path,
     warmup: int,
     iterations: int,
+    backend: str = "cpu",
+    dense_precision: str = "fp32",
 ) -> BenchmarkRecord:
     if warmup < 0 or iterations <= 0:
         raise ValueError("warmup must be non-negative and iterations must be positive")
@@ -118,15 +170,57 @@ def benchmark_once(
         root = Path(temporary)
         for index in range(warmup + iterations):
             sample, peak, _ = _run_process(
-                artifact, runner, generated_tokens, root / f"run-{index}.json"
+                artifact,
+                runner,
+                generated_tokens,
+                root / f"run-{index}.json",
+                backend,
+                dense_precision,
             )
             _, ttft_peak, ttft = _run_process(
-                artifact, runner, 1, root / f"ttft-{index}.json"
+                artifact,
+                runner,
+                1,
+                root / f"ttft-{index}.json",
+                backend,
+                dense_precision,
             )
             if index >= warmup:
                 samples.append(sample)
                 peaks.append(max(peak, ttft_peak))
                 ttft_samples.append(ttft)
+        if backend == "cpu":
+            max_absolute_error = 0.0
+            max_relative_error = 0.0
+        else:
+            reference, _, _ = _run_process(
+                artifact,
+                runner,
+                generated_tokens,
+                root / "reference.json",
+                "cpu",
+                "fp32",
+                diagnostics=True,
+            )
+            candidate, _, _ = _run_process(
+                artifact,
+                runner,
+                generated_tokens,
+                root / "candidate.json",
+                backend,
+                dense_precision,
+                diagnostics=True,
+            )
+            max_absolute_error, max_relative_error = _numerical_errors(
+                reference, candidate
+            )
+    if any(
+        item["backend"] != backend or
+        item["dense_precision"] != dense_precision or
+        item["device"] != samples[0]["device"]
+        for item in samples
+    ):
+        raise RuntimeError("runner metadata changed across benchmark samples")
     prefill_ns = statistics.median(item["prefill_nanoseconds"] for item in samples)
     decode_ns = statistics.median(item["decode_nanoseconds"] for item in samples)
     layer_count = len(samples[0]["per_layer_nanoseconds"])
@@ -136,7 +230,7 @@ def benchmark_once(
     )
     kda_state, mla_kv = _state_sizes(artifact, prompt_tokens + generated_tokens - 1)
     return BenchmarkRecord(
-        scope="synthetic-milestone-zero",
+        scope="synthetic-milestone-one",
         evidence="measured",
         platform=f"{platform.system()} {platform.release()} / {platform.machine()}",
         iterations=iterations,
@@ -149,6 +243,21 @@ def benchmark_once(
         file_read_bytes_per_token=statistics.median(
             item["read_bytes"] / generated_tokens for item in samples
         ),
+        backend=samples[0]["backend"],
+        device=samples[0]["device"],
+        dense_precision=samples[0]["dense_precision"],
+        kernel_nanoseconds=int(
+            statistics.median(item["kernel_nanoseconds"] for item in samples)
+        ),
+        host_to_device_bytes=int(
+            statistics.median(item["host_to_device_bytes"] for item in samples)
+        ),
+        device_to_host_bytes=int(
+            statistics.median(item["device_to_host_bytes"] for item in samples)
+        ),
+        peak_vram_bytes=max(item["peak_vram_bytes"] for item in samples),
+        max_absolute_error=max_absolute_error,
+        max_relative_error=max_relative_error,
         kda_state_bytes=kda_state,
         mla_kv_bytes=mla_kv,
         per_layer_nanoseconds=layer_ns,
@@ -161,10 +270,23 @@ def main() -> int:
     parser.add_argument("--runner", type=Path, required=True)
     parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--iterations", type=int, default=20)
+    parser.add_argument(
+        "--backend", choices=("cpu", "cuda-dense", "cuda-custom"), default="cpu"
+    )
+    parser.add_argument(
+        "--dense-precision", choices=("fp32", "bf16"), default="fp32"
+    )
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--csv", type=Path, required=True)
     args = parser.parse_args()
-    result = benchmark_once(args.artifact, args.runner, args.warmup, args.iterations)
+    result = benchmark_once(
+        args.artifact,
+        args.runner,
+        args.warmup,
+        args.iterations,
+        args.backend,
+        args.dense_precision,
+    )
     write_results(result, args.json, args.csv)
     print(json.dumps(asdict(result), sort_keys=True, separators=(",", ":")))
     return 0

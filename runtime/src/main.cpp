@@ -5,12 +5,34 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <string>
+#include <string_view>
+
+namespace {
+
+void write_json_string(std::ostream& output, std::string_view value) {
+    output << '"';
+    for (const auto character : value) {
+        if (character == '"' || character == '\\') output << '\\';
+        output << character;
+    }
+    output << '"';
+}
+
+void write_error(k3x::ErrorCode code, const std::string& message) {
+    std::cerr << k3x::error_code_name(code);
+    if (!message.empty()) std::cerr << ": " << message;
+    std::cerr << '\n';
+}
+
+}  // namespace
 
 int main(int argc, char** argv) {
     std::filesystem::path model_path, output_path;
     std::string prompt_text, mode = "incremental";
+    std::string backend_name = "cpu", dense_precision_name = "fp32";
     bool diagnostics = false;
     std::size_t count = 0;
     for (int index = 1; index + 1 < argc; index += 2) {
@@ -22,8 +44,49 @@ int main(int argc, char** argv) {
         else if (key == "--mode") mode = value;
         else if (key == "--diagnostics") diagnostics = value == "true";
         else if (key == "--json") output_path = value;
+        else if (key == "--backend") backend_name = value;
+        else if (key == "--dense-precision") dense_precision_name = value;
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
     }
+
+    k3x::BackendOptions backend_options;
+    if (backend_name == "cpu") {
+        backend_options.kind = k3x::BackendKind::cpu;
+    } else if (backend_name == "cuda-dense") {
+        backend_options.kind = k3x::BackendKind::cuda_dense;
+    } else if (backend_name == "cuda-custom") {
+        backend_options.kind = k3x::BackendKind::cuda_custom;
+    } else {
+        std::cerr << "unknown backend: " << backend_name << '\n';
+        return 2;
+    }
+    if (dense_precision_name == "fp32") {
+        backend_options.dense_precision = k3x::DensePrecision::fp32;
+    } else if (dense_precision_name == "bf16") {
+        backend_options.dense_precision = k3x::DensePrecision::bf16_rounded;
+    } else {
+        std::cerr << "unknown dense precision: " << dense_precision_name << '\n';
+        return 2;
+    }
+    if (backend_options.kind == k3x::BackendKind::cpu &&
+        backend_options.dense_precision != k3x::DensePrecision::fp32) {
+        std::cerr << "bf16 dense precision requires a CUDA backend\n";
+        return 2;
+    }
+
+    k3x::Profiler profiler;
+    std::unique_ptr<k3x::ComputeBackend> backend;
+    if (backend_options.kind == k3x::BackendKind::cpu) {
+        backend = k3x::make_cpu_backend(&profiler);
+    } else {
+        auto cuda_backend = k3x::make_cuda_backend(backend_options, &profiler);
+        if (!cuda_backend) {
+            write_error(cuda_backend.error(), cuda_backend.message());
+            return 4;
+        }
+        backend = std::move(cuda_backend.value());
+    }
+
     std::vector<std::uint32_t> prompt;
     std::stringstream parser(prompt_text);
     std::string item;
@@ -34,7 +97,6 @@ int main(int argc, char** argv) {
                                                : reader.message()) << '\n';
         return 3;
     }
-    auto backend = k3x::make_cpu_backend();
     auto result = k3x::generate_greedy(
         reader.value(), *backend, prompt, count, mode == "incremental", diagnostics);
     if (!result) {
@@ -44,8 +106,23 @@ int main(int argc, char** argv) {
     }
     std::ofstream output(output_path);
     if (!output) return 5;
+    const auto profile = profiler.summary();
+    const auto memory = backend->memory_stats();
     output << std::setprecision(9);
-    output << "{\"decode_nanoseconds\":" << result.value().decode_nanoseconds
+    output << "{\"backend\":";
+    write_json_string(output, backend_name);
+    output << ",\"device\":";
+    write_json_string(output, backend->device_name());
+    output << ",\"dense_precision\":";
+    write_json_string(output, dense_precision_name);
+    output << ",\"kernel_nanoseconds\":" << profile.device_nanoseconds
+           << ",\"host_to_device_bytes\":" << profile.host_to_device_bytes
+           << ",\"device_to_host_bytes\":" << profile.device_to_host_bytes
+           << ",\"peak_vram_bytes\":" << memory.peak_device_bytes
+           << ",\"profile_wall_nanoseconds\":" << profile.wall_nanoseconds
+           << ",\"profile_logical_bytes\":" << profile.logical_bytes
+           << ",\"failed_operations\":" << profile.failed_operations
+           << ",\"decode_nanoseconds\":" << result.value().decode_nanoseconds
            << ",\"prefill_nanoseconds\":" << result.value().prefill_nanoseconds
            << ",\"read_bytes\":" << reader.value().counters().completed_bytes
            << ",\"read_calls\":" << reader.value().counters().calls
