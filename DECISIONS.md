@@ -107,3 +107,14 @@
 - Benchmark result: none; incompatibility is a format-contract result, not a performance result.
 - Reason rejected: direct use is invalid, while runtime repacking would add traffic and stop being the exact native MXFP4 path.
 - Revisit: only if a future CUDA library exposes E2M1 with E8M0/32 scaling compatible with K3X bytes.
+
+## D-010 — Use WSL2 as the verified local Linux GPU development path
+
+- Date: 2026-08-08.
+- Status: accepted.
+- Decision: use WSL2 Ubuntu 24.04 for local Milestone 1 correctness and CUDA development while keeping Linux native as the final performance authority.
+- Alternatives considered: weaken Windows Smart App Control; require an immediate dual-boot/native Linux installation; use WSL2 without installing a Linux display driver.
+- Evidence: WSL 2.7.11.0 exposes the RTX 5080 at compute capability 12.0, CUDA Toolkit 13.3.1 provides nvcc 13.3.73 and `sm_120`, and the existing Release baseline passes CTest 2/2 and pytest 47/47.
+- Benchmark result: none; environment validation and correctness tests are not throughput benchmarks.
+- Reason: this preserves the host security policy, matches the Linux-first runtime direction, and supplies a reproducible local CUDA compiler and device path.
+- Revisit: perform final storage and performance measurements on Linux native because WSL filesystem and I/O behavior are not the final authority.

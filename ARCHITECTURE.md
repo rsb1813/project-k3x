@@ -104,7 +104,7 @@ The seeded fixture generates `[43, 32, 28, 49, 9, 28]` for prompt `[1, 7, 3, 9]`
 
 ## Milestone 1 accepted design
 
-Milestone 1 preserves the portable CPU graph as the exact reference and introduces a narrow projection/MXFP4 compute-backend boundary plus structured profiling. The optional CUDA backend targets the locally verified CUDA 13.3 and `sm_120` environment.
+Milestone 1 preserves the portable CPU graph as the exact reference and introduces a narrow projection/MXFP4 compute-backend boundary plus structured profiling. The optional CUDA backend targets the verified WSL2 Ubuntu 24.04 environment with CUDA Toolkit 13.3.1, nvcc 13.3.73, and native `sm_120` support for the RTX 5080. GPU passthrough is implemented environment setup; the CUDA backend itself remains unimplemented.
 
 The accepted comparison has three explicit execution identities.
 

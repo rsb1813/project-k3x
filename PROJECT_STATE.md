@@ -4,7 +4,9 @@
 
 Milestone 1 — exact runtime backend boundary, structured profiler, cuBLASLt dense baseline, and custom K3 MXFP4 CUDA baseline.
 
-The design is approved and the implementation plan is written. Production implementation has not started.
+The design is approved, the implementation plan is written, and the first Linux portability test task is complete. Production runtime changes have not started.
+
+State recorded after the 2026-08-08 WSL/CUDA environment verification and Task 1 test commit.
 
 ## Completed work
 
@@ -17,32 +19,33 @@ The design is approved and the implementation plan is written. Production implem
 - Public repository and Linux correctness workflow.
 - Approved Milestone 1 design and detailed TDD implementation plan.
 - TITAN LEDGER charter, architecture registry, decision ledger, benchmark ledger, and state protocol.
+- WSL 2.7.11.0 with Ubuntu 24.04.4 LTS, Linux 6.18.33.2, CUDA Toolkit 13.3.1, and RTX 5080 passthrough.
+- Linux Release baseline: CTest 2/2 and pytest 39/39 before cross-language path changes.
+- Cross-language native binary resolution through optional `K3X_BUILD_DIR`, verified by the complete Linux pytest suite.
 
 ## Work in progress
 
 - Branch: `feat/milestone-one-runtime`.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
-- The next code task is not started; the written plan awaits execution-mode and Linux-environment authorization.
-- WSL and Virtual Machine Platform are enabled. The immediate prerequisite is a Windows reboot, followed by Ubuntu 24.04 installation and GPU passthrough verification.
+- The next code task is deterministic profiling primitives through TDD.
+- Linux development runs as the unprivileged `jolib` user. The isolated Python environment is `/home/jolib/.venvs/k3x-m1`; repository build output is `build-linux`.
 
 ## Known failures and blockers
 
 - Windows Smart App Control blocks the newly linked unsigned `build/k3x_run.exe` before process creation.
 - Code Integrity events 3033 and 3077 cite policy `{0283ac0f-fff1-49ae-ada1-8a933130cad6}` and an unmet Enterprise signing level.
-- Fresh Windows CTest binaries currently run, but five Python cross-language cases that launch `k3x_run.exe` are blocked. The observed local split is 41 passed and 5 blocked failures.
-- WSL and Virtual Machine Platform are enabled with explicit user authorization, but Windows reports pending CBS and file-rename reboot state. Ubuntu is not installed until that reboot completes.
-- No Linux GPU execution result exists yet, so no CUDA correctness or performance claim exists.
+- Fresh Windows CTest binaries run, but five Python cross-language cases that launch `k3x_run.exe` remain blocked on Windows. This does not block the verified WSL Linux path.
+- No CUDA kernel or CUDA end-to-end runtime exists yet, so no CUDA correctness or performance claim exists despite successful GPU passthrough.
 - Direct cuBLASLt FP4 is rejected for exact K3 MXFP4 because NVIDIA requires UE4M3 scales per 16 FP4 values while K3 uses E8M0 scales per 32 values.
 
 ## Next concrete tasks
 
-1. Reboot Windows to finish the already-enabled WSL and Virtual Machine Platform features.
-2. Install and initialize Ubuntu 24.04, then verify RTX 5080 GPU passthrough.
-3. Reproduce the Milestone 0 Linux CPU baseline before changing production code.
-4. Make cross-language build-directory selection explicit through a RED-GREEN test.
-5. Implement deterministic profiling primitives through TDD.
-6. Extract the exact CPU compute backend without changing numerical output.
-7. Add the optional SM 12.0 CUDA backend, cuBLASLt dense baseline, and custom MXFP4 kernel in separate verified commits.
+1. Implement deterministic profiling primitives through TDD.
+2. Extract the exact CPU compute backend without changing numerical output.
+3. Add the optional SM 12.0 CUDA build shell while preserving CPU-only builds.
+4. Implement and measure the cuBLASLt dense baseline.
+5. Implement the custom native-byte MXFP4 kernel and verify it against the CPU oracle.
+6. Run end-to-end synthetic CPU versus CUDA profiling before accepting a default path.
 
 ## Hardware assumptions
 
@@ -51,11 +54,11 @@ The design is approved and the implementation plan is written. Production implem
 | CPU | AMD Ryzen 7 9800X3D target |
 | GPU | Locally observed NVIDIA GeForce RTX 5080, 16,303 MiB, compute capability 12.0 |
 | Driver | Locally observed 591.86 |
-| CUDA | Locally observed toolkit 13.3 and nvcc 13.3.73 with `sm_120` support |
+| CUDA | WSL-installed toolkit 13.3.1 and nvcc 13.3.73 with `sm_120` support |
 | RAM | 96 GB DDR5-4200 target |
 | NVMe | Solidigm P44 Pro 2 TB target |
 | Final runtime OS | Linux native |
-| Current development OS | Windows 11 AMD64 with Smart App Control enforcement |
+| Current development OS | WSL2 Ubuntu 24.04.4 on Windows 11; Windows Smart App Control remains enforced |
 
 ## Latest measured bottleneck
 
@@ -69,8 +72,10 @@ The next expected bottleneck is expert traffic, based on a derived model rather 
 - GitHub Actions correctness run: `31249173770`, success on Linux.
 - Public-main tests: Python 46/46 and CTest 2/2.
 - Milestone 1 design commit: `84edc6e`.
-- Current worktree CTest baseline: 2/2 pass.
-- Current worktree Python baseline: 41 pass, 5 blocked by Windows application control before `k3x_run.exe` starts.
+- Linux environment: WSL 2.7.11.0, Ubuntu 24.04.4, kernel 6.18.33.2, CUDA Toolkit 13.3.1, nvcc 13.3.73, RTX 5080 compute capability 12.0.
+- Current worktree commit: `b6d900f`.
+- Current worktree CTest: 2/2 pass.
+- Current worktree pytest: 47/47 pass with `K3X_BUILD_DIR=build-linux`.
 
 ## Proposed component status
 

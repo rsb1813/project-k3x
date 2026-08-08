@@ -56,3 +56,8 @@
 - Windows에는 WSL distribution이 설치되어 있지 않다. WSL2 설치는 시스템 변경과 재부팅 가능성이 있으므로 명시적 사용자 승인 전에는 실행하지 않는다.
 - Milestone 1 구현 계획은 Linux GPU 실행 환경을 선행 관문으로 두고 profiler, CPU backend extraction, optional CUDA shell, cuBLASLt dense, custom MXFP4, end-to-end profiling, 최종 측정 순서로 작성했다.
 - 사용자가 inline execution과 WSL2 Ubuntu 24.04 설치를 명시적으로 승인했다. 비관리자 `wsl --install`은 기능 비활성 상태에서 exit 1로 종료됐고, 관리자 DISM으로 `Microsoft-Windows-Subsystem-Linux`와 `VirtualMachinePlatform`만 `/NoRestart` 활성화했다. 두 기능 모두 `InstallState=1`을 확인했으며 CBS/PendingFileRename 재부팅 대기 상태라 자동 재부팅 없이 중단했다.
+- 재부팅 후 WSL 2.7.11.0과 Ubuntu 24.04.4 LTS를 설치했다. Linux kernel은 6.18.33.2이며 RTX 5080 16,303 MiB, compute capability 12.0, Windows driver 591.86이 WSL에 정상 노출된다.
+- NVIDIA WSL 지침에 따라 Linux display driver는 설치하지 않고 WSL 저장소의 `cuda-toolkit-13-3`만 설치했다. 실제 package version은 13.3.1-1, nvcc는 13.3.73이며 `sm_120`을 제공한다.
+- Ubuntu 기본 개발 사용자는 비관리자 `jolib`로 설정했다. Python 환경은 `/home/jolib/.venvs/k3x-m1`, native build는 Git에서 무시되는 `build-linux`를 사용한다.
+- 생산 코드 변경 전 Linux Release baseline은 CTest 2/2와 cross-language 제외 pytest 39/39가 통과했다.
+- `K3X_BUILD_DIR` resolver의 RED ImportError를 확인한 뒤 공통 native binary resolver를 구현했다. targeted cross-language 8/8, 전체 pytest 47/47, CTest 2/2가 통과했고 커밋은 `b6d900f`다.
