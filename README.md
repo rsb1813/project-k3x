@@ -115,7 +115,7 @@ K3X v1 is an execution-ordered, random-access format rather than a general tenso
 - Crash-safe `.partial` output and idempotent resume manifest.
 - Optional hot/cold expert banks, task-profile metadata, and future PGO layouts.
 
-The detailed binary contract will be added as `K3X_FORMAT.md` with its executable reader and writer. The approved milestone design is available in [`docs/superpowers/specs/2026-08-08-k3x-milestone-one-design.md`](docs/superpowers/specs/2026-08-08-k3x-milestone-one-design.md).
+The exact binary contract is documented in [`K3X_FORMAT.md`](K3X_FORMAT.md) and enforced by the streaming writer, strict reader, corruption tests, and crash-resume tests. The approved milestone design is available in [`docs/superpowers/specs/2026-08-08-k3x-milestone-one-design.md`](docs/superpowers/specs/2026-08-08-k3x-milestone-one-design.md).
 
 ## Planned runtime
 
@@ -155,7 +155,7 @@ K3X has an approved Milestone 0 design and an implementation-ready execution pla
 - [x] Milestone design approved and documented.
 - [x] Detailed implementation plan written.
 - [x] Synthetic PyTorch model passing.
-- [ ] K3X synthetic round-trip passing.
+- [x] K3X synthetic round-trip passing.
 - [ ] Independent C++ runtime parity passing.
 - [ ] Synthetic benchmark recorded.
 
@@ -191,7 +191,7 @@ Source revisions used for the approved design are recorded in the [design specif
 - [Implementation checklist](checklist.md).
 - [Decision log](context-notes.md).
 
-`ARCHITECTURE.md`, `PERFORMANCE_MODEL.md`, and `K3X_FORMAT.md` are milestone deliverables and will be added with executable evidence.
+`ARCHITECTURE.md` and `PERFORMANCE_MODEL.md` remain milestone deliverables. The executable [`K3X_FORMAT.md`](K3X_FORMAT.md) contract is complete for the synthetic round-trip.
 
 ---
 

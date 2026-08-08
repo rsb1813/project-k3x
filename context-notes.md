@@ -28,3 +28,6 @@
 - 공식 vendored `config.json`에서 SiTU beta 4.0, linear beta 25.0, MLA output gate 활성화, routed scaling factor 1.0을 확인해 합성 config와 K3X model metadata에 반영했다.
 - Router의 correction bias는 선택에만 사용하고 unbiased sigmoid score를 normalize한다. Stable LatentMoE는 native MXFP4 routed branch와 원래 hidden-space shared branch를 분리하며, AttnRes는 normalized key로 score한 뒤 raw source를 혼합한다.
 - Controlled graph는 prompt `[1,7,3,9]`에서 full/incremental 모두 token 5를 6회 생성했다. Seeded graph도 두 mode의 greedy token이 exact match했고, source shard와 golden fixture를 두 번 생성한 SHA-256 manifest가 동일했다.
+- K3X v1 writer는 safetensors header만 읽어 tensor extent를 찾고, 설정된 chunk 크기 이하로 payload를 복사한다. native MXFP4 packed code와 scale은 별도 aligned extent로 byte-for-byte 보존한다.
+- 각 extent는 flush와 fsync 뒤 partial 파일에서 다시 읽어 CRC32C를 확인한 후에만 원자적 resume ledger에 기록한다. source fingerprint가 달라진 resume는 거부한다.
+- 4 KiB superblock literal layout, 128-byte tensor record, extent 정렬·중복·절단 검증, payload corruption, unknown required feature, source mutation, 중단 재개, CLI dry-run 및 native MXFP4 byte parity를 포함해 Python 전체 35개 테스트가 3.49초에 통과했다.

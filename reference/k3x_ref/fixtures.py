@@ -192,18 +192,26 @@ def build_synthetic_model(
     return SyntheticK3Model(cfg, _build_weights(cfg, seed, controlled))
 
 
-def _collect_tensors(value: Any, prefix: str, output: dict[str, torch.Tensor]) -> None:
+def _collect_tensors(
+    value: Any,
+    prefix: str,
+    output: dict[str, torch.Tensor],
+    packed_shapes: dict[str, list[int]],
+) -> None:
     if isinstance(value, torch.Tensor):
         output[prefix] = value.detach().cpu().contiguous()
     elif isinstance(value, PackedMatrix):
         output[f"{prefix}.weight_packed"] = torch.tensor(list(value.packed), dtype=torch.uint8)
         output[f"{prefix}.weight_scale"] = torch.tensor(list(value.scales), dtype=torch.uint8)
+        packed_shapes[prefix] = [value.rows, value.cols]
     elif is_dataclass(value):
         for field in fields(value):
-            _collect_tensors(getattr(value, field.name), f"{prefix}.{field.name}", output)
+            _collect_tensors(
+                getattr(value, field.name), f"{prefix}.{field.name}", output, packed_shapes
+            )
     elif isinstance(value, tuple):
         for index, item in enumerate(value):
-            _collect_tensors(item, f"{prefix}.{index}", output)
+            _collect_tensors(item, f"{prefix}.{index}", output, packed_shapes)
 
 
 def write_source_checkpoint(
@@ -213,7 +221,8 @@ def write_source_checkpoint(
     path.mkdir(parents=True, exist_ok=True)
     model = build_synthetic_model(seed)
     tensors: dict[str, torch.Tensor] = {}
-    _collect_tensors(model.weights, "model", tensors)
+    packed_shapes: dict[str, list[int]] = {}
+    _collect_tensors(model.weights, "model", tensors, packed_shapes)
     names = sorted(tensors)
     midpoint = (len(names) + 1) // 2
     shard_names = ("model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors")
@@ -227,6 +236,7 @@ def write_source_checkpoint(
         "seed": seed,
         "config": model.cfg.__dict__,
         "weight_map": weight_map,
+        "packed_shapes": packed_shapes,
     }
     manifest_path = path / "source-manifest.json"
     manifest_path.write_text(

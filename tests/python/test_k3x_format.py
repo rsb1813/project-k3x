@@ -1,0 +1,126 @@
+# K3X 고정 레이아웃과 corruption rejection을 검증합니다.
+import os
+import json
+import struct
+from pathlib import Path
+
+import google_crc32c
+import pytest
+
+from k3x_converter.format import (
+    SUPERBLOCK_BYTES,
+    DType,
+    K3XError,
+    Quantization,
+    Superblock,
+    TensorRecord,
+    fnv1a64,
+    validate_extent_layout,
+)
+from k3x_converter.reader import K3XReader
+from k3x_converter.safetensors_reader import inspect_shard, iter_tensor_chunks
+from k3x_converter.writer import convert
+
+
+def test_superblock_has_literal_offsets_and_zero_reserved_bytes() -> None:
+    block = Superblock.empty(source_sha256=bytes(range(32)), file_uuid=bytes(range(16)))
+    encoded = block.encode()
+    assert len(encoded) == SUPERBLOCK_BYTES
+    assert encoded[:8] == b"K3XCHKPT"
+    assert struct.unpack_from("<HHII", encoded, 8) == (1, 0, 4096, 4096)
+    assert encoded[232:4092] == bytes(4092 - 232)
+    assert google_crc32c.value(encoded[:4092]) == struct.unpack_from("<I", encoded, 4092)[0]
+    assert Superblock.decode(encoded) == block
+
+
+def test_tensor_record_is_exactly_128_bytes() -> None:
+    record = TensorRecord(
+        tensor_id=7,
+        role=0,
+        dtype=DType.UINT8,
+        quantization=Quantization.MXFP4,
+        dimensions=(32, 32),
+        layer_id=2,
+        expert_id=3,
+        data_offset=4096,
+        data_length=512,
+        logical_length=4096,
+        auxiliary_offset=8192,
+        auxiliary_length=32,
+        data_crc32c=1,
+        auxiliary_crc32c=2,
+    )
+    encoded = record.encode()
+    assert len(encoded) == 128
+    assert encoded[112:] == bytes(16)
+    assert TensorRecord.decode(encoded) == record
+
+
+def test_extent_validation_rejects_unaligned_overlap_and_truncation() -> None:
+    base = TensorRecord(1, 0, DType.UINT8, Quantization.NONE, (32,), -1, -1, 4096, 32, 32, 0, 0, 0, 0)
+    with pytest.raises(K3XError, match="UNALIGNED_EXTENT"):
+        validate_extent_layout((base.replace(data_offset=4097),), 16384, 4096)
+    with pytest.raises(K3XError, match="OVERLAPPING_EXTENT"):
+        validate_extent_layout((base, base.replace(tensor_id=2)), 16384, 4096)
+    with pytest.raises(K3XError, match="TRUNCATED_FILE"):
+        validate_extent_layout((base.replace(data_offset=16384),), 16384, 4096)
+
+
+def test_reader_rejects_payload_corruption(synthetic_source: Path, tmp_path: Path) -> None:
+    artifact = tmp_path / "synthetic.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    reader = K3XReader.open(artifact)
+    first = reader.tensor_records[0]
+    with artifact.open("r+b") as stream:
+        stream.seek(first.data_offset)
+        original = stream.read(1)
+        stream.seek(first.data_offset)
+        stream.write(bytes([original[0] ^ 1]))
+    with pytest.raises(K3XError, match="DATA_CRC_MISMATCH"):
+        K3XReader.open(artifact)
+
+
+def test_reader_rejects_unknown_required_feature(synthetic_source: Path, tmp_path: Path) -> None:
+    artifact = tmp_path / "synthetic.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    with artifact.open("r+b") as stream:
+        block = bytearray(stream.read(SUPERBLOCK_BYTES))
+        struct.pack_into("<Q", block, 24, 1)
+        struct.pack_into("<I", block, 4092, google_crc32c.value(bytes(block[:4092])))
+        stream.seek(0)
+        stream.write(block)
+    with pytest.raises(K3XError, match="UNSUPPORTED_REQUIRED_FEATURE"):
+        K3XReader.open(artifact, verify_root=False)
+
+
+def test_reader_rejects_truncated_file(synthetic_source: Path, tmp_path: Path) -> None:
+    artifact = tmp_path / "synthetic.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    os.truncate(artifact, artifact.stat().st_size - 1)
+    with pytest.raises(K3XError, match="TRUNCATED_FILE"):
+        K3XReader.open(artifact)
+
+
+def test_native_mxfp4_payload_round_trips_byte_for_byte(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    artifact = tmp_path / "synthetic.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    reader = K3XReader.open(artifact)
+    record = next(
+        item for item in reader.tensor_records if item.quantization == Quantization.MXFP4
+    )
+    manifest = json.loads(
+        (synthetic_source / "source-manifest.json").read_text(encoding="utf-8")
+    )
+    base = next(
+        name.removesuffix(".weight_packed")
+        for name in sorted(manifest["weight_map"])
+        if name.endswith(".weight_packed") and fnv1a64(name.removesuffix(".weight_packed")) == record.tensor_id
+    )
+    packed_name, scale_name = base + ".weight_packed", base + ".weight_scale"
+    packed = inspect_shard(synthetic_source / manifest["weight_map"][packed_name])[packed_name]
+    scale = inspect_shard(synthetic_source / manifest["weight_map"][scale_name])[scale_name]
+    actual_data, actual_auxiliary = reader.read_tensor_extents(record)
+    assert actual_data == b"".join(iter_tensor_chunks(packed, 257))
+    assert actual_auxiliary == b"".join(iter_tensor_chunks(scale, 257))
