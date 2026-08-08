@@ -40,8 +40,9 @@
 - [x] exact runtime, profiler, CUDA baseline 설계 명세 작성.
 - [x] 격리 worktree와 고정 Python 의존성 구성.
 - [x] C++ baseline 2개 테스트 통과.
-- [ ] 작성된 Milestone 1 설계 명세 사용자 검토 승인.
-- [ ] Milestone 1 세부 구현 계획 작성.
+- [x] 작성된 Milestone 1 설계 명세 사용자 검토 승인.
+- [x] TITAN LEDGER 지속성 문서 체계 초기화.
+- [x] Milestone 1 세부 구현 계획 작성.
 
 ## Milestone 1 구현
 
@@ -49,7 +50,7 @@
 - [ ] CPU compute backend 경계를 회귀 테스트와 함께 도입.
 - [ ] optional CUDA 13.3 및 SM 12.0 build 구성.
 - [ ] cuBLASLt FP32/BF16 projection baseline 구현.
-- [ ] cuBLASLt native FP4 layout adapter 검증.
+- [x] cuBLASLt FP4와 K3 MXFP4 scale 계약 비교 후 direct path 기각.
 - [ ] custom MXFP4 CUDA baseline 구현.
 - [ ] CPU, CUDA library, CUDA custom synthetic graph parity 검증.
 - [ ] JSON/CSV benchmark와 실제 RTX 5080 측정.

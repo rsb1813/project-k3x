@@ -13,7 +13,7 @@ This milestone does not claim full-model Kimi K3 performance. It establishes the
 - Driver: 591.86.
 - CUDA toolkit: 13.3, nvcc 13.3.73.
 - Local nvcc supports `compute_120` and `sm_120` code generation.
-- Installed CUDA 13.3 headers expose `CUDA_R_4F_E2M1` and `CUBLASLT_MATMUL_MATRIX_SCALE_VEC32_UE8M0`.
+- Installed CUDA 13.3 headers expose `CUDA_R_4F_E2M1` and `CUBLASLT_MATMUL_MATRIX_SCALE_VEC32_UE8M0`, but NVIDIA's cuBLAS contract assigns UE8M0/32 scaling to FP8. cuBLASLt FP4 requires UE4M3/16 scaling and is not a direct K3 MXFP4 path.
 - Windows Smart App Control currently blocks the newly linked unsigned `k3x_run.exe` with Code Integrity events 3033 and 3077. K3X will not disable or weaken that policy automatically.
 
 The production target remains Linux native. Windows is a development build target, not the final performance authority.
@@ -26,11 +26,11 @@ This gives direct control over K3-specific layouts and future fusion, but it mak
 
 ### Library CUDA only
 
-cuBLASLt provides a strong projection baseline and exposes native FP4 plus UE8M0 scaling in the installed toolkit. It does not by itself establish that the K3X packed expert layout is accepted byte-for-byte, and it does not provide the planned K3-specific fusion path.
+cuBLASLt provides a strong dense projection baseline. Its native FP4 path uses UE4M3 scales per 16 values, whereas K3 MXFP4 uses E8M0 scales per 32 values. Using it for exact K3 experts would require a format conversion and would no longer preserve the native expert path.
 
 ### Selected hybrid baseline
 
-The runtime will use cuBLASLt as the independent dense and native-FP4 library baseline and a minimal custom CUDA MXFP4 path as the controlled implementation. Both consume the same K3X tensor metadata and are compared against the CPU oracle. Benchmark results, not theoretical capability, determine the later default.
+The runtime will use cuBLASLt as the independent dense FP32/BF16 baseline and a minimal custom CUDA MXFP4 path as the controlled exact expert implementation. The custom path consumes native K3X expert bytes and is compared against the CPU oracle. A direct cuBLASLt FP4 expert path is rejected for this milestone because its scaling contract is incompatible.
 
 ## 4. Scope
 
@@ -42,7 +42,7 @@ The runtime will use cuBLASLt as the independent dense and native-FP4 library ba
 - Add optional CUDA 13.3 build support without making CUDA a CPU-build dependency.
 - Generate an SM 12.0 native cubin for the RTX 5080 build.
 - Add cuBLASLt FP32/BF16 projection baselines.
-- Verify whether the K3X E2M1 payload and per-32-value E8M0 scales map directly to the installed cuBLASLt FP4 contract.
+- Add a regression test that records the rejected cuBLASLt FP4 compatibility assumption: K3X uses E8M0/32 while cuBLASLt FP4 requires UE4M3/16.
 - Add a minimal custom CUDA MXFP4 decode-and-matmul implementation.
 - Add structured runtime profiling and JSON/CSV benchmark output.
 - Compare CPU, CUDA library, and CUDA custom paths on the synthetic checkpoint.
@@ -74,11 +74,11 @@ This boundary is intentionally smaller than a general tensor library. Elementwis
 
 ### 5.2 CUDA paths
 
-The library path uses cuBLASLt for dense FP32/BF16 projection. Native FP4 support is enabled only after a literal adapter test proves that K3X nibble order, matrix orientation, group size 32, and E8M0 scale interpretation match the installed cuBLASLt contract.
+The library path uses cuBLASLt only for dense FP32/BF16 projection. It does not repack K3X MXFP4 into NVIDIA's distinct UE4M3/16 FP4 format.
 
 The custom path performs K3X E2M1 decode and FP32 accumulation in a small CUDA kernel. It is a correctness and profiling baseline, not a claimed optimized kernel. It must not repack or requantize the expert payload during checkpoint conversion.
 
-`cuda-library` uses cuBLASLt for both dense and MXFP4 matrix multiplication. `cuda-custom` retains cuBLASLt for dense projection and replaces only MXFP4 matrix multiplication with the custom kernel. This makes the expert-path comparison single-variable.
+`cuda-dense` uses cuBLASLt for dense projection while retaining the CPU MXFP4 oracle. `cuda-custom` retains the same cuBLASLt dense path and replaces only MXFP4 matrix multiplication with the custom kernel. This makes the expert-path comparison single-variable.
 
 The CMake CUDA option is disabled by default. Enabling it requires CUDA 13.3 or newer and emits real `sm_120` code for the target build. CPU-only Linux CI remains valid when no CUDA toolkit is present.
 
@@ -128,7 +128,7 @@ If a tolerance fails, the test reports the operation, shape, element index, expe
 - CUDA disabled at build time returns `backend_unavailable` for an explicit CUDA request.
 - Unsupported architecture, toolkit version, data type, group size, or layout returns a typed error before launch.
 - CUDA allocation, copy, launch, synchronization, and cuBLASLt errors retain the originating status and operation name.
-- A cuBLASLt heuristic miss does not silently switch to the custom kernel. The caller selects the path, and benchmarks record it.
+- A cuBLASLt dense heuristic miss does not silently switch to another backend. The caller selects the path, and benchmarks record it.
 - Partial profiler records are marked failed and are not included in throughput medians.
 - K3X checksum or directory failure remains fatal before either backend sees tensor bytes.
 
@@ -153,13 +153,13 @@ Implementation follows test-driven development. Every production behavior begins
 - Test device capability reporting and explicit unavailable behavior.
 - Test literal dense FP32 and BF16 matrices.
 - Test literal MXFP4 nibble order, E2M1 values, E8M0 scales, and group boundaries.
-- Compare cuBLASLt FP4 and custom MXFP4 paths against the CPU oracle.
+- Compare the custom MXFP4 path against the CPU oracle and verify that no runtime path labels cuBLASLt's incompatible UE4M3/16 format as K3 MXFP4.
 - Exercise invalid dimensions, invalid group size, allocation failure propagation where safely injectable, and launch error reporting.
 
 ### End-to-end synthetic test
 
 - Convert the deterministic synthetic checkpoint once per test fixture.
-- Run CPU, CUDA library, and CUDA custom modes with the same prompt.
+- Run CPU, CUDA dense-only, and CUDA custom-MXFP4 modes with the same prompt.
 - Compare layer outputs, logits, recurrent state, and generated token IDs under the declared numerical contracts.
 - Produce JSON and CSV artifacts and validate every required field.
 

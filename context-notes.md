@@ -46,8 +46,12 @@
 - 사용자는 CPU exact runtime과 profiler를 먼저 확장하고, 이어서 RTX 5080용 basic CUDA backend를 만드는 순서를 승인했다.
 - custom CUDA only, cuBLASLt only, hybrid baseline을 비교했고 사용자는 cuBLASLt 기준 경로와 custom MXFP4 경로를 함께 두는 hybrid 설계를 승인했다.
 - 실제 개발 PC에서 NVIDIA GeForce RTX 5080 16,303 MiB, compute capability 12.0, driver 591.86, CUDA toolkit 13.3과 nvcc 13.3.73을 확인했다.
-- 설치된 nvcc는 `compute_120`과 `sm_120`을 지원한다. CUDA 13.3 local header는 `CUDA_R_4F_E2M1`과 `CUBLASLT_MATMUL_MATRIX_SCALE_VEC32_UE8M0`을 제공하므로 K3X native MXFP4 layout과의 직접 호환성을 literal test로 검증한 뒤 사용한다.
+- 설치된 nvcc는 `compute_120`과 `sm_120`을 지원한다. CUDA 13.3 local header만 보면 E2M1과 UE8M0/32 mode가 함께 보이지만, NVIDIA 공식 cuBLAS 문서는 FP4에 UE4M3/16을 요구하고 UE8M0/32를 FP8 mode로 규정한다. K3의 E2M1+E8M0/32 native MXFP4와 직접 호환되지 않으므로 cuBLASLt FP4 expert path는 기각하고 cuBLASLt는 dense baseline에만 사용한다.
 - 격리 worktree `feat/milestone-one-runtime`을 만들고 Python 3.12.13 및 `pyproject.toml`의 고정 dependencies를 새 `.venv`에 설치했다.
 - baseline의 첫 Python 실행은 C++ build 전이라 cross-language runner 7개가 없어서 실패했다. MSVC Developer Command 환경과 `.venv`의 Ninja 경로를 명시해 Release build와 CTest 2/2 통과를 확인했다.
 - 새 `k3x_run.exe` 실행은 Windows Smart App Control policy `{0283ac0f-fff1-49ae-ada1-8a933130cad6}`에 의해 차단됐다. Code Integrity event 3033과 3077에서 unsigned executable이 Enterprise signing level을 충족하지 못했다는 원인을 확인했다. Python suite는 이 환경 제약으로 cross-language 5개가 차단되고 나머지 41개가 통과했다.
 - K3X는 Smart App Control을 자동으로 끄거나 신뢰 저장소를 수정하지 않는다. CUDA runtime 완료 판정은 Linux native 또는 사용자가 별도로 승인한 WSL2 GPU 환경에서 수행한다.
+- 사용자는 Milestone 1 hybrid 설계 명세를 승인하고 TITAN LEDGER 지속성 프로토콜을 추가했다. `PROJECT_CHARTER.md`는 안정된 헌장, `ARCHITECTURE.md`는 상태가 표시된 실제 구조, `DECISIONS.md`는 선택 근거, `BENCHMARKS.md`는 측정 원장, `PROJECT_STATE.md`는 마지막에 갱신하는 현재 상태로 분리한다.
+- APOLLO, TITAN COUNCIL, AURORA, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO는 구현·benchmark 전까지 proposed이다. ATLAS, CHRONOS, BLACKSTAR는 역할 정의가 제공되지 않아 reserved proposed/undefined로 기록했다.
+- Windows에는 WSL distribution이 설치되어 있지 않다. WSL2 설치는 시스템 변경과 재부팅 가능성이 있으므로 명시적 사용자 승인 전에는 실행하지 않는다.
+- Milestone 1 구현 계획은 Linux GPU 실행 환경을 선행 관문으로 두고 profiler, CPU backend extraction, optional CUDA shell, cuBLASLt dense, custom MXFP4, end-to-end profiling, 최종 측정 순서로 작성했다.

@@ -2,10 +2,11 @@
 
 ## Scope and evidence
 
-This document separates three kinds of statements.
+This document separates four kinds of statements.
 
 - **Released graph** describes the text decoder exposed by Moonshot AI's Kimi K3 configuration and official implementations.
 - **Milestone 0** describes code that exists and is covered by tests in this repository.
+- **Accepted design** describes an approved implementation boundary that has not yet passed its implementation gates.
 - **Planned runtime** describes later work and is not presented as implemented performance.
 
 K3X does not download or inspect the full Kimi K3 checkpoint in Milestone 0. MoonViT-V2 is outside the executable milestone; the runtime currently begins at text token embeddings.
@@ -100,6 +101,52 @@ The deterministic synthetic model reduces widths but retains the graph contracts
 - PyTorch reference and independent dependency-free C++20 runtime.
 
 The seeded fixture generates `[43, 32, 28, 49, 9, 28]` for prompt `[1, 7, 3, 9]` in both runtimes and in full-prefix and incremental modes. Floating-point layer outputs use an explicit `1e-6` relative and absolute tolerance; token IDs and preserved MXFP4 bytes match exactly.
+
+## Milestone 1 accepted design
+
+Milestone 1 preserves the portable CPU graph as the exact reference and introduces a narrow projection/MXFP4 compute-backend boundary plus structured profiling. The optional CUDA backend targets the locally verified CUDA 13.3 and `sm_120` environment.
+
+The accepted comparison has three explicit execution identities.
+
+| Backend | Dense projection | MXFP4 expert path | Status |
+|---|---|---|---|
+| `cpu` | Portable FP32 C++ | Portable E2M1/E8M0 decode and FP32 accumulation | Implemented and tested |
+| `cuda-dense` | cuBLASLt FP32/BF16 | Portable CPU E2M1/E8M0 oracle | Accepted design, not implemented |
+| `cuda-custom` | Same cuBLASLt dense path | Minimal custom E2M1/E8M0 CUDA kernel | Accepted design, not implemented |
+
+KDA, MLA, routing, Attention Residual, recurrent state, and greedy selection stay on the existing CPU graph during this baseline. Per-operation host/device transfers remain visible so a later residency layer has a measured cost to remove. CUDA is optional at build time and cannot break the CPU-only Linux build.
+
+Direct cuBLASLt FP4 is not a K3 MXFP4 backend. NVIDIA's FP4 contract uses UE4M3 scales per 16 values, while the released K3 experts use E8M0 scales per 32 values. K3X rejects implicit repacking for the exact path and uses a custom CUDA implementation against the CPU byte-level oracle.
+
+The detailed numerical, profiling, error, and platform gates are in [`docs/superpowers/specs/2026-08-08-k3x-exact-runtime-profiler-cuda-design.md`](docs/superpowers/specs/2026-08-08-k3x-exact-runtime-profiler-cuda-design.md).
+
+## TITAN component registry
+
+Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.
+
+| Component | Responsibility | Status |
+|---|---|---|
+| TITAN | Umbrella name for Project K3X and its dedicated Kimi K3 runtime, storage, profiling, and manufacturing system | Implemented foundation; production runtime incomplete |
+| ATLAS | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
+| CHRONOS | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
+| BLACKSTAR | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
+| PROMETHEUS-X | DSpark-compatible speculative decoding extended with MoE-aware expert-cost scheduling | Proposed |
+| AURORA | Self-speculative K3 fast-path drafter using reduced Top-K, reduced precision, and resident experts while retaining target verification | Proposed |
+| ORBIT | Multi-layer lookahead expert residency and prefetch prediction | Proposed |
+| MERCURY | Dynamic CPU/GPU expert placement using predicted transfer-plus-compute latency | Proposed |
+| HELIOS | Automatic hardware/workload tuning for cache, Top-K, speculation, I/O, and placement parameters | Proposed |
+| SHADOW | Periodic divergence monitoring between fast execution and a higher-quality reference | Proposed |
+| APOLLO | Adaptive test-time reasoning and multi-branch deliberation | Proposed |
+| TITAN COUNCIL | Adaptive Architect, Skeptic, Debugger, and Judge reasoning with shared expert-major batching | Proposed |
+| PHOENIX | Automatic escalation toward higher quality after uncertainty, divergence, tool failure, or repeated agent failure | Proposed |
+| VAULT | Persistent KDA, MLA, prefix, and agent state for resumption without unnecessary re-prefill | Proposed |
+| VEILBREAK | Optional behavior-profile adapters for reducing false refusals in legitimate adult roleplay and legitimate security/technical explanation while preserving separate serving-layer controls for disallowed use | Proposed |
+| AUTO | Top-level operating mode that combines Balanced and Quality according to confidence, SHADOW divergence, failures, and task importance | Proposed |
+| SKYFORGE | Cloud-side bounded, resumable K3X model manufacturing with Conductor, Foundry Workers, and IMMORTAL Ledger | Proposed; no cloud resources provisioned |
+
+APOLLO and TITAN COUNCIL operate above token inference and would consume speculative and expert-major runtime interfaces rather than silently changing K3 routing. AURORA and PROMETHEUS-X occupy separate draft/verification experiments. ORBIT predicts future use; MERCURY decides placement; HELIOS tunes exposed policies. SHADOW observes divergence, PHOENIX escalates quality, and AUTO coordinates those signals. These relationships are proposals and do not imply implementation.
+
+VEILBREAK remains isolated from model correctness modes and from serving-layer policy enforcement. It cannot be described as a safety bypass, and no implementation or quality claim exists.
 
 ## K3X data flow
 
