@@ -17,6 +17,7 @@ class SyntheticK3Config:
     qk_nope_head_dim: int = 8
     qk_rope_head_dim: int = 8
     v_head_dim: int = 8
+    mla_use_nope: bool = True
     num_experts: int = 8
     top_k: int = 2
     num_shared_experts: int = 1
@@ -43,5 +44,7 @@ class SyntheticK3Config:
             raise ValueError("kda_heads * kda_head_dim must equal hidden_size")
         if self.expert_intermediate_size % self.mxfp4_group_size:
             raise ValueError("expert_intermediate_size must align to MXFP4 group size")
+        if not self.mla_use_nope:
+            raise ValueError("mla_use_nope must be true for Kimi K3")
         if not 0 < self.top_k <= self.num_experts:
             raise ValueError("top_k must be in [1, num_experts]")

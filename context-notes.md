@@ -20,3 +20,4 @@
 - 사용자가 로컬 dependency 설치와 전체 구현 진행을 승인했다. 격리 worktree `feat/milestone-zero`에서 작업한다.
 - 저장소 전용 `.venv`에 Python 3.12.13, torch 2.13.0, numpy 2.5.1, safetensors 0.8.0, pytest 9.1.1, google-crc32c 1.8.0, psutil 7.2.2, CMake 4.4.2, Ninja 1.13.0을 설치했다. 시스템에는 MSVC 19.51이 이미 있어 LLVM 설치는 진행하지 않았다.
 - 합성 config 계약 테스트는 의도한 `ModuleNotFoundError`로 RED를 확인한 뒤 2개가 통과했다. `pip check`도 문제 없음으로 통과했다.
+- 고정한 PipeNetwork revision의 vendored text reference와 MLX port를 재검증한 결과 K3 MLA는 `mla_use_nope=true`이며 `qk_rope_head_dim`으로 명명된 64차원 subspace에도 rotary embedding을 적용하지 않는다. 사용자 승인에 따라 설계와 계획에서 이를 shared extra-key NoPE 경로로 정정했다.

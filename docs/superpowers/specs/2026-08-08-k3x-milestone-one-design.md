@@ -83,9 +83,9 @@ Incremental state는 Q/K/V convolution histories와 recurrent matrix를 모두 �
 
 ### 4.2 Gated MLA
 
-MLA의 query는 hidden 7168에서 rank 1536 projection, RMSNorm, head별 query projection을 거친다. 각 head query는 non-RoPE 128과 RoPE 64로 나뉜다. KV projection은 rank 512 latent와 shared RoPE 64를 함께 생성하고 latent에만 RMSNorm을 적용한다. latent는 head별 non-RoPE key 128과 value 128로 확장된다.
+MLA의 query는 hidden 7168에서 rank 1536 projection, RMSNorm, head별 query projection을 거친다. 각 head query는 주 key subspace 128과 추가 key subspace 64로 나뉜다. Checkpoint 호환 field 이름은 각각 `qk_nope_head_dim`과 `qk_rope_head_dim`이지만 K3는 `mla_use_nope=true`이므로 어느 subspace에도 rotary embedding을 적용하지 않는다. KV projection은 rank 512 latent와 shared extra key 64를 함께 생성하고 latent에만 RMSNorm을 적용한다. Latent는 head별 주 key 128과 value 128로 확장된다.
 
-Attention score는 non-RoPE와 RoPE 부분을 모두 포함하며 전체 query head dimension 192의 제곱근으로 scale한다. value output에는 hidden state에서 생성한 sigmoid output gate를 적용한 뒤 output projection한다. 첫 마일스톤 incremental cache는 correctness를 단순화하기 위해 확장된 per-head non-RoPE K/V와 shared RoPE slot을 저장한다.
+Attention score는 두 NoPE key subspace를 모두 포함하며 전체 query head dimension 192의 제곱근으로 scale한다. Value output에는 hidden state에서 생성한 sigmoid output gate를 적용한 뒤 output projection한다. 첫 마일스톤 incremental cache는 correctness를 단순화하기 위해 확장된 per-head main K/V와 shared extra-key slot을 저장한다.
 
 ### 4.3 Router와 Stable LatentMoE
 
@@ -113,7 +113,7 @@ Routed branch는 hidden 7168을 latent 3584로 down-project하고, 선택된 각
 | MLA heads | 4 |
 | q LoRA rank | 32 |
 | KV latent rank | 32 |
-| qk non-RoPE / RoPE | 8 / 8 |
+| qk main / extra NoPE | 8 / 8 |
 | value head dim | 8 |
 | routed experts / Top-K | 8 / 2 |
 | shared experts | 1 |

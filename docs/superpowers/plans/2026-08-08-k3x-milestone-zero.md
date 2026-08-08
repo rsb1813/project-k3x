@@ -36,7 +36,7 @@
 
 - `reference/k3x_ref/config.py` owns `SyntheticK3Config` and all shape validation.
 - `reference/k3x_ref/mxfp4.py` owns E2M1 nibble decode, E8M0 block scales, packing validation, and reference matmul.
-- `reference/k3x_ref/ops.py` owns RMSNorm, SiTU-GLU, rotary embedding, and deterministic top-k helpers.
+- `reference/k3x_ref/ops.py` owns RMSNorm, SiTU-GLU, and deterministic top-k helpers.
 - `reference/k3x_ref/kda.py` owns ShortConv state and KDA recurrence.
 - `reference/k3x_ref/mla.py` owns Gated MLA and its incremental cache.
 - `reference/k3x_ref/moe.py` owns routing, routed experts, latent projections, and the shared branch.
@@ -165,6 +165,7 @@ class SyntheticK3Config:
     qk_nope_head_dim: int = 8
     qk_rope_head_dim: int = 8
     v_head_dim: int = 8
+    mla_use_nope: bool = True
     num_experts: int = 8
     top_k: int = 2
     num_shared_experts: int = 1
@@ -191,6 +192,8 @@ class SyntheticK3Config:
             raise ValueError("kda_heads * kda_head_dim must equal hidden_size")
         if self.expert_intermediate_size % self.mxfp4_group_size:
             raise ValueError("expert_intermediate_size must align to MXFP4 group size")
+        if not self.mla_use_nope:
+            raise ValueError("mla_use_nope must be true for Kimi K3")
         if not 0 < self.top_k <= self.num_experts:
             raise ValueError("top_k must be in [1, num_experts]")
 ```
@@ -232,7 +235,6 @@ rtk git commit -m "build: establish K3X milestone toolchain"
 **Interfaces:**
 - Produces: `rms_norm(x, weight, eps) -> torch.Tensor`.
 - Produces: `situ_glu(gate, up, beta, linear_beta) -> torch.Tensor`.
-- Produces: `apply_rope(x, positions, base=10000.0) -> torch.Tensor`.
 - Produces: `decode_mxfp4(packed, scales, rows, cols, group_size=32) -> torch.Tensor`.
 - Produces: `mxfp4_matmul(x, packed, scales, rows, cols) -> torch.Tensor`.
 
@@ -312,7 +314,7 @@ rtk git commit -m "feat: add K3 numerical reference primitives"
 - Produces: `ShortConvState(history: torch.Tensor)` and `KDAState(conv_q, conv_k, conv_v, recurrent)`.
 - Produces: `kda_prefill(x, weights, state, cfg) -> tuple[torch.Tensor, KDAState]`.
 - Produces: `kda_decode(x_one, weights, state, cfg) -> tuple[torch.Tensor, KDAState]`.
-- Produces: `MLAState(keys, values, rope_keys, length)`.
+- Produces: `MLAState(keys, values, shared_keys, length)`.
 - Produces: `mla_prefill(x, weights, positions, state, cfg) -> tuple[torch.Tensor, MLAState]`.
 - Produces: `mla_decode(x_one, weights, position, state, cfg) -> tuple[torch.Tensor, MLAState]`.
 
@@ -338,7 +340,7 @@ def test_kda_step_reads_output_from_updated_state() -> None:
     assert torch.equal(out, torch.tensor([[2.0, 1.0]]))
 ```
 
-Add parameterized sequence lengths 1, 2, and 5 asserting `prefill_output == concat(decode_output)` and exact equality of final convolution and recurrent states. Add the equivalent MLA test, comparing expanded cached K/V and shared RoPE slots as well as output.
+Add parameterized sequence lengths 1, 2, and 5 asserting `prefill_output == concat(decode_output)` and exact equality of final convolution and recurrent states. Add the equivalent MLA test, comparing expanded cached K/V and shared extra-key slots as well as output.
 
 - [ ] **Step 2: Run and observe RED for missing modules**
 
@@ -354,7 +356,7 @@ Project Q/K/V, apply causal depthwise convolution and SiLU, normalize Q/K per he
 
 - [ ] **Step 4: Implement Gated MLA with explicit cache contents**
 
-Use q-LoRA projection and norm, split non-RoPE and RoPE query parts, emit KV latent plus shared RoPE key, normalize only the latent, expand non-RoPE K and V, apply causal softmax scaled by the complete query width, apply sigmoid output gate before output projection, and append exact cache tensors.
+Use q-LoRA projection and norm, split the main and extra query subspaces, emit KV latent plus a shared extra key, normalize only the latent, and apply no positional rotation because K3 sets `mla_use_nope=true`. Expand the main K and V, apply causal softmax scaled by the complete query width, apply the sigmoid output gate before output projection, and append exact cache tensors.
 
 - [ ] **Step 5: Run focused and cumulative tests**
 
@@ -588,7 +590,8 @@ Model config record, 256 bytes
 84  f32      routed_scaling_factor
 88  f32      absolute_tolerance
 92  f32      relative_tolerance
-96  u8[160]  reserved
+96  u32      mla_flags, bit 0 use_nope and bit 1 output_gate
+100 u8[156]  reserved
 ```
 
 All enum numeric values, feature bits, and the canonical directory digest range are listed beside these layouts. Root SHA-256 is computed over the finalized file length with bytes 200-231 and 4092-4095 treated as zero, then written at 200; superblock CRC32C is computed last over bytes 0-4091.
@@ -784,7 +787,7 @@ Expected: `k3x_run` target or graph symbols are missing.
 
 - [ ] **Step 3: Implement KDA and MLA from the public contract**
 
-Port the operation order from Task 3 without calling Python or LibTorch. Preserve convolution tap order, per-key-channel decay, updated-state output, shared RoPE cache storage, complete-head scaling, and pre-projection MLA output gate. Accumulate dot products in `double` and cast once to FP32 at the output boundary.
+Port the operation order from Task 3 without calling Python or LibTorch. Preserve convolution tap order, per-key-channel decay, updated-state output, shared extra-key cache storage without rotary embedding, complete-head scaling, and pre-projection MLA output gate. Accumulate dot products in `double` and cast once to FP32 at the output boundary.
 
 - [ ] **Step 4: Implement router, latent MoE, AttnRes, and model composition**
 
