@@ -52,7 +52,7 @@
 
 - [x] profiler schema와 집계기를 TDD로 구현하고 CTest 3/3 검증.
 - [x] CPU compute backend 경계를 도입하고 CTest 4/4 및 pytest 47/47 검증.
-- [ ] optional CUDA 13.3 및 SM 12.0 build 구성.
+- [x] optional CUDA 13.3 및 SM 12.0 resource shell 구성과 CPU-only 격리 검증.
 - [ ] cuBLASLt FP32/BF16 projection baseline 구현.
 - [x] cuBLASLt FP4와 K3 MXFP4 scale 계약 비교 후 direct path 기각.
 - [ ] custom MXFP4 CUDA baseline 구현.

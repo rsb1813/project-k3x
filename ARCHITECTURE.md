@@ -104,15 +104,15 @@ The seeded fixture generates `[43, 32, 28, 49, 9, 28]` for prompt `[1, 7, 3, 9]`
 
 ## Milestone 1 accepted design
 
-Milestone 1 preserves the portable CPU graph as the exact reference and introduces a narrow projection/MXFP4 compute-backend boundary plus structured profiling. The optional CUDA backend targets the verified WSL2 Ubuntu 24.04 environment with CUDA Toolkit 13.3.1, nvcc 13.3.73, and native `sm_120` support for the RTX 5080. GPU passthrough is implemented environment setup; the CUDA backend itself remains unimplemented.
+Milestone 1 preserves the portable CPU graph as the exact reference and introduces a narrow projection/MXFP4 compute-backend boundary plus structured profiling. The optional CUDA backend targets the verified WSL2 Ubuntu 24.04 environment with CUDA Toolkit 13.3.1, nvcc 13.3.73, and native `sm_120` support for the RTX 5080. GPU passthrough and the CUDA resource shell are implemented; CUDA matrix compute remains unimplemented.
 
 The accepted comparison has three explicit execution identities.
 
 | Backend | Dense projection | MXFP4 expert path | Status |
 |---|---|---|---|
 | `cpu` | Portable FP32 C++ | Portable E2M1/E8M0 decode and FP32 accumulation | Implemented and tested |
-| `cuda-dense` | cuBLASLt FP32/BF16 | Portable CPU E2M1/E8M0 oracle | Accepted design, not implemented |
-| `cuda-custom` | Same cuBLASLt dense path | Minimal custom E2M1/E8M0 CUDA kernel | Accepted design, not implemented |
+| `cuda-dense` | cuBLASLt FP32/BF16 | Portable CPU E2M1/E8M0 oracle | Resource shell implemented; compute path not implemented |
+| `cuda-custom` | Same cuBLASLt dense path | Minimal custom E2M1/E8M0 CUDA kernel | Resource shell implemented; compute path not implemented |
 
 KDA, MLA, routing, Attention Residual, recurrent state, and greedy selection stay on the existing CPU graph during this baseline. Per-operation host/device transfers remain visible so a later residency layer has a measured cost to remove. CUDA is optional at build time and cannot break the CPU-only Linux build.
 
@@ -122,7 +122,9 @@ The detailed numerical, profiling, error, and platform gates are in [`docs/super
 
 The deterministic profiling primitive is implemented and tested. `Profiler` owns explicit `ProfileEvent` records and performs a single linear summary pass. It has no clock, thread, serialization, or CUDA dependency. Successful events contribute wall time, device time, logical bytes, and directional transfer bytes; failed events contribute only to `failed_operations`. Runtime instrumentation and JSON/CSV export remain unimplemented.
 
-The exact CPU compute boundary is implemented and tested. `ComputeBackend` now owns row-major dense matvec and native packed MXFP4 matvec operations, while KDA, MLA, routing, Attention Residual, recurrent state, activations, and greedy selection remain in the unchanged CPU graph. `CpuBackend` preserves the previous double-accumulation dense arithmetic and delegates native MXFP4 to the existing byte-level oracle. Generation accepts an explicit backend, and the legacy overload constructs `CpuBackend` for compatibility. CUDA factories remain unimplemented.
+The exact CPU compute boundary is implemented and tested. `ComputeBackend` now owns row-major dense matvec and native packed MXFP4 matvec operations, while KDA, MLA, routing, Attention Residual, recurrent state, activations, and greedy selection remain in the unchanged CPU graph. `CpuBackend` preserves the previous double-accumulation dense arithmetic and delegates native MXFP4 to the existing byte-level oracle. Generation accepts an explicit backend, and the legacy overload constructs `CpuBackend` for compatibility.
+
+The optional CUDA resource shell is implemented and tested. `K3X_ENABLE_CUDA=OFF` compiles a dependency-free stub that rejects explicit CUDA requests with `backend_unavailable`. The ON build requires CUDA Toolkit 13.3 or newer, links CUDA runtime and cuBLASLt, and emits a native `sm_120` cubin. The factory validates compute capability 12.0 or newer before creating one nonblocking stream and one cuBLASLt handle with local RAII ownership. Device buffers, dense matvec, and MXFP4 matvec remain unimplemented and return typed unavailable errors.
 
 ## TITAN component registry
 

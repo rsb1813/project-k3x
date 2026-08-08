@@ -63,3 +63,5 @@
 - `K3X_BUILD_DIR` resolver의 RED ImportError를 확인한 뒤 공통 native binary resolver를 구현했다. targeted cross-language 8/8, 전체 pytest 47/47, CTest 2/2가 통과했고 커밋은 `b6d900f`다.
 - deterministic profiler는 명시적 event만 소유하며 clock, thread, JSON, CUDA 의존성을 갖지 않는다. 실패 event는 실패 횟수만 증가시키고 시간·byte 합계에서는 제외하며 H2D와 D2H bytes를 분리한다. unknown target RED 후 CTest 3/3과 pytest 47/47을 확인했고 커밋은 `f06ce97`이다.
 - exact CPU backend는 기존 double 누산 dense와 native MXFP4 matvec만 격리한다. graph는 명시적 backend와 prefill/decode phase를 전달하고 LM head는 global layer로 기록한다. literal backend RED/GREEN, CTest 4/4, cross-language parity 5/5, 전체 pytest 47/47을 확인했고 커밋은 `b439e25`이다.
+- Release `NDEBUG`가 최근 `assert` 기반 profiler/backend test 표현식을 제거해 unit checks가 실행되지 않은 문제를 발견했다. 기존 suite 방식인 explicit return codes로 교체해 실제 RED와 GREEN을 재확인했고 커밋은 `d1b52d4`이다.
+- optional CUDA shell은 OFF에서 typed unavailable stub만 링크하고 CUDA dependency가 없으며, ON에서 CUDA 13.3, native `sm_120`, capability 12.0 gate, nonblocking stream, cuBLASLt handle을 RAII로 소유한다. CPU/CUDA CTest 각각 5/5, CPU 전체 pytest 47/47, CUDA cross-language parity 5/5를 확인했고 커밋은 `5b6d1e7`이다. CUDA matrix compute는 아직 미구현이다.

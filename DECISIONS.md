@@ -44,7 +44,7 @@
 ## D-004 — Hybrid CUDA baseline
 
 - Date: 2026-08-08.
-- Status: accepted design; not implemented.
+- Status: accepted design; resource shell implemented, compute paths not implemented.
 - Decision: retain the CPU oracle, use cuBLASLt for the independent dense FP32/BF16 path, and compare CPU MXFP4 with a custom CUDA MXFP4 path that changes only expert matrix multiplication.
 - Alternatives considered: custom CUDA only; cuBLASLt only; hybrid comparison.
 - Evidence: the local CUDA 13.3 toolkit supports `sm_120`. NVIDIA's cuBLAS documentation specifies UE4M3/16 scaling for FP4; K3 uses E8M0/32 MXFP4, so direct native-byte compatibility is disproven.
@@ -140,3 +140,25 @@
 - Benchmark result: none; the backend is not yet connected to the benchmark profiler schema, and this refactor does not claim a throughput change.
 - Reason: the narrow boundary preserves the numerical oracle and limits CUDA parity work to independently testable operations without creating a generic framework.
 - Revisit: widen the boundary only after measured transfer or launch overhead identifies a specific fusion opportunity.
+
+## D-013 — Keep native tests active under Release NDEBUG
+
+- Date: 2026-08-08.
+- Status: accepted.
+- Decision: native C++ tests use explicit nonzero return codes rather than `assert` for behavior checks that must execute in Release builds.
+- Alternatives considered: keep `assert`; undefine `NDEBUG` only for tests; use explicit checks consistently with the existing native suite.
+- Evidence: the first Release CUDA-unavailable test linked past a nonexistent enum reference because `assert` removed the complete expression. Replacing assertions exposed the intended compile-time RED and the corrected profiler/backend tests pass in Release.
+- Benchmark result: none; this is test validity evidence.
+- Reason: Release is the performance build and its correctness tests must execute the same checks rather than silently becoming no-ops.
+- Revisit: a dedicated test framework may replace return codes later, but it must remain active under `NDEBUG`.
+
+## D-014 — Make CUDA an explicit optional build with no CPU fallback
+
+- Date: 2026-08-08.
+- Status: accepted; resource shell implemented.
+- Decision: default `K3X_ENABLE_CUDA=OFF` builds a CUDA-free stub, while ON requires CUDA Toolkit 13.3, targets native `sm_120`, validates capability 12.0 or newer, and owns a nonblocking stream plus cuBLASLt handle without global state.
+- Alternatives considered: require CUDA for every build; silently fall back to CPU; load CUDA dynamically from one binary; compile mutually exclusive stub and CUDA sources.
+- Evidence: CPU CTest passes 5/5 with no CUDA/cuBLAS dynamic dependency; CUDA CTest passes 5/5 on RTX 5080; CUDA artifacts contain `sm_120` cubins; CUDA-enabled cross-language parity passes 5/5 on the still-default CPU graph.
+- Benchmark result: none; no CUDA matrix operation exists yet.
+- Reason: explicit build and runtime identity prevents benchmark mislabeling and preserves portable CPU correctness.
+- Revisit: dynamic loading is considered only if separate build artifacts become an operational burden after measured backends exist.
