@@ -13,8 +13,8 @@
 
 - [x] 저장소 도구 구성과 합성 config 계약 테스트.
 - [x] PyTorch 기본 연산과 MXFP4 oracle.
-- [ ] KDA와 recurrent/ShortConv state parity.
-- [ ] Gated MLA와 incremental KV parity.
+- [x] KDA와 recurrent/ShortConv state parity.
+- [x] Gated MLA와 incremental KV parity.
 - [ ] router, Stable LatentMoE, shared expert parity.
 - [ ] Attention Residual과 decoder graph parity.
 - [ ] greedy generation full/incremental parity.

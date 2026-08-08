@@ -22,3 +22,5 @@
 - 합성 config 계약 테스트는 의도한 `ModuleNotFoundError`로 RED를 확인한 뒤 2개가 통과했다. `pip check`도 문제 없음으로 통과했다.
 - 고정한 PipeNetwork revision의 vendored text reference와 MLX port를 재검증한 결과 K3 MLA는 `mla_use_nope=true`이며 `qk_rope_head_dim`으로 명명된 64차원 subspace에도 rotary embedding을 적용하지 않는다. 사용자 승인에 따라 설계와 계획에서 이를 shared extra-key NoPE 경로로 정정했다.
 - FP32 RMSNorm, SiTU-GLU, native MXFP4 E2M1/E8M0 decode와 reference matmul 테스트 6개가 통과했다. Nibble 순서를 의도적으로 뒤집었을 때 literal test가 실패함을 확인하고 low-nibble-first 구현을 복원했다.
+- KDA reference는 causal depthwise ShortConv history, head-wise `A_log`, channel-wise forget logits, sigmoid beta, delta write 후 read, full-rank output gate를 명시적 state로 구현했다. Pre-update state를 읽도록 변이했을 때 literal recurrence test가 실패함을 확인했다.
+- Gated MLA reference는 q-LoRA와 normalized KV latent, main key/value, shared extra NoPE key, output gate를 명시적으로 저장한다. 길이 1, 2, 5에서 KDA와 MLA 모두 prefill과 token-by-token decode 출력 및 최종 state가 exact match했다.
