@@ -68,6 +68,7 @@
 - [x] Milestone 2 설계 명세와 acceptance matrix 작성.
 - [x] 사용자 서면 명세 검토.
 - [x] TDD 구현 계획 작성.
+- [x] CUDA allocation/weight/batching 옵션과 runtime 통계 계약 정의.
 - [ ] allocation reuse 구현과 독립 ablation.
 - [ ] exact static weight residency 구현과 독립 ablation.
 - [ ] dense/MXFP4 grouped projection 구현과 독립 ablation.

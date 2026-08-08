@@ -14,6 +14,8 @@ public:
     explicit CpuBackend(Profiler* profiler) : profiler_(profiler) {}
 
     BackendKind kind() const noexcept override { return BackendKind::cpu; }
+    const BackendOptions& options() const noexcept override { return options_; }
+    BackendRuntimeStats runtime_stats() const noexcept override { return {}; }
 
     Result<std::vector<float>> dense_matvec(
         std::span<const float> input, std::span<const float> weight,
@@ -73,6 +75,7 @@ private:
                            logical_bytes, 0, success});
     }
 
+    BackendOptions options_{};
     Profiler* profiler_;
 };
 

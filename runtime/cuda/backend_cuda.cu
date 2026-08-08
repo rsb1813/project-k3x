@@ -163,6 +163,10 @@ public:
     }
 
     BackendKind kind() const noexcept override { return options_.kind; }
+    const BackendOptions& options() const noexcept override { return options_; }
+    BackendRuntimeStats runtime_stats() const noexcept override {
+        return runtime_stats_;
+    }
 
     Result<std::vector<float>> dense_matvec(
         std::span<const float> input, std::span<const float> weight,
@@ -488,6 +492,7 @@ private:
     cublasLtHandle_t handle_{};
     std::string device_name_;
     BackendMemoryStats memory_stats_{};
+    BackendRuntimeStats runtime_stats_{};
 };
 
 Result<std::unique_ptr<ComputeBackend>> cuda_failure(

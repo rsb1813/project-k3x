@@ -13,6 +13,34 @@ int main() {
     if (backend->memory_stats().current_device_bytes != 0) return 3;
     if (backend->memory_stats().peak_device_bytes != 0) return 4;
 
+    const k3x::BackendOptions defaults;
+    if (defaults.cuda_allocation != k3x::CudaAllocationMode::per_operation) return 21;
+    if (defaults.cuda_weights != k3x::CudaWeightMode::transient) return 22;
+    if (defaults.cuda_batching != k3x::CudaBatchingMode::scalar) return 23;
+    if (defaults.cuda_resident_bytes != 0) return 24;
+
+    const auto& options = backend->options();
+    if (options.kind != k3x::BackendKind::cpu) return 25;
+    if (options.dense_precision != k3x::DensePrecision::fp32) return 26;
+    if (options.cuda_allocation != k3x::CudaAllocationMode::per_operation) return 27;
+    if (options.cuda_weights != k3x::CudaWeightMode::transient) return 28;
+    if (options.cuda_batching != k3x::CudaBatchingMode::scalar) return 29;
+    if (options.cuda_resident_bytes != 0) return 30;
+
+    const auto runtime_stats = backend->runtime_stats();
+    if (runtime_stats.device_allocation_count != 0) return 31;
+    if (runtime_stats.device_free_count != 0) return 32;
+    if (runtime_stats.stream_synchronization_count != 0) return 33;
+    if (runtime_stats.weight_cache_hits != 0) return 34;
+    if (runtime_stats.weight_cache_misses != 0) return 35;
+    if (runtime_stats.weight_cache_bypasses != 0) return 36;
+    if (runtime_stats.resident_weight_bytes != 0) return 37;
+    if (runtime_stats.peak_resident_weight_bytes != 0) return 38;
+    if (runtime_stats.scratch_bytes != 0) return 39;
+    if (runtime_stats.peak_scratch_bytes != 0) return 40;
+    if (runtime_stats.grouped_projection_calls != 0) return 41;
+    if (runtime_stats.grouped_projection_members != 0) return 42;
+
     const std::array<float, 3> dense_input{2.0F, -1.0F, 0.5F};
     const std::array<float, 6> dense_weight{1.0F, 2.0F, 3.0F,
                                              -2.0F, 0.25F, 4.0F};

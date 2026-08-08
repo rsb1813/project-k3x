@@ -77,3 +77,4 @@
 - 첫 grouped call site는 dependency가 없는 KDA Q/K/V, dense/shared gate-up, routed MXFP4 expert gate-up으로 제한한다. 전체 layer GPU executor, async storage, pinned transfer와 tiered cache는 측정 후 다음 경계로 남긴다.
 - 사용자가 written Milestone 2 spec을 승인했다. 구현 계획 self-review에서 B-0002 reference가 descriptor/event reuse로 오염되지 않도록 `per-operation`은 buffer, descriptor, heuristic, event lifetime까지 Milestone 1 동작을 보존하고 `reused`에서만 재사용하도록 명확히 했다.
 - 구현 계획은 두 CUDA backend의 FP32 8개 switch 조합과 fully-enabled BF16, disjoint grouped output arena, member별 event pool, capacity bypass와 split H2D accounting을 명시한다.
+- Milestone 2 Task 1은 새 CUDA 옵션의 reference 기본값과 12개 runtime counter 계약을 TDD로 고정했다. `ComputeBackend`의 새 순수 가상 계약 때문에 계획에 명시된 CPU 파일뿐 아니라 CUDA 구현체에도 옵션·통계 accessor를 최소 연결했으며, CPU CTest 5개와 CUDA CTest 7개가 모두 통과했다.
