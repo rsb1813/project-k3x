@@ -118,3 +118,14 @@
 - Benchmark result: none; environment validation and correctness tests are not throughput benchmarks.
 - Reason: this preserves the host security policy, matches the Linux-first runtime direction, and supplies a reproducible local CUDA compiler and device path.
 - Revisit: perform final storage and performance measurements on Linux native because WSL filesystem and I/O behavior are not the final authority.
+
+## D-011 — Keep profiling events explicit and aggregate successful work only
+
+- Date: 2026-08-08.
+- Status: accepted.
+- Decision: the foundational profiler records caller-supplied events, aggregates successful event time and bytes, separates H2D/D2H traffic, and counts failed events without adding their partial durations or bytes to successful totals.
+- Alternatives considered: embed clocks and CUDA events in the profiler; aggregate failed partial work into normal totals; keep raw events without a common summary.
+- Evidence: the deterministic aggregation test preserves FP32 and native MXFP4 precision identities, verifies directional transfer bytes, and excludes a failed event from successful totals.
+- Benchmark result: none; CTest 3/3 and pytest 47/47 are correctness results.
+- Reason: explicit events keep measurement source and synchronization policy at the backend boundary while making summaries deterministic and comparable.
+- Revisit: add separate attempted-work counters if failed partial work becomes necessary for diagnosis; do not silently mix it into successful throughput totals.

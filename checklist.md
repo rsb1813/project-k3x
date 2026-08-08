@@ -50,7 +50,7 @@
 
 ## Milestone 1 구현
 
-- [ ] profiler schema와 집계기를 TDD로 구현.
+- [x] profiler schema와 집계기를 TDD로 구현하고 CTest 3/3 검증.
 - [ ] CPU compute backend 경계를 회귀 테스트와 함께 도입.
 - [ ] optional CUDA 13.3 및 SM 12.0 build 구성.
 - [ ] cuBLASLt FP32/BF16 projection baseline 구현.

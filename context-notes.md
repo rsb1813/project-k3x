@@ -61,3 +61,4 @@
 - Ubuntu 기본 개발 사용자는 비관리자 `jolib`로 설정했다. Python 환경은 `/home/jolib/.venvs/k3x-m1`, native build는 Git에서 무시되는 `build-linux`를 사용한다.
 - 생산 코드 변경 전 Linux Release baseline은 CTest 2/2와 cross-language 제외 pytest 39/39가 통과했다.
 - `K3X_BUILD_DIR` resolver의 RED ImportError를 확인한 뒤 공통 native binary resolver를 구현했다. targeted cross-language 8/8, 전체 pytest 47/47, CTest 2/2가 통과했고 커밋은 `b6d900f`다.
+- deterministic profiler는 명시적 event만 소유하며 clock, thread, JSON, CUDA 의존성을 갖지 않는다. 실패 event는 실패 횟수만 증가시키고 시간·byte 합계에서는 제외하며 H2D와 D2H bytes를 분리한다. unknown target RED 후 CTest 3/3과 pytest 47/47을 확인했고 커밋은 `f06ce97`이다.
