@@ -324,8 +324,9 @@ Result<Reader> Reader::open(const std::filesystem::path& path, VerifyMode mode) 
             if (root_stream.gcount() != static_cast<std::streamsize>(requested)) {
                 return Result<Reader>::failure(ErrorCode::truncated_file);
             }
-            for (const auto [start, end] : {std::pair{200ULL, 232ULL},
-                                                  std::pair{4092ULL, 4096ULL}}) {
+            for (const auto [start, end] : {
+                     std::pair<std::uint64_t, std::uint64_t>{200, 232},
+                     std::pair<std::uint64_t, std::uint64_t>{4092, 4096}}) {
                 const auto left = std::max(start, position);
                 const auto right = std::min(end, position + requested);
                 if (left < right) {
