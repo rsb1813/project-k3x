@@ -11,7 +11,8 @@ from k3x_converter.writer import convert
 
 
 def _run_reader(path: Path) -> subprocess.CompletedProcess[str]:
-    runner = Path("build/test_reader.exe").resolve()
+    suffix = ".exe" if os.name == "nt" else ""
+    runner = Path(f"build/test_reader{suffix}").resolve()
     assert runner.exists(), "build test_reader before running cross-language reader tests"
     return subprocess.run([str(runner), str(path)], capture_output=True, text=True)
 

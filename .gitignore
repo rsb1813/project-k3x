@@ -6,5 +6,7 @@ __pycache__/
 *.egg-info/
 build/
 build-*/
+build-fixtures/
+build-results/
 *.k3x.partial
 *.k3x.resume.json

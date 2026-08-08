@@ -1,5 +1,6 @@
 # 독립 C++ runtime의 greedy token이 PyTorch golden과 일치하는지 검증합니다.
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -14,7 +15,8 @@ import pytest
 def test_cpp_generation_matches_python_golden(
     synthetic_source: Path, tmp_path: Path, mode: str
 ) -> None:
-    runner = Path("build/k3x_run.exe").resolve()
+    suffix = ".exe" if os.name == "nt" else ""
+    runner = Path(f"build/k3x_run{suffix}").resolve()
     assert runner.exists(), "build k3x_run before running cross-language parity"
     artifact = tmp_path / "synthetic.k3x"
     output = tmp_path / "result.json"
