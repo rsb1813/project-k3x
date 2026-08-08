@@ -2,11 +2,11 @@
 
 ## Current milestone
 
-Milestone 1 — exact runtime backend boundary, structured profiler, cuBLASLt dense baseline, and custom K3 MXFP4 CUDA baseline.
+Milestone 2 — reusable CUDA allocation, bounded exact weight residency, and same-input projection batching.
 
-Implementation and measurement are complete. The Linux portability layer, deterministic profiler, exact CPU backend, optional CUDA resource shell, cuBLASLt dense baseline, native-byte K3 MXFP4 CUDA baseline, explicit CLI selection, end-to-end graph parity, profiler export, and reproducible CPU/CUDA comparison all passed.
+Milestone 1 implementation, measurement, public merge, and Linux CI are complete. The user approved the staged Milestone 2 design; its written specification is under review and implementation has not started.
 
-State recorded after the 2026-08-08 Milestone 1 benchmark at code commit `c92f498` and fresh dual-build verification.
+State recorded after the 2026-08-08 Milestone 2 design approval on branch `codex/milestone-two-residency`.
 
 ## Completed work
 
@@ -32,12 +32,14 @@ State recorded after the 2026-08-08 Milestone 1 benchmark at code commit `c92f49
 - End-to-end CPU/CUDA layer, logits, recurrent state, and exact-token parity on the deterministic K3X artifact.
 - JSON/CSV export of backend, device, precision, kernel time, directional transfer bytes, peak backend-owned VRAM, logical reads, layer timing, and numerical error.
 - B-0002 synthetic comparison with three warmups and 20 samples for CPU and both CUDA backends in FP32, plus both CUDA backends in BF16.
+- Milestone 1 fast-forward merge to public `main` at `254a9ac` and successful post-merge Linux correctness run `31259325702`.
+- Approved Milestone 2 design covering three independently switchable allocation, residency, and batching axes with B-0002 reference preservation.
 
 ## Work in progress
 
-- Branch: `feat/milestone-one-runtime`.
+- Branch: `codex/milestone-two-residency`.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
-- Milestone 1 documentation, raw result records, and final review are in progress; the code and measurement tasks are complete.
+- The written Milestone 2 design is complete and awaiting the required user review before a TDD implementation plan is written.
 - Linux development runs as the unprivileged `jolib` user. The isolated Python environment is `/home/jolib/.venvs/k3x-m1`; repository build output is `build-linux`.
 
 ## Known failures and blockers
@@ -46,15 +48,17 @@ State recorded after the 2026-08-08 Milestone 1 benchmark at code commit `c92f49
 - Code Integrity events 3033 and 3077 cite policy `{0283ac0f-fff1-49ae-ada1-8a933130cad6}` and an unmet Enterprise signing level.
 - Fresh Windows CTest binaries run, but five Python cross-language cases that launch `k3x_run.exe` remain blocked on Windows. This does not block the verified WSL Linux path.
 - CUDA calls allocate and transfer per operation in the current correctness baseline; persistent residency and asynchronous overlap remain unimplemented.
+- Milestone 2 implementation is intentionally gated on review of the accepted written specification; no production code is claimed yet.
 - `cuda_dense` intentionally uses the CPU MXFP4 oracle with zero device traffic; this is its documented comparison contract, not an automatic fallback after a CUDA failure.
 - Direct cuBLASLt FP4 is rejected for exact K3 MXFP4 because NVIDIA requires UE4M3 scales per 16 FP4 values while K3 uses E8M0 scales per 32 values.
 
 ## Next concrete tasks
 
-1. Add persistent device buffers and a layer/block execution boundary while retaining the current operation-level oracle.
-2. Remeasure CPU, CUDA dense, and CUDA custom to isolate allocation, transfer, launch, and synchronization savings.
-3. Implement the first full-dimension bounded checkpoint-slice runtime without requiring full-model residency.
-4. Begin tiered asynchronous storage only after the wider CUDA boundary passes correctness and ablation gates.
+1. Complete user review of the Milestone 2 written specification.
+2. Write and commit the detailed TDD implementation plan.
+3. Implement and independently ablate reusable allocation, exact static residency, and grouped projections.
+4. Remeasure CPU, CUDA dense, and CUDA custom before selecting any default.
+5. Use the measured remaining boundary cost to choose a wider GPU executor or the first L0/L1 asynchronous transfer pipeline.
 
 ## Hardware assumptions
 
@@ -77,9 +81,9 @@ This does not replace the derived full-model traffic model. Uncached natural Top
 
 ## Last known-good state
 
-- Public `main`: `b86280ed5eefc41992b1ea02e20204edea6b61cf`.
-- GitHub Actions correctness run: `31249173770`, success on Linux.
-- Public-main tests: Python 46/46 and CTest 2/2.
+- Public `main`: `254a9acf8d62682693e2ce0bde37008ee69e8caf`.
+- GitHub Actions correctness run: `31259325702`, success on Linux after the Milestone 1 merge.
+- Public-main local tests: CPU CTest 5/5 and pytest 53 passed; CUDA CTest 7/7 and pytest 59 passed.
 - Milestone 1 design commit: `84edc6e`.
 - Linux environment: WSL 2.7.11.0, Ubuntu 24.04.4, kernel 6.18.33.2, CUDA Toolkit 13.3.1, nvcc 13.3.73, RTX 5080 compute capability 12.0.
 - Current worktree code commit: `c92f498` (`feat: profile backend-selected synthetic inference`).

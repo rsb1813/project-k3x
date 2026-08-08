@@ -59,3 +59,16 @@
 - [x] CPU, CUDA library, CUDA custom synthetic graph parity 검증.
 - [x] JSON/CSV benchmark와 실제 RTX 5080 측정.
 - [x] 전체 ablation 결과와 다음 병목 문서화.
+
+## Milestone 2 설계와 구현
+
+- [x] B-0002와 현재 CUDA resource lifetime을 근거로 병목 재검증.
+- [x] scratch-only, staged residency, whole-layer GPU executor 대안 비교.
+- [x] static weight residency와 grouped projection 설계 승인.
+- [x] Milestone 2 설계 명세와 acceptance matrix 작성.
+- [ ] 사용자 서면 명세 검토.
+- [ ] TDD 구현 계획 작성.
+- [ ] allocation reuse 구현과 독립 ablation.
+- [ ] exact static weight residency 구현과 독립 ablation.
+- [ ] dense/MXFP4 grouped projection 구현과 독립 ablation.
+- [ ] 전체 correctness, memcheck, benchmark, TITAN Ledger 갱신.

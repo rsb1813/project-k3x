@@ -196,3 +196,14 @@
 - Benchmark result: B-0002 measures CPU at 19.49 decode tok/s, ahead of `cuda-dense` at 11.67 and `cuda-custom` at 10.11 on the tiny synthetic graph. BF16 does not reverse the ordering.
 - Reason: selecting a slower GPU path by default would contradict end-to-end evidence. Explicit identities also prevent accidental benchmark mislabeling.
 - Revisit: after persistent device residency and batched layer/block execution are implemented and remeasured on the same correctness fixture.
+
+## D-018 — Stage CUDA residency before a whole-layer GPU executor
+
+- Date: 2026-08-08.
+- Status: accepted design; implementation pending.
+- Decision: implement independently switchable reusable scratch allocation, bounded tensor-ID-keyed immutable-weight residency, and same-input projection grouping before moving the complete KDA/MLA/MoE layer graph to CUDA.
+- Alternatives considered: scratch reuse only; the selected staged design; immediate whole-layer GPU execution.
+- Evidence: B-0002 shows only 11.56--14.52 ms of CUDA-event kernel time per run while every matrix call allocates, uploads immutable weights, downloads output, synchronizes, and frees resources. The current `ComputeBackend` also lacks stable tensor identity and grouped operations.
+- Benchmark result: B-0002 is the reference. Milestone 2 has no benchmark result until the implementation passes its ablation matrix.
+- Reason: the staged design removes measured redundant work while keeping each optimization independently disableable and preserving a narrow numerical oracle. It creates L0 primitives without inventing the later expert eviction policy.
+- Revisit: after the four-step allocation/residency/grouping ablation identifies the remaining host/device boundary cost.

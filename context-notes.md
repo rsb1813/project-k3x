@@ -72,3 +72,6 @@
 - 계획 문서의 artifact 명령은 생성기 출력 상위 디렉터리를 converter에 넘겼지만 실제 생성기는 그 아래 `source/`에 checkpoint manifest를 만든다. 실패 traceback에서 `source-manifest.json` 부재를 확인한 뒤 실제 계약대로 `artifacts/synthetic-source/source`를 변환했다. 코드 회귀가 아니라 계획 예시 경로 불일치다.
 - 커밋 `c92f498`에서 3 warmup과 20 sample로 측정했다. CPU, FP32 cuda-dense, FP32 cuda-custom decode는 각각 19.4858, 11.6682, 10.1118 tok/s다. BF16 cuda-dense/custom은 11.4957/10.1235 tok/s이며 H2D와 backend peak VRAM은 FP32의 약 절반이다.
 - CUDA-event kernel 누적은 전체 run당 11.56~14.52 ms에 불과하지만 end-to-end 실행은 수백 ms다. 현재 합성 병목은 per-operation allocation, staging, synchronous copy/synchronization과 CPU-resident graph다. 다음 구현은 kernel 미세 최적화보다 persistent device buffers와 layer/block batching을 우선한다.
+- 사용자는 Milestone 2 권장안인 bounded static weight residency, reusable scratch buffers, grouped projection 조합을 승인했다. 세 기능은 각각 독립 switch와 ablation을 가지며 기존 per-operation/transient/scalar 경로를 reference로 보존한다.
+- Resident cache는 tensor ID와 representation/shape metadata를 key로 사용한다. capacity를 넘는 entry는 exact transient staging으로 실행하고 bypass를 기록하며, 이 단계에서는 LRU/LFU/Least-Stale eviction을 도입하지 않는다.
+- 첫 grouped call site는 dependency가 없는 KDA Q/K/V, dense/shared gate-up, routed MXFP4 expert gate-up으로 제한한다. 전체 layer GPU executor, async storage, pinned transfer와 tiered cache는 측정 후 다음 경계로 남긴다.
