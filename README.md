@@ -139,13 +139,13 @@ The checked Milestone 0 run used Windows 11 AMD64, an MSVC Debug build, three wa
 
 | Metric | Result |
 |---|---:|
-| Synthetic incremental decode | 562.62 tok/s |
-| Synthetic prefill | 414.04 tok/s |
-| Process-level TTFT median | 19.21 ms |
-| Peak observed child RSS | 5.99 MB |
+| Synthetic incremental decode | 558.89 tok/s |
+| Synthetic prefill | 405.11 tok/s |
+| Process-level TTFT median | 86.20 ms |
+| Peak observed child RSS | 6.27 MB |
 | Logical K3X reads / generated token | 110,936 bytes |
 
-The benchmark's scope is `synthetic-milestone-zero` and evidence is marked `measured` in both JSON and CSV. See [`PERFORMANCE_MODEL.md`](PERFORMANCE_MODEL.md) for definitions, state sizes, layer timings, assumptions, and the full-model byte model.
+The benchmark's scope is `synthetic-milestone-zero` and evidence is marked `measured` in both JSON and CSV. TTFT includes complete artifact integrity verification before execution. See [`PERFORMANCE_MODEL.md`](PERFORMANCE_MODEL.md) for definitions, state sizes, layer timings, assumptions, and the full-model byte model.
 
 ## K3X checkpoint format
 

@@ -11,6 +11,7 @@ K3X uses pinned source snapshots for graph decisions. Performance claims from cl
 | [Hugging Face Kimi K3 configuration](https://huggingface.co/moonshotai/Kimi-K3/blob/main/config.json) | Released tensor dimensions and feature flags | Inspected 2026-08-08 |
 | [MoonshotAI/FlashKDA](https://github.com/MoonshotAI/FlashKDA/tree/1ce47ea3bb22c84eb9cc665028399cf35e8ffb0b) | Official KDA API and optimized kernels | `1ce47ea` |
 | [MoonshotAI/Attention-Residuals](https://github.com/MoonshotAI/Attention-Residuals/tree/85e22310fe5ee860b4a023de312d791de8a5a5e6) | Attention Residual method and implementation | `85e2231` |
+| [vLLM Kimi K3 source](https://github.com/vllm-project/vllm/tree/44351f81/vllm/models/kimi_k3) | Production model graph and NVIDIA/AMD execution paths | `44351f81` |
 | [vLLM Kimi K3 engineering article](https://github.com/vllm-project/vllm-project.github.io/blob/main/_posts/2026-07-27-k3.md) | Production integration, KDA decode and fused residual context | Inspected 2026-08-08 |
 | [FareedKhan-dev/kimi-k3-in-c](https://github.com/FareedKhan-dev/kimi-k3-in-c/tree/ff11dce858a2eb8a781224facdffd33a1fa48d25) | Independent C runtime reference | `ff11dce` |
 | [PipeNetwork/kimi-k3-mlx](https://github.com/PipeNetwork/kimi-k3-mlx/tree/20a4fb101ce81380ab8af0036743d49e7256c521) | Independent MLX graph reference | `20a4fb1` |

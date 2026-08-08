@@ -97,16 +97,16 @@ The following values were measured on 2026-08-08 using the deterministic tiny sy
 
 | Metric | Measured result |
 |---|---:|
-| Prefill throughput | 414.04 tok/s |
-| Incremental decode throughput | 562.62 tok/s |
-| Process-level TTFT median | 19.21 ms |
-| Observed peak child RSS | 5,992,448 bytes |
+| Prefill throughput | 405.11 tok/s |
+| Incremental decode throughput | 558.89 tok/s |
+| Process-level TTFT median | 86.20 ms |
+| Observed peak child RSS | 6,270,976 bytes |
 | Artifact bytes read / generated token | 110,936 bytes |
 | Synthetic KDA state | 19,200 bytes |
 | Synthetic MLA KV state at measured context | 2,592 bytes |
-| Median layer times | 2.146, 5.567, 5.451, 4.967 ms |
+| Median layer times | 2.191, 5.495, 5.511, 5.038 ms |
 
-`TTFT` includes process startup, artifact open and verification, lazy tensor loads, prompt prefill, and JSON output. Decode throughput excludes the first generated token because it comes from the prompt prefill logits. File bytes/token counts the runtime's logical artifact reads and is not an operating-system disk-counter measurement. The benchmark does not use the target RTX 5080 and says nothing about full Kimi K3 token throughput.
+`TTFT` includes process startup, strict CRC32C/directory SHA-256/root SHA-256 verification of the complete artifact, lazy tensor loads, prompt prefill, and JSON output. Decode throughput times exactly the five incremental forwards after the first generated token; that first token comes from the prompt prefill logits. File bytes/token counts the runtime's logical tensor reads after open-time integrity verification and is not an operating-system disk-counter measurement. The benchmark does not use the target RTX 5080 and says nothing about full Kimi K3 token throughput.
 
 Reproduce the record with the commands in [`README.md`](README.md). JSON and CSV are generated under an ignored `build-results/` directory so host-specific results are not mistaken for portable project data.
 

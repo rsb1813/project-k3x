@@ -99,3 +99,4 @@ The model config is a fixed 256-byte record containing the synthetic or real gra
 
 Conversion writes only `<output>.partial` plus an atomic JSON resume ledger until every extent has been flushed, read back, and CRC-verified. A work unit is identified by its canonical tensor hash and `data` or `auxiliary` suffix. Resume requires exact source, converter-version, and configuration fingerprints. Finalization writes directories and the superblock, closes the file, then atomically renames the partial artifact to the requested path.
 
+If termination occurs after the final rename but before ledger deletion, the next invocation verifies the finalized artifact's complete integrity, source fingerprint, and model configuration before deleting the stale ledger. A missing partial file is otherwise an error and never causes an unverified final artifact to be accepted.
