@@ -50,6 +50,22 @@ struct BackendRuntimeStats {
     std::uint64_t grouped_projection_members{};
 };
 
+struct DenseWeightView {
+    std::uint64_t tensor_id;
+    std::span<const float> values;
+    std::size_t rows;
+    std::size_t cols;
+};
+
+struct Mxfp4WeightView {
+    std::uint64_t tensor_id;
+    std::span<const std::byte> packed;
+    std::span<const std::byte> scales;
+    std::size_t rows;
+    std::size_t cols;
+    std::size_t group_size;
+};
+
 class ComputeBackend {
 public:
     virtual ~ComputeBackend() = default;
@@ -57,14 +73,31 @@ public:
     virtual const BackendOptions& options() const noexcept = 0;
     virtual BackendRuntimeStats runtime_stats() const noexcept = 0;
     virtual Result<std::vector<float>> dense_matvec(
-        std::span<const float> input, std::span<const float> weight,
-        std::size_t rows, std::size_t cols, std::uint32_t layer,
-        ProfilePhase phase) = 0;
+        std::span<const float> input, DenseWeightView weight,
+        std::uint32_t layer, ProfilePhase phase) = 0;
     virtual Result<std::vector<float>> mxfp4_matvec(
+        std::span<const float> input, Mxfp4WeightView weight,
+        std::uint32_t layer, ProfilePhase phase) = 0;
+    virtual Result<std::vector<std::vector<float>>> dense_matvec_group(
+        std::span<const float> input, std::span<const DenseWeightView> weights,
+        std::uint32_t layer, ProfilePhase phase) = 0;
+    virtual Result<std::vector<std::vector<float>>> mxfp4_matvec_group(
+        std::span<const float> input, std::span<const Mxfp4WeightView> weights,
+        std::uint32_t layer, ProfilePhase phase) = 0;
+    Result<std::vector<float>> dense_matvec(
+        std::span<const float> input, std::span<const float> values,
+        std::size_t rows, std::size_t cols, std::uint32_t layer,
+        ProfilePhase phase) {
+        return dense_matvec(input, {0, values, rows, cols}, layer, phase);
+    }
+    Result<std::vector<float>> mxfp4_matvec(
         std::span<const float> input, std::span<const std::byte> packed,
         std::span<const std::byte> scales, std::size_t rows,
         std::size_t cols, std::size_t group_size,
-        std::uint32_t layer, ProfilePhase phase) = 0;
+        std::uint32_t layer, ProfilePhase phase) {
+        return mxfp4_matvec(
+            input, {0, packed, scales, rows, cols, group_size}, layer, phase);
+    }
     virtual BackendMemoryStats memory_stats() const noexcept = 0;
     virtual std::string_view device_name() const noexcept = 0;
 };

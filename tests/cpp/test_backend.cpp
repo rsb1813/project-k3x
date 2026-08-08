@@ -47,7 +47,8 @@ int main() {
     const std::array<float, 6> dense_weight{1.0F, 2.0F, 3.0F,
                                              -2.0F, 0.25F, 4.0F};
     const auto dense = backend->dense_matvec(
-        dense_input, dense_weight, 2, 3, 7, k3x::ProfilePhase::prefill);
+        dense_input, k3x::DenseWeightView{100, dense_weight, 2, 3}, 7,
+        k3x::ProfilePhase::prefill);
     if (!dense) return 5;
     if (dense.value()[0] != 1.5F) return 6;
     if (dense.value()[1] != -2.25F) return 7;
@@ -58,13 +59,14 @@ int main() {
     packed[0] = std::byte{0x10};
     const std::array<std::byte, 1> scales{std::byte{127}};
     const auto mxfp4 = backend->mxfp4_matvec(
-        mxfp4_input, packed, scales, 1, 32, 32, 8,
+        mxfp4_input, k3x::Mxfp4WeightView{200, packed, scales, 1, 32, 32}, 8,
         k3x::ProfilePhase::decode);
     if (!mxfp4) return 8;
     if (mxfp4.value()[0] != 1.0F) return 9;
 
     const auto invalid = backend->dense_matvec(
-        dense_input, dense_weight, 2, 4, 9, k3x::ProfilePhase::decode);
+        dense_input, k3x::DenseWeightView{300, dense_weight, 2, 4}, 9,
+        k3x::ProfilePhase::decode);
     if (invalid) return 10;
     if (invalid.error() != k3x::ErrorCode::invalid_extent) return 11;
 
@@ -78,5 +80,43 @@ int main() {
     if (events[1].layer != 8) return 18;
     if (events[2].success) return 19;
     if (events[2].layer != 9) return 20;
+
+    const std::array<float, 2> group_input{2.0F, -1.0F};
+    const std::array<float, 4> first_dense{1.0F, 0.0F, 0.0F, 1.0F};
+    const std::array<float, 2> second_dense{3.0F, -2.0F};
+    const std::array<k3x::DenseWeightView, 2> dense_group{{
+        {101, first_dense, 2, 2},
+        {102, second_dense, 1, 2},
+    }};
+    const auto dense_outputs = backend->dense_matvec_group(
+        group_input, dense_group, 10, k3x::ProfilePhase::decode);
+    if (!dense_outputs || dense_outputs.value().size() != 2) return 50;
+    if (dense_outputs.value()[0] != std::vector<float>{2.0F, -1.0F}) return 51;
+    if (dense_outputs.value()[1] != std::vector<float>{8.0F}) return 52;
+
+    std::array<std::byte, 32> second_packed{};
+    second_packed[0] = std::byte{0x10};
+    second_packed[16] = std::byte{0x10};
+    const std::array<std::byte, 2> second_scales{
+        std::byte{127}, std::byte{127}};
+    const std::array<k3x::Mxfp4WeightView, 2> mxfp4_group{{
+        {201, packed, scales, 1, 32, 32},
+        {202, second_packed, second_scales, 2, 32, 32},
+    }};
+    const auto mxfp4_outputs = backend->mxfp4_matvec_group(
+        mxfp4_input, mxfp4_group, 11, k3x::ProfilePhase::decode);
+    if (!mxfp4_outputs || mxfp4_outputs.value().size() != 2) return 53;
+    if (mxfp4_outputs.value()[0] != std::vector<float>{1.0F}) return 54;
+    if (mxfp4_outputs.value()[1] != std::vector<float>{1.0F, 1.0F}) return 55;
+
+    const std::array<k3x::Mxfp4WeightView, 2> invalid_group{{
+        {203, packed, scales, 1, 32, 32},
+        {204, packed, {}, 1, 32, 32},
+    }};
+    const auto event_count = profiler.events().size();
+    const auto rejected = backend->mxfp4_matvec_group(
+        mxfp4_input, invalid_group, 12, k3x::ProfilePhase::decode);
+    if (rejected || rejected.error() != k3x::ErrorCode::invalid_mxfp4) return 56;
+    if (profiler.events().size() != event_count) return 57;
     return 0;
 }

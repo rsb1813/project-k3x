@@ -119,7 +119,7 @@ public:
         }
         hidden = attention_residual(hidden, sources, "model.output_residual");
         hidden = normalized(hidden, tensor("model.final_norm"), config_.epsilon);
-        return matvec(tensor("model.lm_head"), config_.vocab, config_.hidden,
+        return matvec("model.lm_head", config_.vocab, config_.hidden,
                       hidden, profile_global_layer, phase);
     }
 
@@ -160,10 +160,16 @@ private:
         return tensors_.emplace(id, std::move(values)).first->second;
     }
 
-    Vector matvec(std::span<const float> weight, std::size_t rows,
+    DenseWeightView dense_weight(const std::string& name, std::size_t rows,
+                                 std::size_t cols) {
+        return {fnv1a64(name.c_str()), tensor(name), rows, cols};
+    }
+
+    Vector matvec(const std::string& name, std::size_t rows,
                   std::size_t cols, std::span<const float> input,
                   std::uint32_t layer, ProfilePhase phase) {
-        auto result = backend_.dense_matvec(input, weight, rows, cols, layer, phase);
+        auto result = backend_.dense_matvec(
+            input, dense_weight(name, rows, cols), layer, phase);
         if (!result) throw std::runtime_error("dense backend failure");
         return std::move(result.value());
     }
@@ -211,13 +217,13 @@ private:
     Vector kda(const Vector& input, std::size_t layer, KdaState& state,
                ProfilePhase phase) {
         const auto base = layer_name(layer, "attention.");
-        auto q = short_conv(matvec(tensor(base + "q_proj"), config_.hidden,
+        auto q = short_conv(matvec(base + "q_proj", config_.hidden,
                                    config_.hidden, input, layer, phase),
                             state.conv_q, tensor(base + "q_conv"));
-        auto k = short_conv(matvec(tensor(base + "k_proj"), config_.hidden,
+        auto k = short_conv(matvec(base + "k_proj", config_.hidden,
                                    config_.hidden, input, layer, phase),
                             state.conv_k, tensor(base + "k_conv"));
-        auto v = short_conv(matvec(tensor(base + "v_proj"), config_.hidden,
+        auto v = short_conv(matvec(base + "v_proj", config_.hidden,
                                    config_.hidden, input, layer, phase),
                             state.conv_v, tensor(base + "v_conv"));
         const auto ones = Vector(config_.kda_dim, 1.0F);
@@ -231,11 +237,11 @@ private:
                 k[head * config_.kda_dim + channel] = k_head[channel] * k_scale;
             }
         }
-        const auto f_a = matvec(tensor(base + "f_a_proj"), config_.kda_dim,
+        const auto f_a = matvec(base + "f_a_proj", config_.kda_dim,
                                   config_.hidden, input, layer, phase);
-        const auto forget = matvec(tensor(base + "f_b_proj"), config_.hidden,
+        const auto forget = matvec(base + "f_b_proj", config_.hidden,
                                    config_.kda_dim, f_a, layer, phase);
-        const auto beta_raw = matvec(tensor(base + "b_proj"), config_.kda_heads,
+        const auto beta_raw = matvec(base + "b_proj", config_.kda_heads,
                                      config_.hidden, input, layer, phase);
         const auto& a_log = tensor(base + "a_log");
         const auto& dt_bias = tensor(base + "dt_bias");
@@ -268,29 +274,29 @@ private:
                                           o_norm, config_.epsilon);
             std::copy(head_output.begin(), head_output.end(), recurrent_output.begin() + head * config_.kda_dim);
         }
-        const auto gate = matvec(tensor(base + "g_proj"), config_.hidden,
+        const auto gate = matvec(base + "g_proj", config_.hidden,
                                  config_.hidden, input, layer, phase);
         for (std::size_t index = 0; index < recurrent_output.size(); ++index) recurrent_output[index] *= sigmoid(gate[index]);
-        return matvec(tensor(base + "o_proj"), config_.hidden, config_.hidden,
+        return matvec(base + "o_proj", config_.hidden, config_.hidden,
                       recurrent_output, layer, phase);
     }
 
     Vector mla(const Vector& input, std::size_t layer, MlaState& state,
                ProfilePhase phase) {
         const auto base = layer_name(layer, "attention.");
-        auto q_latent = matvec(tensor(base + "q_a_proj"), config_.q_rank,
+        auto q_latent = matvec(base + "q_a_proj", config_.q_rank,
                                config_.hidden, input, layer, phase);
         q_latent = normalized(q_latent, tensor(base + "q_a_norm"), config_.epsilon);
         const auto query_width = config_.q_main + config_.q_extra;
-        const auto query = matvec(tensor(base + "q_b_proj"),
+        const auto query = matvec(base + "q_b_proj",
                                   config_.mla_heads * query_width,
                                   config_.q_rank, q_latent, layer, phase);
-        const auto compressed = matvec(tensor(base + "kv_a_proj"),
+        const auto compressed = matvec(base + "kv_a_proj",
                                        config_.kv_rank + config_.q_extra,
                                        config_.hidden, input, layer, phase);
         Vector latent(compressed.begin(), compressed.begin() + config_.kv_rank);
         latent = normalized(latent, tensor(base + "kv_a_norm"), config_.epsilon);
-        const auto expanded = matvec(tensor(base + "kv_b_proj"),
+        const auto expanded = matvec(base + "kv_b_proj",
                                      config_.mla_heads * (config_.q_main + config_.value_dim),
                                      config_.kv_rank, latent, layer, phase);
         const auto old_length = state.length++;
@@ -326,23 +332,23 @@ private:
                     merged[head * config_.value_dim + index] += scores[position] / denominator *
                         state.values[(position * config_.mla_heads + head) * config_.value_dim + index];
         }
-        const auto gate = matvec(tensor(base + "g_proj"), merged.size(),
+        const auto gate = matvec(base + "g_proj", merged.size(),
                                  config_.hidden, input, layer, phase);
         for (std::size_t index = 0; index < merged.size(); ++index) merged[index] *= sigmoid(gate[index]);
-        return matvec(tensor(base + "o_proj"), config_.hidden, merged.size(),
+        return matvec(base + "o_proj", config_.hidden, merged.size(),
                       merged, layer, phase);
     }
 
     Vector activated_mlp(const Vector& input, const std::string& base,
                          std::size_t intermediate, std::size_t layer,
                          ProfilePhase phase) {
-        const auto gate = matvec(tensor(base + ".gate"), intermediate,
+        const auto gate = matvec(base + ".gate", intermediate,
                                  input.size(), input, layer, phase);
-        const auto up = matvec(tensor(base + ".up"), intermediate,
+        const auto up = matvec(base + ".up", intermediate,
                                input.size(), input, layer, phase);
         Vector activated(intermediate);
         situ_glu(activated, gate, up, config_.situ_beta, config_.situ_linear);
-        return matvec(tensor(base + ".down"), config_.hidden, intermediate,
+        return matvec(base + ".down", config_.hidden, intermediate,
                       activated, layer, phase);
     }
 
@@ -362,8 +368,9 @@ private:
                                              [id](const auto& item) { return item.tensor_id == id; });
             if (!packed || !scales || record == reader_.tensors().end()) throw std::runtime_error("missing expert");
             auto result = backend_.mxfp4_matvec(
-                value, packed.value(), scales.value(), record->dimensions[0],
-                record->dimensions[1], config_.group_size,
+                value,
+                {id, packed.value(), scales.value(), record->dimensions[0],
+                 record->dimensions[1], config_.group_size},
                 static_cast<std::uint32_t>(layer), phase);
             if (!result) throw std::runtime_error("invalid expert");
             return result.value();
@@ -377,7 +384,7 @@ private:
 
     Vector moe(const Vector& input, std::size_t layer, ProfilePhase phase) {
         const auto base = layer_name(layer, "feed_forward.");
-        const auto scores_raw = matvec(tensor(base + "router_weight"),
+        const auto scores_raw = matvec(base + "router_weight",
                                        config_.experts, config_.hidden, input,
                                        layer, phase);
         const auto& bias = tensor(base + "correction_bias");
@@ -388,7 +395,7 @@ private:
         std::stable_sort(order.begin(), order.end(), [&](auto left, auto right) {
             return scores[left] + bias[left] > scores[right] + bias[right];
         });
-        const auto latent = matvec(tensor(base + "routed_down_proj"),
+        const auto latent = matvec(base + "routed_down_proj",
                                    config_.latent, config_.hidden, input,
                                    layer, phase);
         Vector mixed(config_.latent, 0.0F);
@@ -400,17 +407,17 @@ private:
             for (std::size_t index = 0; index < mixed.size(); ++index) mixed[index] += weight * output[index];
         }
         const auto routed_norm = normalized(mixed, tensor(base + "routed_norm"), config_.epsilon);
-        auto output = matvec(tensor(base + "routed_up_proj"), config_.hidden,
+        auto output = matvec(base + "routed_up_proj", config_.hidden,
                              config_.latent, routed_norm, layer, phase);
-        const auto shared_gate = matvec(tensor(base + "shared_gate"),
+        const auto shared_gate = matvec(base + "shared_gate",
                                         config_.expert_intermediate,
                                         config_.hidden, input, layer, phase);
-        const auto shared_up = matvec(tensor(base + "shared_up"),
+        const auto shared_up = matvec(base + "shared_up",
                                       config_.expert_intermediate,
                                       config_.hidden, input, layer, phase);
         Vector shared_activated(config_.expert_intermediate);
         situ_glu(shared_activated, shared_gate, shared_up, config_.situ_beta, config_.situ_linear);
-        const auto shared = matvec(tensor(base + "shared_down"), config_.hidden,
+        const auto shared = matvec(base + "shared_down", config_.hidden,
                                    config_.expert_intermediate, shared_activated,
                                    layer, phase);
         for (std::size_t index = 0; index < output.size(); ++index) output[index] += shared[index];

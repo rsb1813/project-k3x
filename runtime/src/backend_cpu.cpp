@@ -4,6 +4,7 @@
 #include "k3x/ops.hpp"
 
 #include <chrono>
+#include <limits>
 #include <utility>
 
 namespace k3x {
@@ -18,49 +19,124 @@ public:
     BackendRuntimeStats runtime_stats() const noexcept override { return {}; }
 
     Result<std::vector<float>> dense_matvec(
-        std::span<const float> input, std::span<const float> weight,
-        std::size_t rows, std::size_t cols, std::uint32_t layer,
-        ProfilePhase phase) override {
+        std::span<const float> input, DenseWeightView weight,
+        std::uint32_t layer, ProfilePhase phase) override {
         const auto start = std::chrono::steady_clock::now();
-        if (input.size() != cols || rows > weight.size() ||
-            cols != 0 && rows > weight.size() / cols ||
-            weight.size() != rows * cols) {
+        if (!valid_dense(input, weight)) {
             record(phase, ProfileOperation::dense_matvec, NumericPrecision::fp32,
-                   layer, start, weight.size_bytes(), false);
+                   layer, start, weight.values.size_bytes(), false);
             return Result<std::vector<float>>::failure(ErrorCode::invalid_extent);
         }
 
-        std::vector<float> output(rows);
-        for (std::size_t row = 0; row < rows; ++row) {
+        std::vector<float> output(weight.rows);
+        for (std::size_t row = 0; row < weight.rows; ++row) {
             double sum = 0.0;
-            for (std::size_t column = 0; column < cols; ++column) {
-                sum += static_cast<double>(weight[row * cols + column]) *
+            for (std::size_t column = 0; column < weight.cols; ++column) {
+                sum += static_cast<double>(
+                           weight.values[row * weight.cols + column]) *
                        input[column];
             }
             output[row] = static_cast<float>(sum);
         }
         record(phase, ProfileOperation::dense_matvec, NumericPrecision::fp32,
-               layer, start, weight.size_bytes(), true);
+               layer, start, weight.values.size_bytes(), true);
         return Result<std::vector<float>>::success(std::move(output));
     }
 
     Result<std::vector<float>> mxfp4_matvec(
-        std::span<const float> input, std::span<const std::byte> packed,
-        std::span<const std::byte> scales, std::size_t rows,
-        std::size_t cols, std::size_t group_size,
+        std::span<const float> input, Mxfp4WeightView weight,
         std::uint32_t layer, ProfilePhase phase) override {
         const auto start = std::chrono::steady_clock::now();
-        auto result = mxfp4_matmul(input, packed, scales, rows, cols, group_size);
+        auto result = mxfp4_matmul(input, weight.packed, weight.scales,
+                                   weight.rows, weight.cols, weight.group_size);
         record(phase, ProfileOperation::mxfp4_matvec,
                NumericPrecision::mxfp4_e2m1_e8m0, layer, start,
-               packed.size_bytes() + scales.size_bytes(), static_cast<bool>(result));
+               weight.packed.size_bytes() + weight.scales.size_bytes(),
+               static_cast<bool>(result));
         return result;
+    }
+
+    Result<std::vector<std::vector<float>>> dense_matvec_group(
+        std::span<const float> input, std::span<const DenseWeightView> weights,
+        std::uint32_t layer, ProfilePhase phase) override {
+        for (const auto& weight : weights) {
+            if (!valid_dense(input, weight)) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::invalid_extent);
+            }
+        }
+        std::vector<std::vector<float>> outputs;
+        outputs.reserve(weights.size());
+        for (const auto& weight : weights) {
+            auto output = dense_matvec(input, weight, layer, phase);
+            if (!output) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    output.error(), output.message());
+            }
+            outputs.push_back(std::move(output.value()));
+        }
+        return Result<std::vector<std::vector<float>>>::success(
+            std::move(outputs));
+    }
+
+    Result<std::vector<std::vector<float>>> mxfp4_matvec_group(
+        std::span<const float> input, std::span<const Mxfp4WeightView> weights,
+        std::uint32_t layer, ProfilePhase phase) override {
+        for (const auto& weight : weights) {
+            if (!valid_mxfp4(input, weight)) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::invalid_mxfp4);
+            }
+        }
+        std::vector<std::vector<float>> outputs;
+        outputs.reserve(weights.size());
+        for (const auto& weight : weights) {
+            auto output = mxfp4_matvec(input, weight, layer, phase);
+            if (!output) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    output.error(), output.message());
+            }
+            outputs.push_back(std::move(output.value()));
+        }
+        return Result<std::vector<std::vector<float>>>::success(
+            std::move(outputs));
     }
 
     BackendMemoryStats memory_stats() const noexcept override { return {}; }
     std::string_view device_name() const noexcept override { return "CPU"; }
 
 private:
+    static bool valid_dense(std::span<const float> input,
+                            DenseWeightView weight) {
+        if (input.size() != weight.cols ||
+            weight.rows > weight.values.size() ||
+            (weight.cols != 0 &&
+             weight.rows > weight.values.size() / weight.cols)) {
+            return false;
+        }
+        return weight.values.size() == weight.rows * weight.cols;
+    }
+
+    static bool valid_mxfp4(std::span<const float> input,
+                            Mxfp4WeightView weight) {
+        if (input.size() != weight.cols || !weight.rows || !weight.cols ||
+            !weight.group_size || weight.cols % weight.group_size ||
+            weight.cols % 2 ||
+            weight.rows > std::numeric_limits<std::size_t>::max() /
+                              weight.cols) {
+            return false;
+        }
+        const auto elements = weight.rows * weight.cols;
+        if (weight.packed.size() != elements / 2 ||
+            weight.scales.size() != elements / weight.group_size) {
+            return false;
+        }
+        for (const auto scale : weight.scales) {
+            if (scale == std::byte{0xff}) return false;
+        }
+        return true;
+    }
+
     void record(ProfilePhase phase, ProfileOperation operation,
                 NumericPrecision precision, std::uint32_t layer,
                 std::chrono::steady_clock::time_point start,
