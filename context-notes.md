@@ -34,3 +34,8 @@
 - C++20 runtime은 외부 ML library 없이 portable CRC32C/SHA-256, strict K3X reader, RMSNorm, SiTU, native MXFP4와 합성 KDA/MLA/Attention Residual/Stable LatentMoE graph를 구현한다. Root SHA-256은 1 MiB heap buffer로 증분 검증해 artifact 전체를 RAM에 올리지 않는다.
 - C++ reader는 Python writer artifact를 열고 payload CRC corruption, unknown required feature, truncation을 동일한 안정적 오류 코드로 거부했다. C++ full/incremental greedy 결과는 PyTorch의 `[43,32,28,49,9,28]`과 모두 exact match했다.
 - 첫 cross-language 실행의 Windows `0xC00000FD`는 reader 함수의 1 MiB stack SHA buffer 때문임을 확인했다. heap buffer로 이동한 뒤 같은 parity test가 통과했다.
+- C++ runtime에 prefill, decode, layer별 단조 시계 계측을 추가하고 별도 benchmark driver에서 프로세스 RSS, 논리적 artifact read bytes, KDA/MLA state 크기를 수집한다. 첫 토큰은 prefill logits에서 나오므로 decode tok/s 계산에서는 이후 5개 토큰만 사용한다.
+- 2026-08-08 Windows 11 AMD64, MSVC Debug, 3 warmup과 20회 측정에서 합성 모델 prefill 414.04 tok/s, incremental decode 562.62 tok/s, process-level TTFT 중앙값 19.21 ms, peak child RSS 5,992,448 bytes, logical artifact read 110,936 bytes/generated token을 측정했다. 이는 합성 correctness harness 결과이며 실제 Kimi K3 또는 RTX 5080 성능 근거가 아니다.
+- 공개 config 차원으로 계산한 native MXFP4 routed expert는 17,547,264 bytes이다. cache reuse가 전혀 없는 natural Top-16의 92개 MoE layer expert traffic은 25,829,572,608 bytes/token이다. P44 Pro 공개 최대 7.0 GB/s만 적용한 expert-only ceiling은 0.27 tok/s이므로 다음 실제 병목은 NVMe expert traffic 회피율이다.
+- 공식 차원으로 계산한 BF16 text trunk 추정치는 약 85.72 GB이며 전체 checkpoint scan 결과가 아니다. 96 GB RAM에서 OS와 expert bank까지 확보하려면 sensitivity-aware trunk quantization이 필요하다는 capacity planning 근거로만 사용한다.
+- GitHub Actions는 Linux에서 C++ build/CTest 뒤 Python 및 cross-language suite를 실행한다. 테스트 runner 경로는 Windows `.exe`와 POSIX binary를 모두 찾도록 정정했다.

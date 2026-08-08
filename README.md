@@ -2,51 +2,179 @@
 
 # K3X
 
-### A Kimi K3 out-of-core inference engine for a single consumer PC
+### Kimi K3, engineered for one consumer PC
 
-[![Status](https://img.shields.io/badge/status-milestone%200%20design-6f42c1)](#project-status)
-[![Target](https://img.shields.io/badge/target-Linux%20%2B%20RTX%205080-76b900)](#target-system)
-[![Correctness](https://img.shields.io/badge/priority-correctness%20first-0a7bbb)](#correctness-contract)
+[![Milestone](https://img.shields.io/badge/milestone%200-passing-20a46b?style=flat-square)](#milestone-0--verified-foundation)
+[![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
+[![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
+[![Format](https://img.shields.io/badge/format-K3X%20v1-6f42c1?style=flat-square)](K3X_FORMAT.md)
 
-**K3X is a clean-room, Kimi K3-specific runtime and storage format designed to make a 2.8T-parameter sparse MoE model usable on one high-end consumer machine.**
+**A clean-room, out-of-core inference engine and checkpoint format built around Kimi K3's execution graph.**
 
-No full checkpoint download is required for the first milestone. No throughput claims are made before measurement.
+[Architecture](ARCHITECTURE.md) · [Performance model](PERFORMANCE_MODEL.md) · [File format](K3X_FORMAT.md) · [Research ledger](docs/references.md)
 
 </div>
 
 ---
 
-## Why K3X
+Kimi K3 is a 2.8T-parameter sparse MoE model whose local inference problem is dominated by moving the right expert bytes at the right time. K3X starts from that constraint. It is not a fork of llama.cpp or vLLM, and it does not assume that the checkpoint fits in RAM or VRAM.
 
-Kimi K3 is not a conventional dense Transformer. Its 93-layer text decoder combines Kimi Delta Attention, Gated Multi-Latent Attention, Block Attention Residuals, Stable LatentMoE, and native MXFP4 expert weights. The released model contains 896 routed experts and selects 16 per token.
-
-That structure creates a different local-inference problem. The primary constraint is not only arithmetic throughput; it is moving the right expert bytes through NVMe, system RAM, PCIe, and VRAM before each layer needs them.
-
-K3X therefore starts from K3's execution order and target hardware instead of extending a general-purpose model container with more flags.
+The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Milestone 0 deliberately begins smaller: prove the graph, token sequence, persistent state, binary format, and independent runtime before optimizing any of them.
 
 ```mermaid
 flowchart LR
-    NVME["L2 · NVMe<br/>K3X extents"] -->|"deadline-aware reads"| RAM["L1 · System RAM<br/>warm expert bank"]
-    RAM -->|"pinned async copies"| VRAM["L0 · RTX 5080 VRAM<br/>active experts + trunk"]
-    VRAM --> GPU["KDA / MLA / MoE<br/>specialized kernels"]
-    ROUTER["Full router scores"] --> SCHED["residency + prediction<br/>scheduler"]
-    SCHED --> NVME
-    SCHED --> RAM
-    SCHED --> VRAM
+    L2["L2 · NVMe<br/>complete K3X checkpoint"] -->|"N+2 · aligned read"| L1["L1 · System RAM<br/>warm expert bank"]
+    L1 -->|"N+1 · pinned async copy"| L0["L0 · RTX 5080 VRAM<br/>active tiles + experts"]
+    L0 -->|"N · compute"| GPU["KDA · MLA · MoE"]
+    ROUTE["Full router scores"] --> PLAN["Deadline + residency scheduler"]
+    PLAN --> L2
+    PLAN --> L1
+    PLAN --> L0
 ```
 
-The diagram describes the intended runtime. Milestone 0 implements the correctness foundation and synthetic storage round-trip first.
+> [!IMPORTANT]
+> Milestone 0 uses a tiny synthetic model and a CPU runtime. Its measurements validate the harness; they are not Kimi K3 or RTX 5080 throughput claims. No full checkpoint was downloaded and no paid cloud resource was provisioned.
 
-## Design priorities
+## Why a dedicated engine
 
-1. Correctness.
-2. Measured end-to-end decode throughput.
-3. Minimum NVMe, RAM, and PCIe traffic per token.
-4. Preservation of coding and agentic quality.
-5. Checkpoint size.
-6. General benchmark performance.
+The released text decoder combines 69 Kimi Delta Attention layers, 24 Gated MLA layers, block Attention Residuals, and 92 Stable LatentMoE layers. Each MoE layer selects 16 of 896 native MXFP4 routed experts.
 
-## Target system
+One released routed expert is approximately 16.73 MiB. With no cache reuse, natural Top-16 routing requests approximately **25.83 GB of expert weights per token** across the 92 MoE layers. A P44 Pro's published 7 GB/s sequential maximum would cap that worst case near 0.27 tok/s before all other work. The path to useful speed is therefore traffic avoidance and amortization, not a single faster GEMM.
+
+K3X is designed around four invariants.
+
+- Correctness comes before throughput, and every optimization retains a switchable reference path.
+- Residency never silently becomes pruning; a high-scoring cold expert can be fetched exactly.
+- Storage order follows execution and prefetch, with direct random access to one expert.
+- Every speed claim carries measured bytes/token and a quality mode.
+
+## Milestone 0 — verified foundation
+
+The repository now contains a connected, deterministic K3-compatible miniature graph.
+
+- KDA with causal short-convolution and recurrent state.
+- Gated MLA with main and shared-extra NoPE keys plus incremental KV state.
+- Block Attention Residual mixing.
+- Stable LatentMoE, correction-bias selection, and normalized unbiased routing weights.
+- Native MXFP4 E2M1/E8M0 decode and byte-exact storage preservation.
+- Full-prefix and incremental greedy generation.
+- A bounded-memory, resumable, crash-safe K3X converter.
+- Strict Python and independent C++20 readers and runtimes.
+- Corruption, truncation, required-feature, state, layer, logit, and token parity tests.
+
+For prompt `[1, 7, 3, 9]`, the seeded fixture generates the same sequence in PyTorch and C++, in both full and incremental modes.
+
+```text
+[43, 32, 28, 49, 9, 28]
+```
+
+## Quick start
+
+### 1. Create an environment
+
+Linux and Python 3.12 are the primary development path. PyTorch is used only by the executable reference and fixture generator; the C++ runtime has no ML framework dependency.
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e '.[dev]'
+```
+
+On Windows PowerShell, activate with `.\.venv\Scripts\Activate.ps1`.
+
+### 2. Run the Python correctness suite
+
+```bash
+python -m pytest tests/python -q
+```
+
+### 3. Build the C++20 runtime
+
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+### 4. Generate and convert the synthetic checkpoint
+
+```bash
+python tools/generate_synthetic.py --output build-fixtures/run-a
+python -m k3x_converter.cli convert \
+  build-fixtures/run-a/source \
+  build-fixtures/synthetic.k3x \
+  --chunk-bytes 257
+```
+
+The deliberately tiny chunk size makes the bounded streaming path observable. Conversion writes `.partial` data and an atomic ledger until every extent has been read back and CRC-verified.
+
+### 5. Run exact incremental generation
+
+```bash
+./build/k3x_run \
+  --model build-fixtures/synthetic.k3x \
+  --prompt-ids 1,7,3,9 \
+  --generate 6 \
+  --mode incremental
+```
+
+Use `build\k3x_run.exe` on Windows.
+
+### 6. Reproduce the synthetic benchmark
+
+```bash
+python tools/benchmark_synthetic.py \
+  --artifact build-fixtures/synthetic.k3x \
+  --runner build/k3x_run \
+  --warmup 3 \
+  --iterations 20 \
+  --json build-results/milestone-zero.json \
+  --csv build-results/milestone-zero.csv
+```
+
+## Measured result
+
+The checked Milestone 0 run used Windows 11 AMD64, an MSVC Debug build, three warmups, and 20 measured child processes.
+
+| Metric | Result |
+|---|---:|
+| Synthetic incremental decode | 562.62 tok/s |
+| Synthetic prefill | 414.04 tok/s |
+| Process-level TTFT median | 19.21 ms |
+| Peak observed child RSS | 5.99 MB |
+| Logical K3X reads / generated token | 110,936 bytes |
+
+The benchmark's scope is `synthetic-milestone-zero` and evidence is marked `measured` in both JSON and CSV. See [`PERFORMANCE_MODEL.md`](PERFORMANCE_MODEL.md) for definitions, state sizes, layer timings, assumptions, and the full-model byte model.
+
+## K3X checkpoint format
+
+K3X v1 trades general tensor-container flexibility for K3 execution order.
+
+| Property | Contract |
+|---|---|
+| Superblock | Fixed 4 KiB, versioned, required/optional feature negotiation |
+| Lookup | Tensor, layer, and expert directories |
+| Extents | 4 KiB aligned, execution-order packable, independently checksummed |
+| Integrity | CRC32C per extent, directory SHA-256, finalized root SHA-256 |
+| MXFP4 | Packed values and E8M0 scales preserved byte-for-byte |
+| Failure model | `.partial` artifact, atomic idempotent ledger, read-back verification, atomic final rename |
+| Access | Per-expert random access and large sequential-read layout |
+
+The normative binary layout lives in [`K3X_FORMAT.md`](K3X_FORMAT.md).
+
+## Quality contract
+
+| Mode | Intended semantics |
+|---|---|
+| `QUALITY` | High-precision trunk, natural Top-16, exact experts, strict speculative verification, no proxy |
+| `BALANCED` | Mixed trunk quantization, adaptive K, full routing, exact cold rescue |
+| `HYPERTURBO` | Aggressive mixed precision and experimental expert-aware verification budgets |
+| `EXTREME` | Explicitly lossy proxy or pruning experiments |
+
+Only exact `QUALITY` semantics are implemented in Milestone 0. Future modes will not become defaults without an ablation and a simultaneous quality measurement.
+
+## Target machine
 
 | Component | Primary target |
 |---|---|
@@ -56,142 +184,48 @@ The diagram describes the intended runtime. Milestone 0 implements the correctne
 | Storage | Solidigm P44 Pro 2 TB NVMe |
 | OS | Native Linux first |
 
-The first meaningful engineering target is at least 5 decode tokens/s on a warm coding workload if the hardware permits it. This is a target, not a prediction. K3X will report the measured bottleneck and theoretical ceiling if the target is not achievable.
+The first meaningful engineering target is at least 5 warm coding decode tok/s if measurements show it is achievable. It is a target, not a forecast.
 
-## Milestone 0
+## Roadmap
 
-The first milestone uses a tiny deterministic model with the same essential text-decoder topology as Kimi K3.
+- [x] Exact synthetic reference graph and correctness suite.
+- [x] K3X v1 streaming format and crash-safe converter.
+- [x] Independent exact C++20 synthetic runtime.
+- [x] Synthetic profiler and reproducible JSON/CSV output.
+- [ ] Exact full-dimension CPU/GPU runtime over bounded checkpoint slices.
+- [ ] RTX 5080 backend and fused K3-specific kernels.
+- [ ] Three-tier asynchronous storage and deadline scheduler.
+- [ ] Least-Stale, task/session, and transition-aware expert caches.
+- [ ] Adaptive Top-K with exact cold-expert rescue.
+- [ ] Expert-major speculative verification and cost-aware experiments.
+- [ ] Sensitivity-calibrated mixed trunk quantization.
+- [ ] SKYFORGE shard compiler for explicitly provisioned cloud jobs.
+- [ ] Full ablation and coding-quality suite.
+
+## Repository map
 
 ```text
-tokens
-  → embedding
-  → KDA layer
-  → KDA layer + Stable LatentMoE
-  → KDA layer + Stable LatentMoE
-  → Gated MLA layer + Stable LatentMoE
-  → output Attention Residual
-  → RMSNorm
-  → LM head
-  → greedy token
+reference/k3x_ref/   PyTorch executable oracle
+converter/           Streaming K3X writer, reader, and resume ledger
+runtime/             Dependency-free C++20 reader and synthetic runtime
+tests/python/        Graph, state, conversion, corruption, and parity tests
+tests/cpp/           Portable checksum and primitive tests
+tools/               Deterministic fixture and benchmark entrypoints
+docs/                Research ledger and milestone design records
 ```
 
-It covers the following behavior without downloading the 1.56 TB checkpoint.
+## Research discipline
 
-- KDA prefill and incremental recurrent state.
-- Gated MLA and incremental KV state.
-- Block Attention Residual mixing across depth.
-- Sigmoid routing with correction bias and normalized Top-K weights.
-- Stable LatentMoE routed and shared branches.
-- Native MXFP4 expert decoding and byte-exact payload preservation.
-- Full-prefix and incremental greedy generation.
-- Streaming conversion into a resumable, checksummed K3X artifact.
-- Independent PyTorch and C++20 execution paths.
+The graph and roadmap were checked against the official Kimi K3 release and report, FlashKDA, Attention Residuals, vLLM's implementation work, independent C and MLX runtimes, and the primary SpecMD, EcoSpec, MoE-Spec, and AcceptMoE papers. Pinned revisions and the boundary between implemented and future work are recorded in [`docs/references.md`](docs/references.md).
 
-## Correctness contract
+## Current limitations
 
-Every optimized feature must retain a switchable reference path. Milestone 0 establishes the comparison ladder.
-
-| Boundary | Required evidence |
-|---|---|
-| Primitive | PyTorch oracle versus independent implementation |
-| Stateful operator | Convolution, recurrent, and KV states match |
-| Decoder layer | Hidden states match within an explicit tolerance |
-| MXFP4 storage | Packed payload and scales round-trip byte-for-byte |
-| Generation | Full and incremental greedy token sequences match exactly |
-| Artifact integrity | Truncation, overlap, bad alignment, and checksum corruption are rejected |
-
-Tests are written before production behavior and must be observed failing for the intended reason before the implementation is added.
-
-## K3X checkpoint format
-
-K3X v1 is an execution-ordered, random-access format rather than a general tensor archive.
-
-- Fixed 4 KiB superblock with version and feature negotiation.
-- Tensor, layer, and expert directories.
-- Aligned extents with CRC32C and a finalized SHA-256 root digest.
-- Direct lookup of one expert without scanning unrelated tensors.
-- Sequential layout for layer execution and prefetch.
-- Native MXFP4 payload preservation.
-- Crash-safe `.partial` output and idempotent resume manifest.
-- Optional hot/cold expert banks, task-profile metadata, and future PGO layouts.
-
-The exact binary contract is documented in [`K3X_FORMAT.md`](K3X_FORMAT.md) and enforced by the streaming writer, strict reader, corruption tests, and crash-resume tests. The approved milestone design is available in [`docs/superpowers/specs/2026-08-08-k3x-milestone-one-design.md`](docs/superpowers/specs/2026-08-08-k3x-milestone-one-design.md).
-
-## Planned runtime
-
-```mermaid
-flowchart TB
-    REF["PyTorch reference graph"] --> GOLDEN["Golden tensors and states"]
-    SOURCE["Source shards"] --> CONVERTER["Streaming converter"]
-    CONVERTER --> K3XFILE["K3X checkpoint"]
-    K3XFILE --> CPU["C++20 exact CPU runtime"]
-    K3XFILE --> CUDA["K3-specific CUDA backend"]
-    GOLDEN --> VERIFY["Layer, state, logits, token parity"]
-    CPU --> VERIFY
-    CUDA --> VERIFY
-```
-
-The host runtime is C++20. PyTorch is the executable oracle and calibration environment. CUDA kernels will be introduced only after the exact CPU graph, storage format, and profiler are verified.
-
-## Quality modes
-
-K3X will expose explicit quality modes instead of silently changing routing semantics.
-
-| Mode | Intended behavior |
-|---|---|
-| `QUALITY` | High-precision trunk, natural Top-16, exact routing, strict verification, no proxy |
-| `BALANCED` | Mixed quantization, adaptive K, full routing, exact cold rescue |
-| `HYPERTURBO` | Aggressive mixed quantization and experimental expert-aware verification |
-| `EXTREME` | Explicitly lossy proxy or pruning experiments |
-
-Only `QUALITY` semantics belong to the initial correctness milestone.
-
-## Project status
-
-K3X has an approved Milestone 0 design and an implementation-ready execution plan.
-
-- [x] Workspace and source landscape inspected.
-- [x] Runtime language and milestone scope selected.
-- [x] Milestone design approved and documented.
-- [x] Detailed implementation plan written.
-- [x] Synthetic PyTorch model passing.
-- [x] K3X synthetic round-trip passing.
-- [x] Independent C++ runtime token parity passing.
-- [ ] Synthetic benchmark recorded.
-
-See [`checklist.md`](checklist.md) for the working checklist and [`context-notes.md`](context-notes.md) for decision history.
-
-## Research baseline
-
-The architecture is checked against primary reports and real implementations rather than assumed benchmark numbers.
-
-- [MoonshotAI/Kimi-K3](https://github.com/MoonshotAI/Kimi-K3) — official release and technical report.
-- [moonshotai/Kimi-K3](https://huggingface.co/moonshotai/Kimi-K3) — released configuration and checkpoint metadata.
-- [vLLM Kimi K3 implementation](https://github.com/vllm-project/vllm/tree/main/vllm/models/kimi_k3) — production graph and kernels.
-- [MoonshotAI/FlashKDA](https://github.com/MoonshotAI/FlashKDA) — KDA kernels.
-- [MoonshotAI/Attention-Residuals](https://github.com/MoonshotAI/Attention-Residuals) — original method and implementation.
-- [kimi-k3-in-c](https://github.com/FareedKhan-dev/kimi-k3-in-c) and [kimi-k3-mlx](https://github.com/PipeNetwork/kimi-k3-mlx) — independent local-runtime references.
-- [SpecMD](https://arxiv.org/abs/2602.03921), [EcoSpec](https://arxiv.org/abs/2607.12696), [MoE-Spec](https://arxiv.org/abs/2602.16052), and [AcceptMoE](https://arxiv.org/abs/2608.02989) — later cache and speculative-decoding experiments.
-
-Source revisions used for the approved design are recorded in the [design specification](docs/superpowers/specs/2026-08-08-k3x-milestone-one-design.md#3-근거가-되는-source-snapshot).
-
-## Development rules
-
-- No performance claim without a reproducible measurement.
-- No lossy optimization enabled without a quality comparison.
-- No full-model RAM or VRAM residency assumption.
-- No full checkpoint download or paid cloud provisioning in Milestone 0.
-- Every stage ends with tests, measurements, documentation, and a reviewable commit.
-
-## Documentation
-
-- [Milestone plan](PLAN.md).
-- [Milestone design specification](docs/superpowers/specs/2026-08-08-k3x-milestone-one-design.md).
-- [Milestone implementation plan](docs/superpowers/plans/2026-08-08-k3x-milestone-zero.md).
-- [Implementation checklist](checklist.md).
-- [Decision log](context-notes.md).
-
-`ARCHITECTURE.md` and `PERFORMANCE_MODEL.md` remain milestone deliverables. The executable [`K3X_FORMAT.md`](K3X_FORMAT.md) contract is complete for the synthetic round-trip.
+- The executable model is synthetic and text-only.
+- The runtime is CPU-only and implements synthetic dimensions.
+- There is no CUDA backend, async storage pipeline, cache policy, adaptive Top-K, or speculative decoder yet.
+- The converter has not processed the full Kimi K3 checkpoint.
+- Linux target-hardware performance remains unmeasured.
+- No open-source license has been selected yet; public visibility does not itself grant reuse rights.
 
 ---
 

@@ -27,7 +27,7 @@
 - [x] Python 전체 테스트 통과.
 - [x] C++ 전체 테스트 통과.
 - [x] 합성 checkpoint round-trip 통과.
-- [ ] benchmark와 peak RSS/read bytes 측정.
-- [ ] `ARCHITECTURE.md`, `PERFORMANCE_MODEL.md`, `K3X_FORMAT.md` 완성.
+- [x] benchmark와 peak RSS/read bytes 측정.
+- [x] `ARCHITECTURE.md`, `PERFORMANCE_MODEL.md`, `K3X_FORMAT.md` 완성.
 - [ ] diff 자체 검토와 semantic commits 완료.
-- [ ] 측정 결과와 다음 병목 보고.
+- [x] 측정 결과와 다음 병목 보고.
