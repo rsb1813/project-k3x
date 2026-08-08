@@ -1,6 +1,7 @@
 // K3X synthetic runtime을 실행하고 bounded JSON metrics를 기록합니다.
 #include "k3x/model.hpp"
 
+#include <charconv>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -33,6 +34,10 @@ int main(int argc, char** argv) {
     std::filesystem::path model_path, output_path;
     std::string prompt_text, mode = "incremental";
     std::string backend_name = "cpu", dense_precision_name = "fp32";
+    std::string cuda_allocation_name = "per-operation";
+    std::string cuda_weights_name = "transient";
+    std::string cuda_batching_name = "scalar";
+    std::string cuda_resident_bytes_text = "0";
     bool diagnostics = false;
     std::size_t count = 0;
     for (int index = 1; index + 1 < argc; index += 2) {
@@ -46,6 +51,10 @@ int main(int argc, char** argv) {
         else if (key == "--json") output_path = value;
         else if (key == "--backend") backend_name = value;
         else if (key == "--dense-precision") dense_precision_name = value;
+        else if (key == "--cuda-allocation") cuda_allocation_name = value;
+        else if (key == "--cuda-weights") cuda_weights_name = value;
+        else if (key == "--cuda-batching") cuda_batching_name = value;
+        else if (key == "--cuda-resident-bytes") cuda_resident_bytes_text = value;
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
     }
 
@@ -68,9 +77,63 @@ int main(int argc, char** argv) {
         std::cerr << "unknown dense precision: " << dense_precision_name << '\n';
         return 2;
     }
+    if (cuda_allocation_name == "per-operation") {
+        backend_options.cuda_allocation = k3x::CudaAllocationMode::per_operation;
+    } else if (cuda_allocation_name == "reused") {
+        backend_options.cuda_allocation = k3x::CudaAllocationMode::reused;
+    } else {
+        std::cerr << "unknown CUDA allocation mode: " << cuda_allocation_name << '\n';
+        return 2;
+    }
+    if (cuda_weights_name == "transient") {
+        backend_options.cuda_weights = k3x::CudaWeightMode::transient;
+    } else if (cuda_weights_name == "resident") {
+        backend_options.cuda_weights = k3x::CudaWeightMode::resident;
+    } else {
+        std::cerr << "unknown CUDA weight mode: " << cuda_weights_name << '\n';
+        return 2;
+    }
+    if (cuda_batching_name == "scalar") {
+        backend_options.cuda_batching = k3x::CudaBatchingMode::scalar;
+    } else if (cuda_batching_name == "grouped") {
+        backend_options.cuda_batching = k3x::CudaBatchingMode::grouped;
+    } else {
+        std::cerr << "unknown CUDA batching mode: " << cuda_batching_name << '\n';
+        return 2;
+    }
+    const auto* resident_begin = cuda_resident_bytes_text.data();
+    const auto* resident_end = resident_begin + cuda_resident_bytes_text.size();
+    const auto resident_parse = std::from_chars(
+        resident_begin, resident_end, backend_options.cuda_resident_bytes);
+    if (cuda_resident_bytes_text.empty() || resident_parse.ec != std::errc{} ||
+        resident_parse.ptr != resident_end) {
+        std::cerr << "invalid CUDA resident byte capacity: "
+                  << cuda_resident_bytes_text << '\n';
+        return 2;
+    }
     if (backend_options.kind == k3x::BackendKind::cpu &&
         backend_options.dense_precision != k3x::DensePrecision::fp32) {
         std::cerr << "bf16 dense precision requires a CUDA backend\n";
+        return 2;
+    }
+    if (backend_options.kind == k3x::BackendKind::cpu &&
+        (backend_options.cuda_allocation != k3x::CudaAllocationMode::per_operation ||
+         backend_options.cuda_weights != k3x::CudaWeightMode::transient ||
+         backend_options.cuda_batching != k3x::CudaBatchingMode::scalar ||
+         backend_options.cuda_resident_bytes != 0)) {
+        std::cerr << "CUDA execution options require a CUDA backend\n";
+        return 2;
+    }
+    if (backend_options.kind != k3x::BackendKind::cpu &&
+        backend_options.cuda_weights == k3x::CudaWeightMode::resident &&
+        backend_options.cuda_resident_bytes == 0) {
+        std::cerr << "resident CUDA weights require a positive resident byte capacity\n";
+        return 2;
+    }
+    if (backend_options.kind != k3x::BackendKind::cpu &&
+        backend_options.cuda_weights == k3x::CudaWeightMode::transient &&
+        backend_options.cuda_resident_bytes != 0) {
+        std::cerr << "transient CUDA weights require a zero resident byte capacity\n";
         return 2;
     }
 
@@ -108,6 +171,8 @@ int main(int argc, char** argv) {
     if (!output) return 5;
     const auto profile = profiler.summary();
     const auto memory = backend->memory_stats();
+    const auto runtime = backend->runtime_stats();
+    const auto& effective_options = backend->options();
     output << std::setprecision(9);
     output << "{\"backend\":";
     write_json_string(output, backend_name);
@@ -115,10 +180,36 @@ int main(int argc, char** argv) {
     write_json_string(output, backend->device_name());
     output << ",\"dense_precision\":";
     write_json_string(output, dense_precision_name);
+    output << ",\"cuda_allocation\":";
+    write_json_string(output, cuda_allocation_name);
+    output << ",\"cuda_weights\":";
+    write_json_string(output, cuda_weights_name);
+    output << ",\"cuda_batching\":";
+    write_json_string(output, cuda_batching_name);
+    output << ",\"cuda_resident_bytes\":"
+           << effective_options.cuda_resident_bytes;
     output << ",\"kernel_nanoseconds\":" << profile.device_nanoseconds
            << ",\"host_to_device_bytes\":" << profile.host_to_device_bytes
+           << ",\"weight_h2d_bytes\":" << runtime.weight_h2d_bytes
+           << ",\"activation_h2d_bytes\":" << runtime.activation_h2d_bytes
            << ",\"device_to_host_bytes\":" << profile.device_to_host_bytes
            << ",\"peak_vram_bytes\":" << memory.peak_device_bytes
+           << ",\"device_allocation_count\":" << runtime.device_allocation_count
+           << ",\"device_free_count\":" << runtime.device_free_count
+           << ",\"stream_synchronization_count\":"
+           << runtime.stream_synchronization_count
+           << ",\"weight_cache_hits\":" << runtime.weight_cache_hits
+           << ",\"weight_cache_misses\":" << runtime.weight_cache_misses
+           << ",\"weight_cache_bypasses\":" << runtime.weight_cache_bypasses
+           << ",\"resident_weight_bytes\":" << runtime.resident_weight_bytes
+           << ",\"peak_resident_weight_bytes\":"
+           << runtime.peak_resident_weight_bytes
+           << ",\"scratch_bytes\":" << runtime.scratch_bytes
+           << ",\"peak_scratch_bytes\":" << runtime.peak_scratch_bytes
+           << ",\"grouped_projection_calls\":"
+           << runtime.grouped_projection_calls
+           << ",\"grouped_projection_members\":"
+           << runtime.grouped_projection_members
            << ",\"profile_wall_nanoseconds\":" << profile.wall_nanoseconds
            << ",\"profile_logical_bytes\":" << profile.logical_bytes
            << ",\"failed_operations\":" << profile.failed_operations

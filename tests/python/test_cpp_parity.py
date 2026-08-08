@@ -37,6 +37,76 @@ def test_cpp_runner_rejects_unknown_backend_values(
     assert result.stderr.strip() == message
 
 
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (["--cuda-allocation", "pool"], "unknown CUDA allocation mode: pool"),
+        (["--cuda-weights", "lru"], "unknown CUDA weight mode: lru"),
+        (["--cuda-batching", "graph"], "unknown CUDA batching mode: graph"),
+        (
+            ["--cuda-resident-bytes", "-1"],
+            "invalid CUDA resident byte capacity: -1",
+        ),
+    ],
+)
+def test_cpp_runner_rejects_invalid_cuda_execution_options(
+    arguments: list[str], message: str
+) -> None:
+    result = subprocess.run(
+        [str(cpp_binary("k3x_run")), *arguments],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == message
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--backend", "cpu", "--cuda-allocation", "reused"],
+        ["--backend", "cpu", "--cuda-weights", "resident", "--cuda-resident-bytes", "1"],
+        ["--backend", "cpu", "--cuda-batching", "grouped"],
+        ["--backend", "cpu", "--cuda-resident-bytes", "1"],
+    ],
+)
+def test_cpp_runner_rejects_cuda_execution_options_for_cpu(
+    arguments: list[str],
+) -> None:
+    result = subprocess.run(
+        [str(cpp_binary("k3x_run")), *arguments],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == "CUDA execution options require a CUDA backend"
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (
+            ["--backend", "cuda-dense", "--cuda-weights", "resident"],
+            "resident CUDA weights require a positive resident byte capacity",
+        ),
+        (
+            ["--backend", "cuda-dense", "--cuda-resident-bytes", "1"],
+            "transient CUDA weights require a zero resident byte capacity",
+        ),
+    ],
+)
+def test_cpp_runner_rejects_invalid_cuda_weight_capacity_combinations(
+    arguments: list[str], message: str
+) -> None:
+    result = subprocess.run(
+        [str(cpp_binary("k3x_run")), *arguments],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == message
+
+
 def test_cpu_build_reports_explicit_cuda_request_as_unavailable() -> None:
     if Path(os.environ.get("K3X_BUILD_DIR", "build")).name != "build-cpu":
         pytest.skip("CPU-build contract is exercised only against build-cpu")
@@ -89,6 +159,12 @@ def test_cpp_generation_matches_python_golden(
     assert result["backend"] == "cpu"
     assert result["device"] == "CPU"
     assert result["dense_precision"] == "fp32"
+    assert result["cuda_allocation"] == "per-operation"
+    assert result["cuda_weights"] == "transient"
+    assert result["cuda_batching"] == "scalar"
+    assert result["cuda_resident_bytes"] == 0
+    assert result["device_allocation_count"] == 0
+    assert result["weight_cache_hits"] == 0
 
 
 def test_cpp_prefill_layers_logits_and_state_match_python(

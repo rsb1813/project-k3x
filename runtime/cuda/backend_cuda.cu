@@ -232,6 +232,8 @@ public:
         }
         record(phase, ProfileOperation::host_to_device, precision, layer,
                h2d_start, 0, input_bytes + weight_bytes, 0, true);
+        runtime_stats_.activation_h2d_bytes += input_bytes;
+        runtime_stats_.weight_h2d_bytes += weight_bytes;
 
         MatmulDescOwner operation;
         MatrixLayoutOwner input_layout;
@@ -397,6 +399,9 @@ public:
         record(phase, ProfileOperation::host_to_device, precision, layer,
                h2d_start, 0,
                input_bytes + packed.size_bytes() + scales.size_bytes(), 0, true);
+        runtime_stats_.activation_h2d_bytes += input_bytes;
+        runtime_stats_.weight_h2d_bytes +=
+            packed.size_bytes() + scales.size_bytes();
 
         EventOwner event_start;
         EventOwner event_end;

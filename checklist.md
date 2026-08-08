@@ -69,6 +69,7 @@
 - [x] 사용자 서면 명세 검토.
 - [x] TDD 구현 계획 작성.
 - [x] CUDA allocation/weight/batching 옵션과 runtime 통계 계약 정의.
+- [x] CUDA 실행 CLI 검증과 benchmark JSON/CSV schema 확장.
 - [ ] allocation reuse 구현과 독립 ablation.
 - [ ] exact static weight residency 구현과 독립 ablation.
 - [ ] dense/MXFP4 grouped projection 구현과 독립 ablation.

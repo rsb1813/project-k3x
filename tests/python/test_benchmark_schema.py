@@ -27,10 +27,28 @@ def _record() -> BenchmarkRecord:
         backend="cpu",
         device="CPU",
         dense_precision="fp32",
+        cuda_allocation="per-operation",
+        cuda_weights="transient",
+        cuda_batching="scalar",
+        cuda_resident_bytes=0,
         kernel_nanoseconds=0,
         host_to_device_bytes=0,
+        weight_h2d_bytes=0,
+        activation_h2d_bytes=0,
         device_to_host_bytes=0,
         peak_vram_bytes=None,
+        device_allocation_count=0,
+        device_free_count=0,
+        stream_synchronization_count=0,
+        weight_cache_hits=0,
+        weight_cache_misses=0,
+        weight_cache_bypasses=0,
+        resident_weight_bytes=0,
+        peak_resident_weight_bytes=0,
+        scratch_bytes=0,
+        peak_scratch_bytes=0,
+        grouped_projection_calls=0,
+        grouped_projection_members=0,
         max_absolute_error=None,
         max_relative_error=None,
         kda_state_bytes=1024,
@@ -49,11 +67,21 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["backend"] == "cpu"
     assert payload["device"] == "CPU"
     assert payload["dense_precision"] == "fp32"
+    assert payload["cuda_allocation"] == "per-operation"
+    assert payload["cuda_weights"] == "transient"
+    assert payload["cuda_batching"] == "scalar"
+    assert payload["cuda_resident_bytes"] == 0
+    assert payload["device_allocation_count"] == 0
+    assert payload["weight_h2d_bytes"] == 0
+    assert payload["activation_h2d_bytes"] == 0
     assert payload["peak_vram_bytes"] is None
     with csv_path.open(newline="", encoding="utf-8") as stream:
         row = next(csv.DictReader(stream))
     assert row["decode_tokens_per_second"] == "50.0"
     assert row["host_to_device_bytes"] == "0"
+    assert row["cuda_allocation"] == "per-operation"
+    assert row["weight_cache_bypasses"] == "0"
+    assert row["grouped_projection_members"] == "0"
     assert row["peak_vram_bytes"] == ""
     assert row["per_layer_nanoseconds"] == "1;2;3;4"
 
@@ -87,10 +115,28 @@ def test_benchmark_once_collects_cpu_backend_profile(
     assert record.backend == "cpu"
     assert record.device == "CPU"
     assert record.dense_precision == "fp32"
+    assert record.cuda_allocation == "per-operation"
+    assert record.cuda_weights == "transient"
+    assert record.cuda_batching == "scalar"
+    assert record.cuda_resident_bytes == 0
     assert record.kernel_nanoseconds == 0
     assert record.host_to_device_bytes == 0
+    assert record.weight_h2d_bytes == 0
+    assert record.activation_h2d_bytes == 0
     assert record.device_to_host_bytes == 0
     assert record.peak_vram_bytes == 0
+    assert record.device_allocation_count == 0
+    assert record.device_free_count == 0
+    assert record.stream_synchronization_count == 0
+    assert record.weight_cache_hits == 0
+    assert record.weight_cache_misses == 0
+    assert record.weight_cache_bypasses == 0
+    assert record.resident_weight_bytes == 0
+    assert record.peak_resident_weight_bytes == 0
+    assert record.scratch_bytes == 0
+    assert record.peak_scratch_bytes == 0
+    assert record.grouped_projection_calls == 0
+    assert record.grouped_projection_members == 0
     assert record.max_absolute_error == 0.0
     assert record.max_relative_error == 0.0
 
@@ -126,6 +172,12 @@ def test_benchmark_once_measures_cuda_error_against_cpu(
     assert record.device != "CPU"
     assert record.kernel_nanoseconds > 0
     assert record.host_to_device_bytes > 0
+    assert record.weight_h2d_bytes > 0
+    assert record.activation_h2d_bytes > 0
+    assert (
+        record.weight_h2d_bytes + record.activation_h2d_bytes
+        == record.host_to_device_bytes
+    )
     assert record.device_to_host_bytes > 0
     assert record.peak_vram_bytes > 0
     assert record.max_absolute_error is not None

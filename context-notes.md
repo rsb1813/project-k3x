@@ -78,3 +78,5 @@
 - 사용자가 written Milestone 2 spec을 승인했다. 구현 계획 self-review에서 B-0002 reference가 descriptor/event reuse로 오염되지 않도록 `per-operation`은 buffer, descriptor, heuristic, event lifetime까지 Milestone 1 동작을 보존하고 `reused`에서만 재사용하도록 명확히 했다.
 - 구현 계획은 두 CUDA backend의 FP32 8개 switch 조합과 fully-enabled BF16, disjoint grouped output arena, member별 event pool, capacity bypass와 split H2D accounting을 명시한다.
 - Milestone 2 Task 1은 새 CUDA 옵션의 reference 기본값과 12개 runtime counter 계약을 TDD로 고정했다. `ComputeBackend`의 새 순수 가상 계약 때문에 계획에 명시된 CPU 파일뿐 아니라 CUDA 구현체에도 옵션·통계 accessor를 최소 연결했으며, CPU CTest 5개와 CUDA CTest 7개가 모두 통과했다.
+- Milestone 2 Task 2는 네 CUDA CLI 옵션의 허용값과 CPU/CUDA 조합 규칙을 backend 생성 전에 검증하고, 옵션·runtime counter를 runtime JSON과 benchmark JSON/CSV에 보존한다. 자체 검토에서 CUDA 분리 H2D를 0 placeholder로 기록하는 안을 폐기하고 backend가 실제 성공한 복사를 weight/activation으로 즉시 누적하게 했다. Task 10에서는 profiler event 분류를 추가해 이 backend 계측과 교차 검증한다.
+- Task 2 최종 검증은 CPU CTest 5/5와 Python 23 passed/7 skipped, CUDA CTest 7/7과 Python 29 passed/1 skipped이다. `ruff`는 승인된 venv에 설치되어 있지 않아 실행하지 않았고, Python 파일은 pytest import/실행으로 검증했다.

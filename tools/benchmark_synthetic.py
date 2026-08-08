@@ -34,10 +34,28 @@ class BenchmarkRecord:
     backend: str
     device: str
     dense_precision: str
+    cuda_allocation: str
+    cuda_weights: str
+    cuda_batching: str
+    cuda_resident_bytes: int
     kernel_nanoseconds: int
     host_to_device_bytes: int
+    weight_h2d_bytes: int
+    activation_h2d_bytes: int
     device_to_host_bytes: int
     peak_vram_bytes: int | None
+    device_allocation_count: int
+    device_free_count: int
+    stream_synchronization_count: int
+    weight_cache_hits: int
+    weight_cache_misses: int
+    weight_cache_bypasses: int
+    resident_weight_bytes: int
+    peak_resident_weight_bytes: int
+    scratch_bytes: int
+    peak_scratch_bytes: int
+    grouped_projection_calls: int
+    grouped_projection_members: int
     max_absolute_error: float | None
     max_relative_error: float | None
     kda_state_bytes: int
@@ -76,14 +94,23 @@ def _run_process(
     runner: Path,
     generated_tokens: int,
     output: Path,
+    *,
     backend: str,
     dense_precision: str,
+    cuda_allocation: str,
+    cuda_weights: str,
+    cuda_batching: str,
+    cuda_resident_bytes: int,
     diagnostics: bool = False,
 ) -> tuple[dict, int, float]:
     command = [
         str(runner), "--model", str(artifact), "--prompt-ids", "1,7,3,9",
         "--generate", str(generated_tokens), "--mode", "incremental",
         "--backend", backend, "--dense-precision", dense_precision,
+        "--cuda-allocation", cuda_allocation,
+        "--cuda-weights", cuda_weights,
+        "--cuda-batching", cuda_batching,
+        "--cuda-resident-bytes", str(cuda_resident_bytes),
     ]
     if diagnostics:
         command.extend(["--diagnostics", "true"])
@@ -156,8 +183,13 @@ def benchmark_once(
     runner: Path,
     warmup: int,
     iterations: int,
+    *,
     backend: str = "cpu",
     dense_precision: str = "fp32",
+    cuda_allocation: str = "per-operation",
+    cuda_weights: str = "transient",
+    cuda_batching: str = "scalar",
+    cuda_resident_bytes: int = 0,
 ) -> BenchmarkRecord:
     if warmup < 0 or iterations <= 0:
         raise ValueError("warmup must be non-negative and iterations must be positive")
@@ -174,16 +206,24 @@ def benchmark_once(
                 runner,
                 generated_tokens,
                 root / f"run-{index}.json",
-                backend,
-                dense_precision,
+                backend=backend,
+                dense_precision=dense_precision,
+                cuda_allocation=cuda_allocation,
+                cuda_weights=cuda_weights,
+                cuda_batching=cuda_batching,
+                cuda_resident_bytes=cuda_resident_bytes,
             )
             _, ttft_peak, ttft = _run_process(
                 artifact,
                 runner,
                 1,
                 root / f"ttft-{index}.json",
-                backend,
-                dense_precision,
+                backend=backend,
+                dense_precision=dense_precision,
+                cuda_allocation=cuda_allocation,
+                cuda_weights=cuda_weights,
+                cuda_batching=cuda_batching,
+                cuda_resident_bytes=cuda_resident_bytes,
             )
             if index >= warmup:
                 samples.append(sample)
@@ -198,8 +238,12 @@ def benchmark_once(
                 runner,
                 generated_tokens,
                 root / "reference.json",
-                "cpu",
-                "fp32",
+                backend="cpu",
+                dense_precision="fp32",
+                cuda_allocation="per-operation",
+                cuda_weights="transient",
+                cuda_batching="scalar",
+                cuda_resident_bytes=0,
                 diagnostics=True,
             )
             candidate, _, _ = _run_process(
@@ -207,20 +251,57 @@ def benchmark_once(
                 runner,
                 generated_tokens,
                 root / "candidate.json",
-                backend,
-                dense_precision,
+                backend=backend,
+                dense_precision=dense_precision,
+                cuda_allocation=cuda_allocation,
+                cuda_weights=cuda_weights,
+                cuda_batching=cuda_batching,
+                cuda_resident_bytes=cuda_resident_bytes,
                 diagnostics=True,
             )
             max_absolute_error, max_relative_error = _numerical_errors(
                 reference, candidate
             )
+    deterministic_fields = (
+        "backend",
+        "device",
+        "dense_precision",
+        "cuda_allocation",
+        "cuda_weights",
+        "cuda_batching",
+        "cuda_resident_bytes",
+        "device_allocation_count",
+        "device_free_count",
+        "stream_synchronization_count",
+        "weight_cache_hits",
+        "weight_cache_misses",
+        "weight_cache_bypasses",
+        "resident_weight_bytes",
+        "peak_resident_weight_bytes",
+        "scratch_bytes",
+        "peak_scratch_bytes",
+        "weight_h2d_bytes",
+        "activation_h2d_bytes",
+        "grouped_projection_calls",
+        "grouped_projection_members",
+    )
     if any(
-        item["backend"] != backend or
-        item["dense_precision"] != dense_precision or
-        item["device"] != samples[0]["device"]
-        for item in samples
+        any(item[field] != samples[0][field] for field in deterministic_fields)
+        for item in samples[1:]
     ):
         raise RuntimeError("runner metadata changed across benchmark samples")
+    expected_options = (
+        backend,
+        dense_precision,
+        cuda_allocation,
+        cuda_weights,
+        cuda_batching,
+        cuda_resident_bytes,
+    )
+    option_fields = deterministic_fields[:1] + deterministic_fields[2:7]
+    observed_options = tuple(samples[0][field] for field in option_fields)
+    if observed_options != expected_options:
+        raise RuntimeError("runner metadata did not match requested benchmark options")
     prefill_ns = statistics.median(item["prefill_nanoseconds"] for item in samples)
     decode_ns = statistics.median(item["decode_nanoseconds"] for item in samples)
     layer_count = len(samples[0]["per_layer_nanoseconds"])
@@ -246,16 +327,34 @@ def benchmark_once(
         backend=samples[0]["backend"],
         device=samples[0]["device"],
         dense_precision=samples[0]["dense_precision"],
+        cuda_allocation=samples[0]["cuda_allocation"],
+        cuda_weights=samples[0]["cuda_weights"],
+        cuda_batching=samples[0]["cuda_batching"],
+        cuda_resident_bytes=samples[0]["cuda_resident_bytes"],
         kernel_nanoseconds=int(
             statistics.median(item["kernel_nanoseconds"] for item in samples)
         ),
         host_to_device_bytes=int(
             statistics.median(item["host_to_device_bytes"] for item in samples)
         ),
+        weight_h2d_bytes=samples[0]["weight_h2d_bytes"],
+        activation_h2d_bytes=samples[0]["activation_h2d_bytes"],
         device_to_host_bytes=int(
             statistics.median(item["device_to_host_bytes"] for item in samples)
         ),
         peak_vram_bytes=max(item["peak_vram_bytes"] for item in samples),
+        device_allocation_count=samples[0]["device_allocation_count"],
+        device_free_count=samples[0]["device_free_count"],
+        stream_synchronization_count=samples[0]["stream_synchronization_count"],
+        weight_cache_hits=samples[0]["weight_cache_hits"],
+        weight_cache_misses=samples[0]["weight_cache_misses"],
+        weight_cache_bypasses=samples[0]["weight_cache_bypasses"],
+        resident_weight_bytes=samples[0]["resident_weight_bytes"],
+        peak_resident_weight_bytes=samples[0]["peak_resident_weight_bytes"],
+        scratch_bytes=samples[0]["scratch_bytes"],
+        peak_scratch_bytes=samples[0]["peak_scratch_bytes"],
+        grouped_projection_calls=samples[0]["grouped_projection_calls"],
+        grouped_projection_members=samples[0]["grouped_projection_members"],
         max_absolute_error=max_absolute_error,
         max_relative_error=max_relative_error,
         kda_state_bytes=kda_state,
@@ -276,6 +375,17 @@ def main() -> int:
     parser.add_argument(
         "--dense-precision", choices=("fp32", "bf16"), default="fp32"
     )
+    parser.add_argument(
+        "--cuda-allocation", choices=("per-operation", "reused"),
+        default="per-operation",
+    )
+    parser.add_argument(
+        "--cuda-weights", choices=("transient", "resident"), default="transient"
+    )
+    parser.add_argument(
+        "--cuda-batching", choices=("scalar", "grouped"), default="scalar"
+    )
+    parser.add_argument("--cuda-resident-bytes", type=int, default=0)
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--csv", type=Path, required=True)
     args = parser.parse_args()
@@ -284,8 +394,12 @@ def main() -> int:
         args.runner,
         args.warmup,
         args.iterations,
-        args.backend,
-        args.dense_precision,
+        backend=args.backend,
+        dense_precision=args.dense_precision,
+        cuda_allocation=args.cuda_allocation,
+        cuda_weights=args.cuda_weights,
+        cuda_batching=args.cuda_batching,
+        cuda_resident_bytes=args.cuda_resident_bytes,
     )
     write_results(result, args.json, args.csv)
     print(json.dumps(asdict(result), sort_keys=True, separators=(",", ":")))
