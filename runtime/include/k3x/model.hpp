@@ -11,6 +11,8 @@
 namespace k3x {
 struct GenerationResult {
     std::vector<std::uint32_t> token_ids;
+    std::vector<std::uint64_t> per_layer_nanoseconds;
+    std::uint64_t prefill_nanoseconds{};
     std::uint64_t decode_nanoseconds{};
 };
 

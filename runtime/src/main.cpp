@@ -32,9 +32,15 @@ int main(int argc, char** argv) {
     std::ofstream output(output_path);
     if (!output) return 5;
     output << "{\"decode_nanoseconds\":" << result.value().decode_nanoseconds
+           << ",\"prefill_nanoseconds\":" << result.value().prefill_nanoseconds
            << ",\"read_bytes\":" << reader.value().counters().completed_bytes
            << ",\"read_calls\":" << reader.value().counters().calls
-           << ",\"token_ids\":[";
+           << ",\"per_layer_nanoseconds\":[";
+    for (std::size_t index = 0; index < result.value().per_layer_nanoseconds.size(); ++index) {
+        if (index) output << ',';
+        output << result.value().per_layer_nanoseconds[index];
+    }
+    output << "],\"token_ids\":[";
     for (std::size_t index = 0; index < result.value().token_ids.size(); ++index) {
         if (index) output << ',';
         output << result.value().token_ids[index];

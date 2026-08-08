@@ -93,6 +93,7 @@ public:
     }
 
     ModelState empty_state() const { return state_template_; }
+    const std::vector<std::uint64_t>& layer_nanoseconds() const { return layer_nanoseconds_; }
 
     Vector forward(std::uint32_t token, ModelState& state) {
         const auto& embedding = tensor("model.embeddings");
@@ -101,6 +102,7 @@ public:
                       embedding.begin() + (token + 1) * config_.hidden);
         std::vector<Vector> sources;
         for (std::size_t layer = 0; layer < config_.layers; ++layer) {
+            const auto layer_start = std::chrono::steady_clock::now();
             const auto prefix = hidden;
             Vector attention_input = sources.empty()
                 ? prefix : attention_residual(prefix, sources, layer_name(layer, "self_attention_residual"));
@@ -120,6 +122,8 @@ public:
                                                config_.epsilon);
             const auto ffn = layer == 0 ? dense(ffn_normed, layer) : moe(ffn_normed, layer);
             for (std::size_t index = 0; index < config_.hidden; ++index) hidden[index] = prefix_sum[index] + ffn[index];
+            layer_nanoseconds_[layer] += std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - layer_start).count();
         }
         hidden = attention_residual(hidden, sources, "model.output_residual");
         hidden = normalized(hidden, tensor("model.final_norm"), config_.epsilon);
@@ -361,6 +365,7 @@ private:
     Config config_;
     ModelState state_template_;
     std::unordered_map<std::uint64_t, Vector> tensors_;
+    std::vector<std::uint64_t> layer_nanoseconds_ = std::vector<std::uint64_t>(config_.layers);
 };
 
 std::uint32_t argmax(const Vector& values) {
@@ -376,18 +381,24 @@ Result<GenerationResult> generate_greedy(Reader& reader,
     try {
         Engine engine(reader);
         GenerationResult result;
-        const auto start = std::chrono::steady_clock::now();
         if (incremental) {
             auto state = engine.empty_state();
             Vector logits;
+            const auto prefill_start = std::chrono::steady_clock::now();
             for (const auto token : prompt) logits = engine.forward(token, state);
+            result.prefill_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - prefill_start).count();
+            const auto decode_start = std::chrono::steady_clock::now();
             for (std::size_t index = 0; index < count; ++index) {
                 const auto token = argmax(logits);
                 result.token_ids.push_back(token);
                 if (index + 1 < count) logits = engine.forward(token, state);
             }
+            result.decode_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - decode_start).count();
         } else {
             std::vector<std::uint32_t> sequence(prompt.begin(), prompt.end());
+            const auto decode_start = std::chrono::steady_clock::now();
             for (std::size_t generated = 0; generated < count; ++generated) {
                 auto state = engine.empty_state();
                 Vector logits;
@@ -396,9 +407,10 @@ Result<GenerationResult> generate_greedy(Reader& reader,
                 result.token_ids.push_back(token);
                 sequence.push_back(token);
             }
+            result.decode_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - decode_start).count();
         }
-        result.decode_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now() - start).count();
+        result.per_layer_nanoseconds = engine.layer_nanoseconds();
         return Result<GenerationResult>::success(std::move(result));
     } catch (const std::exception& error) {
         return Result<GenerationResult>::failure(ErrorCode::invalid_extent, error.what());
