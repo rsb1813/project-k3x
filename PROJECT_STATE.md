@@ -4,9 +4,9 @@
 
 Milestone 2 — reusable CUDA allocation, bounded exact weight residency, and same-input projection batching.
 
-Milestone 1 implementation, measurement, public merge, and Linux CI are complete. The user approved the staged Milestone 2 design; its written specification is under review and implementation has not started.
+Milestone 1 implementation, measurement, public merge, and Linux CI are complete. The user approved the staged Milestone 2 design and written specification; the detailed TDD implementation plan is complete and production implementation has not started.
 
-State recorded after the 2026-08-08 Milestone 2 design approval on branch `codex/milestone-two-residency`.
+State recorded after the 2026-08-08 Milestone 2 specification approval and implementation-plan completion on branch `codex/milestone-two-residency`.
 
 ## Completed work
 
@@ -39,7 +39,7 @@ State recorded after the 2026-08-08 Milestone 2 design approval on branch `codex
 
 - Branch: `codex/milestone-two-residency`.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
-- The written Milestone 2 design is complete and awaiting the required user review before a TDD implementation plan is written.
+- The approved specification and TDD plan are complete. Inline execution begins with CUDA option/stat contracts and a failing native test.
 - Linux development runs as the unprivileged `jolib` user. The isolated Python environment is `/home/jolib/.venvs/k3x-m1`; repository build output is `build-linux`.
 
 ## Known failures and blockers
@@ -48,14 +48,14 @@ State recorded after the 2026-08-08 Milestone 2 design approval on branch `codex
 - Code Integrity events 3033 and 3077 cite policy `{0283ac0f-fff1-49ae-ada1-8a933130cad6}` and an unmet Enterprise signing level.
 - Fresh Windows CTest binaries run, but five Python cross-language cases that launch `k3x_run.exe` remain blocked on Windows. This does not block the verified WSL Linux path.
 - CUDA calls allocate and transfer per operation in the current correctness baseline; persistent residency and asynchronous overlap remain unimplemented.
-- Milestone 2 implementation is intentionally gated on review of the accepted written specification; no production code is claimed yet.
+- Milestone 2 production code is not yet implemented; only its approved design and execution plan are claimed.
 - `cuda_dense` intentionally uses the CPU MXFP4 oracle with zero device traffic; this is its documented comparison contract, not an automatic fallback after a CUDA failure.
 - Direct cuBLASLt FP4 is rejected for exact K3 MXFP4 because NVIDIA requires UE4M3 scales per 16 FP4 values while K3 uses E8M0 scales per 32 values.
 
 ## Next concrete tasks
 
-1. Complete user review of the Milestone 2 written specification.
-2. Write and commit the detailed TDD implementation plan.
+1. Implement CUDA option and runtime-stat contracts through a failing native test.
+2. Add CLI/schema controls and stable tensor-keyed backend views.
 3. Implement and independently ablate reusable allocation, exact static residency, and grouped projections.
 4. Remeasure CPU, CUDA dense, and CUDA custom before selecting any default.
 5. Use the measured remaining boundary cost to choose a wider GPU executor or the first L0/L1 asynchronous transfer pipeline.

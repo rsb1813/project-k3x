@@ -66,8 +66,8 @@
 - [x] scratch-only, staged residency, whole-layer GPU executor 대안 비교.
 - [x] static weight residency와 grouped projection 설계 승인.
 - [x] Milestone 2 설계 명세와 acceptance matrix 작성.
-- [ ] 사용자 서면 명세 검토.
-- [ ] TDD 구현 계획 작성.
+- [x] 사용자 서면 명세 검토.
+- [x] TDD 구현 계획 작성.
 - [ ] allocation reuse 구현과 독립 ablation.
 - [ ] exact static weight residency 구현과 독립 ablation.
 - [ ] dense/MXFP4 grouped projection 구현과 독립 ablation.

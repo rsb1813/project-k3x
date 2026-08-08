@@ -38,7 +38,7 @@ The CUDA CLI adds these explicit options.
 
 | Option | Values | Reference value | Meaning |
 |---|---|---|---|
-| `--cuda-allocation` | `per-operation`, `reused` | `per-operation` | Allocate/free each call or use backend-owned grow-only scratch buffers |
+| `--cuda-allocation` | `per-operation`, `reused` | `per-operation` | Recreate buffers/descriptors/events each call or reuse backend-owned grow-only scratch and matching CUDA resources |
 | `--cuda-weights` | `transient`, `resident` | `transient` | Copy weights for every use or retain admitted immutable weights in VRAM |
 | `--cuda-batching` | `scalar`, `grouped` | `scalar` | Execute each projection separately or group independent projections sharing one input |
 | `--cuda-resident-bytes` | non-negative integer | `0` | Hard upper bound for resident immutable weight bytes; required to be positive with `resident` |

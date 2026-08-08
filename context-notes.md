@@ -75,3 +75,5 @@
 - 사용자는 Milestone 2 권장안인 bounded static weight residency, reusable scratch buffers, grouped projection 조합을 승인했다. 세 기능은 각각 독립 switch와 ablation을 가지며 기존 per-operation/transient/scalar 경로를 reference로 보존한다.
 - Resident cache는 tensor ID와 representation/shape metadata를 key로 사용한다. capacity를 넘는 entry는 exact transient staging으로 실행하고 bypass를 기록하며, 이 단계에서는 LRU/LFU/Least-Stale eviction을 도입하지 않는다.
 - 첫 grouped call site는 dependency가 없는 KDA Q/K/V, dense/shared gate-up, routed MXFP4 expert gate-up으로 제한한다. 전체 layer GPU executor, async storage, pinned transfer와 tiered cache는 측정 후 다음 경계로 남긴다.
+- 사용자가 written Milestone 2 spec을 승인했다. 구현 계획 self-review에서 B-0002 reference가 descriptor/event reuse로 오염되지 않도록 `per-operation`은 buffer, descriptor, heuristic, event lifetime까지 Milestone 1 동작을 보존하고 `reused`에서만 재사용하도록 명확히 했다.
+- 구현 계획은 두 CUDA backend의 FP32 8개 switch 조합과 fully-enabled BF16, disjoint grouped output arena, member별 event pool, capacity bypass와 split H2D accounting을 명시한다.
