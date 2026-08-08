@@ -60,6 +60,11 @@ else()
     target_link_libraries(test_cuda_device PRIVATE k3x_runtime)
     set_target_properties(test_cuda_device PROPERTIES CUDA_ARCHITECTURES "120-real")
     add_test(NAME cuda_device COMMAND test_cuda_device)
+
+    add_executable(test_cuda_dense tests/cuda/test_cuda_dense.cu)
+    target_link_libraries(test_cuda_dense PRIVATE k3x_runtime)
+    set_target_properties(test_cuda_dense PROPERTIES CUDA_ARCHITECTURES "120-real")
+    add_test(NAME cuda_dense COMMAND test_cuda_dense)
 endif()
 
 add_executable(test_reader tests/cpp/test_reader.cpp)

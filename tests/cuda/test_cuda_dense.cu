@@ -1,0 +1,131 @@
+// cuBLASLt FP32 dense matvec의 수치 결과와 전송 프로파일을 검증합니다.
+#include "k3x/backend.hpp"
+
+#include <bit>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <iostream>
+#include <vector>
+
+namespace {
+
+bool nearly_equal(float actual, float expected, float tolerance) {
+    return std::abs(actual - expected) <= tolerance;
+}
+
+float round_to_bf16(float value) {
+    auto bits = std::bit_cast<std::uint32_t>(value);
+    bits += 0x7FFFU + ((bits >> 16U) & 1U);
+    return std::bit_cast<float>(bits & 0xFFFF0000U);
+}
+
+int test_fp32() {
+    k3x::Profiler profiler;
+    k3x::BackendOptions options;
+    options.kind = k3x::BackendKind::cuda_dense;
+    options.dense_precision = k3x::DensePrecision::fp32;
+
+    auto backend = k3x::make_cuda_backend(options, &profiler);
+    if (!backend) {
+        std::cerr << backend.message() << '\n';
+        return 1;
+    }
+
+    const std::vector<float> input{1.0F, 2.0F, 3.0F};
+    const std::vector<float> weight{
+        1.0F, 0.0F, -1.0F,
+        0.5F, 2.0F, 1.0F,
+    };
+    const auto output = backend.value()->dense_matvec(
+        input, weight, 2, 3, 7, k3x::ProfilePhase::decode);
+    if (!output) {
+        std::cerr << output.message() << '\n';
+        return 2;
+    }
+    if (output.value().size() != 2) return 3;
+    if (!nearly_equal(output.value()[0], -2.0F, 1.0e-5F)) return 4;
+    if (!nearly_equal(output.value()[1], 7.5F, 1.0e-5F)) return 5;
+
+    std::size_t dense_events = 0;
+    for (const auto& event : profiler.events()) {
+        if (event.operation != k3x::ProfileOperation::dense_matvec) continue;
+        ++dense_events;
+        if (!event.success) return 6;
+        if (event.precision != k3x::NumericPrecision::fp32) return 7;
+        if (event.layer != 7) return 8;
+        if (event.phase != k3x::ProfilePhase::decode) return 9;
+        if (event.device_nanoseconds == 0) return 10;
+    }
+    if (dense_events != 1) return 11;
+
+    const auto summary = profiler.summary();
+    if (summary.failed_operations != 0) return 12;
+    if (summary.host_to_device_bytes != 36) return 13;
+    if (summary.device_to_host_bytes != 8) return 14;
+    if (backend.value()->memory_stats().current_device_bytes != 0) return 15;
+    return 0;
+}
+
+int test_bf16_rounded() {
+    k3x::Profiler profiler;
+    k3x::BackendOptions options;
+    options.kind = k3x::BackendKind::cuda_dense;
+    options.dense_precision = k3x::DensePrecision::bf16_rounded;
+
+    auto backend = k3x::make_cuda_backend(options, &profiler);
+    if (!backend) return 16;
+
+    const std::vector<float> input{1.003F, -2.007F, 0.3333F};
+    const std::vector<float> weight{
+        0.1003F, -0.2007F, 0.3009F,
+        -1.101F, 2.203F, 0.707F,
+    };
+    std::vector<float> expected(2);
+    for (std::size_t row = 0; row < 2; ++row) {
+        float sum = 0.0F;
+        for (std::size_t column = 0; column < 3; ++column) {
+            sum += round_to_bf16(weight[row * 3 + column]) *
+                   round_to_bf16(input[column]);
+        }
+        expected[row] = sum;
+    }
+
+    const auto output = backend.value()->dense_matvec(
+        input, weight, 2, 3, 11, k3x::ProfilePhase::prefill);
+    if (!output) {
+        std::cerr << output.message() << '\n';
+        return 17;
+    }
+    if (output.value().size() != 2) return 18;
+    if (!nearly_equal(output.value()[0], expected[0], 2.0e-2F)) return 19;
+    if (!nearly_equal(output.value()[1], expected[1], 2.0e-2F)) return 20;
+
+    std::size_t dense_events = 0;
+    for (const auto& event : profiler.events()) {
+        if (event.operation != k3x::ProfileOperation::dense_matvec) continue;
+        ++dense_events;
+        if (!event.success) return 21;
+        if (event.precision != k3x::NumericPrecision::bf16_rounded) return 22;
+        if (event.layer != 11) return 23;
+        if (event.phase != k3x::ProfilePhase::prefill) return 24;
+        if (event.device_nanoseconds == 0) return 25;
+    }
+    if (dense_events != 1) return 26;
+
+    const auto summary = profiler.summary();
+    if (summary.failed_operations != 0) return 27;
+    if (summary.logical_bytes != 24) return 28;
+    if (summary.host_to_device_bytes != 18) return 29;
+    if (summary.device_to_host_bytes != 8) return 30;
+    if (backend.value()->memory_stats().current_device_bytes != 0) return 31;
+    return 0;
+}
+
+}  // namespace
+
+int main() {
+    const auto fp32_result = test_fp32();
+    if (fp32_result != 0) return fp32_result;
+    return test_bf16_rounded();
+}
