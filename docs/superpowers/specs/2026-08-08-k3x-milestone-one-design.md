@@ -91,6 +91,8 @@ Attention score는 두 NoPE key subspace를 모두 포함하며 전체 query hea
 
 Router logits는 FP32 hidden state와 router matrix의 linear projection이다. score는 expert별 sigmoid이다. correction bias는 expert 선택 순위에만 더하고 최종 expert weight에는 bias 없는 score를 사용한다. 선택된 Top-16 weight는 합이 1이 되도록 normalize한 뒤 routed scaling factor를 곱한다.
 
+공개 checkpoint config의 SiTU 상수는 `activation_situ_beta=4.0`, `activation_situ_linear_beta=25.0`이며 routed scaling factor는 1.0이다. 합성 모델도 같은 activation 상수를 유지한다.
+
 Routed branch는 hidden 7168을 latent 3584로 down-project하고, 선택된 각 expert의 SiTU-GLU를 실행해 router weight로 합산한다. 합산된 latent를 RMSNorm하고 hidden 7168로 up-project한다. Shared branch는 원래 hidden state에서 2 shared experts 상당의 dense SiTU-GLU를 실행한다. 최종 MoE output은 routed branch와 shared branch의 합이다.
 
 ### 4.4 MXFP4
@@ -119,6 +121,8 @@ Routed branch는 hidden 7168을 latent 3584로 down-project하고, 선택된 각
 | shared experts | 1 |
 | routed latent size | 32 |
 | expert intermediate size | 32 |
+| dense intermediate size | 96 |
+| SiTU beta / linear beta | 4 / 25 |
 | Attention Residual block | 2 |
 
 Attention Residual block size 2는 실제 값 12의 축소 대응이다. 4-layer fixture 안에서 복수 block source와 output mixing을 모두 실행하기 위한 유일한 topology 축소이며, 문서와 fixture metadata에 실제 값과 합성 값을 함께 기록한다.
@@ -194,7 +198,7 @@ Superblock은 magic, major/minor version, file UUID, alignment, required/optiona
 
 모든 production behavior는 실패하는 테스트를 먼저 작성한다. 기대값은 implementation helper로 계산하지 않고 PyTorch reference 또는 작은 hand-derived literal에서 얻는다.
 
-검증 단계는 primitive, stateful operator, decoder layer, full graph, storage round-trip 순서이다. FP32 수치 결과는 연산별 명시 tolerance를 사용한다. MXFP4 payload와 scale round-trip, selected expert IDs 및 greedy tokens는 exact match여야 한다. Full-prefix와 incremental execution은 final token뿐 아니라 KDA convolution/recurrent state와 MLA KV contents도 비교한다.
+검증 단계는 primitive, stateful operator, decoder layer, full graph, storage round-trip 순서이다. FP32 수치 결과와 recurrent/KV state는 연산별 명시 tolerance를 사용한다. GEMM batch shape이나 독립 C++ reduction order가 다른 경로에 bitwise state digest 일치를 요구하지 않는다. MXFP4 payload와 scale round-trip, selected expert IDs 및 greedy tokens는 exact match여야 한다. Full-prefix와 incremental execution은 final token뿐 아니라 KDA convolution/recurrent state와 MLA KV contents도 수치 비교한다.
 
 ## 11. 측정 계획
 

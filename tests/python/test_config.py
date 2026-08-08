@@ -13,6 +13,9 @@ def test_default_config_reproduces_minimal_k3_topology() -> None:
     assert cfg.top_k == 2
     assert cfg.attn_res_block_size == 2
     assert cfg.mla_use_nope is True
+    assert cfg.mla_use_output_gate is True
+    assert cfg.activation_situ_beta == 4.0
+    assert cfg.activation_situ_linear_beta == 25.0
 
 
 def test_config_rejects_mxfp4_incompatible_expert_width() -> None:

@@ -15,9 +15,9 @@
 - [x] PyTorch 기본 연산과 MXFP4 oracle.
 - [x] KDA와 recurrent/ShortConv state parity.
 - [x] Gated MLA와 incremental KV parity.
-- [ ] router, Stable LatentMoE, shared expert parity.
-- [ ] Attention Residual과 decoder graph parity.
-- [ ] greedy generation full/incremental parity.
+- [x] router, Stable LatentMoE, shared expert parity.
+- [x] Attention Residual과 decoder graph parity.
+- [x] greedy generation full/incremental parity.
 - [ ] K3X v1 streaming writer, reader 및 validator.
 - [ ] crash-safe resume와 손상 감지.
 - [ ] C++20 runtime 연산·layer·end-to-end parity.

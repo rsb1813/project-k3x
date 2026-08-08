@@ -24,3 +24,7 @@
 - FP32 RMSNorm, SiTU-GLU, native MXFP4 E2M1/E8M0 decode와 reference matmul 테스트 6개가 통과했다. Nibble 순서를 의도적으로 뒤집었을 때 literal test가 실패함을 확인하고 low-nibble-first 구현을 복원했다.
 - KDA reference는 causal depthwise ShortConv history, head-wise `A_log`, channel-wise forget logits, sigmoid beta, delta write 후 read, full-rank output gate를 명시적 state로 구현했다. Pre-update state를 읽도록 변이했을 때 literal recurrence test가 실패함을 확인했다.
 - Gated MLA reference는 q-LoRA와 normalized KV latent, main key/value, shared extra NoPE key, output gate를 명시적으로 저장한다. 길이 1, 2, 5에서 KDA와 MLA 모두 prefill과 token-by-token decode 출력 및 최종 state가 exact match했다.
+- 전체 그래프의 full-prefix와 incremental 경로는 layer 0부터 GEMM batch shape가 달라 최대 `9.31e-9`, 최종 logits에서 최대 `3.58e-7`의 정상적인 FP32 반올림 차이가 측정됐다. 따라서 cross-path 및 cross-language state는 `atol=rtol=1e-6` 수치 비교를 사용하고, byte-exact digest는 같은 runtime의 반복 실행에만 사용한다.
+- 공식 vendored `config.json`에서 SiTU beta 4.0, linear beta 25.0, MLA output gate 활성화, routed scaling factor 1.0을 확인해 합성 config와 K3X model metadata에 반영했다.
+- Router의 correction bias는 선택에만 사용하고 unbiased sigmoid score를 normalize한다. Stable LatentMoE는 native MXFP4 routed branch와 원래 hidden-space shared branch를 분리하며, AttnRes는 normalized key로 score한 뒤 raw source를 혼합한다.
+- Controlled graph는 prompt `[1,7,3,9]`에서 full/incremental 모두 token 5를 6회 생성했다. Seeded graph도 두 mode의 greedy token이 exact match했고, source shard와 golden fixture를 두 번 생성한 SHA-256 manifest가 동일했다.

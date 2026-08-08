@@ -166,14 +166,19 @@ class SyntheticK3Config:
     qk_rope_head_dim: int = 8
     v_head_dim: int = 8
     mla_use_nope: bool = True
+    mla_use_output_gate: bool = True
     num_experts: int = 8
     top_k: int = 2
     num_shared_experts: int = 1
     routed_latent_size: int = 32
     expert_intermediate_size: int = 32
+    dense_intermediate_size: int = 96
     attn_res_block_size: int = 2
     rms_norm_eps: float = 1.0e-5
     kda_gate_lower_bound: float = -5.0
+    activation_situ_beta: float = 4.0
+    activation_situ_linear_beta: float = 25.0
+    routed_scaling_factor: float = 1.0
     mxfp4_group_size: int = 32
 
     @classmethod
@@ -583,15 +588,18 @@ Model config record, 256 bytes
 56  u32      shared_expert_count
 60  u32      routed_latent_size
 64  u32      expert_intermediate_size
-68  u32      attention_residual_block_size
-72  u32      mxfp4_group_size
-76  f32      rms_norm_epsilon
-80  f32      kda_gate_lower_bound
-84  f32      routed_scaling_factor
-88  f32      absolute_tolerance
-92  f32      relative_tolerance
-96  u32      mla_flags, bit 0 use_nope and bit 1 output_gate
-100 u8[156]  reserved
+68  u32      dense_intermediate_size
+72  u32      attention_residual_block_size
+76  u32      mxfp4_group_size
+80  f32      rms_norm_epsilon
+84  f32      kda_gate_lower_bound
+88  f32      routed_scaling_factor
+92  f32      activation_situ_beta
+96  f32      activation_situ_linear_beta
+100 f32      absolute_tolerance
+104 f32      relative_tolerance
+108 u32      mla_flags, bit 0 use_nope and bit 1 output_gate
+112 u8[144]  reserved
 ```
 
 All enum numeric values, feature bits, and the canonical directory digest range are listed beside these layouts. Root SHA-256 is computed over the finalized file length with bytes 200-231 and 4092-4095 treated as zero, then written at 200; superblock CRC32C is computed last over bytes 0-4091.
@@ -769,10 +777,10 @@ def test_cpp_incremental_generation_matches_python_golden(k3x_fixture, cpp_runne
     ])
     got = json.loads(output.read_text(encoding="utf-8"))
     assert got["token_ids"] == k3x_fixture.golden_token_ids
-    assert got["state_sha256"] == k3x_fixture.golden_state_sha256
+        assert_numeric_state_close(got["state"], k3x_fixture.golden_state, atol=1e-6, rtol=1e-6)
 ```
 
-Add parameterized checks for primitive, each of four layer outputs, final logits, full tokens, incremental tokens, KDA state digest, and MLA state digest. Tests compare numeric arrays before comparing digests so failures identify the first divergent boundary.
+Add parameterized checks for primitive, each of four layer outputs, final logits, full tokens, incremental tokens, KDA state tensors, and MLA state tensors. Numeric arrays use the tolerance stored in model config because different GEMM shapes and the independent C++ reduction order are not bit-identical. MXFP4 bytes, selected expert IDs, and token IDs remain exact. Optional state digests are compared only between repeated executions of the same runtime after numeric boundary checks.
 
 - [ ] **Step 2: Build and observe RED**
 

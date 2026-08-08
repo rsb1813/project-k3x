@@ -18,14 +18,19 @@ class SyntheticK3Config:
     qk_rope_head_dim: int = 8
     v_head_dim: int = 8
     mla_use_nope: bool = True
+    mla_use_output_gate: bool = True
     num_experts: int = 8
     top_k: int = 2
     num_shared_experts: int = 1
     routed_latent_size: int = 32
     expert_intermediate_size: int = 32
+    dense_intermediate_size: int = 96
     attn_res_block_size: int = 2
     rms_norm_eps: float = 1.0e-5
     kda_gate_lower_bound: float = -5.0
+    activation_situ_beta: float = 4.0
+    activation_situ_linear_beta: float = 25.0
+    routed_scaling_factor: float = 1.0
     mxfp4_group_size: int = 32
 
     @classmethod
