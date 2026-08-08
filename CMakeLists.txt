@@ -22,6 +22,7 @@ if(K3X_ENABLE_CUDA)
     find_package(CUDAToolkit 13.3 REQUIRED)
     target_sources(k3x_runtime PRIVATE
         runtime/cuda/backend_cuda.cu
+        runtime/cuda/device_memory.cu
         runtime/cuda/mxfp4.cu
     )
     target_link_libraries(k3x_runtime PUBLIC CUDA::cudart CUDA::cublasLt)
@@ -73,6 +74,12 @@ else()
     target_link_libraries(test_cuda_mxfp4 PRIVATE k3x_runtime)
     set_target_properties(test_cuda_mxfp4 PROPERTIES CUDA_ARCHITECTURES "120-real")
     add_test(NAME cuda_mxfp4 COMMAND test_cuda_mxfp4)
+
+    add_executable(test_cuda_memory tests/cuda/test_cuda_memory.cu)
+    target_link_libraries(test_cuda_memory PRIVATE k3x_runtime)
+    target_include_directories(test_cuda_memory PRIVATE runtime/cuda)
+    set_target_properties(test_cuda_memory PROPERTIES CUDA_ARCHITECTURES "120-real")
+    add_test(NAME cuda_memory COMMAND test_cuda_memory)
 endif()
 
 add_executable(test_reader tests/cpp/test_reader.cpp)
