@@ -1,5 +1,6 @@
 // RTX 5080용 CUDA stream과 cuBLASLt handle의 수명 및 device capability를 관리합니다.
 #include "k3x/backend.hpp"
+#include "k3x/ops.hpp"
 
 #include "mxfp4.cuh"
 
@@ -326,6 +327,14 @@ public:
         const auto operation_start = std::chrono::steady_clock::now();
         constexpr auto precision = NumericPrecision::mxfp4_e2m1_e8m0;
         const auto logical_bytes = packed.size_bytes() + scales.size_bytes();
+        if (options_.kind == BackendKind::cuda_dense) {
+            auto result = k3x::mxfp4_matmul(
+                input, packed, scales, rows, cols, group_size);
+            record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                   operation_start, logical_bytes, 0, 0,
+                   static_cast<bool>(result));
+            return result;
+        }
         if (options_.kind != BackendKind::cuda_custom) {
             record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
                    operation_start, logical_bytes, 0, 0, false);

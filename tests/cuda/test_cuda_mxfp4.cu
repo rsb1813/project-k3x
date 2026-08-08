@@ -67,13 +67,25 @@ int test_rejects_incompatible_contracts() {
         input, std::span<const std::byte>(packed).first(16),
         std::span<const std::byte>(scales).first(1),
         1, 32, 32, 5, k3x::ProfilePhase::decode);
-    if (incompatible_backend ||
-        incompatible_backend.error() != k3x::ErrorCode::backend_unavailable) return 30;
-    if (dense_profiler.summary().failed_operations != 1) return 31;
-    for (const auto& event : dense_profiler.events()) {
-        if (event.operation == k3x::ProfileOperation::dense_matvec) return 32;
-        if (event.precision != k3x::NumericPrecision::mxfp4_e2m1_e8m0) return 33;
+    if (!incompatible_backend || incompatible_backend.value().size() != 1 ||
+        !nearly_equal(incompatible_backend.value()[0], 1.0F)) {
+        std::cerr << "cuda_dense did not retain the CPU MXFP4 oracle\n";
+        return 30;
     }
+    const auto dense_summary = dense_profiler.summary();
+    if (dense_summary.failed_operations != 0) return 31;
+    if (dense_summary.host_to_device_bytes != 0 ||
+        dense_summary.device_to_host_bytes != 0 ||
+        dense_summary.device_nanoseconds != 0) return 32;
+    std::size_t dense_mxfp4_events = 0;
+    for (const auto& event : dense_profiler.events()) {
+        if (event.operation == k3x::ProfileOperation::dense_matvec) return 33;
+        if (event.operation != k3x::ProfileOperation::mxfp4_matvec) continue;
+        ++dense_mxfp4_events;
+        if (!event.success || event.device_nanoseconds != 0) return 34;
+        if (event.precision != k3x::NumericPrecision::mxfp4_e2m1_e8m0) return 35;
+    }
+    if (dense_mxfp4_events != 1) return 36;
     return 0;
 }
 
@@ -81,7 +93,7 @@ int test_strides_columns_beyond_one_block_width() {
     k3x::BackendOptions options;
     options.kind = k3x::BackendKind::cuda_custom;
     auto backend = k3x::make_cuda_backend(options);
-    if (!backend) return 34;
+    if (!backend) return 37;
 
     std::array<float, 320> input{};
     input[256] = 2.0F;
@@ -93,11 +105,11 @@ int test_strides_columns_beyond_one_block_width() {
 
     const auto output = backend.value()->mxfp4_matvec(
         input, packed, scales, 1, 320, 32, 6, k3x::ProfilePhase::decode);
-    if (!output) return 35;
+    if (!output) return 38;
     if (output.value().size() != 1 ||
         !nearly_equal(output.value()[0], 4.0F)) {
         std::cerr << "MXFP4 columns beyond one block width were skipped\n";
-        return 36;
+        return 39;
     }
     return 0;
 }
