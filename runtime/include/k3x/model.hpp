@@ -1,6 +1,7 @@
 // 합성 K3 graph의 C++ greedy generation 인터페이스를 선언합니다.
 #pragma once
 
+#include "k3x/backend.hpp"
 #include "k3x/reader.hpp"
 #include "k3x/status.hpp"
 
@@ -18,6 +19,13 @@ struct GenerationResult {
     std::uint64_t prefill_nanoseconds{};
     std::uint64_t decode_nanoseconds{};
 };
+
+Result<GenerationResult> generate_greedy(Reader& reader,
+                                         ComputeBackend& backend,
+                                         std::span<const std::uint32_t> prompt,
+                                         std::size_t count,
+                                         bool incremental,
+                                         bool diagnostics = false);
 
 Result<GenerationResult> generate_greedy(Reader& reader,
                                          std::span<const std::uint32_t> prompt,

@@ -1,0 +1,50 @@
+// dense와 native MXFP4 연산을 실행하는 명시적 compute backend 계약을 정의합니다.
+#pragma once
+
+#include "k3x/profile.hpp"
+#include "k3x/status.hpp"
+
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <span>
+#include <string_view>
+#include <vector>
+
+namespace k3x {
+
+enum class BackendKind { cpu, cuda_dense, cuda_custom };
+enum class DensePrecision { fp32, bf16_rounded };
+
+struct BackendOptions {
+    BackendKind kind{BackendKind::cpu};
+    DensePrecision dense_precision{DensePrecision::fp32};
+};
+
+struct BackendMemoryStats {
+    std::uint64_t current_device_bytes{};
+    std::uint64_t peak_device_bytes{};
+};
+
+class ComputeBackend {
+public:
+    virtual ~ComputeBackend() = default;
+    virtual BackendKind kind() const noexcept = 0;
+    virtual Result<std::vector<float>> dense_matvec(
+        std::span<const float> input, std::span<const float> weight,
+        std::size_t rows, std::size_t cols, std::uint32_t layer,
+        ProfilePhase phase) = 0;
+    virtual Result<std::vector<float>> mxfp4_matvec(
+        std::span<const float> input, std::span<const std::byte> packed,
+        std::span<const std::byte> scales, std::size_t rows,
+        std::size_t cols, std::size_t group_size,
+        std::uint32_t layer, ProfilePhase phase) = 0;
+    virtual BackendMemoryStats memory_stats() const noexcept = 0;
+    virtual std::string_view device_name() const noexcept = 0;
+};
+
+std::unique_ptr<ComputeBackend> make_cpu_backend(Profiler* profiler = nullptr);
+Result<std::unique_ptr<ComputeBackend>> make_cuda_backend(
+    const BackendOptions& options, Profiler* profiler = nullptr);
+
+}  // namespace k3x

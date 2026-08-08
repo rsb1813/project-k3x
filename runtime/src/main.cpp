@@ -34,8 +34,9 @@ int main(int argc, char** argv) {
                                                : reader.message()) << '\n';
         return 3;
     }
+    auto backend = k3x::make_cpu_backend();
     auto result = k3x::generate_greedy(
-        reader.value(), prompt, count, mode == "incremental", diagnostics);
+        reader.value(), *backend, prompt, count, mode == "incremental", diagnostics);
     if (!result) {
         std::cerr << (result.message().empty() ? k3x::error_code_name(result.error())
                                                : result.message()) << '\n';

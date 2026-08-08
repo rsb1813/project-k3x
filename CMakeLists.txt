@@ -13,6 +13,7 @@ add_library(k3x_runtime
     runtime/src/reader.cpp
     runtime/src/ops.cpp
     runtime/src/profile.cpp
+    runtime/src/backend_cpu.cpp
 )
 target_include_directories(k3x_runtime PUBLIC runtime/include)
 if(MSVC)
@@ -30,6 +31,10 @@ add_test(NAME ops COMMAND test_ops)
 add_executable(test_profile tests/cpp/test_profile.cpp)
 target_link_libraries(test_profile PRIVATE k3x_runtime)
 add_test(NAME profile COMMAND test_profile)
+
+add_executable(test_backend tests/cpp/test_backend.cpp)
+target_link_libraries(test_backend PRIVATE k3x_runtime)
+add_test(NAME backend COMMAND test_backend)
 
 add_executable(test_reader tests/cpp/test_reader.cpp)
 target_link_libraries(test_reader PRIVATE k3x_runtime)
