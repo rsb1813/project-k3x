@@ -156,7 +156,7 @@ K3X has an approved Milestone 0 design and an implementation-ready execution pla
 - [x] Detailed implementation plan written.
 - [x] Synthetic PyTorch model passing.
 - [x] K3X synthetic round-trip passing.
-- [ ] Independent C++ runtime parity passing.
+- [x] Independent C++ runtime token parity passing.
 - [ ] Synthetic benchmark recorded.
 
 See [`checklist.md`](checklist.md) for the working checklist and [`context-notes.md`](context-notes.md) for decision history.

@@ -20,12 +20,12 @@
 - [x] greedy generation full/incremental parity.
 - [x] K3X v1 streaming writer, reader 및 validator.
 - [x] crash-safe resume와 손상 감지.
-- [ ] C++20 runtime 연산·layer·end-to-end parity.
+- [x] C++20 runtime 연산·layer·end-to-end token parity.
 
 ## 검증과 전달
 
 - [x] Python 전체 테스트 통과.
-- [ ] C++ 전체 테스트 통과.
+- [x] C++ 전체 테스트 통과.
 - [x] 합성 checkpoint round-trip 통과.
 - [ ] benchmark와 peak RSS/read bytes 측정.
 - [ ] `ARCHITECTURE.md`, `PERFORMANCE_MODEL.md`, `K3X_FORMAT.md` 완성.

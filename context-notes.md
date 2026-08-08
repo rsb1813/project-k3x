@@ -31,3 +31,6 @@
 - K3X v1 writer는 safetensors header만 읽어 tensor extent를 찾고, 설정된 chunk 크기 이하로 payload를 복사한다. native MXFP4 packed code와 scale은 별도 aligned extent로 byte-for-byte 보존한다.
 - 각 extent는 flush와 fsync 뒤 partial 파일에서 다시 읽어 CRC32C를 확인한 후에만 원자적 resume ledger에 기록한다. source fingerprint가 달라진 resume는 거부한다.
 - 4 KiB superblock literal layout, 128-byte tensor record, extent 정렬·중복·절단 검증, payload corruption, unknown required feature, source mutation, 중단 재개, CLI dry-run 및 native MXFP4 byte parity를 포함해 Python 전체 35개 테스트가 3.49초에 통과했다.
+- C++20 runtime은 외부 ML library 없이 portable CRC32C/SHA-256, strict K3X reader, RMSNorm, SiTU, native MXFP4와 합성 KDA/MLA/Attention Residual/Stable LatentMoE graph를 구현한다. Root SHA-256은 1 MiB heap buffer로 증분 검증해 artifact 전체를 RAM에 올리지 않는다.
+- C++ reader는 Python writer artifact를 열고 payload CRC corruption, unknown required feature, truncation을 동일한 안정적 오류 코드로 거부했다. C++ full/incremental greedy 결과는 PyTorch의 `[43,32,28,49,9,28]`과 모두 exact match했다.
+- 첫 cross-language 실행의 Windows `0xC00000FD`는 reader 함수의 1 MiB stack SHA buffer 때문임을 확인했다. heap buffer로 이동한 뒤 같은 parity test가 통과했다.

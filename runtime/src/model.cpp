@@ -1,0 +1,407 @@
+// 합성 K3 KDA/MLA/MoE/AttnRes graph를 외부 ML library 없이 실행합니다.
+#include "k3x/model.hpp"
+
+#include "k3x/format.hpp"
+#include "k3x/ops.hpp"
+
+#include <algorithm>
+#include <bit>
+#include <chrono>
+#include <cmath>
+#include <cstring>
+#include <numeric>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+
+namespace k3x {
+namespace {
+using Vector = std::vector<float>;
+
+template <typename T>
+T little(const std::array<std::byte, model_config_bytes>& bytes, std::size_t offset) {
+    T value{};
+    for (std::size_t index = 0; index < sizeof(T); ++index) {
+        value |= static_cast<T>(std::to_integer<std::uint8_t>(bytes[offset + index])) << (index * 8U);
+    }
+    return value;
+}
+
+float config_float(const std::array<std::byte, model_config_bytes>& bytes, std::size_t index) {
+    const auto raw = little<std::uint32_t>(bytes, 80 + index * 4);
+    return std::bit_cast<float>(raw);
+}
+
+struct Config {
+    std::uint32_t vocab, hidden, layers, kda_heads, kda_dim, conv_kernel;
+    std::uint32_t mla_heads, q_rank, kv_rank, q_main, q_extra, value_dim;
+    std::uint32_t experts, top_k, shared_experts, latent, expert_intermediate;
+    std::uint32_t dense_intermediate, residual_block, group_size;
+    float epsilon, kda_lower, routed_scale, situ_beta, situ_linear;
+};
+
+Config decode_config(const std::array<std::byte, model_config_bytes>& bytes) {
+    std::array<std::uint32_t, 20> integers{};
+    for (std::size_t index = 0; index < integers.size(); ++index) {
+        integers[index] = little<std::uint32_t>(bytes, index * 4);
+    }
+    return Config{integers[0],integers[1],integers[2],integers[3],integers[4],integers[5],
+                  integers[6],integers[7],integers[8],integers[9],integers[10],integers[11],
+                  integers[12],integers[13],integers[14],integers[15],integers[16],
+                  integers[17],integers[18],integers[19],config_float(bytes,0),
+                  config_float(bytes,1),config_float(bytes,2),config_float(bytes,3),
+                  config_float(bytes,4)};
+}
+
+Vector matvec(std::span<const float> weight, std::size_t rows, std::size_t cols,
+              std::span<const float> input) {
+    Vector output(rows);
+    for (std::size_t row = 0; row < rows; ++row) {
+        double sum = 0.0;
+        for (std::size_t column = 0; column < cols; ++column) {
+            sum += static_cast<double>(weight[row * cols + column]) * input[column];
+        }
+        output[row] = static_cast<float>(sum);
+    }
+    return output;
+}
+
+float sigmoid(float value) { return 1.0F / (1.0F + std::exp(-value)); }
+float silu(float value) { return value * sigmoid(value); }
+
+Vector normalized(std::span<const float> input, std::span<const float> weight, float epsilon) {
+    Vector output(input.size());
+    rms_norm(output, input, weight, epsilon);
+    return output;
+}
+
+struct KdaState { Vector conv_q, conv_k, conv_v, recurrent; };
+struct MlaState { Vector keys, values, shared_keys; std::size_t length{}; };
+struct ModelState { std::vector<KdaState> kda; MlaState mla; };
+
+class Engine {
+public:
+    explicit Engine(Reader& reader) : reader_(reader), config_(decode_config(reader.model_config())) {
+        state_template_.kda.resize(3);
+        for (auto& state : state_template_.kda) {
+            const auto history = (config_.conv_kernel - 1) * config_.hidden;
+            state.conv_q.assign(history, 0.0F);
+            state.conv_k.assign(history, 0.0F);
+            state.conv_v.assign(history, 0.0F);
+            state.recurrent.assign(config_.kda_heads * config_.kda_dim * config_.kda_dim, 0.0F);
+        }
+    }
+
+    ModelState empty_state() const { return state_template_; }
+
+    Vector forward(std::uint32_t token, ModelState& state) {
+        const auto& embedding = tensor("model.embeddings");
+        if (token >= config_.vocab) throw std::runtime_error("token out of range");
+        Vector hidden(embedding.begin() + token * config_.hidden,
+                      embedding.begin() + (token + 1) * config_.hidden);
+        std::vector<Vector> sources;
+        for (std::size_t layer = 0; layer < config_.layers; ++layer) {
+            const auto prefix = hidden;
+            Vector attention_input = sources.empty()
+                ? prefix : attention_residual(prefix, sources, layer_name(layer, "self_attention_residual"));
+            const bool pushed = layer % config_.residual_block == 0;
+            if (pushed) sources.push_back(prefix);
+            const auto normed = normalized(attention_input, tensor(layer_name(layer, "input_norm")), config_.epsilon);
+            Vector attention = layer < 3 ? kda(normed, layer, state.kda[layer])
+                                         : mla(normed, layer, state.mla);
+            Vector prefix_sum(config_.hidden);
+            for (std::size_t index = 0; index < config_.hidden; ++index) {
+                prefix_sum[index] = pushed ? attention[index] : prefix[index] + attention[index];
+            }
+            const auto ffn_input = attention_residual(prefix_sum, sources,
+                                                       layer_name(layer, "mlp_residual"));
+            const auto ffn_normed = normalized(ffn_input,
+                                               tensor(layer_name(layer, "post_attention_norm")),
+                                               config_.epsilon);
+            const auto ffn = layer == 0 ? dense(ffn_normed, layer) : moe(ffn_normed, layer);
+            for (std::size_t index = 0; index < config_.hidden; ++index) hidden[index] = prefix_sum[index] + ffn[index];
+        }
+        hidden = attention_residual(hidden, sources, "model.output_residual");
+        hidden = normalized(hidden, tensor("model.final_norm"), config_.epsilon);
+        return matvec(tensor("model.lm_head"), config_.vocab, config_.hidden, hidden);
+    }
+
+private:
+    static std::string layer_name(std::size_t layer, const std::string& suffix) {
+        return "model.layers." + std::to_string(layer) + "." + suffix;
+    }
+
+    const Vector& tensor(const std::string& name) {
+        const auto id = fnv1a64(name.c_str());
+        if (const auto found = tensors_.find(id); found != tensors_.end()) return found->second;
+        auto bytes = reader_.read_tensor(id);
+        if (!bytes || bytes.value().size() % sizeof(float)) throw std::runtime_error("missing FP32 tensor: " + name);
+        Vector values(bytes.value().size() / sizeof(float));
+        std::memcpy(values.data(), bytes.value().data(), bytes.value().size());
+        return tensors_.emplace(id, std::move(values)).first->second;
+    }
+
+    Vector attention_residual(const Vector& prefix, const std::vector<Vector>& sources,
+                              const std::string& base) {
+        std::vector<const Vector*> values;
+        for (const auto& source : sources) values.push_back(&source);
+        values.push_back(&prefix);
+        const auto& norm_weight = tensor(base + ".norm");
+        const auto& projection = tensor(base + ".projection");
+        Vector scores(values.size());
+        for (std::size_t depth = 0; depth < values.size(); ++depth) {
+            const auto key = normalized(*values[depth], norm_weight, config_.epsilon);
+            scores[depth] = std::inner_product(key.begin(), key.end(), projection.begin(), 0.0F);
+        }
+        const auto maximum = *std::max_element(scores.begin(), scores.end());
+        float denominator = 0.0F;
+        for (auto& score : scores) { score = std::exp(score - maximum); denominator += score; }
+        Vector output(config_.hidden, 0.0F);
+        for (std::size_t depth = 0; depth < values.size(); ++depth) {
+            const auto probability = scores[depth] / denominator;
+            for (std::size_t index = 0; index < output.size(); ++index) output[index] += probability * (*values[depth])[index];
+        }
+        return output;
+    }
+
+    Vector short_conv(const Vector& projected, Vector& history, const Vector& weight) {
+        Vector output(config_.hidden);
+        for (std::size_t channel = 0; channel < config_.hidden; ++channel) {
+            double sum = 0.0;
+            for (std::size_t tap = 0; tap + 1 < config_.conv_kernel; ++tap) {
+                sum += static_cast<double>(history[tap * config_.hidden + channel]) *
+                       weight[channel * config_.conv_kernel + tap];
+            }
+            sum += static_cast<double>(projected[channel]) *
+                   weight[channel * config_.conv_kernel + config_.conv_kernel - 1];
+            output[channel] = silu(static_cast<float>(sum));
+        }
+        std::move(history.begin() + config_.hidden, history.end(), history.begin());
+        std::copy(projected.begin(), projected.end(), history.end() - config_.hidden);
+        return output;
+    }
+
+    Vector kda(const Vector& input, std::size_t layer, KdaState& state) {
+        const auto base = layer_name(layer, "attention.");
+        auto q = short_conv(matvec(tensor(base + "q_proj"), config_.hidden, config_.hidden, input),
+                            state.conv_q, tensor(base + "q_conv"));
+        auto k = short_conv(matvec(tensor(base + "k_proj"), config_.hidden, config_.hidden, input),
+                            state.conv_k, tensor(base + "k_conv"));
+        auto v = short_conv(matvec(tensor(base + "v_proj"), config_.hidden, config_.hidden, input),
+                            state.conv_v, tensor(base + "v_conv"));
+        const auto ones = Vector(config_.kda_dim, 1.0F);
+        const auto q_scale = 1.0F / static_cast<float>(config_.kda_dim);
+        const auto k_scale = 1.0F / std::sqrt(static_cast<float>(config_.kda_dim));
+        for (std::size_t head = 0; head < config_.kda_heads; ++head) {
+            auto q_head = normalized(std::span(q).subspan(head * config_.kda_dim, config_.kda_dim), ones, 1e-6F);
+            auto k_head = normalized(std::span(k).subspan(head * config_.kda_dim, config_.kda_dim), ones, 1e-6F);
+            for (std::size_t channel = 0; channel < config_.kda_dim; ++channel) {
+                q[head * config_.kda_dim + channel] = q_head[channel] * q_scale;
+                k[head * config_.kda_dim + channel] = k_head[channel] * k_scale;
+            }
+        }
+        const auto f_a = matvec(tensor(base + "f_a_proj"), config_.kda_dim, config_.hidden, input);
+        const auto forget = matvec(tensor(base + "f_b_proj"), config_.hidden, config_.kda_dim, f_a);
+        const auto beta_raw = matvec(tensor(base + "b_proj"), config_.kda_heads, config_.hidden, input);
+        const auto& a_log = tensor(base + "a_log");
+        const auto& dt_bias = tensor(base + "dt_bias");
+        Vector recurrent_output(config_.hidden);
+        for (std::size_t head = 0; head < config_.kda_heads; ++head) {
+            const auto beta = sigmoid(beta_raw[head]);
+            auto* matrix = state.recurrent.data() + head * config_.kda_dim * config_.kda_dim;
+            for (std::size_t row = 0; row < config_.kda_dim; ++row) {
+                const auto decay = std::exp(config_.kda_lower * sigmoid(
+                    std::exp(a_log[head]) * (forget[head * config_.kda_dim + row] +
+                                              dt_bias[head * config_.kda_dim + row])));
+                for (std::size_t column = 0; column < config_.kda_dim; ++column) matrix[row * config_.kda_dim + column] *= decay;
+            }
+            Vector prediction(config_.kda_dim, 0.0F);
+            for (std::size_t column = 0; column < config_.kda_dim; ++column)
+                for (std::size_t row = 0; row < config_.kda_dim; ++row)
+                    prediction[column] += k[head * config_.kda_dim + row] * matrix[row * config_.kda_dim + column];
+            for (std::size_t row = 0; row < config_.kda_dim; ++row)
+                for (std::size_t column = 0; column < config_.kda_dim; ++column)
+                    matrix[row * config_.kda_dim + column] += k[head * config_.kda_dim + row] *
+                        (v[head * config_.kda_dim + column] - prediction[column]) * beta;
+            for (std::size_t column = 0; column < config_.kda_dim; ++column)
+                for (std::size_t row = 0; row < config_.kda_dim; ++row)
+                    recurrent_output[head * config_.kda_dim + column] +=
+                        q[head * config_.kda_dim + row] * matrix[row * config_.kda_dim + column];
+        }
+        const auto& o_norm = tensor(base + "o_norm");
+        for (std::size_t head = 0; head < config_.kda_heads; ++head) {
+            auto head_output = normalized(std::span(recurrent_output).subspan(head * config_.kda_dim, config_.kda_dim),
+                                          o_norm, config_.epsilon);
+            std::copy(head_output.begin(), head_output.end(), recurrent_output.begin() + head * config_.kda_dim);
+        }
+        const auto gate = matvec(tensor(base + "g_proj"), config_.hidden, config_.hidden, input);
+        for (std::size_t index = 0; index < recurrent_output.size(); ++index) recurrent_output[index] *= sigmoid(gate[index]);
+        return matvec(tensor(base + "o_proj"), config_.hidden, config_.hidden, recurrent_output);
+    }
+
+    Vector mla(const Vector& input, std::size_t layer, MlaState& state) {
+        const auto base = layer_name(layer, "attention.");
+        auto q_latent = matvec(tensor(base + "q_a_proj"), config_.q_rank, config_.hidden, input);
+        q_latent = normalized(q_latent, tensor(base + "q_a_norm"), config_.epsilon);
+        const auto query_width = config_.q_main + config_.q_extra;
+        const auto query = matvec(tensor(base + "q_b_proj"), config_.mla_heads * query_width,
+                                  config_.q_rank, q_latent);
+        const auto compressed = matvec(tensor(base + "kv_a_proj"), config_.kv_rank + config_.q_extra,
+                                       config_.hidden, input);
+        Vector latent(compressed.begin(), compressed.begin() + config_.kv_rank);
+        latent = normalized(latent, tensor(base + "kv_a_norm"), config_.epsilon);
+        const auto expanded = matvec(tensor(base + "kv_b_proj"),
+                                     config_.mla_heads * (config_.q_main + config_.value_dim),
+                                     config_.kv_rank, latent);
+        const auto old_length = state.length++;
+        state.keys.resize(state.length * config_.mla_heads * config_.q_main);
+        state.values.resize(state.length * config_.mla_heads * config_.value_dim);
+        state.shared_keys.insert(state.shared_keys.end(), compressed.end() - config_.q_extra, compressed.end());
+        for (std::size_t head = 0; head < config_.mla_heads; ++head) {
+            const auto expanded_base = head * (config_.q_main + config_.value_dim);
+            std::copy_n(expanded.begin() + expanded_base, config_.q_main,
+                        state.keys.begin() + (old_length * config_.mla_heads + head) * config_.q_main);
+            std::copy_n(expanded.begin() + expanded_base + config_.q_main, config_.value_dim,
+                        state.values.begin() + (old_length * config_.mla_heads + head) * config_.value_dim);
+        }
+        Vector merged(config_.mla_heads * config_.value_dim);
+        const auto scale = 1.0F / std::sqrt(static_cast<float>(query_width));
+        for (std::size_t head = 0; head < config_.mla_heads; ++head) {
+            Vector scores(state.length);
+            for (std::size_t position = 0; position < state.length; ++position) {
+                double score = 0.0;
+                for (std::size_t index = 0; index < config_.q_main; ++index)
+                    score += query[head * query_width + index] *
+                             state.keys[(position * config_.mla_heads + head) * config_.q_main + index];
+                for (std::size_t index = 0; index < config_.q_extra; ++index)
+                    score += query[head * query_width + config_.q_main + index] *
+                             state.shared_keys[position * config_.q_extra + index];
+                scores[position] = static_cast<float>(score) * scale;
+            }
+            const auto maximum = *std::max_element(scores.begin(), scores.end());
+            float denominator = 0.0F;
+            for (auto& score : scores) { score = std::exp(score - maximum); denominator += score; }
+            for (std::size_t position = 0; position < state.length; ++position)
+                for (std::size_t index = 0; index < config_.value_dim; ++index)
+                    merged[head * config_.value_dim + index] += scores[position] / denominator *
+                        state.values[(position * config_.mla_heads + head) * config_.value_dim + index];
+        }
+        const auto gate = matvec(tensor(base + "g_proj"), merged.size(), config_.hidden, input);
+        for (std::size_t index = 0; index < merged.size(); ++index) merged[index] *= sigmoid(gate[index]);
+        return matvec(tensor(base + "o_proj"), config_.hidden, merged.size(), merged);
+    }
+
+    Vector activated_mlp(const Vector& input, const std::string& base,
+                         std::size_t intermediate) {
+        const auto gate = matvec(tensor(base + ".gate"), intermediate, input.size(), input);
+        const auto up = matvec(tensor(base + ".up"), intermediate, input.size(), input);
+        Vector activated(intermediate);
+        situ_glu(activated, gate, up, config_.situ_beta, config_.situ_linear);
+        return matvec(tensor(base + ".down"), config_.hidden, intermediate, activated);
+    }
+
+    Vector dense(const Vector& input, std::size_t layer) {
+        return activated_mlp(input, layer_name(layer, "feed_forward"), config_.dense_intermediate);
+    }
+
+    Vector expert(const Vector& input, std::size_t layer, std::size_t expert_id) {
+        const auto base = layer_name(layer, "feed_forward.experts." + std::to_string(expert_id));
+        auto apply = [&](const std::string& suffix, const Vector& value) {
+            const auto id = fnv1a64((base + "." + suffix).c_str());
+            auto packed = reader_.read_tensor(id);
+            auto scales = reader_.read_auxiliary(id);
+            const auto record = std::find_if(reader_.tensors().begin(), reader_.tensors().end(),
+                                             [id](const auto& item) { return item.tensor_id == id; });
+            if (!packed || !scales || record == reader_.tensors().end()) throw std::runtime_error("missing expert");
+            auto result = mxfp4_matmul(value, packed.value(), scales.value(),
+                                       record->dimensions[0], record->dimensions[1], config_.group_size);
+            if (!result) throw std::runtime_error("invalid expert");
+            return result.value();
+        };
+        const auto gate = apply("gate", input);
+        const auto up = apply("up", input);
+        Vector activated(config_.expert_intermediate);
+        situ_glu(activated, gate, up, config_.situ_beta, config_.situ_linear);
+        return apply("down", activated);
+    }
+
+    Vector moe(const Vector& input, std::size_t layer) {
+        const auto base = layer_name(layer, "feed_forward.");
+        const auto scores_raw = matvec(tensor(base + "router_weight"), config_.experts, config_.hidden, input);
+        const auto& bias = tensor(base + "correction_bias");
+        Vector scores(config_.experts);
+        std::vector<std::size_t> order(config_.experts);
+        std::iota(order.begin(), order.end(), 0);
+        for (std::size_t index = 0; index < scores.size(); ++index) scores[index] = sigmoid(scores_raw[index]);
+        std::stable_sort(order.begin(), order.end(), [&](auto left, auto right) {
+            return scores[left] + bias[left] > scores[right] + bias[right];
+        });
+        const auto latent = matvec(tensor(base + "routed_down_proj"), config_.latent, config_.hidden, input);
+        Vector mixed(config_.latent, 0.0F);
+        float denominator = 0.0F;
+        for (std::size_t slot = 0; slot < config_.top_k; ++slot) denominator += scores[order[slot]];
+        for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
+            const auto output = expert(latent, layer, order[slot]);
+            const auto weight = scores[order[slot]] / std::max(denominator, 1e-20F) * config_.routed_scale;
+            for (std::size_t index = 0; index < mixed.size(); ++index) mixed[index] += weight * output[index];
+        }
+        const auto routed_norm = normalized(mixed, tensor(base + "routed_norm"), config_.epsilon);
+        auto output = matvec(tensor(base + "routed_up_proj"), config_.hidden, config_.latent, routed_norm);
+        const auto shared_gate = matvec(tensor(base + "shared_gate"), config_.expert_intermediate, config_.hidden, input);
+        const auto shared_up = matvec(tensor(base + "shared_up"), config_.expert_intermediate, config_.hidden, input);
+        Vector shared_activated(config_.expert_intermediate);
+        situ_glu(shared_activated, shared_gate, shared_up, config_.situ_beta, config_.situ_linear);
+        const auto shared = matvec(tensor(base + "shared_down"), config_.hidden,
+                                   config_.expert_intermediate, shared_activated);
+        for (std::size_t index = 0; index < output.size(); ++index) output[index] += shared[index];
+        return output;
+    }
+
+    Reader& reader_;
+    Config config_;
+    ModelState state_template_;
+    std::unordered_map<std::uint64_t, Vector> tensors_;
+};
+
+std::uint32_t argmax(const Vector& values) {
+    return static_cast<std::uint32_t>(std::distance(values.begin(), std::max_element(values.begin(), values.end())));
+}
+}
+
+Result<GenerationResult> generate_greedy(Reader& reader,
+                                         std::span<const std::uint32_t> prompt,
+                                         std::size_t count,
+                                         bool incremental) {
+    if (prompt.empty()) return Result<GenerationResult>::failure(ErrorCode::invalid_extent, "empty prompt");
+    try {
+        Engine engine(reader);
+        GenerationResult result;
+        const auto start = std::chrono::steady_clock::now();
+        if (incremental) {
+            auto state = engine.empty_state();
+            Vector logits;
+            for (const auto token : prompt) logits = engine.forward(token, state);
+            for (std::size_t index = 0; index < count; ++index) {
+                const auto token = argmax(logits);
+                result.token_ids.push_back(token);
+                if (index + 1 < count) logits = engine.forward(token, state);
+            }
+        } else {
+            std::vector<std::uint32_t> sequence(prompt.begin(), prompt.end());
+            for (std::size_t generated = 0; generated < count; ++generated) {
+                auto state = engine.empty_state();
+                Vector logits;
+                for (const auto token : sequence) logits = engine.forward(token, state);
+                const auto token = argmax(logits);
+                result.token_ids.push_back(token);
+                sequence.push_back(token);
+            }
+        }
+        result.decode_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - start).count();
+        return Result<GenerationResult>::success(std::move(result));
+    } catch (const std::exception& error) {
+        return Result<GenerationResult>::failure(ErrorCode::invalid_extent, error.what());
+    }
+}
+}

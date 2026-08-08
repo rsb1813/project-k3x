@@ -7,3 +7,27 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 enable_testing()
 
+add_library(k3x_runtime
+    runtime/src/crc32c.cpp
+    runtime/src/sha256.cpp
+    runtime/src/reader.cpp
+    runtime/src/ops.cpp
+)
+target_include_directories(k3x_runtime PUBLIC runtime/include)
+if(MSVC)
+    target_compile_options(k3x_runtime PUBLIC /utf-8)
+endif()
+
+add_executable(test_checksums tests/cpp/test_checksums.cpp)
+target_link_libraries(test_checksums PRIVATE k3x_runtime)
+add_test(NAME checksums COMMAND test_checksums)
+
+add_executable(test_ops tests/cpp/test_ops.cpp)
+target_link_libraries(test_ops PRIVATE k3x_runtime)
+add_test(NAME ops COMMAND test_ops)
+
+add_executable(test_reader tests/cpp/test_reader.cpp)
+target_link_libraries(test_reader PRIVATE k3x_runtime)
+
+add_executable(k3x_run runtime/src/main.cpp runtime/src/model.cpp)
+target_link_libraries(k3x_run PRIVATE k3x_runtime)
