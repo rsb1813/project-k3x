@@ -1,0 +1,181 @@
+// native K3 MXFP4 CUDA matvec의 수치 결과와 프로파일 계약을 검증합니다.
+#include "k3x/backend.hpp"
+#include "k3x/ops.hpp"
+
+#include <array>
+#include <cmath>
+#include <cstddef>
+#include <iostream>
+#include <span>
+
+namespace {
+
+bool nearly_equal(float actual, float expected, float tolerance = 1.0e-4F) {
+    return std::abs(actual - expected) <= tolerance;
+}
+
+int test_rejects_incompatible_contracts() {
+    std::array<float, 32> input{};
+    input[1] = 2.0F;
+    std::array<std::byte, 17> packed{};
+    packed[0] = std::byte{0x10};
+    std::array<std::byte, 2> scales{std::byte{127}, std::byte{127}};
+
+    k3x::Profiler custom_profiler;
+    k3x::BackendOptions custom_options;
+    custom_options.kind = k3x::BackendKind::cuda_custom;
+    auto custom = k3x::make_cuda_backend(custom_options, &custom_profiler);
+    if (!custom) return 22;
+
+    const auto wrong_group = custom.value()->mxfp4_matvec(
+        input, std::span<const std::byte>(packed).first(16), scales,
+        1, 32, 16, 1, k3x::ProfilePhase::decode);
+    if (wrong_group || wrong_group.error() != k3x::ErrorCode::invalid_mxfp4) {
+        std::cerr << "non-32 MXFP4 group size was not rejected\n";
+        return 23;
+    }
+
+    const auto extra_packed = custom.value()->mxfp4_matvec(
+        input, packed, std::span<const std::byte>(scales).first(1),
+        1, 32, 32, 2, k3x::ProfilePhase::decode);
+    if (extra_packed || extra_packed.error() != k3x::ErrorCode::invalid_mxfp4) return 24;
+
+    const auto extra_scale = custom.value()->mxfp4_matvec(
+        input, std::span<const std::byte>(packed).first(16), scales,
+        1, 32, 32, 3, k3x::ProfilePhase::decode);
+    if (extra_scale || extra_scale.error() != k3x::ErrorCode::invalid_mxfp4) return 25;
+
+    scales[0] = std::byte{0xFF};
+    const auto reserved_scale = custom.value()->mxfp4_matvec(
+        input, std::span<const std::byte>(packed).first(16),
+        std::span<const std::byte>(scales).first(1),
+        1, 32, 32, 4, k3x::ProfilePhase::decode);
+    if (reserved_scale || reserved_scale.error() != k3x::ErrorCode::invalid_mxfp4) return 26;
+
+    const auto custom_summary = custom_profiler.summary();
+    if (custom_summary.failed_operations != 4) return 27;
+    if (custom_summary.host_to_device_bytes != 0 ||
+        custom_summary.device_to_host_bytes != 0) return 28;
+
+    k3x::Profiler dense_profiler;
+    k3x::BackendOptions dense_options;
+    dense_options.kind = k3x::BackendKind::cuda_dense;
+    auto dense = k3x::make_cuda_backend(dense_options, &dense_profiler);
+    if (!dense) return 29;
+    scales[0] = std::byte{127};
+    const auto incompatible_backend = dense.value()->mxfp4_matvec(
+        input, std::span<const std::byte>(packed).first(16),
+        std::span<const std::byte>(scales).first(1),
+        1, 32, 32, 5, k3x::ProfilePhase::decode);
+    if (incompatible_backend ||
+        incompatible_backend.error() != k3x::ErrorCode::backend_unavailable) return 30;
+    if (dense_profiler.summary().failed_operations != 1) return 31;
+    for (const auto& event : dense_profiler.events()) {
+        if (event.operation == k3x::ProfileOperation::dense_matvec) return 32;
+        if (event.precision != k3x::NumericPrecision::mxfp4_e2m1_e8m0) return 33;
+    }
+    return 0;
+}
+
+int test_strides_columns_beyond_one_block_width() {
+    k3x::BackendOptions options;
+    options.kind = k3x::BackendKind::cuda_custom;
+    auto backend = k3x::make_cuda_backend(options);
+    if (!backend) return 34;
+
+    std::array<float, 320> input{};
+    input[256] = 2.0F;
+    input[257] = 3.0F;
+    std::array<std::byte, 160> packed{};
+    packed[128] = std::byte{0x21};
+    std::array<std::byte, 10> scales{};
+    scales.fill(std::byte{127});
+
+    const auto output = backend.value()->mxfp4_matvec(
+        input, packed, scales, 1, 320, 32, 6, k3x::ProfilePhase::decode);
+    if (!output) return 35;
+    if (output.value().size() != 1 ||
+        !nearly_equal(output.value()[0], 4.0F)) {
+        std::cerr << "MXFP4 columns beyond one block width were skipped\n";
+        return 36;
+    }
+    return 0;
+}
+
+}  // namespace
+
+int main() {
+    k3x::Profiler profiler;
+    k3x::BackendOptions options;
+    options.kind = k3x::BackendKind::cuda_custom;
+    auto backend = k3x::make_cuda_backend(options, &profiler);
+    if (!backend) {
+        std::cerr << backend.message() << '\n';
+        return 1;
+    }
+    if (backend.value()->kind() != k3x::BackendKind::cuda_custom) return 2;
+
+    std::array<float, 64> input{};
+    input[0] = 1.0F;
+    input[1] = 2.0F;
+    input[2] = 1.5F;
+    input[3] = -0.5F;
+    input[32] = 0.25F;
+    input[33] = -0.5F;
+
+    std::array<std::byte, 96> packed{};
+    packed[0] = std::byte{0x10};
+    packed[1] = std::byte{0x72};
+    packed[16] = std::byte{0xD4};
+    packed[32] = std::byte{0x96};
+    packed[48] = std::byte{0x23};
+    packed[64] = std::byte{0xF5};
+    packed[80] = std::byte{0x4A};
+    const std::array<std::byte, 6> scales{
+        std::byte{127}, std::byte{128}, std::byte{126},
+        std::byte{129}, std::byte{125}, std::byte{127},
+    };
+
+    const auto oracle = k3x::mxfp4_matmul(input, packed, scales, 3, 64, 32);
+    if (!oracle) return 3;
+    const std::array<float, 3> literal{3.5F, 1.0F, -3.5F};
+    for (std::size_t row = 0; row < literal.size(); ++row) {
+        if (!nearly_equal(oracle.value()[row], literal[row])) return 4;
+    }
+
+    const auto output = backend.value()->mxfp4_matvec(
+        input, packed, scales, 3, 64, 32, 23, k3x::ProfilePhase::decode);
+    if (!output) {
+        std::cerr << output.message() << '\n';
+        return 5;
+    }
+    if (output.value().size() != literal.size()) return 6;
+    for (std::size_t row = 0; row < literal.size(); ++row) {
+        if (!nearly_equal(output.value()[row], oracle.value()[row])) return 7;
+    }
+
+    std::size_t mxfp4_events = 0;
+    for (const auto& event : profiler.events()) {
+        if (event.operation == k3x::ProfileOperation::dense_matvec) return 8;
+        if (event.operation != k3x::ProfileOperation::mxfp4_matvec) continue;
+        ++mxfp4_events;
+        if (!event.success) return 9;
+        if (event.precision != k3x::NumericPrecision::mxfp4_e2m1_e8m0) return 10;
+        if (event.layer != 23) return 11;
+        if (event.phase != k3x::ProfilePhase::decode) return 12;
+        if (event.device_nanoseconds == 0) return 13;
+        if (event.logical_bytes != packed.size() + scales.size()) return 14;
+    }
+    if (mxfp4_events != 1) return 15;
+
+    const auto summary = profiler.summary();
+    if (summary.failed_operations != 0) return 16;
+    if (summary.host_to_device_bytes !=
+        input.size() * sizeof(float) + packed.size() + scales.size()) return 17;
+    if (summary.device_to_host_bytes != literal.size() * sizeof(float)) return 18;
+    if (summary.logical_bytes != packed.size() + scales.size()) return 19;
+    if (backend.value()->memory_stats().current_device_bytes != 0) return 20;
+    const auto stride_result = test_strides_columns_beyond_one_block_width();
+    if (stride_result != 0) return stride_result;
+    return test_rejects_incompatible_contracts();
+}

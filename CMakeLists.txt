@@ -20,7 +20,10 @@ add_library(k3x_runtime
 if(K3X_ENABLE_CUDA)
     enable_language(CUDA)
     find_package(CUDAToolkit 13.3 REQUIRED)
-    target_sources(k3x_runtime PRIVATE runtime/cuda/backend_cuda.cu)
+    target_sources(k3x_runtime PRIVATE
+        runtime/cuda/backend_cuda.cu
+        runtime/cuda/mxfp4.cu
+    )
     target_link_libraries(k3x_runtime PUBLIC CUDA::cudart CUDA::cublasLt)
     set_target_properties(k3x_runtime PROPERTIES
         CUDA_ARCHITECTURES "120-real"
@@ -65,6 +68,11 @@ else()
     target_link_libraries(test_cuda_dense PRIVATE k3x_runtime)
     set_target_properties(test_cuda_dense PROPERTIES CUDA_ARCHITECTURES "120-real")
     add_test(NAME cuda_dense COMMAND test_cuda_dense)
+
+    add_executable(test_cuda_mxfp4 tests/cuda/test_cuda_mxfp4.cu)
+    target_link_libraries(test_cuda_mxfp4 PRIVATE k3x_runtime)
+    set_target_properties(test_cuda_mxfp4 PROPERTIES CUDA_ARCHITECTURES "120-real")
+    add_test(NAME cuda_mxfp4 COMMAND test_cuda_mxfp4)
 endif()
 
 add_executable(test_reader tests/cpp/test_reader.cpp)

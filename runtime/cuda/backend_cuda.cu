@@ -1,6 +1,8 @@
 // RTX 5080용 CUDA stream과 cuBLASLt handle의 수명 및 device capability를 관리합니다.
 #include "k3x/backend.hpp"
 
+#include "mxfp4.cuh"
+
 #include <cublasLt.h>
 #include <cuda_bf16.h>
 #include <cuda_runtime_api.h>
@@ -9,6 +11,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <span>
 #include <string>
@@ -316,12 +319,117 @@ public:
     }
 
     Result<std::vector<float>> mxfp4_matvec(
-        std::span<const float>, std::span<const std::byte>,
-        std::span<const std::byte>, std::size_t, std::size_t,
-        std::size_t, std::uint32_t, ProfilePhase) override {
-        return Result<std::vector<float>>::failure(
-            ErrorCode::backend_unavailable,
-            "CUDA MXFP4 matvec is not implemented in the backend shell");
+        std::span<const float> input, std::span<const std::byte> packed,
+        std::span<const std::byte> scales, std::size_t rows,
+        std::size_t cols, std::size_t group_size,
+        std::uint32_t layer, ProfilePhase phase) override {
+        const auto operation_start = std::chrono::steady_clock::now();
+        constexpr auto precision = NumericPrecision::mxfp4_e2m1_e8m0;
+        const auto logical_bytes = packed.size_bytes() + scales.size_bytes();
+        if (options_.kind != BackendKind::cuda_custom) {
+            record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                   operation_start, logical_bytes, 0, 0, false);
+            return Result<std::vector<float>>::failure(
+                ErrorCode::backend_unavailable,
+                "native K3 MXFP4 requires the cuda_custom backend");
+        }
+        if (input.size() != cols || rows == 0 || cols == 0 ||
+            group_size != 32 || cols % group_size != 0 || cols % 2 != 0 ||
+            rows > std::numeric_limits<std::size_t>::max() / cols) {
+            record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                   operation_start, logical_bytes, 0, 0, false);
+            return Result<std::vector<float>>::failure(ErrorCode::invalid_mxfp4);
+        }
+        const auto elements = rows * cols;
+        if (packed.size() != elements / 2 ||
+            scales.size() != elements / group_size ||
+            std::any_of(scales.begin(), scales.end(), [](std::byte scale) {
+                return std::to_integer<std::uint8_t>(scale) == 0xFFU;
+            })) {
+            record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                   operation_start, logical_bytes, 0, 0, false);
+            return Result<std::vector<float>>::failure(ErrorCode::invalid_mxfp4);
+        }
+
+        const auto input_bytes = input.size_bytes();
+        const auto output_bytes = rows * sizeof(float);
+        DeviceBuffer device_input;
+        DeviceBuffer device_packed;
+        DeviceBuffer device_scales;
+        DeviceBuffer device_output;
+        if (device_input.allocate(input_bytes, &memory_stats_) != cudaSuccess ||
+            device_packed.allocate(packed.size_bytes(), &memory_stats_) !=
+                cudaSuccess ||
+            device_scales.allocate(scales.size_bytes(), &memory_stats_) !=
+                cudaSuccess ||
+            device_output.allocate(output_bytes, &memory_stats_) != cudaSuccess) {
+            record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                   operation_start, logical_bytes, 0, 0, false);
+            return Result<std::vector<float>>::failure(
+                ErrorCode::backend_unavailable, "CUDA device allocation failed");
+        }
+
+        const auto h2d_start = std::chrono::steady_clock::now();
+        if (cudaMemcpyAsync(device_input.get(), input.data(), input_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+            cudaMemcpyAsync(device_packed.get(), packed.data(), packed.size_bytes(),
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+            cudaMemcpyAsync(device_scales.get(), scales.data(), scales.size_bytes(),
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess) {
+            record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                   operation_start, logical_bytes, 0, 0, false);
+            return Result<std::vector<float>>::failure(
+                ErrorCode::backend_unavailable, "CUDA host-to-device copy failed");
+        }
+        record(phase, ProfileOperation::host_to_device, precision, layer,
+               h2d_start, 0,
+               input_bytes + packed.size_bytes() + scales.size_bytes(), 0, true);
+
+        EventOwner event_start;
+        EventOwner event_end;
+        if (cudaEventCreate(event_start.out()) != cudaSuccess ||
+            cudaEventCreate(event_end.out()) != cudaSuccess ||
+            cudaEventRecord(event_start.get(), stream_) != cudaSuccess ||
+            cuda::launch_mxfp4_matvec(
+                static_cast<const float*>(device_input.get()),
+                static_cast<const std::uint8_t*>(device_packed.get()),
+                static_cast<const std::uint8_t*>(device_scales.get()),
+                static_cast<float*>(device_output.get()), rows, cols, stream_) !=
+                cudaSuccess ||
+            cudaEventRecord(event_end.get(), stream_) != cudaSuccess) {
+            record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                   operation_start, logical_bytes, 0, 0, false);
+            return Result<std::vector<float>>::failure(
+                ErrorCode::backend_unavailable, "CUDA MXFP4 kernel launch failed");
+        }
+
+        std::vector<float> output(rows);
+        const auto d2h_start = std::chrono::steady_clock::now();
+        if (cudaMemcpyAsync(output.data(), device_output.get(), output_bytes,
+                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+            cudaStreamSynchronize(stream_) != cudaSuccess) {
+            record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                   operation_start, logical_bytes, 0, 0, false);
+            return Result<std::vector<float>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA MXFP4 execution or device-to-host copy failed");
+        }
+
+        float elapsed_milliseconds = 0.0F;
+        if (cudaEventElapsedTime(&elapsed_milliseconds, event_start.get(),
+                                 event_end.get()) != cudaSuccess) {
+            record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                   operation_start, logical_bytes, 0, 0, false);
+            return Result<std::vector<float>>::failure(
+                ErrorCode::backend_unavailable, "CUDA event timing failed");
+        }
+        record(phase, ProfileOperation::device_to_host, precision, layer,
+               d2h_start, 0, output_bytes, 0, true);
+        const auto device_nanoseconds = static_cast<std::uint64_t>(
+            std::llround(static_cast<double>(elapsed_milliseconds) * 1.0e6));
+        record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+               operation_start, logical_bytes, 0, device_nanoseconds, true);
+        return Result<std::vector<float>>::success(std::move(output));
     }
 
     BackendMemoryStats memory_stats() const noexcept override { return memory_stats_; }
