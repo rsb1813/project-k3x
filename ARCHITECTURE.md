@@ -104,15 +104,15 @@ The seeded fixture generates `[43, 32, 28, 49, 9, 28]` for prompt `[1, 7, 3, 9]`
 
 ## Milestone 1 accepted design
 
-Milestone 1 preserves the portable CPU graph as the exact reference and introduces a narrow projection/MXFP4 compute-backend boundary plus structured profiling. The optional CUDA backend targets the verified WSL2 Ubuntu 24.04 environment with CUDA Toolkit 13.3.1, nvcc 13.3.73, and native `sm_120` support for the RTX 5080. GPU passthrough and the CUDA resource shell are implemented; CUDA matrix compute remains unimplemented.
+Milestone 1 preserves the portable CPU graph as the exact reference and introduces a narrow projection/MXFP4 compute-backend boundary plus structured profiling. The optional CUDA backend targets the verified WSL2 Ubuntu 24.04 environment with CUDA Toolkit 13.3.1, nvcc 13.3.73, and native `sm_120` support for the RTX 5080. GPU passthrough, the CUDA resource shell, and cuBLASLt dense matvec are implemented; native K3 MXFP4 CUDA compute remains unimplemented.
 
 The accepted comparison has three explicit execution identities.
 
 | Backend | Dense projection | MXFP4 expert path | Status |
 |---|---|---|---|
 | `cpu` | Portable FP32 C++ | Portable E2M1/E8M0 decode and FP32 accumulation | Implemented and tested |
-| `cuda-dense` | cuBLASLt FP32/BF16 | Portable CPU E2M1/E8M0 oracle | Resource shell implemented; compute path not implemented |
-| `cuda-custom` | Same cuBLASLt dense path | Minimal custom E2M1/E8M0 CUDA kernel | Resource shell implemented; compute path not implemented |
+| `cuda-dense` | cuBLASLt FP32 and BF16-rounded input/weight with FP32 accumulation/output | Portable CPU E2M1/E8M0 oracle | Dense matvec implemented and tested; graph integration pending |
+| `cuda-custom` | Same cuBLASLt dense path | Minimal custom E2M1/E8M0 CUDA kernel | Dense matvec implemented; custom MXFP4 compute not implemented |
 
 KDA, MLA, routing, Attention Residual, recurrent state, and greedy selection stay on the existing CPU graph during this baseline. Per-operation host/device transfers remain visible so a later residency layer has a measured cost to remove. CUDA is optional at build time and cannot break the CPU-only Linux build.
 
@@ -124,7 +124,7 @@ The deterministic profiling primitive is implemented and tested. `Profiler` owns
 
 The exact CPU compute boundary is implemented and tested. `ComputeBackend` now owns row-major dense matvec and native packed MXFP4 matvec operations, while KDA, MLA, routing, Attention Residual, recurrent state, activations, and greedy selection remain in the unchanged CPU graph. `CpuBackend` preserves the previous double-accumulation dense arithmetic and delegates native MXFP4 to the existing byte-level oracle. Generation accepts an explicit backend, and the legacy overload constructs `CpuBackend` for compatibility.
 
-The optional CUDA resource shell is implemented and tested. `K3X_ENABLE_CUDA=OFF` compiles a dependency-free stub that rejects explicit CUDA requests with `backend_unavailable`. The ON build requires CUDA Toolkit 13.3 or newer, links CUDA runtime and cuBLASLt, and emits a native `sm_120` cubin. The factory validates compute capability 12.0 or newer before creating one nonblocking stream and one cuBLASLt handle with local RAII ownership. Device buffers, dense matvec, and MXFP4 matvec remain unimplemented and return typed unavailable errors.
+The optional CUDA resource shell and dense baseline are implemented and tested. `K3X_ENABLE_CUDA=OFF` compiles a dependency-free stub that rejects explicit CUDA requests with `backend_unavailable`. The ON build requires CUDA Toolkit 13.3 or newer, links CUDA runtime and cuBLASLt, and emits a native `sm_120` cubin. The factory validates compute capability 12.0 or newer before creating one nonblocking stream and one cuBLASLt handle with local RAII ownership. Dense matvec accepts row-major FP32 host tensors, stages either FP32 or BF16-rounded operands, selects a zero-workspace cuBLASLt algorithm, accumulates and returns FP32, records CUDA-event device time and exact directional transfer bytes, and releases per-call device buffers before returning. CUDA 13.3 requires regular BF16 matmul operands A and B to share the BF16 type, so BF16-rounded mode stages both input and weight while preserving the FP32 host API. MXFP4 matvec remains unimplemented and returns a typed unavailable error.
 
 ## TITAN component registry
 

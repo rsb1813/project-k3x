@@ -49,6 +49,6 @@ These values are capacity and traffic estimates. They are not inserted into B-00
 ## Pending benchmark gates
 
 - Milestone 1 CPU profiler baseline.
-- Milestone 1 RTX 5080 cuBLASLt dense baseline.
+- Milestone 1 RTX 5080 cuBLASLt dense throughput baseline. FP32/BF16-rounded literal correctness, exact transfer-byte accounting, and CUDA-event instrumentation are implemented, but no throughput result is recorded yet.
 - Milestone 1 RTX 5080 custom MXFP4 baseline.
 - Milestone 1 end-to-end synthetic CPU versus CUDA comparison.

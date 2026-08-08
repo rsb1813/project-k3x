@@ -4,9 +4,9 @@
 
 Milestone 1 — exact runtime backend boundary, structured profiler, cuBLASLt dense baseline, and custom K3 MXFP4 CUDA baseline.
 
-The design is approved, and the Linux portability, deterministic profiler, exact CPU backend, and optional CUDA resource-shell tasks are complete. The cuBLASLt dense baseline is next.
+The design is approved, and the Linux portability, deterministic profiler, exact CPU backend, optional CUDA resource shell, and cuBLASLt dense baseline tasks are complete. The native-byte K3 MXFP4 CUDA baseline is next.
 
-State recorded after the 2026-08-08 optional CUDA shell commit and dual-build correctness verification.
+State recorded after the 2026-08-08 cuBLASLt FP32/BF16-rounded dense implementation commit and fresh dual-build correctness verification.
 
 ## Completed work
 
@@ -26,12 +26,13 @@ State recorded after the 2026-08-08 optional CUDA shell commit and dual-build co
 - Explicit `ComputeBackend` boundary for exact CPU dense and native MXFP4 matrix operations, with compatibility and backend-selected generation overloads.
 - Optional CUDA 13.3 build with native `sm_120`, RTX 5080 capability validation, nonblocking stream and cuBLASLt RAII ownership, plus a CUDA-free OFF stub.
 - Release native tests use explicit return codes so `NDEBUG` cannot remove their behavior checks.
+- Row-major cuBLASLt dense matvec for FP32 and BF16-rounded operands with FP32 accumulation/output, zero-workspace heuristic selection, exact directional transfer-byte accounting, CUDA-event timing, and per-call device-memory accounting.
 
 ## Work in progress
 
 - Branch: `feat/milestone-one-runtime`.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
-- The next code task is literal cuBLASLt FP32 and BF16-rounded dense matvec with exact transfer and device-time profiling.
+- The next code task is the exact custom K3 MXFP4 CUDA matvec against the existing CPU byte-level oracle.
 - Linux development runs as the unprivileged `jolib` user. The isolated Python environment is `/home/jolib/.venvs/k3x-m1`; repository build output is `build-linux`.
 
 ## Known failures and blockers
@@ -39,13 +40,14 @@ State recorded after the 2026-08-08 optional CUDA shell commit and dual-build co
 - Windows Smart App Control blocks the newly linked unsigned `build/k3x_run.exe` before process creation.
 - Code Integrity events 3033 and 3077 cite policy `{0283ac0f-fff1-49ae-ada1-8a933130cad6}` and an unmet Enterprise signing level.
 - Fresh Windows CTest binaries run, but five Python cross-language cases that launch `k3x_run.exe` remain blocked on Windows. This does not block the verified WSL Linux path.
-- No CUDA matrix kernel or end-to-end CUDA runtime exists yet, so the resource-shell result is not a CUDA correctness or performance claim for model compute.
+- cuBLASLt dense matvec is not yet connected to the synthetic decoder graph, and no CUDA throughput benchmark has been accepted yet.
+- The custom native-byte K3 MXFP4 CUDA matvec remains unimplemented, so expert compute still has no GPU path.
 - Direct cuBLASLt FP4 is rejected for exact K3 MXFP4 because NVIDIA requires UE4M3 scales per 16 FP4 values while K3 uses E8M0 scales per 32 values.
 
 ## Next concrete tasks
 
-1. Implement and measure the cuBLASLt FP32/BF16-rounded dense baseline.
-2. Implement the custom native-byte MXFP4 kernel and verify it against the CPU oracle.
+1. Implement the custom native-byte MXFP4 kernel and verify it against the CPU oracle.
+2. Connect the CUDA backend to the synthetic graph and verify CPU/CUDA layer, state, logits, and token parity.
 3. Instrument the graph with explicit profile events and export JSON/CSV summaries.
 4. Run end-to-end synthetic CPU versus CUDA profiling before accepting a default path.
 
@@ -66,7 +68,7 @@ State recorded after the 2026-08-08 optional CUDA shell commit and dual-build co
 
 Milestone 0 did not measure full-model or NVMe performance. Its only measured run is the tiny CPU synthetic B-0001 entry in `BENCHMARKS.md`.
 
-The next expected bottleneck is expert traffic, based on a derived model rather than measurement: uncached natural Top-16 expert reads across 92 MoE layers total 25.83 GB/token. Linux NVMe, RAM-to-GPU, kernel, and stall counters remain not measured until the relevant runtime exists.
+The latest implemented CUDA operation is only a tiny literal dense correctness case, not a throughput benchmark. The next concrete implementation bottleneck is native K3 MXFP4 expert compute. The expected full-model bottleneck remains expert traffic, based on a derived model rather than measurement: uncached natural Top-16 expert reads across 92 MoE layers total 25.83 GB/token. Linux NVMe, RAM-to-GPU, kernel, and stall counters remain unmeasured until the relevant runtime exists.
 
 ## Last known-good state
 
@@ -75,9 +77,9 @@ The next expected bottleneck is expert traffic, based on a derived model rather 
 - Public-main tests: Python 46/46 and CTest 2/2.
 - Milestone 1 design commit: `84edc6e`.
 - Linux environment: WSL 2.7.11.0, Ubuntu 24.04.4, kernel 6.18.33.2, CUDA Toolkit 13.3.1, nvcc 13.3.73, RTX 5080 compute capability 12.0.
-- Current worktree code commit: `5b6d1e7`.
+- Current worktree code commit: `c4b612a`.
 - CPU-only CTest: 5/5 pass; `k3x_run` has no CUDA or cuBLAS dynamic dependency.
-- CUDA CTest: 5/5 pass on RTX 5080; runtime archive and device test contain native `sm_120` cubins.
+- CUDA CTest: 6/6 pass on RTX 5080; cuBLASLt FP32/BF16-rounded literal checks pass and `compute-sanitizer --tool memcheck` reports 0 errors.
 - CPU-only pytest: 47/47 pass with `K3X_BUILD_DIR=build-cpu`.
 - CUDA-enabled cross-language parity: 5/5 pass with `K3X_BUILD_DIR=build-cuda` while the CLI remains on the exact CPU backend.
 

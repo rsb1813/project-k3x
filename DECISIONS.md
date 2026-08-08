@@ -44,10 +44,10 @@
 ## D-004 — Hybrid CUDA baseline
 
 - Date: 2026-08-08.
-- Status: accepted design; resource shell implemented, compute paths not implemented.
+- Status: accepted; resource shell and dense path implemented, custom MXFP4 path pending.
 - Decision: retain the CPU oracle, use cuBLASLt for the independent dense FP32/BF16 path, and compare CPU MXFP4 with a custom CUDA MXFP4 path that changes only expert matrix multiplication.
 - Alternatives considered: custom CUDA only; cuBLASLt only; hybrid comparison.
-- Evidence: the local CUDA 13.3 toolkit supports `sm_120`. NVIDIA's cuBLAS documentation specifies UE4M3/16 scaling for FP4; K3 uses E8M0/32 MXFP4, so direct native-byte compatibility is disproven.
+- Evidence: the local CUDA 13.3 toolkit supports `sm_120`. NVIDIA's cuBLAS documentation specifies UE4M3/16 scaling for FP4; K3 uses E8M0/32 MXFP4, so direct native-byte compatibility is disproven. The cuBLASLt FP32/BF16-rounded dense literal suite now passes on the RTX 5080.
 - Benchmark result: none; CUDA performance is unmeasured.
 - Reason: cuBLASLt remains a strong dense baseline, while the custom path is required to preserve exact K3 MXFP4 bytes and provides a route toward K3-specific fusion.
 - Revisit: after both paths have end-to-end synthetic measurements.
@@ -162,3 +162,15 @@
 - Benchmark result: none; no CUDA matrix operation exists yet.
 - Reason: explicit build and runtime identity prevents benchmark mislabeling and preserves portable CPU correctness.
 - Revisit: dynamic loading is considered only if separate build artifacts become an operational burden after measured backends exist.
+
+## D-015 — Stage both operands for the BF16-rounded cuBLASLt baseline
+
+- Date: 2026-08-08.
+- Status: accepted and implemented.
+- Decision: keep the public dense interface in FP32, but round and stage both the input vector and weight matrix as BF16 for `bf16_rounded`; accumulate and return FP32.
+- Alternatives considered: stage only BF16 weights with an FP32 input; stage both operands as BF16; round weights to BF16 and expand them back to FP32 before transfer.
+- Evidence: NVIDIA cuBLAS 13.3 lists regular BF16 matmul support with a shared `Atype/Btype` of `CUDA_R_16BF`, not a BF16-weight/FP32-input combination. The literal GPU test matches an independently bit-rounded CPU oracle and records 18 H2D bytes instead of the FP32 path's 36 bytes.
+- Primary source: [NVIDIA cuBLAS 13.3 `cublasLtMatmul` data type table](https://docs.nvidia.com/cuda/archive/13.3.0/cublas/index.html#cublasltmatmul).
+- Benchmark result: none; the test records correctness, transfer bytes, and a nonzero CUDA event duration but is not a throughput benchmark.
+- Reason: using a documented operand combination preserves an honest BF16 baseline and actual transfer accounting; expanding rounded weights to FP32 would erase the intended H2D reduction.
+- Revisit: add a separately named weight-only emulation only if a future CUDA release documents mixed BF16/FP32 A/B support or a custom kernel justifies it.

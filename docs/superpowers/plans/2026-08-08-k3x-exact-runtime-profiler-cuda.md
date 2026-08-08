@@ -418,11 +418,11 @@ git commit -m "feat: add optional RTX 5080 CUDA backend"
 - Consumes: row-major FP32 input and weights plus `DensePrecision`.
 - Produces: FP32 output, CUDA event timing, and exact H2D/D2H byte records.
 
-- [ ] **Step 1: Write a failing FP32 literal test**
+- [x] **Step 1: Write a failing FP32 literal test**
 
 Use input `[1,2,3]` and row-major weights `[[1,0,-1],[0.5,2,1]]`. Assert output `[-2,7.5]` at `1e-5`, one dense device event, 36 H2D bytes, and 8 D2H bytes.
 
-- [ ] **Step 2: Run and verify RED**
+- [x] **Step 2: Run and verify RED**
 
 Run:
 
@@ -433,23 +433,23 @@ build-cuda/test_cuda_dense
 
 Expected: FAIL because CUDA dense matvec returns `backend_unavailable`.
 
-- [ ] **Step 3: Implement the minimal FP32 cuBLASLt matmul**
+- [x] **Step 3: Implement the minimal FP32 cuBLASLt matmul**
 
 Create row/column descriptors that preserve the public row-major result, use `CUBLAS_COMPUTE_32F`, copy input and weights on the backend stream, select one heuristic with zero workspace first, launch, record CUDA events, copy FP32 output, and synchronize only before returning the host result.
 
-- [ ] **Step 4: Verify FP32 GREEN**
+- [x] **Step 4: Verify FP32 GREEN**
 
 Run the same target and expect the literal output and profiler byte counts to pass.
 
-- [ ] **Step 5: Write the failing BF16-rounded test**
+- [x] **Step 5: Write the failing BF16-rounded test**
 
 Use weights containing values not exactly representable in BF16. Build the oracle by converting each weight FP32 → BF16 → FP32, then perform FP32 accumulation. Assert `2e-2` parity and confirm the profile labels the selected dense precision.
 
-- [ ] **Step 6: Implement BF16 weight staging**
+- [x] **Step 6: Implement BF16 operand staging**
 
-Convert weights to `__nv_bfloat16` in a bounded host buffer for this baseline, use BF16 weight descriptors with FP32 compute and FP32 output, and record the actual BF16 transfer byte count. Do not mutate or cache the K3X tensor.
+Convert input and weights to `__nv_bfloat16` in bounded host buffers for this baseline, use the CUDA 13.3 documented shared BF16 A/B type with FP32 compute and FP32 output, and record the actual BF16 transfer byte count. Do not mutate or cache the K3X tensor.
 
-- [ ] **Step 7: Run CUDA and CPU regression suites**
+- [x] **Step 7: Run CUDA and CPU regression suites**
 
 Run:
 
@@ -461,7 +461,7 @@ Run:
 
 Expected: CUDA dense tests pass in both precisions and CPU tests remain unchanged.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add CMakeLists.txt runtime/cuda/backend_cuda.cu tests/cuda/test_cuda_dense.cu
