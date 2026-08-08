@@ -56,6 +56,6 @@
 - [x] cuBLASLt FP32/BF16-rounded projection baseline 구현과 memcheck 검증.
 - [x] cuBLASLt FP4와 K3 MXFP4 scale 계약 비교 후 direct path 기각.
 - [x] exact native-byte custom MXFP4 CUDA baseline 구현과 memcheck 검증.
-- [ ] CPU, CUDA library, CUDA custom synthetic graph parity 검증.
-- [ ] JSON/CSV benchmark와 실제 RTX 5080 측정.
-- [ ] 전체 ablation 결과와 다음 병목 문서화.
+- [x] CPU, CUDA library, CUDA custom synthetic graph parity 검증.
+- [x] JSON/CSV benchmark와 실제 RTX 5080 측정.
+- [x] 전체 ablation 결과와 다음 병목 문서화.

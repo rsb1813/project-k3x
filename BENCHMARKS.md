@@ -40,6 +40,38 @@
 
 Median per-layer time was 2.1913, 5.4949, 5.51105, and 5.0384 ms for layers zero through three. These figures apply only to the tiny deterministic model and are not evidence for full Kimi K3 or RTX 5080 throughput.
 
+## B-0002 ??Milestone 1 synthetic CPU/CUDA backend comparison
+
+| Field | Value |
+|---|---|
+| Evidence | measured; ratios and per-token byte conversions are arithmetic over measured counters |
+| Date | 2026-08-08 |
+| Code commit | `c92f498` |
+| Hardware | AMD Ryzen 7 9800X3D; NVIDIA GeForce RTX 5080 16,303 MiB; driver 591.86; WSL2 exposes 49,251,213,312 bytes RAM |
+| Environment | WSL2 Ubuntu 24.04.4, Linux 6.18.33.2, CUDA Toolkit 13.3.1, nvcc 13.3.73, native `sm_120` Release builds |
+| Model/checkpoint | deterministic `synthetic-milestone-one` K3-compatible K3X artifact; no full Kimi K3 weights |
+| Mode | exact incremental generation; explicit backend; strict artifact verification; no silent fallback |
+| Context length | 4 prompt tokens, prompt IDs `[1, 7, 3, 9]` |
+| Generated tokens | 6, exact token IDs `[43, 32, 28, 49, 9, 28]` in every mode |
+| Warmup / samples | 3 / 20 separate process runs per mode |
+| Quality mode | synthetic exact-routing contract; fixed Top-2 router; no pruning, proxy, adaptive K, or speculation |
+
+| Backend / dense precision | Decode tok/s | Prefill tok/s | TTFT ms | Peak RSS MiB | H2D bytes/run | D2H bytes/run | Peak backend VRAM bytes | CUDA kernel ms/run | Max abs. error | Max rel. error |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `cpu` / FP32 | 19.4858 | 11.3489 | 797.398 | 225.21 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `cuda-dense` / FP32 | 11.6682 | 7.1813 | 1,244.627 | 483.23 | 4,999,104 | 90,864 | 25,216 | 11.561 | 1.640e-7 | 2.485e-4 |
+| `cuda-custom` / FP32 | 10.1118 | 6.5095 | 1,296.817 | 483.60 | 5,107,968 | 111,600 | 25,216 | 14.521 | 1.751e-7 | 2.485e-4 |
+| `cuda-dense` / BF16 | 11.4957 | 7.2915 | 1,239.816 | 458.96 | 2,499,552 | 90,864 | 12,800 | 11.844 | 0.00402409 | 17.5009 |
+| `cuda-custom` / BF16 | 10.1235 | 6.6671 | 1,288.632 | 459.26 | 2,608,416 | 111,600 | 12,800 | 14.314 | 0.00402409 | 17.5009 |
+
+All modes recorded 110,936 logical K3X tensor bytes per generated token. This is not an OS or NVMe counter, so NVMe GB/token and I/O stall time remain not measured. FP32 H2D traffic is 0.000833184 GB/generated token for `cuda-dense` and 0.000851328 GB/generated token for `cuda-custom`; BF16 reduces these to 0.000416592 and 0.000434736 GB/generated token. GPU utilization and memory bandwidth were not sampled. Cache hit rate, cold rescue count, speculative acceptance, and unique experts per verification block are not applicable because those systems do not exist in this milestone.
+
+The maximum relative BF16 error is dominated by reference values close to zero and should not be read as a quality percentage. Maximum absolute error and exact greedy tokens are the useful current checks; broader quality evaluation is still required before BF16 can become a quality mode default.
+
+The CPU backend wins this tiny end-to-end comparison. CUDA-event kernel work occupies only 11.56--14.52 ms per full run, while the process performs hundreds of milliseconds of graph work. The measured immediate bottleneck is per-operation device allocation, host staging, synchronous copies, synchronization, and CPU-resident graph logic. These synthetic numbers do not predict full Kimi K3 throughput, where expert bytes and reuse dominate.
+
+Raw records are stored in `results/m1-*.json` and `results/m1-*.csv`.
+
 ## Derived bottleneck model — not a benchmark
 
 The released dimensions imply 17,547,264 bytes per native MXFP4 routed expert. With no cache reuse, natural Top-16 across 92 MoE layers implies 25,829,572,608 expert bytes/token. Applying the P44 Pro published 7.0 GB/s sequential figure gives a derived expert-only ceiling of about 0.271 tok/s and implies roughly 94.6% expert NVMe-byte avoidance for a 5 tok/s target.
@@ -48,7 +80,7 @@ These values are capacity and traffic estimates. They are not inserted into B-00
 
 ## Pending benchmark gates
 
-- Milestone 1 CPU profiler baseline.
-- Milestone 1 RTX 5080 cuBLASLt dense throughput baseline. FP32/BF16-rounded literal correctness, exact transfer-byte accounting, and CUDA-event instrumentation are implemented, but no throughput result is recorded yet.
-- Milestone 1 RTX 5080 custom MXFP4 throughput baseline. Native-byte literal correctness, exact transfer-byte accounting, stride coverage, and CUDA-event instrumentation are implemented, but no throughput result is recorded yet.
-- Milestone 1 end-to-end synthetic CPU versus CUDA comparison.
+- Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
+- Persistent-buffer and layer/block-batched CUDA ablation against B-0002.
+- Full-dimension bounded-slice runtime before any full-model throughput claim.
+- Tiered-runtime NVMe, pinned H2D, cache-hit, utilization, memory-bandwidth, and I/O-stall counters.

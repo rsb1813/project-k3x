@@ -4,9 +4,9 @@
 
 Milestone 1 — exact runtime backend boundary, structured profiler, cuBLASLt dense baseline, and custom K3 MXFP4 CUDA baseline.
 
-The design is approved, and the Linux portability, deterministic profiler, exact CPU backend, optional CUDA resource shell, cuBLASLt dense baseline, and native-byte K3 MXFP4 CUDA baseline tasks are complete. End-to-end backend selection and profiler export are next.
+Implementation and measurement are complete. The Linux portability layer, deterministic profiler, exact CPU backend, optional CUDA resource shell, cuBLASLt dense baseline, native-byte K3 MXFP4 CUDA baseline, explicit CLI selection, end-to-end graph parity, profiler export, and reproducible CPU/CUDA comparison all passed.
 
-State recorded after the 2026-08-08 exact custom MXFP4 CUDA implementation commit and fresh dual-build correctness verification.
+State recorded after the 2026-08-08 Milestone 1 benchmark at code commit `c92f498` and fresh dual-build verification.
 
 ## Completed work
 
@@ -28,12 +28,16 @@ State recorded after the 2026-08-08 exact custom MXFP4 CUDA implementation commi
 - Release native tests use explicit return codes so `NDEBUG` cannot remove their behavior checks.
 - Row-major cuBLASLt dense matvec for FP32 and BF16-rounded operands with FP32 accumulation/output, zero-workspace heuristic selection, exact directional transfer-byte accounting, CUDA-event timing, and per-call device-memory accounting.
 - Exact native-byte K3 MXFP4 CUDA matvec with low-nibble-first E2M1 decode, E8M0/32 scaling, FP32 accumulation, stride coverage, typed validation, transfer accounting, and CUDA-event timing.
+- Explicit `cpu`, `cuda-dense`, and `cuda-custom` runtime selection plus FP32/BF16 dense precision selection without silent fallback.
+- End-to-end CPU/CUDA layer, logits, recurrent state, and exact-token parity on the deterministic K3X artifact.
+- JSON/CSV export of backend, device, precision, kernel time, directional transfer bytes, peak backend-owned VRAM, logical reads, layer timing, and numerical error.
+- B-0002 synthetic comparison with three warmups and 20 samples for CPU and both CUDA backends in FP32, plus both CUDA backends in BF16.
 
 ## Work in progress
 
 - Branch: `feat/milestone-one-runtime`.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
-- The next code task is explicit CLI backend/precision selection, synthetic graph integration, and JSON/CSV profiler export.
+- Milestone 1 documentation, raw result records, and final review are in progress; the code and measurement tasks are complete.
 - Linux development runs as the unprivileged `jolib` user. The isolated Python environment is `/home/jolib/.venvs/k3x-m1`; repository build output is `build-linux`.
 
 ## Known failures and blockers
@@ -41,17 +45,16 @@ State recorded after the 2026-08-08 exact custom MXFP4 CUDA implementation commi
 - Windows Smart App Control blocks the newly linked unsigned `build/k3x_run.exe` before process creation.
 - Code Integrity events 3033 and 3077 cite policy `{0283ac0f-fff1-49ae-ada1-8a933130cad6}` and an unmet Enterprise signing level.
 - Fresh Windows CTest binaries run, but five Python cross-language cases that launch `k3x_run.exe` remain blocked on Windows. This does not block the verified WSL Linux path.
-- cuBLASLt dense and custom MXFP4 operations are not yet connected to the synthetic decoder graph, and no CUDA throughput benchmark has been accepted yet.
 - CUDA calls allocate and transfer per operation in the current correctness baseline; persistent residency and asynchronous overlap remain unimplemented.
 - `cuda_dense` intentionally uses the CPU MXFP4 oracle with zero device traffic; this is its documented comparison contract, not an automatic fallback after a CUDA failure.
 - Direct cuBLASLt FP4 is rejected for exact K3 MXFP4 because NVIDIA requires UE4M3 scales per 16 FP4 values while K3 uses E8M0 scales per 32 values.
 
 ## Next concrete tasks
 
-1. Add explicit CLI backend and dense-precision selection without silent CPU fallback.
-2. Connect the CUDA backend to the synthetic graph and verify CPU/CUDA layer, state, logits, and token parity.
-3. Export backend, device, transfer, kernel, memory, and numerical fields through JSON/CSV benchmark records.
-4. Run end-to-end synthetic CPU versus CUDA profiling before accepting a default path.
+1. Add persistent device buffers and a layer/block execution boundary while retaining the current operation-level oracle.
+2. Remeasure CPU, CUDA dense, and CUDA custom to isolate allocation, transfer, launch, and synchronization savings.
+3. Implement the first full-dimension bounded checkpoint-slice runtime without requiring full-model residency.
+4. Begin tiered asynchronous storage only after the wider CUDA boundary passes correctness and ablation gates.
 
 ## Hardware assumptions
 
@@ -68,9 +71,9 @@ State recorded after the 2026-08-08 exact custom MXFP4 CUDA implementation commi
 
 ## Latest measured bottleneck
 
-Milestone 0 did not measure full-model or NVMe performance. Its only measured run is the tiny CPU synthetic B-0001 entry in `BENCHMARKS.md`.
+B-0002 measures the tiny synthetic graph at 19.4858 CPU, 11.6682 FP32 `cuda-dense`, and 10.1118 FP32 `cuda-custom` decode tok/s. BF16 halves H2D bytes and backend-owned peak VRAM but does not improve decode throughput materially. CUDA-event work totals only 11.56--14.52 ms per run while end-to-end graph work takes hundreds of milliseconds. The latest measured bottleneck is per-operation allocation, host staging, synchronous copy/synchronization, and CPU-resident graph execution, not the CUDA kernel arithmetic.
 
-The latest implemented CUDA operations are literal dense and native MXFP4 correctness cases, not throughput benchmarks. The next concrete bottleneck is end-to-end graph integration and truthful profiler export, which are required before kernel and transfer costs can be compared. The expected full-model bottleneck remains expert traffic, based on a derived model rather than measurement: uncached natural Top-16 expert reads across 92 MoE layers total 25.83 GB/token. Linux NVMe, RAM-to-GPU, kernel, and stall counters remain unmeasured until the relevant runtime exists.
+This does not replace the derived full-model traffic model. Uncached natural Top-16 expert reads across 92 MoE layers still imply 25.83 GB/token, but native-Linux NVMe traffic, cache reuse, I/O stalls, GPU utilization, and full-model throughput remain unmeasured.
 
 ## Last known-good state
 
@@ -79,11 +82,12 @@ The latest implemented CUDA operations are literal dense and native MXFP4 correc
 - Public-main tests: Python 46/46 and CTest 2/2.
 - Milestone 1 design commit: `84edc6e`.
 - Linux environment: WSL 2.7.11.0, Ubuntu 24.04.4, kernel 6.18.33.2, CUDA Toolkit 13.3.1, nvcc 13.3.73, RTX 5080 compute capability 12.0.
-- Current worktree code commit: `7d4ade6` (`ea730c5` custom kernel plus the cuda-dense CPU-oracle contract correction).
+- Current worktree code commit: `c92f498` (`feat: profile backend-selected synthetic inference`).
 - CPU-only CTest: 5/5 pass; `k3x_run` has no CUDA or cuBLAS dynamic dependency.
 - CUDA CTest: 7/7 pass on RTX 5080; cuBLASLt FP32/BF16-rounded and exact native-byte MXFP4 literal checks pass, and MXFP4 `compute-sanitizer --tool memcheck` reports 0 errors.
-- CPU-only pytest: 47/47 pass with `K3X_BUILD_DIR=build-cpu`.
-- CUDA-enabled cross-language parity: 5/5 pass with `K3X_BUILD_DIR=build-cuda` while the CLI remains on the exact CPU backend.
+- CPU-only pytest: 53 passed and 7 CUDA-only cases skipped with `K3X_BUILD_DIR=build-cpu`.
+- CUDA-enabled pytest: 59 passed and 1 CPU-build-only case skipped with `K3X_BUILD_DIR=build-cuda`; FP32/BF16 CUDA graph parity and benchmark schema tests are included.
+- B-0002 raw JSON/CSV records are generated for CPU FP32 and both CUDA identities in FP32/BF16.
 
 ## Proposed component status
 

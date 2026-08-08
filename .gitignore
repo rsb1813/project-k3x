@@ -8,5 +8,6 @@ build/
 build-*/
 build-fixtures/
 build-results/
+artifacts/
 *.k3x.partial
 *.k3x.resume.json

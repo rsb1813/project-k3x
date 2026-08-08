@@ -1,0 +1,30 @@
+{
+  "backend": "cpu",
+  "decode_tokens_per_second": 19.485756353458004,
+  "dense_precision": "fp32",
+  "device": "CPU",
+  "device_to_host_bytes": 0,
+  "evidence": "measured",
+  "file_read_bytes_per_token": 110936.0,
+  "generated_tokens": 6,
+  "host_to_device_bytes": 0,
+  "iterations": 20,
+  "kda_state_bytes": 19200,
+  "kernel_nanoseconds": 0,
+  "max_absolute_error": 0.0,
+  "max_relative_error": 0.0,
+  "mla_kv_bytes": 2592,
+  "peak_rss_bytes": 236154880,
+  "peak_vram_bytes": 0,
+  "per_layer_nanoseconds": [
+    29852364,
+    193269483,
+    193755398,
+    184573211
+  ],
+  "platform": "Linux 6.18.33.2-microsoft-standard-WSL2 / x86_64",
+  "prefill_tokens_per_second": 11.348895727903688,
+  "prompt_tokens": 4,
+  "scope": "synthetic-milestone-one",
+  "ttft_ms": 797.3983885
+}

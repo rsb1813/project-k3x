@@ -1,0 +1,30 @@
+{
+  "backend": "cuda-custom",
+  "decode_tokens_per_second": 10.111842294607404,
+  "dense_precision": "fp32",
+  "device": "NVIDIA GeForce RTX 5080",
+  "device_to_host_bytes": 111600,
+  "evidence": "measured",
+  "file_read_bytes_per_token": 110936.0,
+  "generated_tokens": 6,
+  "host_to_device_bytes": 5107968,
+  "iterations": 20,
+  "kda_state_bytes": 19200,
+  "kernel_nanoseconds": 14521360,
+  "max_absolute_error": 1.750999999994285e-07,
+  "max_relative_error": 0.00024847236155856874,
+  "mla_kv_bytes": 2592,
+  "peak_rss_bytes": 507092992,
+  "peak_vram_bytes": 25216,
+  "per_layer_nanoseconds": [
+    167569391,
+    314071226,
+    313383339,
+    293207965
+  ],
+  "platform": "Linux 6.18.33.2-microsoft-standard-WSL2 / x86_64",
+  "prefill_tokens_per_second": 6.509505124051346,
+  "prompt_tokens": 4,
+  "scope": "synthetic-milestone-one",
+  "ttft_ms": 1296.8174165
+}
