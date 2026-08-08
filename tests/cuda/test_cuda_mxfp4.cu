@@ -114,6 +114,69 @@ int test_strides_columns_beyond_one_block_width() {
     return 0;
 }
 
+int test_allocation_modes() {
+    std::array<float, 64> input{};
+    input[0] = 1.0F;
+    std::array<std::byte, 128> packed{};
+    packed[0] = std::byte{0x02};
+    packed[32] = std::byte{0x02};
+    packed[64] = std::byte{0x02};
+    packed[96] = std::byte{0x02};
+    std::array<std::byte, 8> scales{};
+    scales.fill(std::byte{127});
+    const k3x::Mxfp4WeightView view{
+        201, std::span<const std::byte>(packed).first(96),
+        std::span<const std::byte>(scales).first(6), 3, 64, 32};
+
+    k3x::BackendOptions reference_options;
+    reference_options.kind = k3x::BackendKind::cuda_custom;
+    auto reference = k3x::make_cuda_backend(reference_options);
+    if (!reference) return 40;
+    if (!reference.value()->mxfp4_matvec(
+            input, view, 7, k3x::ProfilePhase::decode)) return 41;
+    const auto reference_stats = reference.value()->runtime_stats();
+    if (reference_stats.device_allocation_count != 4 ||
+        reference_stats.device_free_count != 4 ||
+        reference_stats.stream_synchronization_count != 1) return 42;
+
+    k3x::BackendOptions reused_options;
+    reused_options.kind = k3x::BackendKind::cuda_custom;
+    reused_options.cuda_allocation = k3x::CudaAllocationMode::reused;
+    auto reused = k3x::make_cuda_backend(reused_options);
+    if (!reused) return 43;
+    const auto first = reused.value()->mxfp4_matvec(
+        input, view, 7, k3x::ProfilePhase::decode);
+    if (!first) return 44;
+    const auto reused_first = reused.value()->runtime_stats();
+    if (reused_first.device_allocation_count != 4 ||
+        reused_first.device_free_count != 0 ||
+        reused_first.stream_synchronization_count != 1 ||
+        reused_first.scratch_bytes != 370) return 45;
+    const auto second = reused.value()->mxfp4_matvec(
+        input, view, 7, k3x::ProfilePhase::decode);
+    if (!second || second.value() != first.value()) return 46;
+    const auto reused_second = reused.value()->runtime_stats();
+    if (reused_second.device_allocation_count !=
+            reused_first.device_allocation_count ||
+        reused_second.device_free_count != reused_first.device_free_count ||
+        reused_second.stream_synchronization_count !=
+            reused_first.stream_synchronization_count + 1) return 47;
+
+    const auto larger = reused.value()->mxfp4_matvec(
+        input, k3x::Mxfp4WeightView{202, packed, scales, 4, 64, 32}, 7,
+        k3x::ProfilePhase::decode);
+    if (!larger) return 48;
+    const auto reused_larger = reused.value()->runtime_stats();
+    if (reused_larger.device_allocation_count !=
+            reused_second.device_allocation_count + 3 ||
+        reused_larger.device_free_count !=
+            reused_second.device_free_count + 3 ||
+        reused_larger.scratch_bytes != 408 ||
+        reused_larger.stream_synchronization_count !=
+            reused_second.stream_synchronization_count + 1) return 49;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -189,5 +252,7 @@ int main() {
     if (backend.value()->memory_stats().current_device_bytes != 0) return 20;
     const auto stride_result = test_strides_columns_beyond_one_block_width();
     if (stride_result != 0) return stride_result;
-    return test_rejects_incompatible_contracts();
+    const auto contract_result = test_rejects_incompatible_contracts();
+    if (contract_result != 0) return contract_result;
+    return test_allocation_modes();
 }

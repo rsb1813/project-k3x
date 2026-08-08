@@ -122,10 +122,81 @@ int test_bf16_rounded() {
     return 0;
 }
 
+int test_allocation_modes() {
+    const std::vector<float> input{1.0F, 2.0F, 3.0F};
+    const std::vector<float> weight{
+        1.0F, 0.0F, -1.0F,
+        0.5F, 2.0F, 1.0F,
+    };
+    const k3x::DenseWeightView view{101, weight, 2, 3};
+
+    k3x::BackendOptions reference_options;
+    reference_options.kind = k3x::BackendKind::cuda_dense;
+    auto reference = k3x::make_cuda_backend(reference_options);
+    if (!reference) return 40;
+    if (!reference.value()->dense_matvec(
+            input, view, 4, k3x::ProfilePhase::decode)) return 41;
+    const auto reference_first = reference.value()->runtime_stats();
+    if (reference_first.device_allocation_count != 3 ||
+        reference_first.device_free_count != 3 ||
+        reference_first.stream_synchronization_count != 1 ||
+        reference_first.scratch_bytes != 0) return 42;
+    if (!reference.value()->dense_matvec(
+            input, view, 4, k3x::ProfilePhase::decode)) return 43;
+    const auto reference_second = reference.value()->runtime_stats();
+    if (reference_second.device_allocation_count != 6 ||
+        reference_second.device_free_count != 6 ||
+        reference_second.stream_synchronization_count != 2) return 44;
+
+    k3x::BackendOptions reused_options;
+    reused_options.kind = k3x::BackendKind::cuda_dense;
+    reused_options.cuda_allocation = k3x::CudaAllocationMode::reused;
+    auto reused = k3x::make_cuda_backend(reused_options);
+    if (!reused) return 45;
+    const auto first = reused.value()->dense_matvec(
+        input, view, 4, k3x::ProfilePhase::decode);
+    if (!first) return 46;
+    const auto reused_first = reused.value()->runtime_stats();
+    if (reused_first.device_allocation_count != 3 ||
+        reused_first.device_free_count != 0 ||
+        reused_first.stream_synchronization_count != 1 ||
+        reused_first.scratch_bytes != 44) return 47;
+    const auto second = reused.value()->dense_matvec(
+        input, view, 4, k3x::ProfilePhase::decode);
+    if (!second || second.value() != first.value()) return 48;
+    const auto reused_second = reused.value()->runtime_stats();
+    if (reused_second.device_allocation_count !=
+            reused_first.device_allocation_count ||
+        reused_second.device_free_count != reused_first.device_free_count ||
+        reused_second.stream_synchronization_count !=
+            reused_first.stream_synchronization_count + 1) return 49;
+
+    const std::vector<float> larger_weight{
+        1.0F, 0.0F, -1.0F,
+        0.5F, 2.0F, 1.0F,
+        2.0F, 1.0F, 0.0F,
+    };
+    const auto larger = reused.value()->dense_matvec(
+        input, k3x::DenseWeightView{102, larger_weight, 3, 3}, 4,
+        k3x::ProfilePhase::decode);
+    if (!larger) return 50;
+    const auto reused_larger = reused.value()->runtime_stats();
+    if (reused_larger.device_allocation_count !=
+            reused_second.device_allocation_count + 2 ||
+        reused_larger.device_free_count !=
+            reused_second.device_free_count + 2 ||
+        reused_larger.scratch_bytes != 60 ||
+        reused_larger.stream_synchronization_count !=
+            reused_second.stream_synchronization_count + 1) return 51;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
     const auto fp32_result = test_fp32();
     if (fp32_result != 0) return fp32_result;
-    return test_bf16_rounded();
+    const auto bf16_result = test_bf16_rounded();
+    if (bf16_result != 0) return bf16_result;
+    return test_allocation_modes();
 }

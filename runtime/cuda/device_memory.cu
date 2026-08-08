@@ -81,8 +81,9 @@ ScratchBuffer::ScratchBuffer(
       allocation_(memory, runtime, allocator) {}
 
 ScratchBuffer::~ScratchBuffer() {
+    const auto capacity = allocation_.bytes();
     allocation_.reset();
-    if (runtime_) runtime_->scratch_bytes = 0;
+    if (runtime_) runtime_->scratch_bytes -= capacity;
 }
 
 cudaError_t ScratchBuffer::reserve(std::size_t bytes) noexcept {
@@ -90,8 +91,9 @@ cudaError_t ScratchBuffer::reserve(std::size_t bytes) noexcept {
     DeviceAllocation replacement(memory_, runtime_, allocator_);
     const auto status = replacement.allocate(bytes);
     if (status != cudaSuccess) return status;
+    const auto previous = allocation_.bytes();
     allocation_.swap(replacement);
-    runtime_->scratch_bytes = bytes;
+    runtime_->scratch_bytes += bytes - previous;
     runtime_->peak_scratch_bytes = std::max(
         runtime_->peak_scratch_bytes, runtime_->scratch_bytes);
     return cudaSuccess;

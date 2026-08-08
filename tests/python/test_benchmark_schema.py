@@ -180,7 +180,35 @@ def test_benchmark_once_measures_cuda_error_against_cpu(
     )
     assert record.device_to_host_bytes > 0
     assert record.peak_vram_bytes > 0
+    assert record.device_allocation_count > 0
+    assert record.device_allocation_count == record.device_free_count
+    assert record.stream_synchronization_count > 0
+    assert record.scratch_bytes == 0
     assert record.max_absolute_error is not None
     assert record.max_absolute_error <= tolerance
     assert record.max_relative_error is not None
     assert record.max_relative_error >= 0.0
+
+
+def test_benchmark_once_reports_reused_cuda_scratch(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    if Path(os.environ.get("K3X_BUILD_DIR", "build")).name != "build-cuda":
+        pytest.skip("CUDA benchmark contract is exercised only against build-cuda")
+    artifact = tmp_path / "synthetic.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    record = benchmark_once(
+        artifact,
+        cpp_binary("k3x_run"),
+        warmup=0,
+        iterations=1,
+        backend="cuda-dense",
+        dense_precision="fp32",
+        cuda_allocation="reused",
+    )
+    assert record.cuda_allocation == "reused"
+    assert record.device_allocation_count > record.device_free_count
+    assert record.scratch_bytes > 0
+    assert record.peak_scratch_bytes >= record.scratch_bytes
+    assert record.max_absolute_error is not None
+    assert record.max_absolute_error <= 1.0e-4

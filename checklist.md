@@ -72,7 +72,7 @@
 - [x] CUDA 실행 CLI 검증과 benchmark JSON/CSV schema 확장.
 - [x] stable tensor identity와 CPU grouped projection oracle 구현.
 - [x] tracked CUDA allocation과 grow-only scratch primitive 구현.
-- [ ] allocation reuse 구현과 독립 ablation.
+- [x] allocation reuse 구현과 독립 ablation.
 - [ ] exact static weight residency 구현과 독립 ablation.
 - [ ] dense/MXFP4 grouped projection 구현과 독립 ablation.
 - [ ] 전체 correctness, memcheck, benchmark, TITAN Ledger 갱신.

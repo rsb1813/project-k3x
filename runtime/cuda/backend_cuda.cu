@@ -2,6 +2,7 @@
 #include "k3x/backend.hpp"
 #include "k3x/ops.hpp"
 
+#include "device_memory.cuh"
 #include "mxfp4.cuh"
 
 #include <cublasLt.h>
@@ -13,9 +14,11 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <memory>
 #include <span>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -52,41 +55,6 @@ public:
 
 private:
     cublasLtHandle_t handle_{};
-};
-
-class DeviceBuffer {
-public:
-    DeviceBuffer() = default;
-    ~DeviceBuffer() { reset(); }
-    DeviceBuffer(const DeviceBuffer&) = delete;
-    DeviceBuffer& operator=(const DeviceBuffer&) = delete;
-
-    cudaError_t allocate(std::size_t bytes, BackendMemoryStats* stats) {
-        if (bytes == 0) return cudaSuccess;
-        const auto status = cudaMalloc(&pointer_, bytes);
-        if (status != cudaSuccess) return status;
-        bytes_ = bytes;
-        stats_ = stats;
-        stats_->current_device_bytes += bytes_;
-        stats_->peak_device_bytes =
-            std::max(stats_->peak_device_bytes, stats_->current_device_bytes);
-        return cudaSuccess;
-    }
-
-    void* get() const noexcept { return pointer_; }
-
-private:
-    void reset() noexcept {
-        if (!pointer_) return;
-        cudaFree(pointer_);
-        stats_->current_device_bytes -= bytes_;
-        pointer_ = nullptr;
-        bytes_ = 0;
-    }
-
-    void* pointer_{};
-    std::size_t bytes_{};
-    BackendMemoryStats* stats_{};
 };
 
 class MatmulDescOwner {
@@ -142,11 +110,22 @@ public:
     EventOwner(const EventOwner&) = delete;
     EventOwner& operator=(const EventOwner&) = delete;
     EventOwner() = default;
-    cudaEvent_t* out() { return &event_; }
+    cudaError_t ensure() {
+        return event_ ? cudaSuccess : cudaEventCreate(&event_);
+    }
     cudaEvent_t get() const { return event_; }
 
 private:
     cudaEvent_t event_{};
+};
+
+struct DensePlan {
+    MatmulDescOwner operation;
+    MatrixLayoutOwner input_layout;
+    MatrixLayoutOwner weight_layout;
+    MatrixLayoutOwner output_layout;
+    MatmulPreferenceOwner preference;
+    cublasLtMatmulHeuristicResult_t heuristic{};
 };
 
 class CudaBackend final : public ComputeBackend {
@@ -155,7 +134,14 @@ public:
                 cudaStream_t stream, cublasLtHandle_t handle,
                 std::string device_name)
         : options_(options), profiler_(profiler), stream_(stream), handle_(handle),
-          device_name_(std::move(device_name)) {}
+          device_name_(std::move(device_name)),
+          dense_input_scratch_(&memory_stats_, &runtime_stats_),
+          dense_weight_scratch_(&memory_stats_, &runtime_stats_),
+          dense_output_scratch_(&memory_stats_, &runtime_stats_),
+          mxfp4_input_scratch_(&memory_stats_, &runtime_stats_),
+          mxfp4_packed_scratch_(&memory_stats_, &runtime_stats_),
+          mxfp4_scales_scratch_(&memory_stats_, &runtime_stats_),
+          mxfp4_output_scratch_(&memory_stats_, &runtime_stats_) {}
 
     ~CudaBackend() override {
         if (handle_) cublasLtDestroy(handle_);
@@ -210,22 +196,42 @@ public:
         }
 
         const auto output_bytes = rows * sizeof(float);
-        DeviceBuffer device_input;
-        DeviceBuffer device_weight;
-        DeviceBuffer device_output;
-        if (device_input.allocate(input_bytes, &memory_stats_) != cudaSuccess ||
-            device_weight.allocate(weight_bytes, &memory_stats_) != cudaSuccess ||
-            device_output.allocate(output_bytes, &memory_stats_) != cudaSuccess) {
+        cuda::DeviceAllocation local_input(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_weight(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_output(&memory_stats_, &runtime_stats_);
+        void* device_input = nullptr;
+        void* device_weight = nullptr;
+        void* device_output = nullptr;
+        if (options_.cuda_allocation == CudaAllocationMode::reused) {
+            if (dense_input_scratch_.reserve(input_bytes) != cudaSuccess ||
+                dense_weight_scratch_.reserve(weight_bytes) != cudaSuccess ||
+                dense_output_scratch_.reserve(output_bytes) != cudaSuccess) {
+                record(phase, ProfileOperation::dense_matvec, precision, layer,
+                       operation_start, logical_weight_bytes, 0, 0, false);
+                return Result<std::vector<float>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA reusable device allocation failed");
+            }
+            device_input = dense_input_scratch_.get();
+            device_weight = dense_weight_scratch_.get();
+            device_output = dense_output_scratch_.get();
+        } else if (local_input.allocate(input_bytes) != cudaSuccess ||
+                   local_weight.allocate(weight_bytes) != cudaSuccess ||
+                   local_output.allocate(output_bytes) != cudaSuccess) {
             record(phase, ProfileOperation::dense_matvec, precision, layer,
                    operation_start, logical_weight_bytes, 0, 0, false);
             return Result<std::vector<float>>::failure(
                 ErrorCode::backend_unavailable, "CUDA device allocation failed");
+        } else {
+            device_input = local_input.get();
+            device_weight = local_weight.get();
+            device_output = local_output.get();
         }
 
         const auto h2d_start = std::chrono::steady_clock::now();
-        if (cudaMemcpyAsync(device_input.get(), host_input, input_bytes,
+        if (cudaMemcpyAsync(device_input, host_input, input_bytes,
                             cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(device_weight.get(), host_weight, weight_bytes,
+            cudaMemcpyAsync(device_weight, host_weight, weight_bytes,
                             cudaMemcpyHostToDevice, stream_) != cudaSuccess) {
             record(phase, ProfileOperation::host_to_device, precision, layer,
                    h2d_start, 0, input_bytes + weight_bytes, 0, false);
@@ -237,45 +243,48 @@ public:
         runtime_stats_.activation_h2d_bytes += input_bytes;
         runtime_stats_.weight_h2d_bytes += weight_bytes;
 
-        MatmulDescOwner operation;
-        MatrixLayoutOwner input_layout;
-        MatrixLayoutOwner weight_layout;
-        MatrixLayoutOwner output_layout;
-        MatmulPreferenceOwner preference;
-        if (cublasLtMatmulDescCreate(operation.out(), CUBLAS_COMPUTE_32F,
-                                     CUDA_R_32F) != CUBLAS_STATUS_SUCCESS ||
-            !create_row_major_layout(weight_layout, weight_type, rows, cols,
-                                     cols) ||
-            !create_row_major_layout(input_layout, input_type, cols, 1, 1) ||
-            !create_row_major_layout(output_layout, CUDA_R_32F, rows, 1, 1) ||
-            cublasLtMatmulPreferenceCreate(preference.out()) !=
-                CUBLAS_STATUS_SUCCESS) {
+        DensePlan local_plan;
+        DensePlan* plan = &local_plan;
+        if (options_.cuda_allocation == CudaAllocationMode::reused) {
+            const DensePlanKey key{rows, cols, static_cast<int>(input_type),
+                                   static_cast<int>(weight_type)};
+            const auto found = dense_plans_.find(key);
+            if (found != dense_plans_.end()) {
+                plan = found->second.get();
+            } else {
+                auto candidate = std::make_unique<DensePlan>();
+                if (!initialize_dense_plan(
+                        *candidate, rows, cols, input_type, weight_type)) {
+                    record(phase, ProfileOperation::dense_matvec, precision,
+                           layer, operation_start, logical_weight_bytes, 0, 0,
+                           false);
+                    return Result<std::vector<float>>::failure(
+                        ErrorCode::backend_unavailable,
+                        "cuBLASLt plan creation failed");
+                }
+                plan = candidate.get();
+                dense_plans_.emplace(key, std::move(candidate));
+            }
+        } else if (!initialize_dense_plan(
+                       local_plan, rows, cols, input_type, weight_type)) {
             record(phase, ProfileOperation::dense_matvec, precision, layer,
                    operation_start, logical_weight_bytes, 0, 0, false);
             return Result<std::vector<float>>::failure(
                 ErrorCode::backend_unavailable,
-                "cuBLASLt descriptor creation failed");
+                "cuBLASLt plan creation failed");
         }
 
-        cublasLtMatmulHeuristicResult_t heuristic{};
-        int returned_results = 0;
-        if (cublasLtMatmulAlgoGetHeuristic(
-                handle_, operation.get(), weight_layout.get(), input_layout.get(),
-                output_layout.get(), output_layout.get(), preference.get(), 1,
-                &heuristic, &returned_results) != CUBLAS_STATUS_SUCCESS ||
-            returned_results != 1 || heuristic.state != CUBLAS_STATUS_SUCCESS) {
-            record(phase, ProfileOperation::dense_matvec, precision, layer,
-                   operation_start, logical_weight_bytes, 0, 0, false);
-            return Result<std::vector<float>>::failure(
-                ErrorCode::backend_unavailable,
-                "cuBLASLt found no zero-workspace dense algorithm");
+        EventOwner local_event_start;
+        EventOwner local_event_end;
+        auto* event_start = &local_event_start;
+        auto* event_end = &local_event_end;
+        if (options_.cuda_allocation == CudaAllocationMode::reused) {
+            event_start = &dense_event_start_;
+            event_end = &dense_event_end_;
         }
-
-        EventOwner event_start;
-        EventOwner event_end;
-        if (cudaEventCreate(event_start.out()) != cudaSuccess ||
-            cudaEventCreate(event_end.out()) != cudaSuccess ||
-            cudaEventRecord(event_start.get(), stream_) != cudaSuccess) {
+        if (event_start->ensure() != cudaSuccess ||
+            event_end->ensure() != cudaSuccess ||
+            cudaEventRecord(event_start->get(), stream_) != cudaSuccess) {
             record(phase, ProfileOperation::dense_matvec, precision, layer,
                    operation_start, logical_weight_bytes, 0, 0, false);
             return Result<std::vector<float>>::failure(
@@ -285,12 +294,13 @@ public:
         constexpr float alpha = 1.0F;
         constexpr float beta = 0.0F;
         const auto matmul_status = cublasLtMatmul(
-            handle_, operation.get(), &alpha, device_weight.get(),
-            weight_layout.get(), device_input.get(), input_layout.get(), &beta,
-            device_output.get(), output_layout.get(), device_output.get(),
-            output_layout.get(), &heuristic.algo, nullptr, 0, stream_);
+            handle_, plan->operation.get(), &alpha, device_weight,
+            plan->weight_layout.get(), device_input, plan->input_layout.get(),
+            &beta, device_output, plan->output_layout.get(), device_output,
+            plan->output_layout.get(), &plan->heuristic.algo, nullptr, 0,
+            stream_);
         if (matmul_status != CUBLAS_STATUS_SUCCESS ||
-            cudaEventRecord(event_end.get(), stream_) != cudaSuccess) {
+            cudaEventRecord(event_end->get(), stream_) != cudaSuccess) {
             record(phase, ProfileOperation::dense_matvec, precision, layer,
                    operation_start, logical_weight_bytes, 0, 0, false);
             return Result<std::vector<float>>::failure(
@@ -299,7 +309,7 @@ public:
 
         std::vector<float> output(rows);
         const auto d2h_start = std::chrono::steady_clock::now();
-        if (cudaMemcpyAsync(output.data(), device_output.get(), output_bytes,
+        if (cudaMemcpyAsync(output.data(), device_output, output_bytes,
                             cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
             cudaStreamSynchronize(stream_) != cudaSuccess) {
             record(phase, ProfileOperation::device_to_host, precision, layer,
@@ -309,12 +319,13 @@ public:
             return Result<std::vector<float>>::failure(
                 ErrorCode::backend_unavailable, "CUDA device-to-host copy failed");
         }
+        ++runtime_stats_.stream_synchronization_count;
         record(phase, ProfileOperation::device_to_host, precision, layer,
                d2h_start, 0, output_bytes, 0, true);
 
         float elapsed_milliseconds = 0.0F;
-        if (cudaEventElapsedTime(&elapsed_milliseconds, event_start.get(),
-                                 event_end.get()) != cudaSuccess) {
+        if (cudaEventElapsedTime(&elapsed_milliseconds, event_start->get(),
+                                 event_end->get()) != cudaSuccess) {
             record(phase, ProfileOperation::dense_matvec, precision, layer,
                    operation_start, logical_weight_bytes, 0, 0, false);
             return Result<std::vector<float>>::failure(
@@ -373,28 +384,50 @@ public:
 
         const auto input_bytes = input.size_bytes();
         const auto output_bytes = rows * sizeof(float);
-        DeviceBuffer device_input;
-        DeviceBuffer device_packed;
-        DeviceBuffer device_scales;
-        DeviceBuffer device_output;
-        if (device_input.allocate(input_bytes, &memory_stats_) != cudaSuccess ||
-            device_packed.allocate(packed.size_bytes(), &memory_stats_) !=
-                cudaSuccess ||
-            device_scales.allocate(scales.size_bytes(), &memory_stats_) !=
-                cudaSuccess ||
-            device_output.allocate(output_bytes, &memory_stats_) != cudaSuccess) {
+        cuda::DeviceAllocation local_input(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_packed(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_scales(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_output(&memory_stats_, &runtime_stats_);
+        void* device_input = nullptr;
+        void* device_packed = nullptr;
+        void* device_scales = nullptr;
+        void* device_output = nullptr;
+        if (options_.cuda_allocation == CudaAllocationMode::reused) {
+            if (mxfp4_input_scratch_.reserve(input_bytes) != cudaSuccess ||
+                mxfp4_packed_scratch_.reserve(packed.size_bytes()) != cudaSuccess ||
+                mxfp4_scales_scratch_.reserve(scales.size_bytes()) != cudaSuccess ||
+                mxfp4_output_scratch_.reserve(output_bytes) != cudaSuccess) {
+                record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                       operation_start, logical_bytes, 0, 0, false);
+                return Result<std::vector<float>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA reusable device allocation failed");
+            }
+            device_input = mxfp4_input_scratch_.get();
+            device_packed = mxfp4_packed_scratch_.get();
+            device_scales = mxfp4_scales_scratch_.get();
+            device_output = mxfp4_output_scratch_.get();
+        } else if (local_input.allocate(input_bytes) != cudaSuccess ||
+                   local_packed.allocate(packed.size_bytes()) != cudaSuccess ||
+                   local_scales.allocate(scales.size_bytes()) != cudaSuccess ||
+                   local_output.allocate(output_bytes) != cudaSuccess) {
             record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
                    operation_start, logical_bytes, 0, 0, false);
             return Result<std::vector<float>>::failure(
                 ErrorCode::backend_unavailable, "CUDA device allocation failed");
+        } else {
+            device_input = local_input.get();
+            device_packed = local_packed.get();
+            device_scales = local_scales.get();
+            device_output = local_output.get();
         }
 
         const auto h2d_start = std::chrono::steady_clock::now();
-        if (cudaMemcpyAsync(device_input.get(), input.data(), input_bytes,
+        if (cudaMemcpyAsync(device_input, input.data(), input_bytes,
                             cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(device_packed.get(), packed.data(), packed.size_bytes(),
+            cudaMemcpyAsync(device_packed, packed.data(), packed.size_bytes(),
                             cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(device_scales.get(), scales.data(), scales.size_bytes(),
+            cudaMemcpyAsync(device_scales, scales.data(), scales.size_bytes(),
                             cudaMemcpyHostToDevice, stream_) != cudaSuccess) {
             record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
                    operation_start, logical_bytes, 0, 0, false);
@@ -408,18 +441,24 @@ public:
         runtime_stats_.weight_h2d_bytes +=
             packed.size_bytes() + scales.size_bytes();
 
-        EventOwner event_start;
-        EventOwner event_end;
-        if (cudaEventCreate(event_start.out()) != cudaSuccess ||
-            cudaEventCreate(event_end.out()) != cudaSuccess ||
-            cudaEventRecord(event_start.get(), stream_) != cudaSuccess ||
+        EventOwner local_event_start;
+        EventOwner local_event_end;
+        auto* event_start = &local_event_start;
+        auto* event_end = &local_event_end;
+        if (options_.cuda_allocation == CudaAllocationMode::reused) {
+            event_start = &mxfp4_event_start_;
+            event_end = &mxfp4_event_end_;
+        }
+        if (event_start->ensure() != cudaSuccess ||
+            event_end->ensure() != cudaSuccess ||
+            cudaEventRecord(event_start->get(), stream_) != cudaSuccess ||
             cuda::launch_mxfp4_matvec(
-                static_cast<const float*>(device_input.get()),
-                static_cast<const std::uint8_t*>(device_packed.get()),
-                static_cast<const std::uint8_t*>(device_scales.get()),
-                static_cast<float*>(device_output.get()), rows, cols, stream_) !=
+                static_cast<const float*>(device_input),
+                static_cast<const std::uint8_t*>(device_packed),
+                static_cast<const std::uint8_t*>(device_scales),
+                static_cast<float*>(device_output), rows, cols, stream_) !=
                 cudaSuccess ||
-            cudaEventRecord(event_end.get(), stream_) != cudaSuccess) {
+            cudaEventRecord(event_end->get(), stream_) != cudaSuccess) {
             record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
                    operation_start, logical_bytes, 0, 0, false);
             return Result<std::vector<float>>::failure(
@@ -428,7 +467,7 @@ public:
 
         std::vector<float> output(rows);
         const auto d2h_start = std::chrono::steady_clock::now();
-        if (cudaMemcpyAsync(output.data(), device_output.get(), output_bytes,
+        if (cudaMemcpyAsync(output.data(), device_output, output_bytes,
                             cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
             cudaStreamSynchronize(stream_) != cudaSuccess) {
             record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
@@ -437,10 +476,11 @@ public:
                 ErrorCode::backend_unavailable,
                 "CUDA MXFP4 execution or device-to-host copy failed");
         }
+        ++runtime_stats_.stream_synchronization_count;
 
         float elapsed_milliseconds = 0.0F;
-        if (cudaEventElapsedTime(&elapsed_milliseconds, event_start.get(),
-                                 event_end.get()) != cudaSuccess) {
+        if (cudaEventElapsedTime(&elapsed_milliseconds, event_start->get(),
+                                 event_end->get()) != cudaSuccess) {
             record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
                    operation_start, logical_bytes, 0, 0, false);
             return Result<std::vector<float>>::failure(
@@ -507,6 +547,35 @@ public:
     std::string_view device_name() const noexcept override { return device_name_; }
 
 private:
+    using DensePlanKey =
+        std::tuple<std::size_t, std::size_t, int, int>;
+
+    bool initialize_dense_plan(DensePlan& plan, std::size_t rows,
+                               std::size_t cols, cudaDataType_t input_type,
+                               cudaDataType_t weight_type) {
+        if (cublasLtMatmulDescCreate(plan.operation.out(), CUBLAS_COMPUTE_32F,
+                                     CUDA_R_32F) != CUBLAS_STATUS_SUCCESS ||
+            !create_row_major_layout(plan.weight_layout, weight_type, rows,
+                                     cols, cols) ||
+            !create_row_major_layout(plan.input_layout, input_type, cols, 1,
+                                     1) ||
+            !create_row_major_layout(plan.output_layout, CUDA_R_32F, rows, 1,
+                                     1) ||
+            cublasLtMatmulPreferenceCreate(plan.preference.out()) !=
+                CUBLAS_STATUS_SUCCESS) {
+            return false;
+        }
+        int returned_results = 0;
+        return cublasLtMatmulAlgoGetHeuristic(
+                   handle_, plan.operation.get(), plan.weight_layout.get(),
+                   plan.input_layout.get(), plan.output_layout.get(),
+                   plan.output_layout.get(), plan.preference.get(), 1,
+                   &plan.heuristic, &returned_results) ==
+                   CUBLAS_STATUS_SUCCESS &&
+               returned_results == 1 &&
+               plan.heuristic.state == CUBLAS_STATUS_SUCCESS;
+    }
+
     static bool valid_dense(std::span<const float> input,
                             DenseWeightView weight) {
         if (input.size() != weight.cols ||
@@ -581,6 +650,18 @@ private:
     std::string device_name_;
     BackendMemoryStats memory_stats_{};
     BackendRuntimeStats runtime_stats_{};
+    cuda::ScratchBuffer dense_input_scratch_;
+    cuda::ScratchBuffer dense_weight_scratch_;
+    cuda::ScratchBuffer dense_output_scratch_;
+    cuda::ScratchBuffer mxfp4_input_scratch_;
+    cuda::ScratchBuffer mxfp4_packed_scratch_;
+    cuda::ScratchBuffer mxfp4_scales_scratch_;
+    cuda::ScratchBuffer mxfp4_output_scratch_;
+    EventOwner dense_event_start_;
+    EventOwner dense_event_end_;
+    EventOwner mxfp4_event_start_;
+    EventOwner mxfp4_event_end_;
+    std::map<DensePlanKey, std::unique_ptr<DensePlan>> dense_plans_;
 };
 
 Result<std::unique_ptr<ComputeBackend>> cuda_failure(
