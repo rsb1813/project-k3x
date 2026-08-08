@@ -1,1 +1,10 @@
 .worktrees/
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.egg-info/
+build/
+build-*/
+*.k3x.partial
+*.k3x.resume.json

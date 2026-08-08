@@ -11,7 +11,7 @@
 
 ## 구현
 
-- [ ] 저장소 도구 구성과 합성 config 계약 테스트.
+- [x] 저장소 도구 구성과 합성 config 계약 테스트.
 - [ ] PyTorch 기본 연산과 MXFP4 oracle.
 - [ ] KDA와 recurrent/ShortConv state parity.
 - [ ] Gated MLA와 incremental KV parity.

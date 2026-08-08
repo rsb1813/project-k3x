@@ -17,3 +17,6 @@
 - 구현 계획 작성 시 기본 환경에서 Python 3.14.6만 확인되었고 PyTorch, CMake, C++ compiler 및 WSL은 없었다. Codex 번들 Python 3.12.13은 사용할 수 있지만 PyTorch는 설치되어 있지 않다.
 - 2026-08-08 PyPI index에서 확인한 계획상 Python dependency version은 torch 2.13.0, numpy 2.5.1, safetensors 0.8.0, pytest 9.1.1, google-crc32c 1.8.0, psutil 7.2.2이며 build backend는 setuptools 83.0.0이다. 설치 전에는 사용자에게 package-install 권한을 별도로 확인한다.
 - 첫 마일스톤 구현은 연결된 correctness graph이므로 기본 실행 방식은 주 agent의 inline execution으로 둔다. 독립 agent 사용은 사용자가 명시적으로 요청할 때만 선택한다.
+- 사용자가 로컬 dependency 설치와 전체 구현 진행을 승인했다. 격리 worktree `feat/milestone-zero`에서 작업한다.
+- 저장소 전용 `.venv`에 Python 3.12.13, torch 2.13.0, numpy 2.5.1, safetensors 0.8.0, pytest 9.1.1, google-crc32c 1.8.0, psutil 7.2.2, CMake 4.4.2, Ninja 1.13.0을 설치했다. 시스템에는 MSVC 19.51이 이미 있어 LLVM 설치는 진행하지 않았다.
+- 합성 config 계약 테스트는 의도한 `ModuleNotFoundError`로 RED를 확인한 뒤 2개가 통과했다. `pip check`도 문제 없음으로 통과했다.
