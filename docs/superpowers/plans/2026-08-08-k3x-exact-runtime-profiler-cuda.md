@@ -481,11 +481,11 @@ git commit -m "feat: add cuBLASLt dense baselines"
 - Consumes: K3X low-nibble-first E2M1 packed weights, one E8M0 scale byte per 32 flattened values, FP32 input, rows, and columns.
 - Produces: FP32 accumulated output without runtime repacking or requantization.
 
-- [ ] **Step 1: Write the failing literal decode-and-matvec test**
+- [x] **Step 1: Write the failing literal decode-and-matvec test**
 
 Reuse the existing CPU literal with packed byte `0x10` and scale byte `127`, then add sign, exponent, high-nibble, two scale groups, and a non-multiple-of-warp row count. Compare the complete output vector with `k3x::mxfp4_matmul` at `1e-4`.
 
-- [ ] **Step 2: Run and verify RED**
+- [x] **Step 2: Run and verify RED**
 
 Run:
 
@@ -496,15 +496,15 @@ build-cuda/test_cuda_mxfp4
 
 Expected: FAIL because `BackendKind::cuda_custom` has no MXFP4 implementation.
 
-- [ ] **Step 3: Implement the minimal kernel**
+- [x] **Step 3: Implement the minimal kernel**
 
 Assign one CUDA block per output row. Threads stride columns, decode low nibble before high nibble, apply `2^(scale_byte-127)` to each 32-value group, multiply by FP32 input, reduce in FP32 shared memory, and write one FP32 output. Validate packed length, scale length, rows, columns, and group size before launch.
 
-- [ ] **Step 4: Record exact traffic and launch timing**
+- [x] **Step 4: Record exact traffic and launch timing**
 
 Record packed bytes, scale bytes, FP32 input H2D, FP32 output D2H, and CUDA-event kernel duration as separate events. On allocation, copy, launch, or synchronization failure, record one failed operation and return its typed status.
 
-- [ ] **Step 5: Verify GREEN and run sanitizer**
+- [x] **Step 5: Verify GREEN and run sanitizer**
 
 Run:
 
@@ -517,11 +517,11 @@ compute-sanitizer --tool memcheck build-cuda/test_cuda_mxfp4
 
 Expected: numerical tests pass; compute-sanitizer reports zero errors; all CUDA and CPU tests pass.
 
-- [ ] **Step 6: Add the incompatible-library regression assertion**
+- [x] **Step 6: Add the incompatible-library regression assertion**
 
 In `test_cuda_mxfp4.cu`, assert the K3X request reports scale kind `e8m0_group32` and cannot be routed to a backend operation labeled cuBLASLt FP4. This is a contract test, not a runtime conversion.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add CMakeLists.txt runtime/cuda/mxfp4.cuh runtime/cuda/mxfp4.cu runtime/cuda/backend_cuda.cu tests/cuda/test_cuda_mxfp4.cu

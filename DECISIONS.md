@@ -44,10 +44,10 @@
 ## D-004 — Hybrid CUDA baseline
 
 - Date: 2026-08-08.
-- Status: accepted; resource shell and dense path implemented, custom MXFP4 path pending.
+- Status: accepted; resource shell, dense path, and custom MXFP4 path implemented; graph integration pending.
 - Decision: retain the CPU oracle, use cuBLASLt for the independent dense FP32/BF16 path, and compare CPU MXFP4 with a custom CUDA MXFP4 path that changes only expert matrix multiplication.
 - Alternatives considered: custom CUDA only; cuBLASLt only; hybrid comparison.
-- Evidence: the local CUDA 13.3 toolkit supports `sm_120`. NVIDIA's cuBLAS documentation specifies UE4M3/16 scaling for FP4; K3 uses E8M0/32 MXFP4, so direct native-byte compatibility is disproven. The cuBLASLt FP32/BF16-rounded dense literal suite now passes on the RTX 5080.
+- Evidence: the local CUDA 13.3 toolkit supports `sm_120`. NVIDIA's cuBLAS documentation specifies UE4M3/16 scaling for FP4; K3 uses E8M0/32 MXFP4, so direct native-byte compatibility is disproven. The cuBLASLt FP32/BF16-rounded dense and custom native-byte MXFP4 literal suites pass on the RTX 5080.
 - Benchmark result: none; CUDA performance is unmeasured.
 - Reason: cuBLASLt remains a strong dense baseline, while the custom path is required to preserve exact K3 MXFP4 bytes and provides a route toward K3-specific fusion.
 - Revisit: after both paths have end-to-end synthetic measurements.
@@ -156,10 +156,10 @@
 
 - Date: 2026-08-08.
 - Status: accepted; resource shell implemented.
-- Decision: default `K3X_ENABLE_CUDA=OFF` builds a CUDA-free stub, while ON requires CUDA Toolkit 13.3, targets native `sm_120`, validates capability 12.0 or newer, and owns a nonblocking stream plus cuBLASLt handle without global state.
+- Decision: default `K3X_ENABLE_CUDA=OFF` builds a CUDA-free stub, while ON requires CUDA Toolkit 13.3, targets native `sm_120`, validates capability 12.0 or newer, and owns a nonblocking stream plus cuBLASLt handle without global state. An unavailable requested operation never silently changes backend; the documented `cuda_dense` CPU MXFP4 oracle is part of that comparison backend's definition rather than a fallback.
 - Alternatives considered: require CUDA for every build; silently fall back to CPU; load CUDA dynamically from one binary; compile mutually exclusive stub and CUDA sources.
-- Evidence: CPU CTest passes 5/5 with no CUDA/cuBLAS dynamic dependency; CUDA CTest passes 5/5 on RTX 5080; CUDA artifacts contain `sm_120` cubins; CUDA-enabled cross-language parity passes 5/5 on the still-default CPU graph.
-- Benchmark result: none; no CUDA matrix operation exists yet.
+- Evidence: CPU CTest passes 5/5 with no CUDA/cuBLAS dynamic dependency; CUDA CTest passes 7/7 on RTX 5080; CUDA artifacts contain `sm_120` cubins; CUDA-enabled cross-language parity passes 5/5 on the still-default CPU graph.
+- Benchmark result: none; optional-build isolation is correctness evidence rather than a throughput measurement.
 - Reason: explicit build and runtime identity prevents benchmark mislabeling and preserves portable CPU correctness.
 - Revisit: dynamic loading is considered only if separate build artifacts become an operational burden after measured backends exist.
 
@@ -174,3 +174,14 @@
 - Benchmark result: none; the test records correctness, transfer bytes, and a nonzero CUDA event duration but is not a throughput benchmark.
 - Reason: using a documented operand combination preserves an honest BF16 baseline and actual transfer accounting; expanding rounded weights to FP32 would erase the intended H2D reduction.
 - Revisit: add a separately named weight-only emulation only if a future CUDA release documents mixed BF16/FP32 A/B support or a custom kernel justifies it.
+
+## D-016 — Use a one-block-per-row native MXFP4 correctness kernel
+
+- Date: 2026-08-08.
+- Status: accepted and implemented as a baseline.
+- Decision: decode K3X low-nibble-first E2M1 plus E8M0/32 bytes directly in a custom CUDA kernel, assign one 256-thread block per output row, stride columns, reduce in FP32 shared memory, and expose it only through `cuda_custom`.
+- Alternatives considered: repack to cuBLASLt FP4; dequantize a complete matrix before GEMM; decode and accumulate native bytes in one minimal kernel.
+- Evidence: the three-row/two-group literal covers low and high nibbles, signs, E2M1 magnitudes, distinct E8M0 exponents, and a non-warp-multiple row count; a 320-column mutation test proves columns beyond the first 256 are processed. Results match the CPU byte-level oracle within `1e-4`, memcheck reports zero errors, and the archive contains a native `sm_120` cubin for `mxfp4.cu.o`. The `cuda_dense` regression retains the CPU MXFP4 oracle with zero H2D and device time, proving the incompatible cuBLASLt FP4 path is not used.
+- Benchmark result: none; this task establishes correctness and instrumentation only.
+- Reason: direct decode preserves exact checkpoint bytes and provides the smallest controlled baseline for later fusion and residency measurements.
+- Revisit: replace the reduction, vectorize loads, or fuse activation/scaling only after end-to-end profiling identifies this kernel as a measured bottleneck.
