@@ -13,4 +13,7 @@
 - 미완성 변환은 `.partial` artifact와 resume manifest에 남기고, 모든 extent 검증 후 원자적으로 최종 이름으로 바꾼다.
 - 확인한 공식 Kimi K3 config의 주요 값은 hidden 7168, 93 layers, 69 KDA, 24 MLA, 96 heads, latent MoE 3584, 896 experts, Top-16, 2 shared experts, AttnRes block 12, KDA short convolution 4이다.
 - 조사 시점의 source HEAD는 설계 명세의 source ledger에 고정한다. 이후 upstream 변경은 자동으로 현재 설계의 근거가 되지 않는다.
-
+- 사용자가 작성된 첫 마일스톤 설계 명세를 승인했다.
+- 구현 계획 작성 시 기본 환경에서 Python 3.14.6만 확인되었고 PyTorch, CMake, C++ compiler 및 WSL은 없었다. Codex 번들 Python 3.12.13은 사용할 수 있지만 PyTorch는 설치되어 있지 않다.
+- 2026-08-08 PyPI index에서 확인한 계획상 Python dependency version은 torch 2.13.0, numpy 2.5.1, safetensors 0.8.0, pytest 9.1.1, google-crc32c 1.8.0, psutil 7.2.2이며 build backend는 setuptools 83.0.0이다. 설치 전에는 사용자에게 package-install 권한을 별도로 확인한다.
+- 첫 마일스톤 구현은 연결된 correctness graph이므로 기본 실행 방식은 주 agent의 inline execution으로 둔다. 독립 agent 사용은 사용자가 명시적으로 요청할 때만 선택한다.

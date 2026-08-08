@@ -148,12 +148,12 @@ Only `QUALITY` semantics belong to the initial correctness milestone.
 
 ## Project status
 
-K3X is currently at the design gate for Milestone 0.
+K3X has an approved Milestone 0 design and an implementation-ready execution plan.
 
 - [x] Workspace and source landscape inspected.
 - [x] Runtime language and milestone scope selected.
 - [x] Milestone design approved and documented.
-- [ ] Detailed implementation plan reviewed.
+- [x] Detailed implementation plan written.
 - [ ] Synthetic PyTorch model passing.
 - [ ] K3X synthetic round-trip passing.
 - [ ] Independent C++ runtime parity passing.
@@ -187,6 +187,7 @@ Source revisions used for the approved design are recorded in the [design specif
 
 - [Milestone plan](PLAN.md).
 - [Milestone design specification](docs/superpowers/specs/2026-08-08-k3x-milestone-one-design.md).
+- [Milestone implementation plan](docs/superpowers/plans/2026-08-08-k3x-milestone-zero.md).
 - [Implementation checklist](checklist.md).
 - [Decision log](context-notes.md).
 
