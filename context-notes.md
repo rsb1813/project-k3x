@@ -40,3 +40,14 @@
 - 공식 차원으로 계산한 BF16 text trunk 추정치는 약 85.72 GB이며 전체 checkpoint scan 결과가 아니다. 96 GB RAM에서 OS와 expert bank까지 확보하려면 sensitivity-aware trunk quantization이 필요하다는 capacity planning 근거로만 사용한다.
 - GitHub Actions는 Linux에서 C++ build/CTest 뒤 Python 및 cross-language suite를 실행한다. 테스트 runner 경로는 Windows `.exe`와 POSIX binary를 모두 찾도록 정정했다.
 - 최종 diff 리뷰에서 발견한 실행기 `metadata_only`, 불완전한 C++ layer/expert directory parser, final rename 직후 stale ledger, token-only C++ parity를 모두 회귀 테스트와 함께 수정했다. 실행기는 생성 전에 artifact 전체 무결성을 검증하고, C++ 진단 mode는 prompt logits, 네 layer 출력, canonicalized KDA/MLA state를 PyTorch와 `1e-6` 허용오차로 비교한다.
+
+## 2026-08-08 Milestone 1
+
+- 사용자는 CPU exact runtime과 profiler를 먼저 확장하고, 이어서 RTX 5080용 basic CUDA backend를 만드는 순서를 승인했다.
+- custom CUDA only, cuBLASLt only, hybrid baseline을 비교했고 사용자는 cuBLASLt 기준 경로와 custom MXFP4 경로를 함께 두는 hybrid 설계를 승인했다.
+- 실제 개발 PC에서 NVIDIA GeForce RTX 5080 16,303 MiB, compute capability 12.0, driver 591.86, CUDA toolkit 13.3과 nvcc 13.3.73을 확인했다.
+- 설치된 nvcc는 `compute_120`과 `sm_120`을 지원한다. CUDA 13.3 local header는 `CUDA_R_4F_E2M1`과 `CUBLASLT_MATMUL_MATRIX_SCALE_VEC32_UE8M0`을 제공하므로 K3X native MXFP4 layout과의 직접 호환성을 literal test로 검증한 뒤 사용한다.
+- 격리 worktree `feat/milestone-one-runtime`을 만들고 Python 3.12.13 및 `pyproject.toml`의 고정 dependencies를 새 `.venv`에 설치했다.
+- baseline의 첫 Python 실행은 C++ build 전이라 cross-language runner 7개가 없어서 실패했다. MSVC Developer Command 환경과 `.venv`의 Ninja 경로를 명시해 Release build와 CTest 2/2 통과를 확인했다.
+- 새 `k3x_run.exe` 실행은 Windows Smart App Control policy `{0283ac0f-fff1-49ae-ada1-8a933130cad6}`에 의해 차단됐다. Code Integrity event 3033과 3077에서 unsigned executable이 Enterprise signing level을 충족하지 못했다는 원인을 확인했다. Python suite는 이 환경 제약으로 cross-language 5개가 차단되고 나머지 41개가 통과했다.
+- K3X는 Smart App Control을 자동으로 끄거나 신뢰 저장소를 수정하지 않는다. CUDA runtime 완료 판정은 Linux native 또는 사용자가 별도로 승인한 WSL2 GPU 환경에서 수행한다.
