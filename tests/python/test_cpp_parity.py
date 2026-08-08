@@ -1,6 +1,5 @@
 # 독립 C++ runtime의 greedy token이 PyTorch golden과 일치하는지 검증합니다.
 import json
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -15,13 +14,14 @@ from k3x_ref.fixtures import build_synthetic_model
 
 import pytest
 
+from conftest import cpp_binary
+
 
 @pytest.mark.parametrize("mode", ["incremental", "full"])
 def test_cpp_generation_matches_python_golden(
     synthetic_source: Path, tmp_path: Path, mode: str
 ) -> None:
-    suffix = ".exe" if os.name == "nt" else ""
-    runner = Path(f"build/k3x_run{suffix}").resolve()
+    runner = cpp_binary("k3x_run")
     assert runner.exists(), "build k3x_run before running cross-language parity"
     artifact = tmp_path / "synthetic.k3x"
     output = tmp_path / "result.json"
@@ -43,8 +43,7 @@ def test_cpp_generation_matches_python_golden(
 def test_cpp_prefill_layers_logits_and_state_match_python(
     synthetic_source: Path, tmp_path: Path
 ) -> None:
-    suffix = ".exe" if os.name == "nt" else ""
-    runner = Path(f"build/k3x_run{suffix}").resolve()
+    runner = cpp_binary("k3x_run")
     artifact = tmp_path / "synthetic.k3x"
     output = tmp_path / "result.json"
     convert(synthetic_source, artifact, chunk_bytes=257)
@@ -84,8 +83,7 @@ def test_cpp_prefill_layers_logits_and_state_match_python(
 def test_cpp_runner_rejects_corrupt_model_before_generation(
     synthetic_source: Path, tmp_path: Path
 ) -> None:
-    suffix = ".exe" if os.name == "nt" else ""
-    runner = Path(f"build/k3x_run{suffix}").resolve()
+    runner = cpp_binary("k3x_run")
     valid = tmp_path / "valid.k3x"
     corrupt = tmp_path / "corrupt.k3x"
     convert(synthetic_source, valid, chunk_bytes=257)
@@ -109,8 +107,7 @@ def test_cpp_runner_rejects_corrupt_model_before_generation(
 def test_cpp_first_generated_token_is_not_counted_as_decode(
     synthetic_source: Path, tmp_path: Path
 ) -> None:
-    suffix = ".exe" if os.name == "nt" else ""
-    runner = Path(f"build/k3x_run{suffix}").resolve()
+    runner = cpp_binary("k3x_run")
     artifact = tmp_path / "synthetic.k3x"
     output = tmp_path / "result.json"
     convert(synthetic_source, artifact, chunk_bytes=257)

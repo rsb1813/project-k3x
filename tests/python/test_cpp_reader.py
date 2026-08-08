@@ -6,16 +6,25 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
+from conftest import cpp_binary
 from k3x_converter.format import SUPERBLOCK_BYTES, Superblock, root_sha256
 from k3x_converter.reader import K3XReader
 from k3x_converter.writer import convert
 
 
 def _run_reader(path: Path) -> subprocess.CompletedProcess[str]:
-    suffix = ".exe" if os.name == "nt" else ""
-    runner = Path(f"build/test_reader{suffix}").resolve()
+    runner = cpp_binary("test_reader")
     assert runner.exists(), "build test_reader before running cross-language reader tests"
     return subprocess.run([str(runner), str(path)], capture_output=True, text=True)
+
+
+def test_cpp_binary_uses_configured_build_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("K3X_BUILD_DIR", str(tmp_path / "native-build"))
+    assert cpp_binary("test_reader").parent == tmp_path / "native-build"
 
 
 def _refinalize_metadata(path: Path, mutation) -> None:
