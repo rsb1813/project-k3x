@@ -18,7 +18,7 @@ Three integrations were considered.
 
 ## Runtime metadata contract
 
-Metadata is a bounded ordered map of UTF-8 key/value pairs such as `TASK=coding`, `LANG=cpp`, `PHASE=debug`, and `REPO=foo`. Keys use uppercase ASCII letters, digits, and underscore; values are non-empty UTF-8 strings without control characters. Duplicate keys are rejected rather than silently overwritten. Limits are fixed and tested so an untrusted profile cannot allocate without bound.
+Metadata is a bounded ordered map of UTF-8 key/value pairs such as `TASK=coding`, `LANG=cpp`, `PHASE=debug`, and `REPO=foo`. Keys use uppercase ASCII letters, digits, and underscore; values are non-empty UTF-8 strings without control characters. Duplicate records inside a persisted file or one CLI header are rejected. Explicit current-run metadata may replace a value loaded from an older session, allowing fields such as `PHASE` to advance. Limits are fixed and tested so an untrusted profile cannot allocate without bound.
 
 The CLI accepts one comma-separated `--runtime-metadata` value. A test compares runs with and without metadata and requires identical prompt IDs, logits, routing, recurrent state, and generated tokens.
 
@@ -47,7 +47,7 @@ This gives a deterministic crossover: an empty session uses the prior, while suf
 
 The v1 profile is deterministic, versioned, line-oriented UTF-8 with a fixed magic line, declared record counts, bounded integer fields, and a final CRC32C over the canonical body. Records are sorted before writing. Unknown versions, duplicate records, malformed UTF-8, count mismatches, overflow, and checksum mismatch fail without mutating the current session profile.
 
-Save is crash-safe within one filesystem: write a sibling temporary file, flush and close it, then rename it over the destination. The temporary file is removed on failure. Loading never assumes a complete-model or large-memory resident state.
+Save uses process-interruption-safe publication within one filesystem: write a sibling temporary file, flush and close it, then rename it over the destination. The temporary file is removed on failure. This milestone does not claim power-loss durability because it does not fsync the file and parent directory. Loading never assumes a complete-model or large-memory resident state.
 
 The persisted aggregate becomes prior evidence when reopened. New live observations remain separate and gradually outweigh it. Metadata permits repository-specific files without baking a repository name into model tokens.
 

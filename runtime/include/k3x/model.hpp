@@ -5,6 +5,7 @@
 #include "k3x/expert_scheduler.hpp"
 #include "k3x/host_expert_store.hpp"
 #include "k3x/reader.hpp"
+#include "k3x/runtime_profile.hpp"
 #include "k3x/status.hpp"
 
 #include <atomic>
@@ -12,6 +13,7 @@
 #include <cstdint>
 #include <mutex>
 #include <span>
+#include <utility>
 #include <vector>
 
 namespace k3x {
@@ -22,14 +24,20 @@ struct RuntimeOptions {
     bool diagnostics{};
     L1ExpertCacheMode l1_expert_cache{L1ExpertCacheMode::disabled};
     std::size_t l1_expert_cache_bytes{};
+    std::uint64_t profile_prior_strength{64};
     L2ExpertScheduleMode l2_expert_schedule{L2ExpertScheduleMode::blocking};
 };
 
 class RuntimeSession {
 public:
     explicit RuntimeSession(RuntimeOptions options)
-        : options_(options), expert_store_(options.l1_expert_cache,
-                                           options.l1_expert_cache_bytes) {
+        : RuntimeSession(options, RuntimeProfile{}) {}
+
+    RuntimeSession(RuntimeOptions options, RuntimeProfile profile)
+        : options_(options), profile_(std::move(profile)),
+          expert_store_(options.l1_expert_cache,
+                        options.l1_expert_cache_bytes, &profile_,
+                        options.profile_prior_strength) {
         if (options.l2_expert_schedule == L2ExpertScheduleMode::deadline) {
             expert_loader_ = std::make_unique<DeadlineExpertLoader>(64);
         }
@@ -37,6 +45,8 @@ public:
 
     const RuntimeOptions& options() const noexcept { return options_; }
     HostExpertStore& expert_store() noexcept { return expert_store_; }
+    RuntimeProfile& profile() noexcept { return profile_; }
+    const RuntimeProfile& profile() const noexcept { return profile_; }
     L1ExpertCacheStats l1_expert_cache_stats() const {
         return expert_store_.stats();
     }
@@ -56,6 +66,7 @@ public:
 
 private:
     RuntimeOptions options_;
+    RuntimeProfile profile_;
     HostExpertStore expert_store_;
     std::unique_ptr<DeadlineExpertLoader> expert_loader_;
     std::atomic<std::uint64_t> next_forward_cycle_{};

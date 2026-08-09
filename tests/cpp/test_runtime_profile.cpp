@@ -26,10 +26,10 @@ int main() {
     RuntimeProfile profile;
     assert(profile.set_metadata("TASK", "coding"));
     assert(profile.set_metadata("LANG", "cpp"));
-    assert(!profile.set_metadata("TASK", "duplicate"));
+    assert(profile.set_metadata("TASK", "agentic-coding"));
     assert(!profile.set_metadata("bad-key", "value"));
     assert(!profile.set_metadata("REPO", "line\nbreak"));
-    assert(profile.metadata().at("TASK") == "coding");
+    assert(profile.metadata().at("TASK") == "agentic-coding");
 
     const std::array first{ExpertKey{0, 3}, ExpertKey{0, 1}};
     const std::array second{ExpertKey{1, 4}, ExpertKey{1, 2}};

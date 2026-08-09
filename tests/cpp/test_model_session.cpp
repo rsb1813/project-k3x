@@ -137,5 +137,23 @@ int main(int argc, char** argv) {
             std::future_status::timeout);
     generation_guard.unlock();
     require(static_cast<bool>(concurrent_generation.get()));
+
+    k3x::RuntimeProfile runtime_profile;
+    require(static_cast<bool>(runtime_profile.set_metadata("TASK", "coding")));
+    require(static_cast<bool>(runtime_profile.set_metadata("REPO", "k3x")));
+    auto profiled_options = options;
+    profiled_options.l1_expert_cache = k3x::L1ExpertCacheMode::profiled;
+    profiled_options.profile_prior_strength = 4;
+    k3x::RuntimeSession profiled_session(
+        profiled_options, std::move(runtime_profile));
+    auto profiled = k3x::generate_greedy(
+        serialized_reader.value(), *serialized_backend, prompt, 6,
+        profiled_session);
+    require(static_cast<bool>(profiled));
+    require(profiled.value().token_ids == first.value().token_ids);
+    require(profiled.value().prefill_routed_experts ==
+            first.value().prefill_routed_experts);
+    require(profiled_session.profile().metadata().at("TASK") == "coding");
+    require(profiled_session.profile().live_route_observations() > 0);
     return 0;
 }

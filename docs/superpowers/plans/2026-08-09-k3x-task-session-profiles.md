@@ -18,9 +18,9 @@ Add bounded runtime-only metadata and deterministic persistent routing profiles 
 
 ## Task 3 — Runtime and CLI integration
 
-- [ ] Add runtime metadata, task/session profile load, and session profile save options.
-- [ ] Prove metadata is not inserted into prompt tokens and exact tokens/routing/logits/state remain unchanged.
-- [ ] Export bounded profile telemetry without claiming prefix/KDA payload caching.
+- [x] Add runtime metadata, task/session profile load, and session profile save options.
+- [x] Prove metadata is not inserted into prompt tokens and exact tokens/routing/logits/state remain unchanged.
+- [x] Export bounded profile telemetry without claiming prefix/KDA payload caching.
 
 ## Task 4 — Measurement, ledger, and publication
 

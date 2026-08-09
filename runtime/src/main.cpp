@@ -2,12 +2,14 @@
 #include "k3x/model.hpp"
 
 #include <charconv>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <set>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -73,7 +75,10 @@ void write_error(k3x::ErrorCode code, const std::string& message) {
 
 int main(int argc, char** argv) {
     std::filesystem::path model_path, output_path;
+    std::filesystem::path runtime_profile_in, runtime_profile_out;
     std::string prompt_text, mode = "incremental";
+    std::string runtime_metadata_text;
+    std::string profile_prior_strength_text = "64";
     std::string backend_name = "cpu", dense_precision_name = "fp32";
     std::string cuda_allocation_name = "per-operation";
     std::string cuda_weights_name = "transient";
@@ -110,6 +115,10 @@ int main(int argc, char** argv) {
         else if (key == "--cuda-pinned-bytes") cuda_pinned_bytes_text = value;
         else if (key == "--l1-expert-cache") l1_expert_cache_name = value;
         else if (key == "--l1-expert-cache-bytes") l1_expert_cache_bytes_text = value;
+        else if (key == "--profile-prior-strength") profile_prior_strength_text = value;
+        else if (key == "--runtime-metadata") runtime_metadata_text = value;
+        else if (key == "--runtime-profile-in") runtime_profile_in = value;
+        else if (key == "--runtime-profile-out") runtime_profile_out = value;
         else if (key == "--l2-io") l2_io_name = value;
         else if (key == "--l2-cache") l2_cache_name = value;
         else if (key == "--l2-queue-depth") l2_queue_depth_text = value;
@@ -132,6 +141,8 @@ int main(int argc, char** argv) {
         runtime_options.l1_expert_cache = k3x::L1ExpertCacheMode::lfu;
     } else if (l1_expert_cache_name == "least-stale") {
         runtime_options.l1_expert_cache = k3x::L1ExpertCacheMode::least_stale;
+    } else if (l1_expert_cache_name == "profiled") {
+        runtime_options.l1_expert_cache = k3x::L1ExpertCacheMode::profiled;
     } else {
         std::cerr << "unknown L1 expert cache mode: " << l1_expert_cache_name << '\n';
         return 2;
@@ -155,6 +166,19 @@ int main(int argc, char** argv) {
     if (runtime_options.l1_expert_cache == k3x::L1ExpertCacheMode::disabled &&
         runtime_options.l1_expert_cache_bytes != 0) {
         std::cerr << "disabled L1 expert cache requires a zero byte capacity\n";
+        return 2;
+    }
+    const auto* strength_begin = profile_prior_strength_text.data();
+    const auto* strength_end =
+        strength_begin + profile_prior_strength_text.size();
+    const auto strength_parse = std::from_chars(
+        strength_begin, strength_end, runtime_options.profile_prior_strength);
+    if (profile_prior_strength_text.empty() ||
+        strength_parse.ec != std::errc{} ||
+        strength_parse.ptr != strength_end ||
+        runtime_options.profile_prior_strength == 0) {
+        std::cerr << "invalid profile prior strength: "
+                  << profile_prior_strength_text << '\n';
         return 2;
     }
     if (l2_schedule_name == "blocking") {
@@ -357,12 +381,61 @@ int main(int argc, char** argv) {
     std::stringstream parser(prompt_text);
     std::string item;
     while (std::getline(parser, item, ',')) prompt.push_back(static_cast<std::uint32_t>(std::stoul(item)));
+    k3x::RuntimeProfile runtime_profile;
+    std::uint64_t runtime_profile_load_bytes = 0;
+    std::uint64_t runtime_profile_load_nanoseconds = 0;
+    if (!runtime_profile_in.empty()) {
+        const auto load_start = std::chrono::steady_clock::now();
+        auto loaded_profile = k3x::RuntimeProfile::load(runtime_profile_in);
+        runtime_profile_load_nanoseconds =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - load_start).count();
+        if (!loaded_profile) {
+            write_error(loaded_profile.error(), loaded_profile.message());
+            return 4;
+        }
+        std::error_code size_error;
+        runtime_profile_load_bytes =
+            std::filesystem::file_size(runtime_profile_in, size_error);
+        if (size_error) {
+            write_error(k3x::ErrorCode::io_error,
+                        "cannot stat loaded runtime profile");
+            return 4;
+        }
+        runtime_profile = std::move(loaded_profile.value());
+    }
+    if (!runtime_metadata_text.empty()) {
+        std::stringstream metadata_parser(runtime_metadata_text);
+        std::string record;
+        std::set<std::string> metadata_keys;
+        while (std::getline(metadata_parser, record, ',')) {
+            const auto separator = record.find('=');
+            if (separator == std::string::npos || separator == 0 ||
+                separator + 1 == record.size() ||
+                record.find('=', separator + 1) != std::string::npos) {
+                std::cerr << "invalid runtime metadata: " << record << '\n';
+                return 2;
+            }
+            const auto key = record.substr(0, separator);
+            if (!metadata_keys.insert(key).second) {
+                std::cerr << "invalid runtime metadata: duplicate key "
+                          << key << '\n';
+                return 2;
+            }
+            auto inserted = runtime_profile.set_metadata(
+                key, record.substr(separator + 1));
+            if (!inserted) {
+                write_error(inserted.error(), inserted.message());
+                return 2;
+            }
+        }
+    }
     auto reader = k3x::Reader::open(model_path, reader_options);
     if (!reader) {
         write_error(reader.error(), reader.message());
         return 3;
     }
-    k3x::RuntimeSession session(runtime_options);
+    k3x::RuntimeSession session(runtime_options, std::move(runtime_profile));
     const auto process_io_before = process_io_snapshot();
     auto result = k3x::generate_greedy(
         reader.value(), *backend, prompt, count, session);
@@ -371,6 +444,27 @@ int main(int argc, char** argv) {
     if (!result) {
         write_error(result.error(), result.message());
         return 4;
+    }
+    std::uint64_t runtime_profile_save_bytes = 0;
+    std::uint64_t runtime_profile_save_nanoseconds = 0;
+    if (!runtime_profile_out.empty()) {
+        const auto save_start = std::chrono::steady_clock::now();
+        auto saved_profile = session.profile().save(runtime_profile_out);
+        runtime_profile_save_nanoseconds =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - save_start).count();
+        if (!saved_profile) {
+            write_error(saved_profile.error(), saved_profile.message());
+            return 4;
+        }
+        std::error_code size_error;
+        runtime_profile_save_bytes =
+            std::filesystem::file_size(runtime_profile_out, size_error);
+        if (size_error) {
+            write_error(k3x::ErrorCode::io_error,
+                        "cannot stat saved runtime profile");
+            return 4;
+        }
     }
     std::ofstream output(output_path);
     if (!output) return 5;
@@ -417,6 +511,21 @@ int main(int argc, char** argv) {
            << result.value().l1_expert_cache.resident_bytes
            << ",\"peak_l1_expert_cache_resident_bytes\":"
            << result.value().l1_expert_cache.peak_resident_bytes;
+    output << ",\"runtime_profile_metadata_count\":"
+           << session.profile().metadata().size()
+           << ",\"runtime_profile_prior_weight\":"
+           << session.profile().prior_weight(
+                  runtime_options.profile_prior_strength)
+           << ",\"runtime_profile_live_observations\":"
+           << session.profile().live_route_observations()
+           << ",\"runtime_profile_load_bytes\":"
+           << runtime_profile_load_bytes
+           << ",\"runtime_profile_save_bytes\":"
+           << runtime_profile_save_bytes
+           << ",\"runtime_profile_load_nanoseconds\":"
+           << runtime_profile_load_nanoseconds
+           << ",\"runtime_profile_save_nanoseconds\":"
+           << runtime_profile_save_nanoseconds;
     output << ",\"l2_io_engine\":";
     write_json_string(output, l2_io_name);
     output << ",\"l2_cache_mode\":";

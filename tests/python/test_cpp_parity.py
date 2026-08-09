@@ -121,6 +121,14 @@ def test_cpp_runner_rejects_invalid_cuda_execution_options(
             ["--l1-expert-cache-bytes", "1"],
             "disabled L1 expert cache requires a zero byte capacity",
         ),
+        (
+            ["--profile-prior-strength", "0"],
+            "invalid profile prior strength: 0",
+        ),
+        (
+            ["--profile-prior-strength", "-1"],
+            "invalid profile prior strength: -1",
+        ),
     ],
 )
 def test_cpp_runner_rejects_invalid_l1_expert_cache_options(
@@ -135,7 +143,9 @@ def test_cpp_runner_rejects_invalid_l1_expert_cache_options(
     assert result.stderr.strip() == message
 
 
-@pytest.mark.parametrize("cache_mode", ["static", "lru", "lfu", "least-stale"])
+@pytest.mark.parametrize(
+    "cache_mode", ["static", "lru", "lfu", "least-stale", "profiled"]
+)
 def test_cpp_runner_accepts_l1_expert_cache_for_cpu(cache_mode: str) -> None:
     result = subprocess.run(
         [
@@ -149,6 +159,29 @@ def test_cpp_runner_accepts_l1_expert_cache_for_cpu(cache_mode: str) -> None:
         text=True,
     )
     assert result.returncode == 3
+
+
+@pytest.mark.parametrize(
+    ("metadata", "message"),
+    [
+        ("bad-key=value", "INVALID_STATE: invalid runtime metadata"),
+        ("TASK=", "invalid runtime metadata: TASK="),
+        (
+            "TASK=coding,TASK=debug",
+            "invalid runtime metadata: duplicate key TASK",
+        ),
+    ],
+)
+def test_cpp_runner_rejects_invalid_runtime_metadata(
+    metadata: str, message: str
+) -> None:
+    result = subprocess.run(
+        [str(cpp_binary("k3x_run")), "--runtime-metadata", metadata],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == message
 
 
 @pytest.mark.parametrize(
@@ -485,6 +518,88 @@ def test_runtime_session_reuses_l1_experts_across_generations(
         [str(cpp_binary("test_model_session")), str(artifact)],
         check=True,
     )
+
+
+def test_runtime_profile_metadata_is_not_prompt_and_round_trips_session(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    artifact = tmp_path / "synthetic.k3x"
+    baseline_output = tmp_path / "baseline.json"
+    profiled_output = tmp_path / "profiled.json"
+    resumed_output = tmp_path / "resumed.json"
+    first_profile = tmp_path / "first.k3xp"
+    resumed_profile = tmp_path / "resumed.k3xp"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+
+    common = [
+        str(cpp_binary("k3x_run")),
+        "--model",
+        str(artifact),
+        "--prompt-ids",
+        "1,7,3,9",
+        "--generate",
+        "6",
+        "--mode",
+        "incremental",
+        "--diagnostics",
+        "true",
+    ]
+    subprocess.run([*common, "--json", str(baseline_output)], check=True)
+    subprocess.run(
+        [
+            *common,
+            "--l1-expert-cache",
+            "profiled",
+            "--l1-expert-cache-bytes",
+            "13056",
+            "--profile-prior-strength",
+            "4",
+            "--runtime-metadata",
+            "TASK=coding,LANG=cpp,PHASE=debug,REPO=k3x",
+            "--runtime-profile-out",
+            str(first_profile),
+            "--json",
+            str(profiled_output),
+        ],
+        check=True,
+    )
+    subprocess.run(
+        [
+            *common,
+            "--l1-expert-cache",
+            "profiled",
+            "--l1-expert-cache-bytes",
+            "13056",
+            "--profile-prior-strength",
+            "4",
+            "--runtime-profile-in",
+            str(first_profile),
+            "--runtime-metadata",
+            "PHASE=test",
+            "--runtime-profile-out",
+            str(resumed_profile),
+            "--json",
+            str(resumed_output),
+        ],
+        check=True,
+    )
+
+    baseline = json.loads(baseline_output.read_text(encoding="utf-8"))
+    profiled = json.loads(profiled_output.read_text(encoding="utf-8"))
+    resumed = json.loads(resumed_output.read_text(encoding="utf-8"))
+    for payload in (profiled, resumed):
+        assert payload["token_ids"] == baseline["token_ids"]
+        assert payload["prefill_routed_experts"] == baseline["prefill_routed_experts"]
+        assert payload["prefill_logits"] == baseline["prefill_logits"]
+        assert payload["prefill_state"] == baseline["prefill_state"]
+    assert profiled["runtime_profile_metadata_count"] == 4
+    assert profiled["runtime_profile_prior_weight"] == 0.0
+    assert profiled["runtime_profile_live_observations"] > 0
+    assert profiled["runtime_profile_save_bytes"] == first_profile.stat().st_size
+    assert resumed["runtime_profile_metadata_count"] == 4
+    assert 0.0 < resumed["runtime_profile_prior_weight"] < 1.0
+    assert resumed["runtime_profile_load_bytes"] == first_profile.stat().st_size
+    assert resumed["runtime_profile_save_bytes"] == resumed_profile.stat().st_size
 
 
 @pytest.mark.parametrize(

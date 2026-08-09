@@ -57,7 +57,7 @@ State recorded on 2026-08-09 at verified Milestone 9 integration head `185ae5d`.
 
 ## Work in progress
 
-- Milestone 10 Tasks 1–2 bounded runtime profile persistence and opt-in profiled exact eviction are implemented locally on branch `codex/milestone-ten-task-session-profiles`; CLI integration and B-0011 remain in progress.
+- Milestone 10 Tasks 1–3 bounded runtime profile persistence, opt-in profiled exact eviction, RuntimeSession ownership, CLI integration, and prompt/output non-interference proof are implemented locally on branch `codex/milestone-ten-task-session-profiles`; B-0011 and full verification remain in progress.
 - Milestone 9 Terra high final review found one valid Important shared-session policy-context issue. Commit `fd05d95` serializes complete generation calls; re-review found no remaining Critical or Important issue and withdrew an initial collision interpretation concern after deterministic future-layer trace review.
 - Static, LRU, LFU, Least-Stale, and all non-default L2 modes remain experimental and opt-in. Task/session priors, transition prediction, and cross-layer asynchronous L2 scheduling remain unimplemented.
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.

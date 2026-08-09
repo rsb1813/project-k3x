@@ -124,11 +124,11 @@ Result<bool> RuntimeProfile::set_metadata(std::string key, std::string value) {
         return Result<bool>::failure(ErrorCode::invalid_state,
                                      "invalid runtime metadata");
     }
-    if (metadata_.size() >= maximum_metadata_records || metadata_.contains(key)) {
+    if (metadata_.size() >= maximum_metadata_records && !metadata_.contains(key)) {
         return Result<bool>::failure(ErrorCode::invalid_state,
-                                     "duplicate or excessive runtime metadata");
+                                     "excessive runtime metadata");
     }
-    metadata_.emplace(std::move(key), std::move(value));
+    metadata_.insert_or_assign(std::move(key), std::move(value));
     return Result<bool>::success(true);
 }
 
@@ -356,6 +356,10 @@ Result<RuntimeProfile> RuntimeProfile::load(const std::filesystem::path& path) {
         }
         auto decoded = hex_decode(encoded);
         if (!decoded) return Result<RuntimeProfile>::failure(decoded.error(), decoded.message());
+        if (result.metadata_.contains(key)) {
+            return Result<RuntimeProfile>::failure(
+                ErrorCode::invalid_state, "duplicate runtime metadata");
+        }
         auto inserted = result.set_metadata(std::move(key), std::move(decoded.value()));
         if (!inserted) return Result<RuntimeProfile>::failure(inserted.error(), inserted.message());
     }
