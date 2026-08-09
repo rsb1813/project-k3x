@@ -142,7 +142,7 @@
 - [x] Audit README and TITAN Ledger documents for stale Milestone 11–13 status.
 - [x] Update the README milestone badge and current implementation summary.
 - [x] Correct the stale speculative-implementation statement and publication HEAD in `PROJECT_STATE.md`.
-- [ ] Run documentation checks, commit, publish, and verify public `main`.
+- [x] Run documentation checks, commit, publish, and verify public `main`.
 
 ## Milestone 8 — Deadline-aware exact expert loading
 

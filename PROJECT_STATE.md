@@ -4,7 +4,7 @@
 
 Milestone 13 exact token-major speculative verification is complete, measured, fully verified, and publicly integrated. The next milestone is expert-major verification design and implementation.
 
-State recorded on 2026-08-10 from public M13 publication head `f0641de`. The active branch is `codex/milestone-thirteen-speculative-verification`. PR #11, PR #12, and PR #13 are merged; their implementations, dedicated English README sections, measurements, and ledgers are public.
+State recorded on 2026-08-10 from public documentation synchronization head `4984728`. The active branch is `codex/milestone-thirteen-speculative-verification`. PR #11, PR #12, PR #13, and documentation PR #14 are merged; the Milestone 11–13 implementations, dedicated English README sections, measurements, and ledgers are public.
 
 ## Completed work
 
@@ -128,7 +128,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 - Public M13 integration head `463e9ca`; branch/PR correctness runs `31324378917`/`31324381376` and post-merge main run `31324492327` succeeded. Publication head `f0641de` and publication-main run `31324647692` also succeeded. PR #13 is merged.
 - B-0014 summary JSON/CSV SHA-256: `7cd834b1c65d507367320170cdf72ca76aace9f6a743da85a0a9f0cca4a21062` / `9c5fdba84c547f93e2a0a7d4c0b76412181ffb2c635ffd969537a154950ce75b`; raw-summary and exact-parity cross-check passed.
 - Post-measurement verification: CPU CTest 12/12 and pytest 245/44; liburing/direct CTest 13/13 and pytest 247/42; CUDA CTest 21/21 and pytest 281/8; ASan/UBSan CTest 13/13 and targeted pytest 26/3 with 104 deselected; perfect and mixed CUDA speculative Compute Sanitizer runs both 0 errors.
-- Public documentation head `f0641de` includes dedicated English README sections for merged Milestones 11, 12, and 13. The Milestone 11/12 documentation run `31322913019` and latest publication-main run `31324647692` succeeded.
+- Public documentation synchronization head `4984728` includes dedicated English README sections for merged Milestones 11, 12, and 13, a Milestone 13 badge, and a reconciled current-state ledger. Push/PR/post-merge correctness runs `31325118488`, `31325132631`, and `31325294591` succeeded, and PR #14 is merged.
 - Public Milestone 12 publication head: `dc23020706bcca7a68b9a643c055f7627e31698b`; branch/PR/integration-main correctness runs `31322043556`, `31322049903`, and `31322191670` succeeded, and final publication-main run `31322330041` succeeded. PR #12 is merged.
 - Latest verified Milestone 12 result head: `0632a0f`; measurement code is `58c36dd`.
 - B-0013 synthetic artifact SHA-256: `edeaa4802b4bfac0624fa4d0e73917318076258d95e74e880c97a8b2709dd2d2`; released storage SHA-256: `aab7aea48b03bdcd8e0b4d98c4780128ab689d2bba005089a49970eb0e326890`.
