@@ -24,9 +24,10 @@ K3X uses pinned source snapshots for graph decisions. Performance claims from cl
 | [EcoSpec](https://arxiv.org/abs/2607.12696) | Study acceptance probability together with marginal expert fetch cost |
 | [MoE-Spec](https://arxiv.org/abs/2602.16052) | Experimental layer-wise verification expert budgets |
 | [AcceptMoE](https://arxiv.org/abs/2608.02989) | Explicitly lossy verifier expert selection experiment, never the strict default |
-| [DeepSpec](https://github.com/deepseek-ai/DeepSpec/tree/005e03b81cec38b7da6399833d609ee89a2587f2) | DSpark-compatible draft/target interface reference | 
+| [DSpark paper](https://arxiv.org/abs/2607.05147) | Proposal/target separation, prefix verification, and confidence scheduling source |
+| [DeepSpec](https://github.com/deepseek-ai/DeepSpec/tree/005e03b81cec38b7da6399833d609ee89a2587f2) | Inspected DSpark proposal, verification, target-cache crop, and draft-state update implementation |
 
-These works are future implementation inputs. Milestone 0 does not claim to implement their cache or speculative-decoding algorithms.
+SpecMD informed the implemented experimental Least-Stale cache. DSpark and DeepSpec inform the accepted Milestone 13 design, whose implementation is still pending. EcoSpec, MoE-Spec, and AcceptMoE remain future experimental inputs. No source's reported speedup is transferred to K3X.
 
 ## Reproducibility policy
 

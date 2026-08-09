@@ -254,6 +254,14 @@ The same contract is implemented for synchronous and prepared-prefetch execution
 
 B-0013 separates end-to-end synthetic evidence from a bounded released-dimension kernel fixture. On the synthetic natural Top-16 graph, fusion increased decode throughput by 11.33% in synchronous mode and 8.91% in prefetch mode while reducing D2H by 51,840 bytes per run. On the 3,584-by-3,072 released expert repeated across 16 immutable slots, it reduced D2H by 93.75% but increased median latency by 630,394 ns, or 8.01%, and aggregate kernel time by 5.88%. That fixture has no routing semantics and is not a full-model TPS measurement. The representative-dimension regression keeps fusion experimental and disabled by default. The normative design is in [`docs/superpowers/specs/2026-08-09-k3x-fused-routed-accumulation-design.md`](docs/superpowers/specs/2026-08-09-k3x-fused-routed-accumulation-design.md).
 
+## Milestone 13 accepted speculative verification design
+
+Milestone 13 is designed but not implemented. The accepted boundary mirrors the inspected DeepSpec DSpark lifecycle: an external draft provider proposes an accepted anchor plus a bounded candidate prefix, the target verifier owns acceptance and state correctness, and the provider observes the committed result so it can later advance or crop private draft state. This is semantic lifecycle compatibility, not DeepSpec checkpoint or tensor-ABI compatibility.
+
+The first target path is strict greedy token-major verification. It accepts only the longest candidate prefix equal to successive target argmax tokens and commits one target bonus token. Rejected suffix tokens are never executed, so KDA/MLA state after each block contains all committed tokens except the final bonus token, exactly matching ordinary incremental generation. Empty proposals reduce to one ordinary target step. Default `generate_greedy` behavior remains unchanged.
+
+This boundary deliberately precedes expert-major execution. It provides no parallel target forward, unique-expert union, fetch amortization, learned DSpark drafter, confidence scheduling, EcoSpec, MoE-Spec, or AcceptMoE behavior. The normative design is in [`docs/superpowers/specs/2026-08-10-k3x-exact-speculative-verification-design.md`](docs/superpowers/specs/2026-08-10-k3x-exact-speculative-verification-design.md).
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

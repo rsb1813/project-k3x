@@ -424,6 +424,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [ ] Cross-layer asynchronous L2 prefetch and N/N+1/N+2 scheduling.
 - [ ] Transition-conditioned prediction and multi-layer lookahead.
 - [x] Experimental adaptive/fixed Top-K with exact selected cold-expert rescue and B-0012 quality/traffic ablation.
+- [ ] Exact token-major speculative block verification with a DSpark-lifecycle-compatible external draft interface.
 - [ ] Expert-major speculative verification and cost-aware experiments.
 - [ ] Sensitivity-calibrated mixed trunk quantization.
 - [ ] SKYFORGE shard compiler for explicitly provisioned cloud jobs.
@@ -443,7 +444,7 @@ docs/                Research ledger and milestone design records
 
 ## Research discipline
 
-The graph and roadmap were checked against the official Kimi K3 release and report, FlashKDA, Attention Residuals, vLLM's implementation work, independent C and MLX runtimes, and the primary SpecMD, EcoSpec, MoE-Spec, and AcceptMoE papers. Pinned revisions and the boundary between implemented and future work are recorded in [`docs/references.md`](docs/references.md).
+The graph and roadmap were checked against the official Kimi K3 release and report, FlashKDA, Attention Residuals, vLLM's implementation work, independent C and MLX runtimes, and the primary SpecMD, DSpark, EcoSpec, MoE-Spec, and AcceptMoE sources. Pinned revisions and the boundary between implemented, designed, and future work are recorded in [`docs/references.md`](docs/references.md).
 
 ## Current limitations
 
@@ -451,7 +452,8 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - The runtime implements synthetic dimensions; the CUDA backend accelerates only dense and MXFP4 matrix operations while the graph remains host-driven.
 - Reusable scratch, bounded static weight residency, and same-input grouping are implemented, but activations and results still cross the host/device boundary and asynchronous overlap is not implemented.
 - Static residency has no eviction and is not the future three-tier expert cache.
-- The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline, future-layer predictor, or speculative decoder yet.
+- The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
+- Exact speculative block verification is designed but not implemented. There is no DSpark drafter, confidence scheduler, expert-major verifier, or speculative speed measurement yet.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
 - The converter has not processed the full Kimi K3 checkpoint.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.

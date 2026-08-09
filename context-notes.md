@@ -247,3 +247,10 @@
 - 전체 검증은 CPU CTest 11/11과 pytest 235/44, liburing/direct CTest 12/12와 pytest 237/42, CUDA CTest 20/20과 pytest 271/8, ASan/UBSan liburing CTest 12/12와 targeted pytest 49/5를 통과했다. 기존 10개 CUDA test와 새 released benchmark까지 11개 Compute Sanitizer 실행이 모두 0 errors였다. 최초 liburing pytest는 capability env 누락으로 expected-selection 1건이 실패했고 수정 실행은 통과했다. 최초 sanitizer loop는 PowerShell quoting 오류로 유효 target을 실행하지 못했으며 명시적 11회 실행으로 교정했다.
 - Ledger commit 후 현재 HEAD 재검증에서 CPU CTest 11/11, 수정된 `PYTHONPATH=.` CPU pytest 235/44, CUDA CTest 20/20, CUDA pytest 271/8이 통과했다. 첫 CPU pytest 명령은 `PYTHONPATH=.` 누락으로 `tools` import collection error 11건을 냈고, 첫 CUDA 결합 명령은 124초 도구 timeout으로 결과를 반환하지 못했다. CTest와 pytest를 분리한 교정 실행이 각각 통과했다.
 - Milestone 12 public integration head `9e59a9d`는 branch/PR correctness run `31322043556`/`31322049903`을 통과했고 PR #12로 fast-forward merge되었다. Post-merge `main` run `31322191670`도 성공했다.
+
+## 2026-08-10 Milestone 13 설계
+
+- 공개 main publication head `dc23020`에서 `codex/milestone-thirteen-speculative-verification` 브랜치를 시작했다. 기존 linked worktree를 확인해 중첩 worktree는 만들지 않았다.
+- DSpark paper arXiv `2607.05147`과 DeepSpec commit `005e03b81cec38b7da6399833d609ee89a2587f2`의 `base_evaluator.py`, DSpark `evaluator.py`, `draft_ops.py`를 확인했다. 실제 구현은 accepted anchor를 proposal 첫 토큰으로 두고 accepted prefix와 target bonus를 commit한 뒤 target/draft cache를 crop/update한다.
+- DeepSpec evaluator는 nonzero-temperature rejection sampling을 구현하지만 K3X 현재 runtime은 greedy다. M13 strict verifier는 candidate가 target argmax와 같은 동안만 longest prefix를 accept하고 target bonus token을 commit한다. 이는 K3X 계약이며 DeepSpec 동작을 greedy라고 오기하지 않는다.
+- Expert-major 실행, DSpark learned drafter, confidence scheduler, AURORA, EcoSpec, MoE-Spec, AcceptMoE를 동시에 구현하는 안은 거부했다. 먼저 external draft lifecycle과 token-major exact target reference를 고정하고, rejected suffix를 target state에 적용하지 않는 state boundary를 검증한다.

@@ -126,6 +126,16 @@
 - [x] B-0013 synthetic 및 released-dimension bounded 측정 도구 구현.
 - [x] 전체 correctness, sanitizer, RTX 5080 ablation, ledger, review, public integration.
 
+## Milestone 13 — Exact speculative block verification
+
+- [x] TITAN Ledger, DSpark paper, DeepSpec implementation, current state boundary review.
+- [x] Exact greedy token-major verification design and TDD plan.
+- [ ] Pure proposal/verification/provider contract with native tests.
+- [ ] Incremental runtime integration with greedy token/state/routing parity.
+- [ ] Telemetry and deterministic scripted-draft end-to-end harness.
+- [ ] B-0014 correctness and overhead measurement.
+- [ ] Full verification, sanitizer, ledger, review, and public integration.
+
 ## Milestone 8 — Deadline-aware exact expert loading
 
 - [x] Deadline scheduler contract와 deterministic unit tests.

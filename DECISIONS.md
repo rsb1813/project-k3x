@@ -396,3 +396,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: B-0013 synthetic natural Top-16 improved decode by 11.33% synchronous and 8.91% prefetch and reduced D2H by 51,840 bytes per run. The released 3,584-by-3,072 expert repeated over 16 slots reduced D2H by 4,300,800 bytes, or 93.75%, but increased median latency by 630,394 ns, or 8.01%, and aggregate kernel time by 5.88%. All correctness gates passed; the released fixture is kernel/D2H evidence without routing semantics, not full-model TPS.
 - Reason: the narrow fusion proves exact ordered accumulation and removes intermediate host traffic, but representative dimensions show that the current sequential expert launches and accumulation dependency cost more than the saved transfer. Measurement therefore rejects a default change.
 - Revisit: after native-Linux profiling identifies the accumulation serialization cost, and when expert-major multi-token verification or a kernel shape that shares hidden activations across output work can amortize it.
+
+## D-036 — Establish token-major exact verification before expert-major scheduling
+
+- Date: 2026-08-10.
+- Status: accepted design; implementation and measurement pending.
+- Decision: first expose an external draft lifecycle whose proposal contains the current accepted anchor and a bounded candidate prefix, then implement strict greedy token-major target verification. Accept only successive target-argmax matches, commit one target bonus token, and report the exact commit back to the draft provider.
+- Alternatives considered: implement expert-major unioning immediately; combine a reduced-Top-K AURORA drafter with verification; fix proposal, acceptance, state, and telemetry semantics independently before either optimization.
+- Evidence: DSpark paper arXiv `2607.05147` separates proposal and target verification. DeepSpec commit `005e03b81cec38b7da6399833d609ee89a2587f2` uses an anchor-first proposal, commits accepted prefix plus target token, and crops or updates target and draft caches after verification. K3X's current one-token Engine mutates KDA/MLA state, so expert-major work before a tested commit boundary would combine acceptance and state-scheduling risks.
+- Benchmark result: none. B-0014 is pending and no speculative speedup or acceptance result is claimed.
+- Reason: a deliberately unoptimized exact reference makes later expert-major fetch amortization measurable against stable token, state, routing, and traffic invariants. It also keeps DSpark, AURORA, and cost-aware policies separate from target correctness.
+- Revisit: after the token-major reference passes B-0014; then evaluate expert-major scheduling without changing the accepted proposal or commit semantics.
