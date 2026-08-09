@@ -17,16 +17,30 @@ bool same_tokens(std::span<const std::uint32_t> left,
         std::equal(left.begin(), left.end(), right.begin());
 }
 
-bool supported_runtime(ComputeBackend& backend,
-                       const RuntimeOptions& options,
+bool supported_options(const RuntimeOptions& options,
                        std::span<const std::uint32_t> prompt) {
-    return backend.kind() == BackendKind::cpu && options.incremental &&
+    return options.incremental &&
         options.routing_policy.mode == RoutingMode::fixed &&
         allowed_draft_k(options.routing_policy.fixed_k) &&
         options.l1_expert_cache == L1ExpertCacheMode::disabled &&
         options.l1_expert_cache_bytes == 0 &&
         options.l2_expert_schedule == L2ExpertScheduleMode::blocking &&
         !options.profile_observation && !prompt.empty();
+}
+
+bool supported_persistent_backend(const ComputeBackend& backend) {
+    if (backend.kind() == BackendKind::cpu) return true;
+    if (backend.kind() != BackendKind::cuda_custom) return false;
+    const auto& options = backend.options();
+    return options.kind == BackendKind::cuda_custom &&
+        options.dense_precision == DensePrecision::fp32 &&
+        options.cuda_allocation == CudaAllocationMode::reused &&
+        options.cuda_weights == CudaWeightMode::transient &&
+        options.cuda_batching == CudaBatchingMode::grouped &&
+        options.cuda_boundary == CudaBoundaryMode::ffn_block &&
+        options.cuda_transfer == CudaTransferMode::synchronous &&
+        options.cuda_moe_fusion == CudaMoeFusionMode::none &&
+        options.cuda_resident_bytes == 0 && options.cuda_pinned_bytes == 0;
 }
 
 bool valid_update(const DraftVerification& verification,
@@ -60,7 +74,8 @@ AuroraReplayDraftProvider::create(
     Reader& reader, ComputeBackend& backend,
     std::span<const std::uint32_t> prompt,
     RuntimeOptions draft_options, AuroraReplayConfig config) {
-    if (!supported_runtime(backend, draft_options, prompt)) {
+    if (backend.kind() != BackendKind::cpu ||
+        !supported_options(draft_options, prompt)) {
         return Result<std::unique_ptr<AuroraReplayDraftProvider>>::failure(
             ErrorCode::invalid_state,
             "unsupported AURORA replay runtime combination");
@@ -186,7 +201,8 @@ AuroraPersistentDraftProvider::create(
     Reader& reader, ComputeBackend& backend,
     std::span<const std::uint32_t> prompt,
     RuntimeOptions draft_options, AuroraPersistentConfig config) {
-    if (!supported_runtime(backend, draft_options, prompt)) {
+    if (!supported_persistent_backend(backend) ||
+        !supported_options(draft_options, prompt)) {
         return Result<std::unique_ptr<AuroraPersistentDraftProvider>>::failure(
             ErrorCode::invalid_state,
             "unsupported AURORA persistent runtime combination");
