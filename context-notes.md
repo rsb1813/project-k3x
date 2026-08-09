@@ -310,3 +310,6 @@
 ## 2026-08-10 Milestone 16 준비
 
 - 새 Windows worktree의 첫 전체 baseline은 B-0011 profile SHA-256 한 건만 실패했다. Git blob과 summary는 LF bytes의 `897e872d…`로 일치했지만 `core.autocrlf=true`가 canonical ASCII `.k3xp`를 CRLF `940f0353…`로 바꾼 것이 원인이었다. `*.k3xp -text`를 추가하고 다섯 profile을 blob에서 재물질화한 뒤 CTest 13/13과 Python 262/47이 통과했다.
+- DSpark 원문과 DeepSpec `005e03b8` 구현은 confidence의 누적 prefix survival로 proposal을 자르고 verified target state만 draft context에 반영한다. EcoSpec은 target verifier를 바꾸지 않고 marginal expert activation cost를 draft 선택에 넣으며, MoE-Spec은 verifier expert budget으로 품질 경계를 바꾼다. M16은 DSpark checkpoint나 expert budget을 흉내 내지 않고 reduced-Top-K self draft의 실제 acceptance와 기존 exact target cost를 먼저 측정한다.
+- 외부 trained drafter는 Kimi K3 checkpoint/ABI가 없고, scripted trace는 대표 acceptance가 아니며, persistent AURORA state는 KDA/MLA crop까지 한 번에 묶는다. 따라서 별도 CPU Reader/backend/session이 committed prefix를 replay하는 AURORA reference를 선택했다. target은 natural token/expert-major strict verifier 그대로이고 draft/target traffic은 분리한다.
+- Adaptive block scheduler는 `{1,2,4}`를 한 rung씩 탐색하고 위치별 Laplace-smoothed prefix survival 0.5와 measured unique-load/assignment ratio 0.9를 gate로 사용한다. 거절은 즉시 이전 rung으로 backoff한다. 이 값들은 B-0017 synthetic 실험 identity이며 기본 runtime 정책이 아니다.
