@@ -424,6 +424,29 @@ public:
 
         const auto input_bytes = input.size_bytes();
         const auto output_bytes = rows * sizeof(float);
+        bool has_resident_weight = false;
+        std::uint64_t weight_transfer_bytes = logical_bytes;
+        const void* resident_packed = nullptr;
+        const void* resident_scales = nullptr;
+        if (resident_weights_) {
+            const auto acquisition = resident_weights_->acquire(
+                {weight.tensor_id, cuda::WeightRepresentation::mxfp4, rows,
+                 cols, group_size},
+                packed, scales);
+            if (!acquisition) {
+                record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                       operation_start, logical_bytes, 0, 0, false);
+                return Result<std::vector<float>>::failure(
+                    acquisition.error(), acquisition.message());
+            }
+            has_resident_weight =
+                acquisition.value().disposition !=
+                cuda::ResidentDisposition::bypass;
+            resident_packed = acquisition.value().primary;
+            resident_scales = acquisition.value().secondary;
+            weight_transfer_bytes = acquisition.value().uploaded_bytes;
+            if (!has_resident_weight) weight_transfer_bytes = logical_bytes;
+        }
         cuda::DeviceAllocation local_input(&memory_stats_, &runtime_stats_);
         cuda::DeviceAllocation local_packed(&memory_stats_, &runtime_stats_);
         cuda::DeviceAllocation local_scales(&memory_stats_, &runtime_stats_);
@@ -434,8 +457,12 @@ public:
         void* device_output = nullptr;
         if (options_.cuda_allocation == CudaAllocationMode::reused) {
             if (mxfp4_input_scratch_.reserve(input_bytes) != cudaSuccess ||
-                mxfp4_packed_scratch_.reserve(packed.size_bytes()) != cudaSuccess ||
-                mxfp4_scales_scratch_.reserve(scales.size_bytes()) != cudaSuccess ||
+                (!has_resident_weight &&
+                 mxfp4_packed_scratch_.reserve(packed.size_bytes()) !=
+                     cudaSuccess) ||
+                (!has_resident_weight &&
+                 mxfp4_scales_scratch_.reserve(scales.size_bytes()) !=
+                     cudaSuccess) ||
                 mxfp4_output_scratch_.reserve(output_bytes) != cudaSuccess) {
                 record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
                        operation_start, logical_bytes, 0, 0, false);
@@ -444,12 +471,18 @@ public:
                     "CUDA reusable device allocation failed");
             }
             device_input = mxfp4_input_scratch_.get();
-            device_packed = mxfp4_packed_scratch_.get();
-            device_scales = mxfp4_scales_scratch_.get();
+            device_packed = has_resident_weight
+                                ? const_cast<void*>(resident_packed)
+                                : mxfp4_packed_scratch_.get();
+            device_scales = has_resident_weight
+                                ? const_cast<void*>(resident_scales)
+                                : mxfp4_scales_scratch_.get();
             device_output = mxfp4_output_scratch_.get();
         } else if (local_input.allocate(input_bytes) != cudaSuccess ||
-                   local_packed.allocate(packed.size_bytes()) != cudaSuccess ||
-                   local_scales.allocate(scales.size_bytes()) != cudaSuccess ||
+                   (!has_resident_weight &&
+                    local_packed.allocate(packed.size_bytes()) != cudaSuccess) ||
+                   (!has_resident_weight &&
+                    local_scales.allocate(scales.size_bytes()) != cudaSuccess) ||
                    local_output.allocate(output_bytes) != cudaSuccess) {
             record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
                    operation_start, logical_bytes, 0, 0, false);
@@ -457,18 +490,24 @@ public:
                 ErrorCode::backend_unavailable, "CUDA device allocation failed");
         } else {
             device_input = local_input.get();
-            device_packed = local_packed.get();
-            device_scales = local_scales.get();
+            device_packed = has_resident_weight
+                                ? const_cast<void*>(resident_packed)
+                                : local_packed.get();
+            device_scales = has_resident_weight
+                                ? const_cast<void*>(resident_scales)
+                                : local_scales.get();
             device_output = local_output.get();
         }
 
         const auto h2d_start = std::chrono::steady_clock::now();
         if (cudaMemcpyAsync(device_input, input.data(), input_bytes,
                             cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(device_packed, packed.data(), packed.size_bytes(),
-                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(device_scales, scales.data(), scales.size_bytes(),
-                            cudaMemcpyHostToDevice, stream_) != cudaSuccess) {
+            (!has_resident_weight &&
+             cudaMemcpyAsync(device_packed, packed.data(), packed.size_bytes(),
+                             cudaMemcpyHostToDevice, stream_) != cudaSuccess) ||
+            (!has_resident_weight &&
+             cudaMemcpyAsync(device_scales, scales.data(), scales.size_bytes(),
+                             cudaMemcpyHostToDevice, stream_) != cudaSuccess)) {
             record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
                    operation_start, logical_bytes, 0, 0, false);
             return Result<std::vector<float>>::failure(
@@ -476,10 +515,9 @@ public:
         }
         record(phase, ProfileOperation::host_to_device, precision, layer,
                h2d_start, 0,
-               input_bytes + packed.size_bytes() + scales.size_bytes(), 0, true);
+               input_bytes + weight_transfer_bytes, 0, true);
         runtime_stats_.activation_h2d_bytes += input_bytes;
-        runtime_stats_.weight_h2d_bytes +=
-            packed.size_bytes() + scales.size_bytes();
+        runtime_stats_.weight_h2d_bytes += weight_transfer_bytes;
 
         EventOwner local_event_start;
         EventOwner local_event_end;

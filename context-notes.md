@@ -90,3 +90,5 @@
 
 - Task 6 bounded dense residency는 stable tensor ID, representation, rows, cols, group size 전체를 key로 사용한다. 동일 tensor의 FP32/BF16 표현은 별도 entry로 허용하지만 shape/group 충돌은 `invalid_extent`로 거부한다. Hard capacity에 맞지 않는 entry는 miss와 bypass를 기록하고 기존 exact transient path로 실행한다.
 - Dense residency 검증은 `cuda_residency`와 `cuda_dense` CTest 통과, `test_cuda_residency` Compute Sanitizer 0 errors이다. 24-byte capacity에서 첫 FP32 weight는 miss/upload, 두 번째 사용은 hit/zero extra weight H2D, 두 번째 24-byte weight는 exact bypass였고 resident bytes는 24를 넘지 않았다.
+- Task 7은 native MXFP4 packed E2M1 bytes와 E8M0 scales를 한 논리 key 아래 두 tracked device extent로 보존한다. 102-byte entry는 한 번만 upload되고 다음 호출은 hit이며, 101-byte capacity는 exact transient bypass를 선택한다. Repacking, dequantization, pruning은 수행하지 않는다.
+- Task 7 최종 검증은 CUDA CTest 9/9와 `test_cuda_residency`, `test_cuda_mxfp4` Compute Sanitizer 각각 0 errors이다. `cuda-dense` MXFP4 CPU oracle은 resident table을 조회하지 않아 hit/miss/bypass/resident counter가 모두 0으로 유지됐다.
