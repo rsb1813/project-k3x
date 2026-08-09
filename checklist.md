@@ -187,7 +187,7 @@
 - [x] Implement the incremental cursor and rollback contract through witnessed RED/GREEN cycles.
 - [x] Integrate the persistent provider, CLI, schema, and replay-oracle parity.
 - [x] Run B-0018, the full verification matrix, sanitizer coverage, and evidence cross-checks.
-- [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
+- [x] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
 
 ## Milestone 14 — Exact expert-major speculative verification
 

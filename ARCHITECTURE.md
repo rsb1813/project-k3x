@@ -302,6 +302,8 @@ The implemented opaque `IncrementalDraftCursor` owns one fixed-reduced-Top-K CPU
 
 B-0018 proves equal proposal/acceptance counts and exact target token, final-state, and committed-route parity for fixed/adaptive token-major and CPU expert-major pairs. Persistent execution removes all repeated-prefix positions and reduces logical draft Reader bytes by 45.96% to 63.08% relative to replay on the Top-16 synthetic fixture. Reduced precision, resident-only drafting, learned DSpark, serialization/VAULT, multi-branch APOLLO state, and CUDA draft execution remain unimplemented. The normative design is in [`docs/superpowers/specs/2026-08-10-k3x-persistent-aurora-draft-state-design.md`](docs/superpowers/specs/2026-08-10-k3x-persistent-aurora-draft-state-design.md).
 
+This implementation is published on public `main` through PR #23 at integration head `30bbf7a8`. Its branch, pull-request, and post-merge correctness runs all passed; publication does not change the experimental, non-default status above.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

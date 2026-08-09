@@ -477,6 +477,8 @@ git commit -m "docs: publish persistent AURORA evidence"
 
 Review `origin/main...HEAD` for default-path changes, replay compatibility, target ownership, malformed-update Reader access, deep MLA copies, telemetry parity, raw-summary digest parity, and proposed-versus-measured language. Apply at most one focused correction batch and rerun affected tests.
 
-- [ ] **Step 5: Publish and verify public main**
+- [x] **Step 5: Publish and verify public main**
 
 Push `codex/milestone-seventeen-persistent-aurora`, open a ready public PR against `main`, wait for push and PR correctness, rebase-merge, and wait for the post-merge `main` run. Record publication through a small reconciliation PR only if the ledger would otherwise retain a stale active-branch statement.
+
+PR #23 was rebase-merged at public integration head `30bbf7a8` after branch and pull-request correctness runs `31340338639` and `31340340063` passed. Post-merge `main` correctness run `31340476396` also passed. This reconciliation change replaces the stale active-branch statement without changing measured evidence.
