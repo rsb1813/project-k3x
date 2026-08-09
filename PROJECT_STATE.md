@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 16 AURORA replay and adaptive block scheduling is in accepted-design preparation. The accepted boundary uses a separate CPU reduced-Top-K replay runtime to produce real self-speculative candidates, while the existing natural strict target verifier remains authoritative. Adaptive proposal lengths are limited to 1, 2, and 4 and use observed prefix survival plus measured expert-union cost. No Milestone 16 implementation or performance claim exists yet.
+Milestone 16 AURORA replay and adaptive block scheduling has an accepted, self-reviewed design and detailed TDD implementation plan. The boundary uses a separate CPU reduced-Top-K replay runtime to produce real self-speculative candidates, while the existing natural strict target verifier remains authoritative. Adaptive proposal lengths are limited to 1, 2, and 4 and use observed prefix survival plus measured expert-union cost. No Milestone 16 implementation or performance claim exists yet.
 
 State audited on 2026-08-10 against public Milestone 15 integration head `c18df33` and final public documentation head `49ed848`. The active isolated branch is `codex/milestone-sixteen-aurora`. Its clean CPU baseline passes CTest 13/13 and Python 262 passed/47 skipped after the canonical `.k3xp` checkout correction. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
@@ -74,7 +74,7 @@ State audited on 2026-08-10 against public Milestone 15 integration head `c18df3
 
 ## Work in progress
 
-- Milestone 16 design selects an intentionally slow `aurora-replay` oracle before persistent KDA/MLA draft state. The implementation plan, runtime code, B-0017, full verification, final review, and public integration remain pending.
+- Milestone 16 design and TDD plan select an intentionally slow `aurora-replay` oracle before persistent KDA/MLA draft state. Runtime code, B-0017, full verification, final review, and public integration remain pending.
 - The planned scheduler explores `{1,2,4}` one rung at a time, uses Laplace-smoothed observed prefix survival and actual expert-major payload-load/assignment ratio, and immediately backs off after rejection. These thresholds are an experimental B-0017 identity, not a runtime default.
 - Milestone 15 implementation, B-0016, complete CPU/CUDA verification, Compute Sanitizer, final read-only review, public PR integration, and post-merge CI are complete.
 - B-0016 perfect CUDA expert-major blocks slightly reduce synthetic Reader/H2D traffic and improve tiny decode, while the mixed row evaluates three rejected positions and regresses traffic and decode. Released single-expert batching proves exact one-payload-per-group H2D reuse at batch sizes two and four. Neither result supports a default change.
@@ -103,8 +103,8 @@ State audited on 2026-08-10 against public Milestone 15 integration head `c18df3
 
 ## Next concrete tasks
 
-1. Write and self-review the detailed Milestone 16 TDD implementation plan.
-2. Implement pure adaptive feedback, replay provider lifecycle, CLI identity, and separated draft telemetry through witnessed RED/GREEN cycles.
+1. Implement speculative target feedback and provider telemetry through witnessed RED/GREEN.
+2. Implement the pure adaptive scheduler, replay provider lifecycle, CLI identity, and separated draft telemetry in the committed plan order.
 3. Run B-0017 fixed/adaptive AURORA measurements, full verification, sanitizer coverage, evidence cross-checks, and public review before persistent draft state.
 
 ## Hardware assumptions
