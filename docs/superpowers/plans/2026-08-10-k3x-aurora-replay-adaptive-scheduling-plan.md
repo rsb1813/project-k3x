@@ -616,7 +616,7 @@ K3X_TEST_CUDA=1 python -m pytest -q
 
 Run Compute Sanitizer on any new CUDA expert-major AURORA CLI row; do not claim sanitizer coverage for the CPU replay provider itself. If no new CUDA code exists, existing CUDA kernels retain their prior sanitizer evidence and B-0017 reports that scope explicitly.
 
-- [ ] **Step 6: Synchronize evidence documents and commit**
+- [x] **Step 6: Synchronize evidence documents and commit**
 
 Update measured values only after the canonical run. Change AURORA registry status to `Experimental replay reference` only if code and all applicable tests pass. Record D-040's measured outcome, B-0017 fields and caveats, README milestone evidence, performance bottleneck, checklist, and context notes. Update `PROJECT_STATE.md` last with exact commits, tests, artifacts, bottleneck, and next persistent-state task.
 

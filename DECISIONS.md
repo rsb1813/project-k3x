@@ -444,10 +444,10 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-040 — Establish replay AURORA before persistent self-draft state
 
 - Date: 2026-08-10.
-- Status: accepted; replay provider and scheduler implemented, runtime integration and measurement pending.
+- Status: accepted, implemented, and measured as a non-default experimental reference.
 - Decision: produce real self-speculative candidates by replaying the committed prefix through a separate CPU fixed-reduced-Top-K K3X runtime, preserve the existing natural strict target verifier, and adapt proposal length over `{1,2,4}` using observed prefix survival plus measured expert-union cost.
 - Alternatives considered: treat scripted traces as representative; integrate an unavailable Kimi K3 DSpark checkpoint; implement persistent KDA/MLA draft state and adaptive scheduling simultaneously; first establish a replay oracle and measured feedback contract.
 - Evidence: DeepSpec `005e03b8` truncates DSpark proposals from prefix confidence and updates draft context from verified target state. B-0015/B-0016 show opposite fixed-block outcomes at 1.0 and 0.25 acceptance. K3X has no Kimi K3 DSpark checkpoint or persistent draft-state crop contract. At implementation heads `c20e28c` and `5723f59`, replay candidates equal an independent fixed-K4 greedy oracle, target feedback reaches the provider before its next proposal, ordinary greedy draft counters remain zero, and focused CPU/artifact tests pass.
-- Benchmark result: pending B-0017. No performance direction is assumed.
+- Benchmark result: B-0017 measures natural greedy at 1140.3391 tok/s. All six replay rows preserve exact target output but regress decode by 46.35% to 62.52%. Fixed block-2 expert-major is best at 611.7589 tok/s with acceptance 1.0, target Reader 1,102,416 bytes, and additional draft Reader 1,454,112 bytes. Adaptive token/expert rows accept 0.5, replay 2,181,168 draft bytes, and measure 447.3694/427.4438 tok/s.
 - Reason: replay is slow but executes the real reduced-routing graph, produces non-scripted acceptance, isolates draft telemetry, and supplies an oracle for later persistent state without combining two correctness boundaries.
-- Revisit: after B-0017 and persistent draft-state parity prove identical proposals with less replay work; then evaluate reduced precision, resident experts, and confidence prediction separately.
+- Revisit: after persistent draft-state parity proves identical proposals with less replay work; then evaluate reduced precision, resident experts, and confidence prediction separately. Do not tune the block thresholds around this tiny trace before removing prefix replay.

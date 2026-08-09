@@ -629,6 +629,33 @@ Raw JSON/CSV and diagnostics are under `results/b0016-cuda-expert-major-wsl/`. C
 
 Verification passed CPU CTest 13/13 and pytest 262/47, liburing/direct CTest 14/14 and pytest 264/45, ASan/UBSan CTest 14/14, and CUDA CTest 22/22 with pytest 301/8. Compute Sanitizer reported `ERROR SUMMARY: 0 errors` for native MXFP4, CUDA FFN, released batch-2, perfect expert-major CLI, and mixed expert-major CLI. Branch and pull-request correctness runs `31332732339` and `31332745907` passed, PR #17 was rebase-merged at public integration head `c18df33`, and post-merge `main` run `31332852551` passed.
 
+## B-0017 — Milestone 16 AURORA replay and adaptive scheduling
+
+- Date: 2026-08-10.
+- Commit: runtime integration `bc45538`; measurement evidence `51ff8e7`.
+- Hardware: AMD Ryzen 7 9800X3D under WSL2 Ubuntu 24.04.4. The CPU graph was measured; the RTX 5080 was used only for the combined-path Compute Sanitizer check.
+- Model/checkpoint: the runner-generated temporary synthetic natural Top-16 K3X artifact, SHA-256 `c1110ad2a1fe981f92b01e36aaafa216d0d8ea45a6608270f3cf706816c17a7c`.
+- Mode: incremental natural target Top-16, fixed reduced draft Top-4, disabled L1, blocking `pread + buffered`, 4 prompt tokens, 6 generated tokens, 3 warmups, and 20 measured samples.
+- Cases: natural greedy; fixed replay blocks 1, 2, and 4 with token-major target verification; adaptive token-major replay; fixed block-2 expert-major replay; adaptive expert-major replay.
+
+| Case | Decode tok/s | Prefill tok/s | TTFT ms | Peak RSS | Acceptance | Blocks | Candidates | Target eval / discard | Target Reader bytes | Draft Reader bytes | Replay positions |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| natural greedy | 1140.3391 | 1032.2611 | 21.3741 | 5,709,824 B | n/a | 0 | 0 | 0 / 0 | 1,294,992 | 0 | 0 |
+| fixed-1 token-major | 480.1354 | 1131.4542 | 31.6413 | 6,742,016 B | 0.6667 | 3 | 3 | 0 / 0 | 1,294,992 | 2,161,584 | 20 |
+| fixed-2 token-major | 562.7420 | 1145.7370 | 32.9992 | 6,815,744 B | 1.0000 | 2 | 3 | 0 / 0 | 1,294,992 | 1,454,112 | 13 |
+| fixed-4 token-major | 514.2685 | 1111.1756 | 32.6129 | 6,553,600 B | 0.6000 | 2 | 5 | 0 / 0 | 1,294,992 | 1,493,280 | 13 |
+| adaptive token-major | 447.3694 | 1166.7779 | 31.9693 | 6,590,464 B | 0.5000 | 3 | 4 | 0 / 0 | 1,294,992 | 2,181,168 | 20 |
+| fixed-2 expert-major | 611.7589 | 1001.9199 | 32.3485 | 6,483,968 B | 1.0000 | 2 | 3 | 5 / 0 | 1,102,416 | 1,454,112 | 13 |
+| adaptive expert-major | 427.4438 | 1010.3564 | 32.1726 | 6,516,736 B | 0.5000 | 3 | 4 | 7 / 2 | 1,197,072 | 2,181,168 | 20 |
+
+Every replay row preserves the natural target token sequence, final KDA/MLA recurrent state, and committed expert/K trace exactly. Target average Top-K is 16 and draft average Top-K is 4. The adaptive token-major and expert-major rows each record one growth and one backoff event. L1 is disabled, so its hit rate is zero. GPU utilization, GPU memory bandwidth, VRAM, H2D, and kernel time are zero or not applicable for this CPU measurement. Logical Reader bytes are not physical NVMe bytes, and physical NVMe GB/token remains unmeasured.
+
+All replay cases regress decode by 46.35% to 62.52% relative to the tiny natural baseline. Fixed block-2 expert-major is the least-slow replay row at 611.7589 tok/s and reduces target Reader traffic through expert-union reuse, but the separate replay drafter adds 1,454,112 logical bytes and repeats 13 committed-prefix positions. Adaptive rows repeat 20 positions and add 2,181,168 draft bytes. The measured bottleneck is complete-prefix replay, so AURORA remains non-default and no scheduler threshold is promoted from this trace.
+
+Raw JSON/CSV, diagnostics, and independently cross-checked summaries are under `results/b0017-aurora-replay-wsl/`. The runner SHA-256 is `a20f708073bd27150d27d8eddf5c926072f1b96020257e625ab3caa895a536f7`; canonical aggregate-record SHA-256 is `fb7febf52c75281417b77c3f7d40787f738dba8a35490cc86d43ac5072cacd23`; summary JSON/CSV SHA-256 is `fdd94c5696d1505e17e0dbc41d465d8edad38b132896f5a3742277c09b852871` / `865d228fb88b1bc22fe147b04e1ce003559f04534052d8ce0180b753832d9551`. Independent validation recomputed all 14 raw JSON/CSV digests, the canonical aggregate, and the LF-stable CSV digest.
+
+Verification passed CPU CTest 14/14 and pytest 268/47, liburing/direct CTest 15/15 and pytest 274/41, ASan/UBSan liburing CTest 15/15, and CUDA CTest 23/23 with pytest 307/8. Compute Sanitizer reported `ERROR SUMMARY: 0 errors` for the combined CUDA expert-major AURORA CLI path. These checks establish synthetic exactness and memory-safety coverage; they do not establish full-model quality or performance.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
@@ -638,5 +665,6 @@ Verification passed CPU CTest 13/13 and pytest 262/47, liburing/direct CTest 14/
 - Native-Linux repetition of B-0010 with a representative routing trace, full-size experts, and controlled warm/cold preparation before selecting any cache policy.
 - Native-Linux repetition of B-0011 with repository-duration sessions and controlled helpful, stale, and adversarial priors before selecting any profile policy.
 - Native-Linux repetition of B-0016 with physical NVMe accounting, GPU utilization, memory bandwidth, multi-expert/full-layer groups, and representative acceptance distributions before any speculative default claim.
+- Persistent-state AURORA parity and representative native-Linux measurement with physical I/O, realistic acceptance, coding quality, and resident-expert pressure before any self-speculative default claim.
 - Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.
