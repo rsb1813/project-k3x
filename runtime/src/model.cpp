@@ -5,6 +5,7 @@
 #include "k3x/ops.hpp"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <chrono>
 #include <cmath>
@@ -146,6 +147,12 @@ public:
     }
 
 private:
+    struct DenseProjection {
+        std::string name;
+        std::size_t rows;
+        std::size_t cols;
+    };
+
     static std::string layer_name(std::size_t layer, const std::string& suffix) {
         return "model.layers." + std::to_string(layer) + "." + suffix;
     }
@@ -171,6 +178,30 @@ private:
         auto result = backend_.dense_matvec(
             input, dense_weight(name, rows, cols), layer, phase);
         if (!result) throw std::runtime_error("dense backend failure");
+        return std::move(result.value());
+    }
+
+    std::vector<Vector> matvec_group(
+        std::span<const DenseProjection> projections,
+        std::span<const float> input, std::uint32_t layer,
+        ProfilePhase phase) {
+        if (backend_.options().cuda_batching != CudaBatchingMode::grouped) {
+            std::vector<Vector> outputs;
+            outputs.reserve(projections.size());
+            for (const auto& projection : projections) {
+                outputs.push_back(matvec(projection.name, projection.rows,
+                                         projection.cols, input, layer, phase));
+            }
+            return outputs;
+        }
+        std::vector<DenseWeightView> weights;
+        weights.reserve(projections.size());
+        for (const auto& projection : projections) {
+            weights.push_back(dense_weight(
+                projection.name, projection.rows, projection.cols));
+        }
+        auto result = backend_.dense_matvec_group(input, weights, layer, phase);
+        if (!result) throw std::runtime_error("grouped dense backend failure");
         return std::move(result.value());
     }
 
@@ -217,14 +248,17 @@ private:
     Vector kda(const Vector& input, std::size_t layer, KdaState& state,
                ProfilePhase phase) {
         const auto base = layer_name(layer, "attention.");
-        auto q = short_conv(matvec(base + "q_proj", config_.hidden,
-                                   config_.hidden, input, layer, phase),
+        const std::array<DenseProjection, 3> qkv_projections{{
+            {base + "q_proj", config_.hidden, config_.hidden},
+            {base + "k_proj", config_.hidden, config_.hidden},
+            {base + "v_proj", config_.hidden, config_.hidden},
+        }};
+        auto qkv = matvec_group(qkv_projections, input, layer, phase);
+        auto q = short_conv(std::move(qkv[0]),
                             state.conv_q, tensor(base + "q_conv"));
-        auto k = short_conv(matvec(base + "k_proj", config_.hidden,
-                                   config_.hidden, input, layer, phase),
+        auto k = short_conv(std::move(qkv[1]),
                             state.conv_k, tensor(base + "k_conv"));
-        auto v = short_conv(matvec(base + "v_proj", config_.hidden,
-                                   config_.hidden, input, layer, phase),
+        auto v = short_conv(std::move(qkv[2]),
                             state.conv_v, tensor(base + "v_conv"));
         const auto ones = Vector(config_.kda_dim, 1.0F);
         const auto q_scale = 1.0F / static_cast<float>(config_.kda_dim);
@@ -342,12 +376,14 @@ private:
     Vector activated_mlp(const Vector& input, const std::string& base,
                          std::size_t intermediate, std::size_t layer,
                          ProfilePhase phase) {
-        const auto gate = matvec(base + ".gate", intermediate,
-                                 input.size(), input, layer, phase);
-        const auto up = matvec(base + ".up", intermediate,
-                               input.size(), input, layer, phase);
+        const std::array<DenseProjection, 2> projections{{
+            {base + ".gate", intermediate, input.size()},
+            {base + ".up", intermediate, input.size()},
+        }};
+        auto gate_up = matvec_group(projections, input, layer, phase);
         Vector activated(intermediate);
-        situ_glu(activated, gate, up, config_.situ_beta, config_.situ_linear);
+        situ_glu(activated, gate_up[0], gate_up[1], config_.situ_beta,
+                 config_.situ_linear);
         return matvec(base + ".down", config_.hidden, intermediate,
                       activated, layer, phase);
     }
@@ -409,14 +445,17 @@ private:
         const auto routed_norm = normalized(mixed, tensor(base + "routed_norm"), config_.epsilon);
         auto output = matvec(base + "routed_up_proj", config_.hidden,
                              config_.latent, routed_norm, layer, phase);
-        const auto shared_gate = matvec(base + "shared_gate",
-                                        config_.expert_intermediate,
-                                        config_.hidden, input, layer, phase);
-        const auto shared_up = matvec(base + "shared_up",
-                                      config_.expert_intermediate,
-                                      config_.hidden, input, layer, phase);
+        const std::array<DenseProjection, 2> shared_projections{{
+            {base + "shared_gate", config_.expert_intermediate,
+             config_.hidden},
+            {base + "shared_up", config_.expert_intermediate,
+             config_.hidden},
+        }};
+        auto shared_gate_up = matvec_group(
+            shared_projections, input, layer, phase);
         Vector shared_activated(config_.expert_intermediate);
-        situ_glu(shared_activated, shared_gate, shared_up, config_.situ_beta, config_.situ_linear);
+        situ_glu(shared_activated, shared_gate_up[0], shared_gate_up[1],
+                 config_.situ_beta, config_.situ_linear);
         const auto shared = matvec(base + "shared_down", config_.hidden,
                                    config_.expert_intermediate, shared_activated,
                                    layer, phase);

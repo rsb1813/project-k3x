@@ -208,12 +208,14 @@ def test_cpp_prefill_layers_logits_and_state_match_python(
 
 
 @pytest.mark.parametrize(
-    ("backend", "dense_precision", "tolerance"),
+    ("backend", "dense_precision", "cuda_batching", "tolerance"),
     [
-        ("cuda-dense", "fp32", 1e-5),
-        ("cuda-custom", "fp32", 1e-4),
-        ("cuda-dense", "bf16", 2e-2),
-        ("cuda-custom", "bf16", 2e-2),
+        ("cuda-dense", "fp32", "scalar", 1e-5),
+        ("cuda-custom", "fp32", "scalar", 1e-4),
+        ("cuda-dense", "bf16", "scalar", 2e-2),
+        ("cuda-custom", "bf16", "scalar", 2e-2),
+        ("cuda-dense", "fp32", "grouped", 1e-5),
+        ("cuda-custom", "fp32", "grouped", 1e-4),
     ],
 )
 def test_cuda_backends_match_synthetic_graph_and_tokens(
@@ -221,13 +223,14 @@ def test_cuda_backends_match_synthetic_graph_and_tokens(
     tmp_path: Path,
     backend: str,
     dense_precision: str,
+    cuda_batching: str,
     tolerance: float,
 ) -> None:
     if Path(os.environ.get("K3X_BUILD_DIR", "build")).name != "build-cuda":
         pytest.skip("CUDA parity is exercised only against build-cuda")
     runner = cpp_binary("k3x_run")
     artifact = tmp_path / "synthetic.k3x"
-    output = tmp_path / f"{backend}-{dense_precision}.json"
+    output = tmp_path / f"{backend}-{dense_precision}-{cuda_batching}.json"
     convert(synthetic_source, artifact, chunk_bytes=257)
     subprocess.run(
         [
@@ -246,6 +249,8 @@ def test_cuda_backends_match_synthetic_graph_and_tokens(
             backend,
             "--dense-precision",
             dense_precision,
+            "--cuda-batching",
+            cuda_batching,
             "--json",
             str(output),
         ],
@@ -261,11 +266,15 @@ def test_cuda_backends_match_synthetic_graph_and_tokens(
     assert result["backend"] == backend
     assert result["device"] != "CPU"
     assert result["dense_precision"] == dense_precision
+    assert result["cuda_batching"] == cuda_batching
     assert result["kernel_nanoseconds"] > 0
     assert result["host_to_device_bytes"] > 0
     assert result["device_to_host_bytes"] > 0
     assert result["peak_vram_bytes"] > 0
     assert result["failed_operations"] == 0
+    if cuda_batching == "grouped":
+        assert result["grouped_projection_calls"] > 0
+        assert result["grouped_projection_members"] > result["grouped_projection_calls"]
     np.testing.assert_allclose(
         result["prefill_logits"],
         expected_logits.numpy().reshape(-1),

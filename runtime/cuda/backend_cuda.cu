@@ -139,6 +139,7 @@ public:
           dense_input_scratch_(&memory_stats_, &runtime_stats_),
           dense_weight_scratch_(&memory_stats_, &runtime_stats_),
           dense_output_scratch_(&memory_stats_, &runtime_stats_),
+          dense_group_output_scratch_(&memory_stats_, &runtime_stats_),
           mxfp4_input_scratch_(&memory_stats_, &runtime_stats_),
           mxfp4_packed_scratch_(&memory_stats_, &runtime_stats_),
           mxfp4_scales_scratch_(&memory_stats_, &runtime_stats_),
@@ -582,18 +583,283 @@ public:
                     ErrorCode::invalid_extent);
             }
         }
-        std::vector<std::vector<float>> outputs;
-        outputs.reserve(weights.size());
-        for (const auto& weight : weights) {
-            auto output = dense_matvec(input, weight, layer, phase);
-            if (!output) {
-                return Result<std::vector<std::vector<float>>>::failure(
-                    output.error(), output.message());
+        if (options_.cuda_batching != CudaBatchingMode::grouped) {
+            std::vector<std::vector<float>> outputs;
+            outputs.reserve(weights.size());
+            for (const auto& weight : weights) {
+                auto output = dense_matvec(input, weight, layer, phase);
+                if (!output) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        output.error(), output.message());
+                }
+                outputs.push_back(std::move(output.value()));
             }
-            outputs.push_back(std::move(output.value()));
+            return Result<std::vector<std::vector<float>>>::success(
+                std::move(outputs));
+        }
+        if (weights.empty()) {
+            return Result<std::vector<std::vector<float>>>::success({});
+        }
+
+        const auto precision = numeric_precision();
+        std::vector<__nv_bfloat16> bf16_input;
+        const void* host_input = input.data();
+        std::size_t input_bytes = input.size_bytes();
+        cudaDataType_t input_type = CUDA_R_32F;
+        if (options_.dense_precision == DensePrecision::bf16_rounded) {
+            bf16_input.reserve(input.size());
+            for (const auto value : input) {
+                bf16_input.push_back(__float2bfloat16_rn(value));
+            }
+            host_input = bf16_input.data();
+            input_bytes = bf16_input.size() * sizeof(__nv_bfloat16);
+            input_type = CUDA_R_16BF;
+        }
+
+        struct GroupMember {
+            const void* host_weight{};
+            std::size_t weight_bytes{};
+            void* device_weight{};
+            std::size_t output_offset{};
+            std::uint64_t transfer_bytes{};
+            DensePlan* plan{};
+        };
+        std::vector<std::vector<__nv_bfloat16>> bf16_weights(weights.size());
+        std::vector<GroupMember> members(weights.size());
+        std::size_t maximum_weight_bytes = 0;
+        std::size_t total_output_bytes = 0;
+        std::uint64_t total_weight_transfer = 0;
+        const auto weight_type =
+            options_.dense_precision == DensePrecision::fp32
+                ? CUDA_R_32F
+                : CUDA_R_16BF;
+        for (std::size_t index = 0; index < weights.size(); ++index) {
+            auto& member = members[index];
+            const auto& weight = weights[index];
+            member.host_weight = weight.values.data();
+            member.weight_bytes = weight.values.size_bytes();
+            if (options_.dense_precision == DensePrecision::bf16_rounded) {
+                auto& converted = bf16_weights[index];
+                converted.reserve(weight.values.size());
+                for (const auto value : weight.values) {
+                    converted.push_back(__float2bfloat16_rn(value));
+                }
+                member.host_weight = converted.data();
+                member.weight_bytes = converted.size() * sizeof(__nv_bfloat16);
+            }
+            member.output_offset = total_output_bytes;
+            total_output_bytes += weight.rows * sizeof(float);
+            maximum_weight_bytes =
+                std::max(maximum_weight_bytes, member.weight_bytes);
+            member.transfer_bytes = member.weight_bytes;
+            if (resident_weights_) {
+                const auto representation =
+                    options_.dense_precision == DensePrecision::fp32
+                        ? cuda::WeightRepresentation::dense_fp32
+                        : cuda::WeightRepresentation::dense_bf16;
+                const auto host_bytes = std::span(
+                    static_cast<const std::byte*>(member.host_weight),
+                    member.weight_bytes);
+                const auto acquisition = resident_weights_->acquire(
+                    {weight.tensor_id, representation, weight.rows,
+                     weight.cols, 0},
+                    host_bytes, {});
+                if (!acquisition) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        acquisition.error(), acquisition.message());
+                }
+                if (acquisition.value().disposition !=
+                    cuda::ResidentDisposition::bypass) {
+                    member.device_weight =
+                        const_cast<void*>(acquisition.value().primary);
+                    member.transfer_bytes = acquisition.value().uploaded_bytes;
+                }
+            }
+            total_weight_transfer += member.transfer_bytes;
+        }
+
+        cuda::DeviceAllocation local_input(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_weight(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_output(&memory_stats_, &runtime_stats_);
+        void* device_input = nullptr;
+        void* transient_weight = nullptr;
+        void* device_output = nullptr;
+        if (options_.cuda_allocation == CudaAllocationMode::reused) {
+            if (dense_input_scratch_.reserve(input_bytes) != cudaSuccess ||
+                dense_weight_scratch_.reserve(maximum_weight_bytes) !=
+                    cudaSuccess ||
+                dense_group_output_scratch_.reserve(total_output_bytes) !=
+                    cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA grouped dense allocation failed");
+            }
+            device_input = dense_input_scratch_.get();
+            transient_weight = dense_weight_scratch_.get();
+            device_output = dense_group_output_scratch_.get();
+        } else if (local_input.allocate(input_bytes) != cudaSuccess ||
+                   local_weight.allocate(maximum_weight_bytes) != cudaSuccess ||
+                   local_output.allocate(total_output_bytes) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA grouped dense allocation failed");
+        } else {
+            device_input = local_input.get();
+            transient_weight = local_weight.get();
+            device_output = local_output.get();
+        }
+
+        if (cudaMemcpyAsync(device_input, host_input, input_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA grouped activation upload failed");
+        }
+        std::vector<std::vector<float>> outputs(weights.size());
+        std::vector<std::unique_ptr<DensePlan>> local_plans;
+        std::vector<std::unique_ptr<EventOwner>> local_starts;
+        std::vector<std::unique_ptr<EventOwner>> local_ends;
+        local_plans.reserve(weights.size());
+        local_starts.reserve(weights.size());
+        local_ends.reserve(weights.size());
+        if (options_.cuda_allocation == CudaAllocationMode::reused) {
+            while (dense_group_event_starts_.size() < weights.size()) {
+                dense_group_event_starts_.push_back(
+                    std::make_unique<EventOwner>());
+                dense_group_event_ends_.push_back(
+                    std::make_unique<EventOwner>());
+            }
+        }
+        const auto d2h_start = std::chrono::steady_clock::now();
+        constexpr float alpha = 1.0F;
+        constexpr float beta = 0.0F;
+        for (std::size_t index = 0; index < weights.size(); ++index) {
+            const auto& weight = weights[index];
+            auto& member = members[index];
+            if (!member.device_weight) {
+                member.device_weight = transient_weight;
+                if (cudaMemcpyAsync(member.device_weight, member.host_weight,
+                                    member.weight_bytes,
+                                    cudaMemcpyHostToDevice, stream_) !=
+                    cudaSuccess) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        ErrorCode::backend_unavailable,
+                        "CUDA grouped weight upload failed");
+                }
+            }
+
+            const DensePlanKey key{
+                weight.rows, weight.cols, static_cast<int>(input_type),
+                static_cast<int>(weight_type)};
+            if (options_.cuda_allocation == CudaAllocationMode::reused) {
+                const auto found = dense_plans_.find(key);
+                if (found != dense_plans_.end()) {
+                    member.plan = found->second.get();
+                } else {
+                    auto candidate = std::make_unique<DensePlan>();
+                    if (!initialize_dense_plan(*candidate, weight.rows,
+                                               weight.cols, input_type,
+                                               weight_type)) {
+                        return Result<std::vector<std::vector<float>>>::failure(
+                            ErrorCode::backend_unavailable,
+                            "cuBLASLt grouped plan creation failed");
+                    }
+                    member.plan = candidate.get();
+                    dense_plans_.emplace(key, std::move(candidate));
+                }
+            } else {
+                auto candidate = std::make_unique<DensePlan>();
+                if (!initialize_dense_plan(*candidate, weight.rows, weight.cols,
+                                           input_type, weight_type)) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        ErrorCode::backend_unavailable,
+                        "cuBLASLt grouped plan creation failed");
+                }
+                member.plan = candidate.get();
+                local_plans.push_back(std::move(candidate));
+            }
+
+            EventOwner* event_start = nullptr;
+            EventOwner* event_end = nullptr;
+            if (options_.cuda_allocation == CudaAllocationMode::reused) {
+                event_start = dense_group_event_starts_[index].get();
+                event_end = dense_group_event_ends_[index].get();
+            } else {
+                local_starts.push_back(std::make_unique<EventOwner>());
+                local_ends.push_back(std::make_unique<EventOwner>());
+                event_start = local_starts.back().get();
+                event_end = local_ends.back().get();
+            }
+            if (event_start->ensure() != cudaSuccess ||
+                event_end->ensure() != cudaSuccess ||
+                cudaEventRecord(event_start->get(), stream_) != cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA grouped event creation failed");
+            }
+            auto* member_output = static_cast<std::byte*>(device_output) +
+                                  member.output_offset;
+            const auto status = cublasLtMatmul(
+                handle_, member.plan->operation.get(), &alpha,
+                member.device_weight, member.plan->weight_layout.get(),
+                device_input, member.plan->input_layout.get(), &beta,
+                member_output, member.plan->output_layout.get(), member_output,
+                member.plan->output_layout.get(), &member.plan->heuristic.algo,
+                nullptr, 0, stream_);
+            if (status != CUBLAS_STATUS_SUCCESS ||
+                cudaEventRecord(event_end->get(), stream_) != cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "cuBLASLt grouped dense matvec failed");
+            }
+            outputs[index].resize(weight.rows);
+            if (cudaMemcpyAsync(outputs[index].data(), member_output,
+                                weight.rows * sizeof(float),
+                                cudaMemcpyDeviceToHost, stream_) != cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA grouped output copy failed");
+            }
+        }
+        if (cudaStreamSynchronize(stream_) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA grouped synchronization failed");
+        }
+        ++runtime_stats_.stream_synchronization_count;
+        runtime_stats_.activation_h2d_bytes += input_bytes;
+        runtime_stats_.weight_h2d_bytes += total_weight_transfer;
+        ++runtime_stats_.grouped_projection_calls;
+        runtime_stats_.grouped_projection_members += weights.size();
+        record(phase, ProfileOperation::host_to_device, precision, layer,
+               d2h_start, 0, input_bytes + total_weight_transfer, 0, true);
+        record(phase, ProfileOperation::device_to_host, precision, layer,
+               d2h_start, 0, total_output_bytes, 0, true);
+        for (std::size_t index = 0; index < weights.size(); ++index) {
+            auto* event_start =
+                options_.cuda_allocation == CudaAllocationMode::reused
+                    ? dense_group_event_starts_[index].get()
+                    : local_starts[index].get();
+            auto* event_end =
+                options_.cuda_allocation == CudaAllocationMode::reused
+                    ? dense_group_event_ends_[index].get()
+                    : local_ends[index].get();
+            float elapsed_milliseconds = 0.0F;
+            if (cudaEventElapsedTime(&elapsed_milliseconds, event_start->get(),
+                                     event_end->get()) != cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA grouped event timing failed");
+            }
+            record(phase, ProfileOperation::dense_matvec, precision, layer,
+                   d2h_start, weights[index].values.size_bytes(), 0,
+                   static_cast<std::uint64_t>(std::llround(
+                       static_cast<double>(elapsed_milliseconds) * 1.0e6)),
+                   true);
         }
         return Result<std::vector<std::vector<float>>>::success(
             std::move(outputs));
+
     }
 
     Result<std::vector<std::vector<float>>> mxfp4_matvec_group(
@@ -731,6 +997,7 @@ private:
     cuda::ScratchBuffer dense_input_scratch_;
     cuda::ScratchBuffer dense_weight_scratch_;
     cuda::ScratchBuffer dense_output_scratch_;
+    cuda::ScratchBuffer dense_group_output_scratch_;
     cuda::ScratchBuffer mxfp4_input_scratch_;
     cuda::ScratchBuffer mxfp4_packed_scratch_;
     cuda::ScratchBuffer mxfp4_scales_scratch_;
@@ -739,6 +1006,8 @@ private:
     EventOwner dense_event_end_;
     EventOwner mxfp4_event_start_;
     EventOwner mxfp4_event_end_;
+    std::vector<std::unique_ptr<EventOwner>> dense_group_event_starts_;
+    std::vector<std::unique_ptr<EventOwner>> dense_group_event_ends_;
     std::map<DensePlanKey, std::unique_ptr<DensePlan>> dense_plans_;
     std::unique_ptr<cuda::ResidentWeightTable> resident_weights_;
 };

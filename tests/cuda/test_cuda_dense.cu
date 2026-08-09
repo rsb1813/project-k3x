@@ -191,6 +191,48 @@ int test_allocation_modes() {
     return 0;
 }
 
+int test_grouped_execution() {
+    k3x::BackendOptions options;
+    options.kind = k3x::BackendKind::cuda_dense;
+    options.cuda_allocation = k3x::CudaAllocationMode::reused;
+    options.cuda_batching = k3x::CudaBatchingMode::grouped;
+    auto backend = k3x::make_cuda_backend(options);
+    if (!backend) return 60;
+    const std::array<float, 2> input{2.0F, -1.0F};
+    const std::array<float, 4> first{1.0F, 0.0F, 0.0F, 1.0F};
+    const std::array<float, 2> second{3.0F, -2.0F};
+    const std::array<k3x::DenseWeightView, 2> weights{{
+        {301, first, 2, 2},
+        {302, second, 1, 2},
+    }};
+    const auto output = backend.value()->dense_matvec_group(
+        input, weights, 9, k3x::ProfilePhase::decode);
+    if (!output || output.value().size() != 2) return 61;
+    if (output.value()[0] != std::vector<float>{2.0F, -1.0F}) return 62;
+    if (output.value()[1] != std::vector<float>{8.0F}) return 63;
+    const auto stats = backend.value()->runtime_stats();
+    if (stats.grouped_projection_calls != 1 ||
+        stats.grouped_projection_members != 2 ||
+        stats.activation_h2d_bytes != input.size() * sizeof(float) ||
+        stats.weight_h2d_bytes !=
+            (first.size() + second.size()) * sizeof(float) ||
+        stats.stream_synchronization_count != 1) return 64;
+
+    const std::array<k3x::DenseWeightView, 2> invalid{{
+        {303, first, 2, 2},
+        {304, second, 2, 2},
+    }};
+    const auto before = backend.value()->runtime_stats();
+    const auto rejected = backend.value()->dense_matvec_group(
+        input, invalid, 9, k3x::ProfilePhase::decode);
+    if (rejected || rejected.error() != k3x::ErrorCode::invalid_extent) return 65;
+    const auto after = backend.value()->runtime_stats();
+    if (after.grouped_projection_calls != before.grouped_projection_calls ||
+        after.device_allocation_count != before.device_allocation_count ||
+        after.activation_h2d_bytes != before.activation_h2d_bytes) return 66;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -198,5 +240,7 @@ int main() {
     if (fp32_result != 0) return fp32_result;
     const auto bf16_result = test_bf16_rounded();
     if (bf16_result != 0) return bf16_result;
-    return test_allocation_modes();
+    const auto allocation_result = test_allocation_modes();
+    if (allocation_result != 0) return allocation_result;
+    return test_grouped_execution();
 }
