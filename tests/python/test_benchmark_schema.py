@@ -8,6 +8,8 @@ import pytest
 
 from conftest import cpp_binary
 from k3x_converter.writer import convert
+from k3x_ref.config import SyntheticK3Config
+from k3x_ref.fixtures import write_source_checkpoint
 from tools.ablate_cuda_residency import cuda_residency_matrix, run_ablation
 from tools.ablate_cuda_ffn import ffn_boundary_matrix, run_ffn_ablation
 from tools.benchmark_synthetic import BenchmarkRecord, benchmark_once, write_results
@@ -91,6 +93,21 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["speculative_mode"] == "none"
     assert payload["speculative_verification"] == "token-major"
     assert payload["speculative_block_size"] == 0
+    assert payload["aurora_draft_k"] == 0
+    assert payload["aurora_block_policy"] == "none"
+    assert payload["draft_proposal_calls"] == 0
+    assert payload["draft_candidate_tokens"] == 0
+    assert payload["draft_replayed_context_tokens"] == 0
+    assert payload["draft_generation_nanoseconds"] == 0
+    assert payload["draft_reader_read_calls"] == 0
+    assert payload["draft_reader_completed_bytes"] == 0
+    assert payload["draft_routing_decisions"] == 0
+    assert payload["draft_routing_selected_experts"] == 0
+    assert payload["draft_selected_length_1"] == 0
+    assert payload["draft_selected_length_2"] == 0
+    assert payload["draft_selected_length_4"] == 0
+    assert payload["draft_scheduler_growths"] == 0
+    assert payload["draft_scheduler_backoffs"] == 0
     assert payload["speculative_verification_blocks"] == 0
     assert payload["target_decode_forward_calls"] == 0
     assert payload["target_block_forward_calls"] == 0
@@ -178,6 +195,9 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert row["speculative_mode"] == "none"
     assert row["speculative_verification"] == "token-major"
     assert row["speculative_verification_blocks"] == "0"
+    assert row["aurora_draft_k"] == "0"
+    assert row["aurora_block_policy"] == "none"
+    assert row["draft_reader_completed_bytes"] == "0"
     assert row["target_block_forward_calls"] == "0"
     assert row["target_positions_evaluated"] == "0"
     assert row["expert_major_payload_loads"] == "0"
@@ -401,6 +421,11 @@ def test_benchmark_once_collects_scripted_speculative_telemetry(
     assert record.token_ids == (43, 32, 28, 49, 9, 28)
     assert record.speculative_mode == "scripted-reference"
     assert record.speculative_block_size == 2
+    assert record.aurora_draft_k == 0
+    assert record.aurora_block_policy == "none"
+    assert record.draft_proposal_calls == 0
+    assert record.draft_candidate_tokens == 0
+    assert record.draft_reader_completed_bytes == 0
     assert record.speculative_verification_blocks == 2
     assert record.speculative_proposed_draft_tokens == 3
     assert record.speculative_accepted_draft_tokens == 3
@@ -438,6 +463,36 @@ def test_benchmark_once_collects_scripted_speculative_telemetry(
     else:
         assert record.process_rchar_bytes is None
         assert record.process_read_bytes is None
+
+
+def test_benchmark_once_collects_aurora_replay_telemetry(
+    tmp_path: Path,
+) -> None:
+    config = SyntheticK3Config.default().replace(num_experts=24, top_k=16)
+    source = tmp_path / "source-top16"
+    write_source_checkpoint(source, config=config)
+    artifact = tmp_path / "top16.k3x"
+    convert(source, artifact, chunk_bytes=257)
+    record = benchmark_once(
+        artifact,
+        cpp_binary("k3x_run"),
+        warmup=0,
+        iterations=1,
+        speculative_mode="aurora-replay",
+        speculative_block_size=2,
+        aurora_draft_k=4,
+        aurora_block_policy="fixed",
+    )
+    assert record.speculative_mode == "aurora-replay"
+    assert record.aurora_draft_k == 4
+    assert record.aurora_block_policy == "fixed"
+    assert record.draft_proposal_calls > 0
+    assert record.draft_candidate_tokens > 0
+    assert record.draft_replayed_context_tokens > 0
+    assert record.draft_generation_nanoseconds > 0
+    assert record.draft_reader_read_calls > 0
+    assert record.draft_reader_completed_bytes > 0
+    assert record.draft_routing_decisions > 0
     assert record.kernel_nanoseconds == 0
     assert record.host_to_device_bytes == 0
     assert record.weight_h2d_bytes == 0

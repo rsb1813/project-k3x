@@ -1,4 +1,5 @@
 // K3X synthetic runtime을 실행하고 bounded JSON metrics를 기록합니다.
+#include "k3x/aurora.hpp"
 #include "k3x/model.hpp"
 
 #include <charconv>
@@ -11,6 +12,7 @@
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string>
@@ -73,6 +75,15 @@ void write_error(k3x::ErrorCode code, const std::string& message) {
     std::cerr << '\n';
 }
 
+std::uint32_t model_natural_top_k(
+    const std::array<std::byte, k3x::model_config_bytes>& config) {
+    constexpr std::size_t offset = 13 * sizeof(std::uint32_t);
+    return std::to_integer<std::uint32_t>(config[offset]) |
+        (std::to_integer<std::uint32_t>(config[offset + 1]) << 8U) |
+        (std::to_integer<std::uint32_t>(config[offset + 2]) << 16U) |
+        (std::to_integer<std::uint32_t>(config[offset + 3]) << 24U);
+}
+
 class ScriptedDraftProvider final : public k3x::DraftProvider {
 public:
     explicit ScriptedDraftProvider(std::deque<k3x::DraftProposal> proposals)
@@ -131,6 +142,10 @@ int main(int argc, char** argv) {
     std::string speculative_verification_name = "token-major";
     std::string speculative_block_size_text = "0";
     std::string speculative_script_text;
+    std::string aurora_draft_k_text = "0";
+    std::string aurora_block_policy_name = "fixed";
+    bool aurora_draft_k_supplied = false;
+    bool aurora_block_policy_supplied = false;
     bool diagnostics = false;
     std::size_t count = 0;
     for (int index = 1; index + 1 < argc; index += 2) {
@@ -172,6 +187,14 @@ int main(int argc, char** argv) {
         else if (key == "--speculative-verification") speculative_verification_name = value;
         else if (key == "--speculative-block-size") speculative_block_size_text = value;
         else if (key == "--speculative-script") speculative_script_text = value;
+        else if (key == "--aurora-draft-k") {
+            aurora_draft_k_text = value;
+            aurora_draft_k_supplied = true;
+        }
+        else if (key == "--aurora-block-policy") {
+            aurora_block_policy_name = value;
+            aurora_block_policy_supplied = true;
+        }
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
     }
 
@@ -210,8 +233,15 @@ int main(int argc, char** argv) {
                   << speculative_block_size_text << '\n';
         return 2;
     }
+    std::size_t aurora_draft_k = 0;
+    if (!parse_size(aurora_draft_k_text, aurora_draft_k)) {
+        std::cerr << "invalid AURORA draft K: " << aurora_draft_k_text
+                  << '\n';
+        return 2;
+    }
     if (speculative_mode_name != "none" &&
-        speculative_mode_name != "scripted-reference") {
+        speculative_mode_name != "scripted-reference" &&
+        speculative_mode_name != "aurora-replay") {
         std::cerr << "unknown speculative mode: " << speculative_mode_name
                   << '\n';
         return 2;
@@ -229,13 +259,23 @@ int main(int argc, char** argv) {
     }
     if (runtime_options.speculative_verification ==
             k3x::SpeculativeVerificationMode::expert_major &&
-        speculative_mode_name != "scripted-reference") {
-        std::cerr << "expert-major verification requires scripted-reference speculation\n";
+        speculative_mode_name == "none") {
+        std::cerr << "expert-major verification requires scripted-reference or AURORA replay speculation\n";
         return 2;
     }
     if (speculative_mode_name == "none" &&
         (speculative_block_size != 0 || !speculative_script_text.empty())) {
         std::cerr << "speculative mode none requires block size 0 and an empty script\n";
+        return 2;
+    }
+    if (speculative_mode_name == "none" &&
+        (aurora_draft_k_supplied || aurora_block_policy_supplied)) {
+        std::cerr << "speculative mode none does not accept speculative options\n";
+        return 2;
+    }
+    if (speculative_mode_name == "scripted-reference" &&
+        (aurora_draft_k_supplied || aurora_block_policy_supplied)) {
+        std::cerr << "scripted-reference does not accept AURORA options\n";
         return 2;
     }
     if (speculative_mode_name == "scripted-reference" &&
@@ -246,6 +286,33 @@ int main(int argc, char** argv) {
     if (speculative_mode_name == "scripted-reference" &&
         !runtime_options.incremental) {
         std::cerr << "scripted-reference speculation requires incremental mode\n";
+        return 2;
+    }
+    const auto allowed_aurora_k = [](std::size_t value) {
+        return value == 4 || value == 6 || value == 8 || value == 12;
+    };
+    if (speculative_mode_name == "aurora-replay" &&
+        !allowed_aurora_k(aurora_draft_k)) {
+        std::cerr << "AURORA replay requires draft K4, K6, K8, or K12\n";
+        return 2;
+    }
+    if (speculative_mode_name == "aurora-replay" &&
+        aurora_block_policy_name != "fixed" &&
+        aurora_block_policy_name != "adaptive") {
+        std::cerr << "unknown AURORA block policy: "
+                  << aurora_block_policy_name << '\n';
+        return 2;
+    }
+    if (speculative_mode_name == "aurora-replay" &&
+        speculative_block_size != 1 && speculative_block_size != 2 &&
+        speculative_block_size != 4) {
+        std::cerr << "AURORA replay requires block size 1, 2, or 4\n";
+        return 2;
+    }
+    if (speculative_mode_name == "aurora-replay" &&
+        (!runtime_options.incremental || !speculative_script_text.empty() ||
+         runtime_options.routing_policy.mode != k3x::RoutingMode::natural)) {
+        std::cerr << "AURORA replay requires incremental natural routing and an empty script\n";
         return 2;
     }
     std::deque<k3x::DraftProposal> scripted_proposals;
@@ -745,17 +812,54 @@ int main(int argc, char** argv) {
         write_error(reader.error(), reader.message());
         return 3;
     }
+    if (speculative_mode_name == "aurora-replay" &&
+        aurora_draft_k >= model_natural_top_k(reader.value().model_config())) {
+        std::cerr << "AURORA draft K must be below checkpoint natural Top-K\n";
+        return 2;
+    }
     k3x::RuntimeSession session(runtime_options, std::move(runtime_profile));
-    const auto process_io_before = process_io_snapshot();
     std::unique_ptr<ScriptedDraftProvider> scripted_provider;
+    std::optional<k3x::Reader> aurora_reader;
+    k3x::Profiler aurora_profiler;
+    std::unique_ptr<k3x::ComputeBackend> aurora_backend;
+    std::unique_ptr<k3x::AuroraReplayDraftProvider> aurora_provider;
+    k3x::DraftProvider* draft_provider = nullptr;
     if (speculative_mode_name == "scripted-reference") {
         scripted_provider = std::make_unique<ScriptedDraftProvider>(
             std::move(scripted_proposals));
+        draft_provider = scripted_provider.get();
+    } else if (speculative_mode_name == "aurora-replay") {
+        auto opened_draft_reader = k3x::Reader::open(model_path, reader_options);
+        if (!opened_draft_reader) {
+            write_error(opened_draft_reader.error(),
+                        opened_draft_reader.message());
+            return 3;
+        }
+        aurora_reader.emplace(std::move(opened_draft_reader.value()));
+        aurora_backend = k3x::make_cpu_backend(&aurora_profiler);
+        k3x::RuntimeOptions draft_options;
+        draft_options.incremental = true;
+        draft_options.routing_policy.mode = k3x::RoutingMode::fixed;
+        draft_options.routing_policy.fixed_k = aurora_draft_k;
+        const auto block_policy = aurora_block_policy_name == "adaptive"
+            ? k3x::AuroraBlockPolicy::adaptive
+            : k3x::AuroraBlockPolicy::fixed;
+        auto created_provider = k3x::AuroraReplayDraftProvider::create(
+            aurora_reader.value(), *aurora_backend, prompt, draft_options,
+            {.scheduler = {.policy = block_policy,
+                           .maximum_length = speculative_block_size}});
+        if (!created_provider) {
+            write_error(created_provider.error(), created_provider.message());
+            return 4;
+        }
+        aurora_provider = std::move(created_provider.value());
+        draft_provider = aurora_provider.get();
     }
-    auto result = scripted_provider
+    const auto process_io_before = process_io_snapshot();
+    auto result = draft_provider
         ? k3x::generate_speculative(
               reader.value(), *backend, prompt, count, session,
-              *scripted_provider, speculative_block_size)
+              *draft_provider, speculative_block_size)
         : k3x::generate_greedy(
               reader.value(), *backend, prompt, count, session);
     const auto process_io = process_io_delta(
@@ -844,6 +948,41 @@ int main(int argc, char** argv) {
     output << ",\"speculative_verification\":";
     write_json_string(output, speculative_verification_name);
     output << ",\"speculative_block_size\":" << speculative_block_size
+           << ",\"aurora_draft_k\":"
+           << (speculative_mode_name == "aurora-replay"
+                   ? aurora_draft_k
+                   : 0);
+    output << ",\"aurora_block_policy\":";
+    write_json_string(
+        output, speculative_mode_name == "aurora-replay"
+                    ? aurora_block_policy_name
+                    : "none");
+    output << ",\"draft_proposal_calls\":"
+           << result.value().draft_proposal_calls
+           << ",\"draft_candidate_tokens\":"
+           << result.value().draft_candidate_tokens
+           << ",\"draft_replayed_context_tokens\":"
+           << result.value().draft_replayed_context_tokens
+           << ",\"draft_generation_nanoseconds\":"
+           << result.value().draft_generation_nanoseconds
+           << ",\"draft_reader_read_calls\":"
+           << result.value().draft_reader_calls
+           << ",\"draft_reader_completed_bytes\":"
+           << result.value().draft_reader_bytes
+           << ",\"draft_routing_decisions\":"
+           << result.value().draft_routing_decisions
+           << ",\"draft_routing_selected_experts\":"
+           << result.value().draft_routing_selected_experts
+           << ",\"draft_selected_length_1\":"
+           << result.value().draft_selected_length_1
+           << ",\"draft_selected_length_2\":"
+           << result.value().draft_selected_length_2
+           << ",\"draft_selected_length_4\":"
+           << result.value().draft_selected_length_4
+           << ",\"draft_scheduler_growths\":"
+           << result.value().draft_scheduler_growths
+           << ",\"draft_scheduler_backoffs\":"
+           << result.value().draft_scheduler_backoffs
            << ",\"speculative_verification_blocks\":"
            << result.value().speculative_verification_blocks
            << ",\"speculative_proposed_draft_tokens\":"

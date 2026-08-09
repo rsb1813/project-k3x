@@ -461,7 +461,7 @@ git commit -m "feat: feed target cost to AURORA"
 - Produces: `aurora-replay`, `--aurora-draft-k`, `--aurora-block-policy`, JSON/CSV draft telemetry.
 - Preserves: existing CLI defaults and scripted schema values.
 
-- [ ] **Step 1: Write failing CLI and schema tests**
+- [x] **Step 1: Write failing CLI and schema tests**
 
 Add invalid cases to `test_cpp_parity.py` for unknown policy, K0/K16, block size 3, AURORA with reduced target routing, AURORA options in `none`, nonincremental mode, and draft K not below artifact natural K. Assert the output path remains absent.
 
@@ -469,7 +469,7 @@ Add one real Top-16 AURORA invocation that requires exact natural greedy token/f
 
 Extend `_record()` and JSON/CSV assertions in `test_benchmark_schema.py` with the exact fields from `DraftProviderStats`, `aurora_draft_k`, and `aurora_block_policy`. Existing `none` and `scripted-reference` records must serialize zero or `not-applicable` values.
 
-- [ ] **Step 2: Run and verify RED**
+- [x] **Step 2: Run and verify RED**
 
 Run:
 
@@ -481,7 +481,7 @@ python -m pytest -q \
 
 Expected: failures report unknown AURORA flags and missing benchmark fields.
 
-- [ ] **Step 3: Implement CLI preflight and construction**
+- [x] **Step 3: Implement CLI preflight and construction**
 
 In `main.cpp`, parse these defaults.
 
@@ -496,7 +496,7 @@ Open a second Reader with the same Reader options, create a separate unprofiled 
 
 Serialize every new field with explicit names such as `draft_reader_completed_bytes`, never by adding draft bytes to `reader_completed_bytes`. Serialize `aurora_draft_k=0` and `aurora_block_policy="none"` for non-AURORA modes.
 
-- [ ] **Step 4: Extend Python schema and run GREEN**
+- [x] **Step 4: Extend Python schema and run GREEN**
 
 Add dataclass fields and `_run_process` arguments in `tools/benchmark_synthetic.py`; pass the new flags only for AURORA mode and preserve LF CSV writing. Parse the new JSON values directly with no inferred byte totals.
 
@@ -511,7 +511,7 @@ python -m pytest -q \
 
 Expected: all focused Python tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add runtime/src/main.cpp tools/benchmark_synthetic.py tests/python/test_cpp_parity.py tests/python/test_benchmark_schema.py

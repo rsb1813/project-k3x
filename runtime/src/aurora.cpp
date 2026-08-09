@@ -88,7 +88,7 @@ Result<DraftProposal> AuroraReplayDraftProvider::propose(
         }
         if (generated.value().token_ids.size() != selected.value() ||
             reads_after.calls < reads_before.calls ||
-            reads_after.requested_bytes < reads_before.requested_bytes) {
+            reads_after.completed_bytes < reads_before.completed_bytes) {
             return Result<DraftProposal>::failure(
                 ErrorCode::invalid_state, "invalid AURORA replay result");
         }
@@ -99,7 +99,7 @@ Result<DraftProposal> AuroraReplayDraftProvider::propose(
             generated.value().decode_nanoseconds;
         stats_.reader_calls += reads_after.calls - reads_before.calls;
         stats_.reader_bytes +=
-            reads_after.requested_bytes - reads_before.requested_bytes;
+            reads_after.completed_bytes - reads_before.completed_bytes;
         stats_.routing_decisions += generated.value().routing_decisions;
         stats_.routing_selected_experts +=
             generated.value().routing_selected_experts;
