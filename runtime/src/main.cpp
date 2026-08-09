@@ -41,6 +41,8 @@ int main(int argc, char** argv) {
     std::string cuda_transfer_name = "synchronous";
     std::string cuda_resident_bytes_text = "0";
     std::string cuda_pinned_bytes_text = "0";
+    std::string l1_expert_cache_name = "disabled";
+    std::string l1_expert_cache_bytes_text = "0";
     bool diagnostics = false;
     std::size_t count = 0;
     for (int index = 1; index + 1 < argc; index += 2) {
@@ -61,10 +63,43 @@ int main(int argc, char** argv) {
         else if (key == "--cuda-transfer") cuda_transfer_name = value;
         else if (key == "--cuda-resident-bytes") cuda_resident_bytes_text = value;
         else if (key == "--cuda-pinned-bytes") cuda_pinned_bytes_text = value;
+        else if (key == "--l1-expert-cache") l1_expert_cache_name = value;
+        else if (key == "--l1-expert-cache-bytes") l1_expert_cache_bytes_text = value;
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
     }
 
     k3x::BackendOptions backend_options;
+    k3x::RuntimeOptions runtime_options;
+    runtime_options.incremental = mode == "incremental";
+    runtime_options.diagnostics = diagnostics;
+    if (l1_expert_cache_name == "disabled") {
+        runtime_options.l1_expert_cache = k3x::L1ExpertCacheMode::disabled;
+    } else if (l1_expert_cache_name == "static") {
+        runtime_options.l1_expert_cache = k3x::L1ExpertCacheMode::static_admission;
+    } else {
+        std::cerr << "unknown L1 expert cache mode: " << l1_expert_cache_name << '\n';
+        return 2;
+    }
+    const auto* l1_begin = l1_expert_cache_bytes_text.data();
+    const auto* l1_end = l1_begin + l1_expert_cache_bytes_text.size();
+    const auto l1_parse = std::from_chars(
+        l1_begin, l1_end, runtime_options.l1_expert_cache_bytes);
+    if (l1_expert_cache_bytes_text.empty() || l1_parse.ec != std::errc{} ||
+        l1_parse.ptr != l1_end) {
+        std::cerr << "invalid L1 expert cache byte capacity: "
+                  << l1_expert_cache_bytes_text << '\n';
+        return 2;
+    }
+    if (runtime_options.l1_expert_cache == k3x::L1ExpertCacheMode::static_admission &&
+        runtime_options.l1_expert_cache_bytes == 0) {
+        std::cerr << "static L1 expert cache requires a positive byte capacity\n";
+        return 2;
+    }
+    if (runtime_options.l1_expert_cache == k3x::L1ExpertCacheMode::disabled &&
+        runtime_options.l1_expert_cache_bytes != 0) {
+        std::cerr << "disabled L1 expert cache requires a zero byte capacity\n";
+        return 2;
+    }
     if (backend_name == "cpu") {
         backend_options.kind = k3x::BackendKind::cpu;
     } else if (backend_name == "cuda-dense") {
@@ -227,7 +262,7 @@ int main(int argc, char** argv) {
         return 3;
     }
     auto result = k3x::generate_greedy(
-        reader.value(), *backend, prompt, count, mode == "incremental", diagnostics);
+        reader.value(), *backend, prompt, count, runtime_options);
     if (!result) {
         std::cerr << (result.message().empty() ? k3x::error_code_name(result.error())
                                                : result.message()) << '\n';

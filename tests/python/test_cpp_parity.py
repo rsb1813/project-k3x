@@ -72,6 +72,51 @@ def test_cpp_runner_rejects_invalid_cuda_execution_options(
 
 
 @pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (["--l1-expert-cache", "clock"], "unknown L1 expert cache mode: clock"),
+        (
+            ["--l1-expert-cache-bytes", "-1"],
+            "invalid L1 expert cache byte capacity: -1",
+        ),
+        (
+            ["--l1-expert-cache", "static"],
+            "static L1 expert cache requires a positive byte capacity",
+        ),
+        (
+            ["--l1-expert-cache-bytes", "1"],
+            "disabled L1 expert cache requires a zero byte capacity",
+        ),
+    ],
+)
+def test_cpp_runner_rejects_invalid_l1_expert_cache_options(
+    arguments: list[str], message: str
+) -> None:
+    result = subprocess.run(
+        [str(cpp_binary("k3x_run")), *arguments],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == message
+
+
+def test_cpp_runner_accepts_static_l1_expert_cache_for_cpu() -> None:
+    result = subprocess.run(
+        [
+            str(cpp_binary("k3x_run")),
+            "--l1-expert-cache",
+            "static",
+            "--l1-expert-cache-bytes",
+            "65536",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 3
+
+
+@pytest.mark.parametrize(
     "arguments",
     [
         ["--backend", "cpu", "--cuda-allocation", "reused"],

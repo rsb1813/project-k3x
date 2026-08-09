@@ -615,22 +615,21 @@ Result<GenerationResult> generate_greedy(Reader& reader,
                                          ComputeBackend& backend,
                                          std::span<const std::uint32_t> prompt,
                                          std::size_t count,
-                                         bool incremental,
-                                         bool diagnostics) {
+                                         RuntimeOptions options) {
     if (prompt.empty()) return Result<GenerationResult>::failure(ErrorCode::invalid_extent, "empty prompt");
     try {
-        Engine engine(reader, backend, diagnostics);
+        Engine engine(reader, backend, options.diagnostics);
         GenerationResult result;
-        if (incremental) {
+        if (options.incremental) {
             auto state = engine.empty_state();
             Vector logits;
-            if (diagnostics) result.prefill_layer_outputs.resize(engine.layer_nanoseconds().size());
+            if (options.diagnostics) result.prefill_layer_outputs.resize(engine.layer_nanoseconds().size());
             const auto prefill_start = std::chrono::steady_clock::now();
             for (const auto token : prompt) {
                 std::vector<Vector> token_layers;
                 logits = engine.forward(token, state, ProfilePhase::prefill,
-                                        diagnostics ? &token_layers : nullptr);
-                if (diagnostics) {
+                                        options.diagnostics ? &token_layers : nullptr);
+                if (options.diagnostics) {
                     result.prefill_logits.insert(result.prefill_logits.end(), logits.begin(), logits.end());
                     for (std::size_t layer = 0; layer < token_layers.size(); ++layer) {
                         result.prefill_layer_outputs[layer].insert(
@@ -641,7 +640,7 @@ Result<GenerationResult> generate_greedy(Reader& reader,
             }
             result.prefill_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - prefill_start).count();
-            if (diagnostics) {
+        if (options.diagnostics) {
                 result.prefill_state = engine.flatten_state(state);
                 result.prefill_routed_experts = engine.routed_experts();
             }
@@ -685,6 +684,16 @@ Result<GenerationResult> generate_greedy(Reader& reader,
 }
 
 Result<GenerationResult> generate_greedy(Reader& reader,
+                                         ComputeBackend& backend,
+                                         std::span<const std::uint32_t> prompt,
+                                         std::size_t count,
+                                         bool incremental,
+                                         bool diagnostics) {
+    return generate_greedy(reader, backend, prompt, count,
+                           RuntimeOptions{incremental, diagnostics});
+}
+
+Result<GenerationResult> generate_greedy(Reader& reader,
                                          std::span<const std::uint32_t> prompt,
                                          std::size_t count,
                                          bool incremental,
@@ -692,5 +701,13 @@ Result<GenerationResult> generate_greedy(Reader& reader,
     auto backend = make_cpu_backend();
     return generate_greedy(reader, *backend, prompt, count, incremental,
                            diagnostics);
+}
+
+Result<GenerationResult> generate_greedy(Reader& reader,
+                                         std::span<const std::uint32_t> prompt,
+                                         std::size_t count,
+                                         RuntimeOptions options) {
+    auto backend = make_cpu_backend();
+    return generate_greedy(reader, *backend, prompt, count, options);
 }
 }
