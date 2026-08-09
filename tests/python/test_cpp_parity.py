@@ -569,33 +569,47 @@ def test_cpp_aurora_replay_preserves_natural_target_execution(
     subprocess.run([*common, "--json", str(baseline_output)], check=True)
     baseline = json.loads(baseline_output.read_text(encoding="utf-8"))
     for policy in ("fixed", "adaptive"):
-        aurora_output = tmp_path / f"aurora-{policy}.json"
-        subprocess.run(
-            [
-                *common,
-                "--speculative-mode", "aurora-replay",
-                "--speculative-block-size", "2",
-                "--aurora-draft-k", "4",
-                "--aurora-block-policy", policy,
-                "--json", str(aurora_output),
-            ],
-            check=True,
-        )
-        aurora = json.loads(aurora_output.read_text(encoding="utf-8"))
-        assert aurora["token_ids"] == baseline["token_ids"]
-        assert aurora["final_state"] == baseline["final_state"]
-        assert aurora["routed_experts"] == baseline["routed_experts"]
-        assert aurora["routed_k"] == baseline["routed_k"]
-        assert aurora["reader_completed_bytes"] == baseline["reader_completed_bytes"]
-        assert aurora["speculative_mode"] == "aurora-replay"
-        assert aurora["aurora_draft_k"] == 4
-        assert aurora["aurora_block_policy"] == policy
-        assert aurora["draft_proposal_calls"] > 0
-        assert aurora["draft_candidate_tokens"] > 0
-        assert aurora["draft_replayed_context_tokens"] > 0
-        assert aurora["draft_reader_read_calls"] > 0
-        assert aurora["draft_reader_completed_bytes"] > 0
-        assert aurora["draft_routing_decisions"] > 0
+        results = {}
+        for mode in ("aurora-replay", "aurora-persistent"):
+            aurora_output = tmp_path / f"{mode}-{policy}.json"
+            subprocess.run(
+                [
+                    *common,
+                    "--speculative-mode", mode,
+                    "--speculative-block-size", "2",
+                    "--aurora-draft-k", "4",
+                    "--aurora-block-policy", policy,
+                    "--json", str(aurora_output),
+                ],
+                check=True,
+            )
+            aurora = json.loads(aurora_output.read_text(encoding="utf-8"))
+            results[mode] = aurora
+            assert aurora["token_ids"] == baseline["token_ids"]
+            assert aurora["final_state"] == baseline["final_state"]
+            assert aurora["routed_experts"] == baseline["routed_experts"]
+            assert aurora["routed_k"] == baseline["routed_k"]
+            assert aurora["reader_completed_bytes"] == baseline["reader_completed_bytes"]
+            assert aurora["speculative_mode"] == mode
+            assert aurora["aurora_draft_k"] == 4
+            assert aurora["aurora_block_policy"] == policy
+            assert aurora["draft_proposal_calls"] > 0
+            assert aurora["draft_candidate_tokens"] > 0
+            assert aurora["draft_reader_read_calls"] > 0
+            assert aurora["draft_reader_completed_bytes"] > 0
+            assert aurora["draft_routing_decisions"] > 0
+        replay = results["aurora-replay"]
+        persistent = results["aurora-persistent"]
+        assert replay["draft_replayed_context_tokens"] > 0
+        assert replay["draft_context_prefill_tokens"] == 0
+        assert replay["draft_incremental_forward_calls"] == 0
+        assert persistent["draft_replayed_context_tokens"] == 0
+        assert persistent["draft_context_prefill_tokens"] == 5
+        assert persistent["draft_incremental_forward_calls"] > 0
+        assert persistent["draft_kda_checkpoint_bytes"] > 0
+        assert persistent["draft_reader_completed_bytes"] < replay[
+            "draft_reader_completed_bytes"
+        ]
 
 
 def test_cpp_aurora_replay_preflight_rejects_invalid_combinations(
@@ -626,6 +640,15 @@ def test_cpp_aurora_replay_preflight_rejects_invalid_combinations(
         ["--speculative-mode", "none", "--aurora-draft-k", "4"],
         ["--speculative-mode", "aurora-replay", "--speculative-block-size", "2",
          "--aurora-draft-k", "4", "--mode", "full"],
+        ["--speculative-mode", "aurora-persistent", "--speculative-block-size", "2",
+         "--aurora-draft-k", "4", "--mode", "full"],
+        ["--speculative-mode", "aurora-persistent", "--speculative-block-size", "2",
+         "--aurora-draft-k", "4", "--routing-mode", "fixed",
+         "--routing-fixed-k", "4"],
+        ["--speculative-mode", "aurora-persistent", "--speculative-block-size", "3",
+         "--aurora-draft-k", "4"],
+        ["--speculative-mode", "aurora-persistent", "--speculative-block-size", "2",
+         "--aurora-draft-k", "16"],
     )
     for index, arguments in enumerate(invalid_arguments):
         output = tmp_path / f"invalid-{index}.json"

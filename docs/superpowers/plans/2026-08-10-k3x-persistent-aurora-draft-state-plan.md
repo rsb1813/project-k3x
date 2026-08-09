@@ -304,7 +304,7 @@ git commit -m "feat: add persistent AURORA provider"
 - Consumes: persistent provider and five new counters.
 - Produces: `--speculative-mode aurora-persistent`, JSON/CSV fields, and fail-closed option validation.
 
-- [ ] **Step 1: Add CLI and schema RED tests**
+- [x] **Step 1: Add CLI and schema RED tests**
 
 Extend `test_cpp_parity.py` so a Top-16 artifact runs `aurora-persistent` for fixed and adaptive token-major modes and matches natural token/final-state/routes. Add rejection cases for full mode, fixed target routing, draft K 0/16, block size 3, unknown policy, and AURORA options used with `none`.
 
@@ -320,11 +320,11 @@ K3X_BUILD_DIR=build python -m pytest \
 
 Expected: unknown speculative mode or missing JSON/schema keys.
 
-- [ ] **Step 2: Wire the CLI with unchanged preflight order**
+- [x] **Step 2: Wire the CLI with unchanged preflight order**
 
 Accept `aurora-persistent` wherever `aurora-replay` currently accepts shared AURORA options. Keep provider construction after complete option/artifact validation and before output mutation. Open a separate draft Reader, create a CPU backend, and instantiate the persistent provider. Do not alter `none` or `scripted-reference` defaults.
 
-- [ ] **Step 3: Export five fields to JSON, CSV, and Python records**
+- [x] **Step 3: Export five fields to JSON, CSV, and Python records**
 
 Use these exact external names.
 
@@ -338,7 +338,7 @@ draft_kda_checkpoint_bytes
 
 Update `BenchmarkRecord`, sample parsing, equality checks for invariant counters, and `write_results`. Persistent mode must pass AURORA draft arguments exactly as replay does.
 
-- [ ] **Step 4: Verify focused and full CPU GREEN**
+- [x] **Step 4: Verify focused and full CPU GREEN**
 
 ```bash
 cmake --build build -j2
@@ -350,7 +350,7 @@ K3X_BUILD_DIR=build python -m pytest \
 ctest --test-dir build --output-on-failure
 ```
 
-- [ ] **Step 5: Commit CLI and schema**
+- [x] **Step 5: Commit CLI and schema**
 
 ```bash
 git add runtime/src/main.cpp tools/benchmark_synthetic.py \

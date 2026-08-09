@@ -108,6 +108,11 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["draft_selected_length_4"] == 0
     assert payload["draft_scheduler_growths"] == 0
     assert payload["draft_scheduler_backoffs"] == 0
+    assert payload["draft_context_prefill_tokens"] == 0
+    assert payload["draft_incremental_forward_calls"] == 0
+    assert payload["draft_rollback_events"] == 0
+    assert payload["draft_mla_positions_cropped"] == 0
+    assert payload["draft_kda_checkpoint_bytes"] == 0
     assert payload["speculative_verification_blocks"] == 0
     assert payload["target_decode_forward_calls"] == 0
     assert payload["target_block_forward_calls"] == 0
@@ -198,6 +203,11 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert row["aurora_draft_k"] == "0"
     assert row["aurora_block_policy"] == "none"
     assert row["draft_reader_completed_bytes"] == "0"
+    assert row["draft_context_prefill_tokens"] == "0"
+    assert row["draft_incremental_forward_calls"] == "0"
+    assert row["draft_rollback_events"] == "0"
+    assert row["draft_mla_positions_cropped"] == "0"
+    assert row["draft_kda_checkpoint_bytes"] == "0"
     assert row["target_block_forward_calls"] == "0"
     assert row["target_positions_evaluated"] == "0"
     assert row["expert_major_payload_loads"] == "0"

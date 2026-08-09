@@ -171,6 +171,11 @@ class BenchmarkRecord:
     draft_selected_length_4: int = 0
     draft_scheduler_growths: int = 0
     draft_scheduler_backoffs: int = 0
+    draft_context_prefill_tokens: int = 0
+    draft_incremental_forward_calls: int = 0
+    draft_rollback_events: int = 0
+    draft_mla_positions_cropped: int = 0
+    draft_kda_checkpoint_bytes: int = 0
     speculative_verification_blocks: int = 0
     speculative_proposed_draft_tokens: int = 0
     speculative_accepted_draft_tokens: int = 0
@@ -299,7 +304,7 @@ def _run_process(
         "--speculative-block-size", str(speculative_block_size),
         "--speculative-script", speculative_script,
     ]
-    if speculative_mode == "aurora-replay":
+    if speculative_mode in ("aurora-replay", "aurora-persistent"):
         command.extend([
             "--aurora-draft-k", str(aurora_draft_k),
             "--aurora-block-policy", aurora_block_policy,
@@ -794,6 +799,11 @@ def benchmark_once(
         "draft_selected_length_4",
         "draft_scheduler_growths",
         "draft_scheduler_backoffs",
+        "draft_context_prefill_tokens",
+        "draft_incremental_forward_calls",
+        "draft_rollback_events",
+        "draft_mla_positions_cropped",
+        "draft_kda_checkpoint_bytes",
         "speculative_verification_blocks",
         "speculative_proposed_draft_tokens",
         "speculative_accepted_draft_tokens",
@@ -842,8 +852,8 @@ def benchmark_once(
         speculative_mode,
         speculative_verification,
         speculative_block_size,
-        aurora_draft_k if speculative_mode == "aurora-replay" else 0,
-        aurora_block_policy if speculative_mode == "aurora-replay" else "none",
+        aurora_draft_k if speculative_mode in ("aurora-replay", "aurora-persistent") else 0,
+        aurora_block_policy if speculative_mode in ("aurora-replay", "aurora-persistent") else "none",
     )
     option_fields = (
         "backend",
@@ -1124,6 +1134,19 @@ def benchmark_once(
         draft_selected_length_4=samples[0]["draft_selected_length_4"],
         draft_scheduler_growths=samples[0]["draft_scheduler_growths"],
         draft_scheduler_backoffs=samples[0]["draft_scheduler_backoffs"],
+        draft_context_prefill_tokens=samples[0][
+            "draft_context_prefill_tokens"
+        ],
+        draft_incremental_forward_calls=samples[0][
+            "draft_incremental_forward_calls"
+        ],
+        draft_rollback_events=samples[0]["draft_rollback_events"],
+        draft_mla_positions_cropped=samples[0][
+            "draft_mla_positions_cropped"
+        ],
+        draft_kda_checkpoint_bytes=samples[0][
+            "draft_kda_checkpoint_bytes"
+        ],
         speculative_verification_blocks=samples[0][
             "speculative_verification_blocks"
         ],
@@ -1221,7 +1244,10 @@ def main() -> int:
     parser.add_argument("--routing-critical", action="store_true")
     parser.add_argument(
         "--speculative-mode",
-        choices=("none", "scripted-reference", "aurora-replay"),
+        choices=(
+            "none", "scripted-reference", "aurora-replay",
+            "aurora-persistent",
+        ),
         default="none",
     )
     parser.add_argument(
