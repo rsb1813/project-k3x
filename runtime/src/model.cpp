@@ -293,12 +293,45 @@ public:
                 for (const auto& group : plan.value().groups) {
                     const auto payload = load_expert(layer, group.expert_id);
                     ++result.payload_loads;
-                    for (const auto& assignment : group.assignments) {
-                        routed_outputs[assignment.token_index]
-                                      [assignment.router_slot] =
-                            expert_payload(
-                                latents[assignment.token_index], layer,
-                                payload, phase);
+                    if (backend_.kind() == BackendKind::cuda_custom) {
+                        std::vector<float> flat_inputs;
+                        flat_inputs.reserve(
+                            group.assignments.size() * config_.latent);
+                        for (const auto& assignment : group.assignments) {
+                            const auto& latent =
+                                latents[assignment.token_index];
+                            flat_inputs.insert(flat_inputs.end(),
+                                               latent.begin(), latent.end());
+                        }
+                        auto batch = backend_.mxfp4_situ_mlp_batch(
+                            flat_inputs, group.assignments.size(),
+                            payload->view(config_.group_size),
+                            config_.situ_beta, config_.situ_linear,
+                            static_cast<std::uint32_t>(layer), phase);
+                        if (!batch ||
+                            batch.value().size() != group.assignments.size()) {
+                            throw std::runtime_error(
+                                "batched expert FFN backend failure");
+                        }
+                        for (std::size_t index = 0;
+                             index < group.assignments.size(); ++index) {
+                            if (batch.value()[index].size() != config_.latent) {
+                                throw std::runtime_error(
+                                    "batched expert FFN output shape changed");
+                            }
+                            const auto& assignment = group.assignments[index];
+                            routed_outputs[assignment.token_index]
+                                          [assignment.router_slot] =
+                                std::move(batch.value()[index]);
+                        }
+                    } else {
+                        for (const auto& assignment : group.assignments) {
+                            routed_outputs[assignment.token_index]
+                                          [assignment.router_slot] =
+                                expert_payload(
+                                    latents[assignment.token_index], layer,
+                                    payload, phase);
+                        }
                     }
                 }
 
@@ -1202,8 +1235,16 @@ Result<GenerationResult> generate_speculative(
     const bool expert_major =
         options.speculative_verification ==
         SpeculativeVerificationMode::expert_major;
+    const auto& backend_options = backend.options();
+    const bool cuda_expert_major =
+        backend.kind() == BackendKind::cuda_custom &&
+        backend_options.cuda_boundary == CudaBoundaryMode::ffn_block &&
+        backend_options.cuda_allocation == CudaAllocationMode::reused &&
+        backend_options.cuda_weights == CudaWeightMode::transient &&
+        backend_options.cuda_transfer == CudaTransferMode::synchronous &&
+        backend_options.cuda_moe_fusion == CudaMoeFusionMode::none;
     if (expert_major &&
-        (backend.kind() != BackendKind::cpu ||
+        ((backend.kind() != BackendKind::cpu && !cuda_expert_major) ||
          options.l1_expert_cache != L1ExpertCacheMode::disabled ||
          options.l2_expert_schedule != L2ExpertScheduleMode::blocking ||
          options.routing_policy.mode != RoutingMode::natural ||
