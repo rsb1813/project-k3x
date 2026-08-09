@@ -218,3 +218,14 @@
 - Benchmark result: B-0003 measures `cuda-dense` FP32 at 12.1261, 17.4560, 18.0041, and 17.9018 decode tok/s across reference, reuse, residency, and grouped stages. `cuda-custom` measures 12.2647, 17.1425, 17.2723, and 16.8348 tok/s. Grouping reduces activation H2D and synchronization but does not beat scalar residency. Fully enabled BF16 measures 17.6861 and 17.0032 tok/s with maximum absolute error 0.00402409 and exact tokens.
 - Reason: allocation reuse and residency have positive end-to-end evidence, while grouping and BF16 do not have a throughput win on this fixture. The synthetic graph is too small and CPU-resident to justify changing the public default or projecting full-model performance.
 - Revisit: after a wider layer/block GPU executor removes CPU graph boundaries, and again after native-Linux full-dimension slice measurements establish representative transfer and compute costs.
+
+## D-020 — Keep the FFN block boundary experimental after B-0004
+
+- Date: 2026-08-09.
+- Status: accepted and measured.
+- Decision: retain `operation` as the default correctness boundary. Expose `ffn-block` only with explicit `cuda-custom` selection and recommend `reused + resident + scalar + FP32` for synthetic CUDA experimentation. Do not promote BF16 or grouped FFN blocks to defaults.
+- Alternatives considered: a generic device-tensor boundary; a full decoder-layer CUDA executor; the dependency-closed FFN block; immediately defaulting to the fastest measured block configuration.
+- Evidence: dense/shared and exact native MXFP4 block tests cover FP32, BF16-RNE, residency hits, exact capacity bypass, invalid later-expert preflight, ordered outputs, one shared input upload, and one final synchronization. Natural routing traces, tokens, layers, logits, and recurrent state match the operation reference. Fresh verification passes CPU CTest 5/5 and pytest 70 passed/26 skipped, CUDA CTest 11/11 and pytest 95 passed/1 skipped; six CUDA memcheck targets report zero errors.
+- Benchmark result: B-0004 measures FP32 operation-scalar at 16.3576 decode tok/s and FFN-block-scalar at 17.0713, a 4.36% gain. D2H falls 24.77%, activation H2D falls 26.48%, and synchronization falls 32.86%. FP32 FFN-block-grouped reaches 17.0270. BF16 block-scalar reaches 16.9847 with exact tokens but maximum absolute error 0.00402409, so it does not beat FP32 block-scalar.
+- Reason: the dependency-closed boundary produces a measured end-to-end gain and materially reduces traffic while preserving exact routing, but the evidence is one tiny synthetic WSL2 graph. Kernel time rises and most wall time remains in the CPU-driven graph, so changing the public default would overstate generality.
+- Revisit: after KDA/MLA or a larger dependency-closed layer block moves to CUDA, after native-Linux repetition, and after a full-dimension bounded checkpoint slice establishes representative expert sizes and transfer deadlines.

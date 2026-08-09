@@ -491,7 +491,7 @@ git commit -m "feat: add FFN block ablation reporting"
 - Modify last: `PROJECT_STATE.md`
 - Create: `results/b0004-ffn-blocks.json`
 
-- [ ] **Step 1: Run the complete CPU and CUDA suites**
+- [x] **Step 1: Run the complete CPU and CUDA suites**
 
 ```bash
 cmake --build build-cpu -j2
@@ -502,29 +502,29 @@ ctest --test-dir build-cuda --output-on-failure
 pytest -q
 ```
 
-- [ ] **Step 2: Run all six CUDA sanitizer targets**
+- [x] **Step 2: Run all six CUDA sanitizer targets**
 
 Run memcheck for the existing four CUDA targets plus `test_cuda_situ` and `test_cuda_ffn`. Record the exact error summary for each target.
 
-- [ ] **Step 3: Regenerate bounded synthetic artifacts**
+- [x] **Step 3: Regenerate bounded synthetic artifacts**
 
 Regenerate `artifacts/m3-source.k3x` and `artifacts/m3-synthetic.k3x` through the checked converter path. Verify the whole-artifact checksum and model identity. Do not download any full Kimi K3 checkpoint.
 
-- [ ] **Step 4: Measure B-0004**
+- [x] **Step 4: Measure B-0004**
 
 Run the four-case matrix with three warmups and 20 measured iterations on native WSL Linux and RTX 5080. Repeat the matrix with the fully enabled BF16 representation. Record decode tok/s, TTFT where available, split H2D, D2H, synchronization count, resident hit rate, peak VRAM, kernel time, I/O stall time, exact generated tokens, and representation-specific numeric error.
 
 Do not choose a new default from throughput alone. The FFN block path may become the experimental recommendation only if correctness holds and the measured traffic reduction does not introduce an unexplained regression.
 
-- [ ] **Step 5: Validate ledger invariants**
+- [x] **Step 5: Validate ledger invariants**
 
 Check that every measured row names the commit, hardware, model identity, mode, context length, warmup/sample counts, and enabled optimizations. Mark unavailable metrics as not measured. Never copy theoretical values into measured fields.
 
-- [ ] **Step 6: Update durable project documents in order**
+- [x] **Step 6: Update durable project documents in order**
 
 Update `ARCHITECTURE.md` with the actual implemented boundary, `DECISIONS.md` with the measured accept/reject decision, `BENCHMARKS.md` with B-0004, then README, checklist, and context notes. Update `PROJECT_STATE.md` last with the last known-good commit/test state and the newly measured bottleneck.
 
-- [ ] **Step 7: Perform final read-only review and fix Critical or Important findings**
+- [x] **Step 7: Perform final read-only review and fix Critical or Important findings**
 
 Capture `git status --short` and the relevant diff, request one Terra high read-only final review, verify that it made no filesystem changes, and apply any evidence-backed Critical or Important findings in one batch. Re-run affected tests after fixes.
 

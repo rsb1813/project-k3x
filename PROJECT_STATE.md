@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 2 implementation, measurement, public merge, and Linux CI are complete. Milestone 3 implementation and dry-run instrumentation are complete; full verification and B-0004 measurement are next.
+Milestone 2 implementation, measurement, public merge, and Linux CI are complete. Milestone 3 implementation, full verification, Compute Sanitizer validation, B-0004 measurement, and final read-only review are complete; public integration is in progress.
 
 State recorded on 2026-08-09 on branch `codex/milestone-three-ffn-blocks` after selecting the dependency-closed CUDA FFN boundary.
 
@@ -17,30 +17,23 @@ State recorded on 2026-08-09 on branch `codex/milestone-three-ffn-blocks` after 
 - Same-input grouped CUDA projections for KDA Q/K/V, dense and shared gate/up, and routed-expert native MXFP4 gate/up. Expert down remains scalar after CPU SiTU-GLU.
 - Split immutable-weight and activation H2D profiler aggregation, stable runtime-counter export, and a deterministic four-stage sequential ablation runner.
 - B-0003 measurement with three warmups and 20 samples for both FP32 CUDA identities across reference, reuse, residency, and grouped stages, plus fully enabled BF16 measurements.
+- Milestone 3 `operation|ffn-block` boundary switch with `cuda-custom`-only capability validation and operation reference default.
+- Dependency-closed dense/shared and ordered exact native MXFP4 expert FFN blocks that retain gate/up, strict SiTU-GLU, and down projection work on one CUDA stream through the final result transfer.
+- Device SiTU timing, FFN block call/expert counters, exact generated-token capture, prefill routing trace diagnostics, and a provenance-checked four-case FFN boundary ablation runner.
+- B-0004 FP32/BF16 measurement with three warmups and 20 samples across operation/FFN-block and scalar/grouped paths.
 
 ## Work in progress
 
-- The TITAN Ledger and README are synchronized with B-0003.
-- Public PR #2 is merged. Final read-only review found no Critical or Important issue, and the post-merge Linux workflow succeeded.
-- Milestone 3 selects a `cuda-custom`-only FFN block boundary that keeps gate/up outputs and SiTU-GLU activations on device through the down projection. No Milestone 3 production code has been implemented yet.
-- The design specification and detailed eight-task TDD implementation plan are complete.
-- Task 1 implements `operation|ffn-block`, rejects non-`cuda-custom` block requests before backend construction, and serializes zero-initialized FFN block counters.
-- Task 2 implements preflight-complete dense and ordered native MXFP4 CPU block composition as the CUDA correctness oracle.
-- Task 3 implements strict FP32 SiTU computation with FP32 or BF16-RNE device output. CUDA literal/guard CTest passed and Compute Sanitizer reported 0 errors; fast math is absent.
-- Task 4 implements one-stream dense FFN execution with one input upload, one final output download, and one final synchronization. Warm resident weights remain device-resident through gate/up/SiTU/down.
-- Task 5 implements ordered exact native MXFP4 expert groups with full preflight, existing hard-capacity residency, exact bypass, one shared latent upload, and one final synchronization.
-- Task 6 connects dense, shared, and routed block execution while preserving natural routing and CPU score mixing. Diagnostics now serialize the exact prefill routed-expert trace.
-- Task 7 records SiTU device time, preserves generated token IDs in benchmark artifacts, and provides a provenance-checked four-case FFN boundary ablation runner.
-- Latest graph verification: CPU parity 22 passed/22 skipped; CUDA CTest 11/11; CUDA parity 43 passed/1 skipped.
-- Latest full CPU verification remains CTest 5/5 and pytest 68 passed/23 skipped.
+- The TITAN Ledger, README, checklist, context notes, and compact/raw B-0004 artifacts are synchronized with the measured Milestone 3 implementation.
+- Final Terra high read-only review found one Important fixed-group validation gap. Commit `3df8d3f` rejects non-32 MXFP4 FFN views before side effects and adds the group-size 16/64 regression. Documentation commit, public PR, Linux CI, and merge remain in the publication gate.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; builds: `build-linux` and `build-cuda`.
 
 ## Known failures and blockers
 
 - Windows Smart App Control still blocks unsigned `k3x_run.exe`; WSL2 is the verified local CUDA path and native Linux remains the final performance authority.
-- The executable checkpoint is synthetic and tiny. No full Kimi K3 weights have been downloaded, and B-0003 is not a full-model throughput claim.
-- The graph remains CPU-driven. Activation/result transfers, host activation and routing work, and frequent operation boundaries remain.
+- The executable checkpoint is synthetic and tiny. No full Kimi K3 weights have been downloaded, and B-0004 is not a full-model throughput claim.
+- The graph remains CPU-driven outside FFN blocks. KDA, MLA, routing, score mixing, residual work, state management, and non-FFN boundaries remain on the host.
 - Static residency has no eviction, L1 RAM tier, L2 NVMe tier, prefetch, pinned-memory overlap, or deadline scheduler.
 - `cuda-dense` intentionally keeps native MXFP4 on the CPU as its documented comparison identity. `cuda-custom` is the exact GPU MXFP4 path.
 - GPU utilization, GPU memory bandwidth, NVMe GB/token, I/O stall time, and system-wide transfer overlap remain unmeasured.
@@ -48,11 +41,11 @@ State recorded on 2026-08-09 on branch `codex/milestone-three-ffn-blocks` after 
 
 ## Next concrete tasks
 
-1. Run full CPU/CUDA verification, six sanitizer targets, reproducible artifact conversion, and B-0004 FP32/BF16 measurement.
-2. Implement and independently measure dense/shared and exact native MXFP4 FFN blocks while preserving the operation reference path.
-3. Build the first asynchronous L0/L1 transfer pipeline only after the wider boundary exposes representative transfer deadlines.
+1. Complete the Milestone 3 read-only review, public PR, Linux CI, and verified merge.
+2. Design and implement the first exact asynchronous L0/L1 transfer pipeline against the now-measured FFN block deadline boundary while preserving a synchronous reference mode.
+3. Add pinned host staging, explicit transfer deadlines, overlap instrumentation, and deterministic no-output-change tests before selecting an asynchronous default.
 4. Add full-dimension bounded checkpoint slices before any full Kimi K3 throughput claim.
-5. Continue with expert cache policies, task/session profiles, adaptive Top-K, and exact rescue in charter order.
+5. Continue with L2 NVMe integration, expert cache policies, task/session profiles, adaptive Top-K, and exact rescue in charter order.
 
 ## Hardware assumptions
 
@@ -69,21 +62,23 @@ State recorded on 2026-08-09 on branch `codex/milestone-three-ffn-blocks` after 
 
 ## Latest measured bottleneck
 
-B-0003 measures `cuda-dense` FP32 reference, reuse, residency, and grouped decode at 12.1261, 17.4560, 18.0041, and 17.9018 tok/s. `cuda-custom` measures 12.2647, 17.1425, 17.2723, and 16.8348 tok/s. Reusable allocation removes most allocation churn, and static residency reduces weight H2D by about 88.5–88.9%.
+B-0004 measures the FP32 operation-scalar reference at 16.3576 tok/s and the FP32 FFN-block scalar path at 17.0713 tok/s, a 4.36% decode increase. The block path reduces activation H2D from 126,144 to 92,736 bytes, D2H from 111,600 to 83,952 bytes, and synchronization from 630 to 423 while preserving exact generated tokens and routing trace.
 
-Grouping reduces activation H2D by 21.86–23.74% and synchronization by 19.23–22.86%, but it is 0.57–2.53% slower than scalar residency. CUDA-event kernel time remains only 16.02–19.01 ms for the fastest scalar-residency runs while end-to-end decode spans hundreds of milliseconds. The next measured bottleneck is the narrow CPU/GPU operation boundary and CPU-resident graph, not redundant weight upload or allocation alone.
+The FP32 FFN-block grouped path reaches 17.0270 tok/s, so scalar is the synthetic experimental recommendation and operation remains the correctness default. BF16 block scalar reaches 16.9847 tok/s with maximum absolute error 0.00402409 and does not displace FP32. CUDA-event kernel time rises from 20.35 ms to 22.24 ms in the FP32 scalar comparison, so the remaining measured bottleneck is CPU-driven KDA/MLA, routing, residual and state work, non-FFN transfer boundaries, and launch orchestration rather than FFN activation traffic alone.
 
 The derived uncached full-model expert traffic remains 25.83 GB/token, but it is not a measured full-model value. Native-Linux NVMe traffic, cache reuse, and full Kimi K3 throughput remain unknown.
 
 ## Last known-good state
 
-- Public `main`: `f71238c963786707cf426eead4ca4c75a0fdcfe6`; Linux workflow `31291903865` succeeded.
-- Latest measured code commit: `a468db8` (`feat: add CUDA residency ablation reporting`).
-- CPU verification: CTest 5/5; pytest 65 passed and 23 CUDA-only skipped.
-- CUDA verification: CTest 9/9; pytest 87 passed and one CPU-build-only skipped.
-- Compute Sanitizer: `test_cuda_memory`, `test_cuda_residency`, `test_cuda_dense`, and `test_cuda_mxfp4` each report zero errors.
+- Public `main`: `cd72613d0da1645e407980758646d4332a9f3225`; Milestone 2 Linux CI succeeded.
+- Latest measured code commit: `0f6bbdd` (`feat: add FFN block ablation reporting`).
+- Latest validated code commit: `3df8d3f` (`fix: enforce native MXFP4 FFN groups`). The valid group-32 B-0004 path is unchanged.
+- CPU verification: CTest 5/5; pytest 70 passed and 26 CUDA-only skipped.
+- CUDA verification: CTest 11/11; pytest 95 passed and one CPU-build-only skipped.
+- Compute Sanitizer: `test_cuda_dense`, `test_cuda_mxfp4`, `test_cuda_memory`, `test_cuda_residency`, `test_cuda_situ`, and `test_cuda_ffn` each report zero errors.
 - Exact generated tokens: `[43, 32, 28, 49, 9, 28]` across the complete CUDA option matrix and BF16 fully enabled modes.
-- B-0003 raw JSON/CSV: `results/m2-cuda-dense/` and `results/m2-cuda-custom/`.
+- B-0004 artifact SHA-256: `59c1f83f571fb59dcdad27ef80da8d42b03176dfb5fa63ae5195717c141775ed`.
+- B-0004 compact manifest: `results/b0004-ffn-blocks.json`; raw JSON/CSV: `results/b0004-ffn-blocks-fp32/` and `results/b0004-ffn-blocks-bf16/`.
 
 ## Proposed component status
 

@@ -118,6 +118,50 @@ BF16 halves dense operand traffic and resident bytes but does not beat the corre
 
 Raw records are stored under `results/m2-cuda-dense/` and `results/m2-cuda-custom/`. The first timed `cuda-custom` attempt was interrupted by the shell timeout after writing only partial stage files; the complete command was rerun from the reference stage with a sufficient timeout, and only the final overwritten records plus `summary.json` are retained.
 
+## B-0004 — Milestone 3 CUDA FFN block boundary ablation
+
+| Field | Value |
+|---|---|
+| Evidence | measured |
+| Date | 2026-08-09 |
+| Measurement commit | `0f6bbdd` |
+| Hardware | AMD Ryzen 7 9800X3D host; NVIDIA GeForce RTX 5080, 16,303 MiB |
+| Environment | WSL2 Ubuntu 24.04.4, Linux 6.18.33.2, CUDA Toolkit 13.3.1, native `sm_120` |
+| Model/checkpoint | regenerated deterministic 4-layer, 24-expert, 178-tensor synthetic K3X; SHA-256 `59c1f83f571fb59dcdad27ef80da8d42b03176dfb5fa63ae5195717c141775ed` |
+| Mode | `cuda-custom`, reused allocations, 8 MiB exact static residency; operation/block crossed with scalar/grouped scheduling |
+| Context length | 4 prompt tokens, IDs `[1, 7, 3, 9]` |
+| Generated tokens | 6, IDs `[43, 32, 28, 49, 9, 28]` in every row |
+| Warmup / samples | 3 / 20 process runs per row |
+| NVMe GB/token | not measured; async storage is not implemented |
+| Logical K3X reads | 110,936 bytes/generated token in every row |
+| Static-cache hit rate | 83.17% in every row; this is synthetic immutable-weight residency, not the future three-tier cache |
+| Average Top-K | 2, fixed synthetic router setting |
+| Speculative acceptance / unique experts per verification block | not applicable; speculation is disabled |
+| Cold rescue count | not applicable; exact rescue is not implemented |
+| GPU utilization / memory bandwidth | not measured |
+| I/O stall time | not measured; no asynchronous storage path exists |
+
+| Precision / boundary / scheduling | Decode tok/s | Prefill tok/s | TTFT ms | System RSS bytes | H2D bytes/run | Weight / activation H2D | H2D GB/token | D2H bytes/run | Peak backend VRAM bytes | Sync | FFN blocks / experts | Kernel ms/run | Max abs. error |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| FP32 operation scalar | 16.3576 | 8.5014 | 1,158.914 | 506,961,920 | 699,264 | 573,120 / 126,144 | 0.000116544 | 111,600 | 574,144 | 630 | 0 / 0 | 20.348 | 1.751e-7 |
+| FP32 operation grouped | 16.4210 | 8.6722 | 1,150.607 | 507,334,656 | 669,312 | 573,120 / 96,192 | 0.000111552 | 111,600 | 600,160 | 486 | 0 / 0 | 21.981 | 1.751e-7 |
+| FP32 FFN block scalar | **17.0713** | **8.9305** | 1,148.841 | 507,174,912 | 665,856 | 573,120 / 92,736 | 0.000110976 | 83,952 | 600,416 | 423 | 63 / 54 | 22.244 | 1.790e-7 |
+| FP32 FFN block grouped | 17.0270 | 8.8581 | **1,144.731** | 507,342,848 | 652,032 | 573,120 / 78,912 | 0.000108672 | 83,952 | 617,568 | 369 | 63 / 54 | 24.186 | 1.790e-7 |
+| BF16 operation scalar | 16.3874 | 8.8158 | 1,144.064 | 482,033,664 | 374,688 | 301,248 / 73,440 | 0.000062448 | 111,600 | 302,080 | 630 | 0 / 0 | 18.353 | 0.00402409 |
+| BF16 operation grouped | 16.1931 | 8.8731 | 1,144.529 | 481,652,736 | 356,256 | 301,248 / 55,008 | 0.000059376 | 111,600 | 315,808 | 486 | 0 / 0 | 22.794 | 0.00402409 |
+| BF16 FFN block scalar | **16.9847** | **9.1219** | 1,132.774 | 482,033,664 | 349,344 | 301,248 / 48,096 | 0.000058224 | 83,952 | 315,808 | 423 | 63 / 54 | 21.284 | 0.00402409 |
+| BF16 FFN block grouped | 16.9632 | 9.0652 | **1,129.242** | 481,914,880 | 342,432 | 301,248 / 41,184 | 0.000057072 | 83,952 | 324,768 | 369 | 63 / 54 | 24.209 | 0.00402409 |
+
+Against the matching FP32 operation-scalar row, FFN-block-scalar improves decode by 4.36%, reduces activation H2D by 26.48%, D2H by 24.77%, and synchronization by 32.86%. Against operation-grouped, FFN-block-grouped improves decode by 3.69%, reduces activation H2D by 17.96%, D2H by 24.77%, and synchronization by 24.07%.
+
+BF16 block-scalar improves 3.64% over BF16 operation-scalar, while BF16 block-grouped improves 4.76% over its grouped match. BF16 preserves exact tokens but does not beat FP32 block-scalar and retains the previously measured 0.00402409 maximum absolute error. The maximum relative error remains 17.5009 because reference values near zero dominate it.
+
+The traffic reduction produces only a modest end-to-end gain, while CUDA-event kernel time rises in the block rows. Most elapsed time therefore remains in CPU KDA/MLA, routing, residual work, non-FFN boundaries, process startup, and synchronization outside the fused dependency chain. `operation` remains the default reference; FP32 FFN-block-scalar is an experimental synthetic recommendation only.
+
+Raw JSON/CSV records are stored under `results/b0004-ffn-blocks-fp32/` and `results/b0004-ffn-blocks-bf16/`.
+
+Post-measurement validation note: final read-only review found that the new FFN-block preflight accepted non-native MXFP4 group metadata even though the CUDA kernel is fixed to E8M0/32. Commit `3df8d3f` adds a RED/GREEN regression for group sizes 16 and 64 and rejects all non-32 gate/up/down views before side effects. The valid group-32 execution path measured at `0f6bbdd` is unchanged. Post-fix CPU CTest 5/5 and pytest 70/26, CUDA CTest 11/11 and pytest 95/1, `test_cuda_ffn` Compute Sanitizer 0 errors, and one-sample FP32/BF16 four-case smoke all passed. The smoke is validation evidence, not a replacement performance measurement.
+
 ## Derived bottleneck model — not a benchmark
 
 The released dimensions imply 17,547,264 bytes per native MXFP4 routed expert. With no cache reuse, natural Top-16 across 92 MoE layers implies 25,829,572,608 expert bytes/token. Applying the P44 Pro published 7.0 GB/s sequential figure gives a derived expert-only ceiling of about 0.271 tok/s and implies roughly 94.6% expert NVMe-byte avoidance for a 5 tok/s target.
@@ -127,6 +171,6 @@ These values are capacity and traffic estimates. They are not inserted into B-00
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
-- Wider layer/block GPU execution after the Milestone 2 operation-level ablation.
+- Native-Linux repetition of B-0004 and a larger KDA/MLA or decoder subgraph boundary.
 - Full-dimension bounded-slice runtime before any full-model throughput claim.
 - Tiered-runtime NVMe, pinned H2D, cache-hit, utilization, memory-bandwidth, and I/O-stall counters.

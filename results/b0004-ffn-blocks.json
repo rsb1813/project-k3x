@@ -1,0 +1,26 @@
+{
+  "benchmark_id": "B-0004",
+  "commit": "0f6bbdd",
+  "date": "2026-08-09",
+  "artifact_sha256": "59c1f83f571fb59dcdad27ef80da8d42b03176dfb5fa63ae5195717c141775ed",
+  "hardware": "AMD Ryzen 7 9800X3D; NVIDIA GeForce RTX 5080",
+  "environment": "WSL2 Ubuntu 24.04.4; Linux 6.18.33.2; CUDA 13.3.1; sm_120",
+  "warmup": 3,
+  "samples": 20,
+  "prompt_token_ids": [1, 7, 3, 9],
+  "generated_token_ids": [43, 32, 28, 49, 9, 28],
+  "raw_result_directories": [
+    "results/b0004-ffn-blocks-fp32",
+    "results/b0004-ffn-blocks-bf16"
+  ],
+  "records": [
+    {"precision":"fp32","name":"operation-scalar","decode_tok_s":16.357560597576956,"prefill_tok_s":8.501416603269389,"ttft_ms":1158.9141140000002,"h2d_bytes":699264,"d2h_bytes":111600,"sync":630,"peak_vram_bytes":574144,"kernel_ns":20348384,"max_abs_error":1.750999999994285e-7},
+    {"precision":"fp32","name":"operation-grouped","decode_tok_s":16.420964779071674,"prefill_tok_s":8.67223330746229,"ttft_ms":1150.6065050000002,"h2d_bytes":669312,"d2h_bytes":111600,"sync":486,"peak_vram_bytes":600160,"kernel_ns":21980784,"max_abs_error":1.750999999994285e-7},
+    {"precision":"fp32","name":"ffn-block-scalar","decode_tok_s":17.071310704149006,"prefill_tok_s":8.930479501266477,"ttft_ms":1148.841071,"h2d_bytes":665856,"d2h_bytes":83952,"sync":423,"peak_vram_bytes":600416,"kernel_ns":22244016,"max_abs_error":1.7900000004456018e-7},
+    {"precision":"fp32","name":"ffn-block-grouped","decode_tok_s":17.02700424811667,"prefill_tok_s":8.858107526248652,"ttft_ms":1144.7307525,"h2d_bytes":652032,"d2h_bytes":83952,"sync":369,"peak_vram_bytes":617568,"kernel_ns":24186384,"max_abs_error":1.7900000004456018e-7},
+    {"precision":"bf16","name":"operation-scalar","decode_tok_s":16.387412699827948,"prefill_tok_s":8.815819051047121,"ttft_ms":1144.063541,"h2d_bytes":374688,"d2h_bytes":111600,"sync":630,"peak_vram_bytes":302080,"kernel_ns":18352576,"max_abs_error":0.0040240890000000085},
+    {"precision":"bf16","name":"operation-grouped","decode_tok_s":16.193133508360162,"prefill_tok_s":8.873060925630618,"ttft_ms":1144.5292264999998,"h2d_bytes":356256,"d2h_bytes":111600,"sync":486,"peak_vram_bytes":315808,"kernel_ns":22793728,"max_abs_error":0.0040240890000000085},
+    {"precision":"bf16","name":"ffn-block-scalar","decode_tok_s":16.984718427609664,"prefill_tok_s":9.121901851223162,"ttft_ms":1132.7739975,"h2d_bytes":349344,"d2h_bytes":83952,"sync":423,"peak_vram_bytes":315808,"kernel_ns":21284224,"max_abs_error":0.0040240890000000085},
+    {"precision":"bf16","name":"ffn-block-grouped","decode_tok_s":16.963180632737696,"prefill_tok_s":9.065186983390928,"ttft_ms":1129.2421555,"h2d_bytes":342432,"d2h_bytes":83952,"sync":369,"peak_vram_bytes":324768,"kernel_ns":24208624,"max_abs_error":0.0040240890000000085}
+  ]
+}

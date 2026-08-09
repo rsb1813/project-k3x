@@ -88,4 +88,4 @@
 - [x] dense/shared FFN block 구현과 graph 연결.
 - [x] exact native MXFP4 routed expert block group 구현과 graph 연결.
 - [x] profiler/schema/ablation runner 확장.
-- [ ] 전체 correctness, sanitizer, B-0004, TITAN Ledger 갱신.
+- [x] 전체 correctness, sanitizer, B-0004, TITAN Ledger 갱신.

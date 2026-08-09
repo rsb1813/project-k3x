@@ -92,6 +92,12 @@ CUDA execution now exposes three independent switches while preserving the Miles
 
 Static residency stores exact FP32, BF16-rounded, or native E2M1 plus E8M0/32 representations. Entries that do not fit bypass residency and use the exact transient path. This milestone deliberately has no eviction policy and is not yet the L0/L1/L2 expert cache.
 
+## Milestone 3 — exact CUDA FFN blocks
+
+`--cuda-boundary ffn-block` keeps dense/shared gate, up, strict SiTU-GLU, and down intermediates on the GPU. Routed MoE blocks preserve natural Top-K routing, execute exact native MXFP4 expert triplets in router order, upload the shared latent once, and return only final expert outputs for unchanged CPU score mixing.
+
+The block boundary is `cuda-custom` only and remains opt-in. The default `operation` path is the correctness reference. B-0004 measures FP32 block-scalar at 17.0713 decode tok/s versus 16.3576 for its matched operation row, with 24.77% less D2H and 32.86% fewer synchronizations. This is a tiny synthetic WSL2 result, not a full Kimi K3 throughput claim.
+
 ## Quick start
 
 ### 1. Create an environment
@@ -161,7 +167,7 @@ Use `build\k3x_run.exe` on Windows.
 
 Select `--backend cuda-dense` or `--backend cuda-custom` only with a CUDA-enabled build. Use `--dense-precision bf16` for the opt-in BF16-rounded dense path. An unavailable CUDA request fails with `BACKEND_UNAVAILABLE`; it never changes the requested backend.
 
-The Milestone 2 switches are `--cuda-allocation`, `--cuda-weights`, `--cuda-batching`, and `--cuda-resident-bytes`. Defaults retain the exact reference behavior.
+The CUDA switches are `--cuda-allocation`, `--cuda-weights`, `--cuda-batching`, `--cuda-boundary`, and `--cuda-resident-bytes`. Defaults retain the exact operation reference behavior. `--cuda-boundary ffn-block` requires `--backend cuda-custom`.
 
 ### 6. Reproduce the synthetic benchmark
 
@@ -189,6 +195,19 @@ python tools/ablate_cuda_residency.py \
   --warmup 3 \
   --iterations 20 \
   --output-dir build-results/m2-cuda-custom
+```
+
+Run the exact four-case FFN boundary ablation with one checkpoint, commit, precision, and sample count.
+
+```bash
+python tools/ablate_cuda_ffn.py \
+  --artifact build-fixtures/synthetic.k3x \
+  --runner build-cuda/k3x_run \
+  --dense-precision fp32 \
+  --cuda-resident-bytes 8388608 \
+  --warmup 3 \
+  --iterations 20 \
+  --output-dir build-results/b0004-ffn-blocks-fp32
 ```
 
 ## Measured results
@@ -223,6 +242,15 @@ The CPU wins this deliberately tiny Milestone 1 workload. Milestone 2 then measu
 | `cuda-custom` FP32 decode tok/s | 12.26 | 17.14 | **17.27** | 16.83 |
 
 Reusable allocation removes most per-call allocation churn, and residency cuts measured synthetic weight H2D by about 88.5–88.9%. Grouping reduces activation traffic and synchronization but is slightly slower than scalar residency on both backends, so it remains opt-in. Fully enabled BF16 also remains opt-in because it does not beat FP32 scalar residency. These results validate mechanisms on the synthetic graph; they do not predict full Kimi K3 throughput. Raw results live in [`results/`](results/), and the complete measurement contract is in [`BENCHMARKS.md`](BENCHMARKS.md).
+
+Milestone 3 then compares matched `cuda-custom + reused + resident` operation and FFN-block boundaries.
+
+| Precision | Operation scalar | FFN block scalar | Operation grouped | FFN block grouped |
+|---|---:|---:|---:|---:|
+| FP32 decode tok/s | 16.3576 | **17.0713** | 16.4210 | 17.0270 |
+| BF16 decode tok/s | 16.3874 | **16.9847** | 16.1931 | 16.9632 |
+
+All eight B-0004 rows generate `[43, 32, 28, 49, 9, 28]`. FP32 block-scalar is the fastest measured Milestone 3 CUDA row, but `operation` remains the default because the evidence is synthetic, WSL2-only, and still dominated by the CPU-resident graph.
 
 ## K3X checkpoint format
 
