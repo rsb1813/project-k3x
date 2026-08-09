@@ -286,13 +286,13 @@ During layer-major verification, the stable first-use plan is unchanged. The CUD
 
 B-0016 validates exact graph parity and the physical reuse boundary separately. Five CUDA graph rows preserve greedy tokens, final KDA/MLA state, and committed routing. The released 3,584-by-3,072 single-expert fixture shows one payload H2D per batch instead of one per token, with zero numerical error for batch sizes two and four. It has `routing_semantics=false`, so it is kernel/traffic evidence rather than full-model token throughput. Learned drafting, dynamic block size, multi-expert persistent kernels, EcoSpec, MoE-Spec, AcceptMoE, and cross-layer prediction remain unimplemented. The normative design is in [`docs/superpowers/specs/2026-08-10-k3x-cuda-expert-major-design.md`](docs/superpowers/specs/2026-08-10-k3x-cuda-expert-major-design.md).
 
-## Milestone 16 accepted AURORA replay and adaptive scheduling design
+## Milestone 16 AURORA replay and adaptive scheduling
 
-Milestone 16 will add a replay-based self-speculative reference without changing the existing target verifier. A separate CPU Reader, backend, and RuntimeSession will execute the same K3X artifact with fixed reduced Top-K and propose actual candidate tokens from the complete committed prefix. Natural-routing token-major or expert-major target execution remains authoritative for tokens, routing, state, and bonus-token commit.
+The implemented standalone replay provider uses a separate CPU Reader, backend, and RuntimeSession to execute the same K3X artifact with fixed reduced Top-K and propose actual candidate tokens from the complete committed prefix. It enforces one outstanding proposal, exact committed-history synchronization, and latched lifecycle failures before further Reader access. `model.cpp` is owned once by `k3x_runtime`, allowing the provider to reuse the public greedy graph without a copied execution path.
 
-The accepted scheduler explores proposal lengths 1, 2, and 4 one rung at a time. It uses observed cumulative prefix survival and measured expert-major payload-load-to-assignment ratio, with immediate rejection backoff. Draft and target Reader, routing, time, and expert-union counters remain separate. B-0017 will compare fixed and adaptive policies on the natural Top-16 synthetic artifact without requiring a favorable result.
+The implemented pure scheduler explores proposal lengths 1, 2, and 4 one rung at a time. It uses observed cumulative prefix survival and measured expert-major payload-load-to-assignment ratio, with immediate rejection backoff. Provider tests prove that replay candidates equal an independent fixed-K4 greedy run and that draft Reader, routing, and time counters are isolated. Runtime target-feedback decoration, CLI construction, benchmark-schema export, and B-0017 remain in progress; natural target execution is therefore not yet wired to this provider through the CLI.
 
-This is an accepted design, not an implementation claim. Prefix replay is intentionally inefficient and will serve as the candidate oracle for a later persistent AURORA path that must crop or advance KDA and MLA draft state exactly. Reduced precision, resident-only drafting, trained DSpark, EcoSpec path selection, MoE-Spec budgets, and AcceptMoE verifier selection remain unimplemented. The normative design is in [`docs/superpowers/specs/2026-08-10-k3x-aurora-replay-adaptive-scheduling-design.md`](docs/superpowers/specs/2026-08-10-k3x-aurora-replay-adaptive-scheduling-design.md).
+Prefix replay is intentionally inefficient and serves as the candidate oracle for a later persistent AURORA path that must crop or advance KDA and MLA draft state exactly. Reduced precision, resident-only drafting, trained DSpark, EcoSpec path selection, MoE-Spec budgets, and AcceptMoE verifier selection remain unimplemented. The normative design is in [`docs/superpowers/specs/2026-08-10-k3x-aurora-replay-adaptive-scheduling-design.md`](docs/superpowers/specs/2026-08-10-k3x-aurora-replay-adaptive-scheduling-design.md).
 
 ## TITAN component registry
 
@@ -305,7 +305,7 @@ Status meanings are strict. `Implemented` requires code and passing tests. `Expe
 | CHRONOS | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
 | BLACKSTAR | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
 | PROMETHEUS-X | DSpark-compatible speculative decoding extended with MoE-aware expert-cost scheduling | Proposed |
-| AURORA | Self-speculative K3 fast-path drafter using reduced Top-K, reduced precision, and resident experts while retaining target verification | Accepted replay-reference design; unimplemented |
+| AURORA | Self-speculative K3 fast-path drafter using reduced Top-K, reduced precision, and resident experts while retaining target verification | Replay provider and adaptive scheduler implemented; runtime/CLI integration in progress |
 | ORBIT | Multi-layer lookahead expert residency and prefetch prediction | Proposed |
 | MERCURY | Dynamic CPU/GPU expert placement using predicted transfer-plus-compute latency | Proposed |
 | HELIOS | Automatic hardware/workload tuning for cache, Top-K, speculation, I/O, and placement parameters | Proposed |
@@ -318,7 +318,7 @@ Status meanings are strict. `Implemented` requires code and passing tests. `Expe
 | AUTO | Top-level operating mode that combines Balanced and Quality according to confidence, SHADOW divergence, failures, and task importance | Proposed |
 | SKYFORGE | Cloud-side bounded, resumable K3X model manufacturing with Conductor, Foundry Workers, and IMMORTAL Ledger | Proposed; no cloud resources provisioned |
 
-APOLLO and TITAN COUNCIL operate above token inference and would consume speculative and expert-major runtime interfaces rather than silently changing K3 routing. AURORA and PROMETHEUS-X occupy separate draft/verification experiments; only AURORA's replay-reference boundary has an accepted design, and neither is implemented. ORBIT predicts future use; MERCURY decides placement; HELIOS tunes exposed policies. SHADOW observes divergence, PHOENIX escalates quality, and AUTO coordinates those signals. These relationships do not imply implementation.
+APOLLO and TITAN COUNCIL operate above token inference and would consume speculative and expert-major runtime interfaces rather than silently changing K3 routing. AURORA and PROMETHEUS-X occupy separate draft/verification experiments; AURORA's replay provider and scheduler are implemented behind an unintegrated library boundary, while PROMETHEUS-X remains proposed. ORBIT predicts future use; MERCURY decides placement; HELIOS tunes exposed policies. SHADOW observes divergence, PHOENIX escalates quality, and AUTO coordinates those signals. These relationships do not imply implementation.
 
 VEILBREAK remains isolated from model correctness modes and from serving-layer policy enforcement. It cannot be described as a safety bypass, and no implementation or quality claim exists.
 

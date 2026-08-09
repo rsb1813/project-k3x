@@ -43,6 +43,7 @@ flowchart LR
 | Milestone 13 | [PR #13 merged](https://github.com/rsb1813/project-k3x/pull/13) | B-0014 token-major verification |
 | Milestone 14 | [PR #15 merged](https://github.com/rsb1813/project-k3x/pull/15) | B-0015 exact CPU expert-major verification |
 | Milestone 15 | [PR #17 merged](https://github.com/rsb1813/project-k3x/pull/17) at `c18df33` | B-0016 exact CUDA expert-major execution |
+| Milestone 16 | In development on `codex/milestone-sixteen-aurora` | AURORA replay provider and adaptive scheduler; B-0017 pending |
 
 PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 15 integration head `c18df33`; its branch and pull-request correctness runs `31332732339` and `31332745907` passed, followed by successful post-merge `main` run `31332852551`.
 
@@ -199,6 +200,12 @@ python tools/ablate_cuda_expert_major.py \
   --iterations 20 \
   --output-dir build-results/b0016-cuda-expert-major
 ```
+
+## Milestone 16 — AURORA replay reference in progress
+
+The standalone AURORA provider now replays the complete committed prefix through a separate CPU fixed-reduced-Top-K runtime and produces real candidate tokens. Its `{1,2,4}` scheduler gates one-rung exploration with Laplace-smoothed prefix survival and measured expert payload-load-to-assignment cost, then backs off immediately after rejection. Tests prove K4 candidate equality with an independent greedy oracle and enforce exact provider lifecycle and draft telemetry separation.
+
+This is not yet an end-to-end CLI feature or a speed claim. Natural target feedback, CLI/schema integration, B-0017, and full CPU/CUDA validation remain in progress. Prefix replay is intentionally slow and exists as the correctness oracle for a later persistent KDA/MLA draft-state path.
 
 ## Quick start
 
