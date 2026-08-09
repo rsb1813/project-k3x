@@ -1,7 +1,10 @@
 # B-0019 CPU와 CUDA persistent AURORA draft 배치의 동등성과 증거를 검증합니다.
 import hashlib
 import json
+import os
 from pathlib import Path
+
+import pytest
 
 from conftest import cpp_binary
 from tools.ablate_cuda_aurora_draft import CASES, PAIRS, run_ablation
@@ -24,6 +27,8 @@ def test_cuda_aurora_draft_matrix_is_canonical() -> None:
 def test_cuda_aurora_draft_ablation_preserves_pairs_and_raw_evidence(
     tmp_path: Path,
 ) -> None:
+    if os.environ.get("K3X_TEST_CUDA") != "1":
+        pytest.skip("live CUDA ablation requires K3X_TEST_CUDA=1")
     output = tmp_path / "b0019"
     summary = run_ablation(
         cpp_binary("k3x_run"), output_dir=output, warmups=0, samples=1
