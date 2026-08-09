@@ -1,6 +1,7 @@
 // 합성 K3 KDA/MLA/MoE/AttnRes graph를 외부 ML library 없이 실행합니다.
 #include "k3x/model.hpp"
 
+#include "k3x/expert_major.hpp"
 #include "k3x/format.hpp"
 #include "k3x/ops.hpp"
 
@@ -108,6 +109,274 @@ public:
         result.routing_selected_mass_sum = routing_selected_mass_sum_;
         result.routing_boundary_confidence_sum =
             routing_boundary_confidence_sum_;
+    }
+
+    struct ExpertMajorBlockResult {
+        std::vector<Vector> logits;
+        std::vector<ModelState> states_after_positions;
+        std::vector<std::vector<std::uint32_t>>
+            routed_experts_by_position;
+        std::vector<std::vector<std::uint32_t>> routed_k_by_position;
+        std::uint64_t unique_experts_sum{};
+        std::uint64_t unique_experts_max{};
+        std::uint64_t assignments{};
+        std::uint64_t payload_loads{};
+    };
+
+    ExpertMajorBlockResult forward_expert_major_block(
+        std::span<const std::uint32_t> tokens,
+        const ModelState& committed_state, ProfilePhase phase) {
+        if (tokens.empty() || config_.layers != 4 ||
+            committed_state.kda.size() != 3) {
+            throw std::runtime_error("unsupported expert-major graph");
+        }
+        active_forward_cycle_ = session_.acquire_forward_cycle();
+
+        struct Position {
+            Vector hidden;
+            std::vector<Vector> sources;
+        };
+        std::vector<Position> positions;
+        positions.reserve(tokens.size());
+        const auto& embedding = tensor("model.embeddings");
+        for (const auto token : tokens) {
+            if (token >= config_.vocab) {
+                throw std::runtime_error("token out of range");
+            }
+            positions.push_back({
+                .hidden = Vector(
+                    embedding.begin() + token * config_.hidden,
+                    embedding.begin() + (token + 1) * config_.hidden),
+            });
+        }
+
+        ExpertMajorBlockResult result;
+        result.routed_experts_by_position.resize(tokens.size());
+        result.routed_k_by_position.resize(tokens.size());
+        std::vector<std::vector<RoutingDecision>> decisions_by_position(
+            tokens.size());
+        std::vector<std::vector<KdaState>> kda_snapshots(
+            3, std::vector<KdaState>(tokens.size()));
+        std::vector<MlaState> mla_snapshots(tokens.size());
+        auto working_state = committed_state;
+
+        for (std::size_t layer = 0; layer < config_.layers; ++layer) {
+            const auto layer_start = std::chrono::steady_clock::now();
+            std::vector<Vector> prefix_sums(tokens.size());
+            std::vector<Vector> ffn_inputs(tokens.size());
+            for (std::size_t position = 0; position < tokens.size();
+                 ++position) {
+                auto& item = positions[position];
+                const auto prefix = item.hidden;
+                Vector attention_input = item.sources.empty()
+                    ? prefix
+                    : attention_residual(
+                          prefix, item.sources,
+                          layer_name(layer, "self_attention_residual"));
+                const bool pushed = layer % config_.residual_block == 0;
+                if (pushed) item.sources.push_back(prefix);
+                const auto normed = normalized(
+                    attention_input, tensor(layer_name(layer, "input_norm")),
+                    config_.epsilon);
+                Vector attention;
+                if (layer < 3) {
+                    attention = kda(normed, layer, working_state.kda[layer],
+                                    phase);
+                    kda_snapshots[layer][position] =
+                        working_state.kda[layer];
+                } else {
+                    attention = mla(normed, layer, working_state.mla, phase);
+                    mla_snapshots[position] = working_state.mla;
+                }
+                auto& prefix_sum = prefix_sums[position];
+                prefix_sum.resize(config_.hidden);
+                for (std::size_t index = 0; index < config_.hidden;
+                     ++index) {
+                    prefix_sum[index] = pushed
+                        ? attention[index]
+                        : prefix[index] + attention[index];
+                }
+                const auto ffn_input = attention_residual(
+                    prefix_sum, item.sources,
+                    layer_name(layer, "mlp_residual"));
+                ffn_inputs[position] = normalized(
+                    ffn_input,
+                    tensor(layer_name(layer, "post_attention_norm")),
+                    config_.epsilon);
+            }
+
+            if (layer == 0) {
+                for (std::size_t position = 0; position < tokens.size();
+                     ++position) {
+                    const auto ffn = dense(ffn_inputs[position], layer, phase);
+                    positions[position].hidden.resize(config_.hidden);
+                    for (std::size_t index = 0; index < config_.hidden;
+                         ++index) {
+                        positions[position].hidden[index] =
+                            prefix_sums[position][index] + ffn[index];
+                    }
+                }
+            } else {
+                const auto base = layer_name(layer, "feed_forward.");
+                std::vector<ExpertMajorTokenRoute> token_routes;
+                token_routes.reserve(tokens.size());
+                std::vector<Vector> latents;
+                std::vector<Vector> shared_outputs;
+                latents.reserve(tokens.size());
+                shared_outputs.reserve(tokens.size());
+                for (std::size_t position = 0; position < tokens.size();
+                     ++position) {
+                    const auto scores_raw = matvec(
+                        base + "router_weight", config_.experts,
+                        config_.hidden, ffn_inputs[position], layer, phase);
+                    const auto& bias = tensor(base + "correction_bias");
+                    Vector scores(config_.experts);
+                    for (std::size_t index = 0; index < scores.size();
+                         ++index) {
+                        scores[index] = sigmoid(scores_raw[index]);
+                    }
+                    auto routing = select_routing(
+                        scores, bias, config_.top_k,
+                        session_.options().routing_policy);
+                    if (!routing) {
+                        throw std::runtime_error(routing.message());
+                    }
+                    auto decision = std::move(routing.value());
+                    ExpertMajorTokenRoute route;
+                    route.expert_ids.reserve(decision.selected_k);
+                    route.contributions.reserve(decision.selected_k);
+                    result.routed_k_by_position[position].push_back(
+                        static_cast<std::uint32_t>(decision.selected_k));
+                    for (std::size_t slot = 0;
+                         slot < decision.selected_k; ++slot) {
+                        const auto expert_id = static_cast<std::uint32_t>(
+                            decision.expert_ids[slot]);
+                        route.expert_ids.push_back(expert_id);
+                        route.contributions.push_back(
+                            decision.normalized_weights[slot] *
+                            config_.routed_scale);
+                        result.routed_experts_by_position[position].push_back(
+                            expert_id);
+                    }
+                    token_routes.push_back(std::move(route));
+                    decisions_by_position[position].push_back(
+                        std::move(decision));
+                    latents.push_back(matvec(
+                        base + "routed_down_proj", config_.latent,
+                        config_.hidden, ffn_inputs[position], layer, phase));
+                    shared_outputs.push_back(
+                        shared_expert(ffn_inputs[position], layer, phase));
+                }
+
+                auto plan = build_expert_major_plan(token_routes);
+                if (!plan) throw std::runtime_error(plan.message());
+                result.unique_experts_sum += plan.value().groups.size();
+                result.unique_experts_max = std::max<std::uint64_t>(
+                    result.unique_experts_max, plan.value().groups.size());
+                result.assignments += plan.value().assignment_count;
+
+                std::vector<ExpertKey> selected;
+                selected.reserve(plan.value().groups.size());
+                for (const auto& group : plan.value().groups) {
+                    selected.push_back({layer, group.expert_id});
+                }
+                expert_store_.begin_access_set(
+                    active_forward_cycle_, layer, selected);
+
+                std::vector<std::vector<Vector>> routed_outputs(
+                    tokens.size());
+                for (std::size_t position = 0; position < tokens.size();
+                     ++position) {
+                    routed_outputs[position].resize(
+                        token_routes[position].expert_ids.size());
+                }
+                for (const auto& group : plan.value().groups) {
+                    const auto payload = load_expert(layer, group.expert_id);
+                    ++result.payload_loads;
+                    for (const auto& assignment : group.assignments) {
+                        routed_outputs[assignment.token_index]
+                                      [assignment.router_slot] =
+                            expert_payload(
+                                latents[assignment.token_index], layer,
+                                payload, phase);
+                    }
+                }
+
+                for (std::size_t position = 0; position < tokens.size();
+                     ++position) {
+                    Vector mixed(config_.latent, 0.0F);
+                    for (std::size_t slot = 0;
+                         slot < routed_outputs[position].size(); ++slot) {
+                        for (std::size_t index = 0; index < mixed.size();
+                             ++index) {
+                            mixed[index] +=
+                                token_routes[position].contributions[slot] *
+                                routed_outputs[position][slot][index];
+                        }
+                    }
+                    const auto routed_norm = normalized(
+                        mixed, tensor(base + "routed_norm"),
+                        config_.epsilon);
+                    auto output = matvec(
+                        base + "routed_up_proj", config_.hidden,
+                        config_.latent, routed_norm, layer, phase);
+                    for (std::size_t index = 0; index < output.size();
+                         ++index) {
+                        output[index] += shared_outputs[position][index];
+                        positions[position].hidden[index] =
+                            prefix_sums[position][index] + output[index];
+                    }
+                }
+            }
+            layer_nanoseconds_[layer] +=
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now() - layer_start).count();
+        }
+
+        result.logits.reserve(tokens.size());
+        result.states_after_positions.reserve(tokens.size());
+        for (std::size_t position = 0; position < tokens.size(); ++position) {
+            auto hidden = attention_residual(
+                positions[position].hidden, positions[position].sources,
+                "model.output_residual");
+            hidden = normalized(
+                hidden, tensor("model.final_norm"), config_.epsilon);
+            result.logits.push_back(matvec(
+                "model.lm_head", config_.vocab, config_.hidden, hidden,
+                profile_global_layer, phase));
+
+            auto snapshot = committed_state;
+            for (std::size_t layer = 0; layer < 3; ++layer) {
+                snapshot.kda[layer] = kda_snapshots[layer][position];
+            }
+            snapshot.mla = mla_snapshots[position];
+            result.states_after_positions.push_back(std::move(snapshot));
+        }
+        for (const auto& position_decisions : decisions_by_position) {
+            for (const auto& decision : position_decisions) {
+                record_routing_decision(decision);
+            }
+        }
+        return result;
+    }
+
+    void commit_expert_major_routes(
+        const ExpertMajorBlockResult& block,
+        std::size_t committed_positions) {
+        if (committed_positions > block.routed_k_by_position.size()) {
+            throw std::runtime_error("invalid committed route prefix");
+        }
+        if (!trace_routing_) return;
+        for (std::size_t position = 0; position < committed_positions;
+             ++position) {
+            routed_k_.insert(
+                routed_k_.end(), block.routed_k_by_position[position].begin(),
+                block.routed_k_by_position[position].end());
+            routed_experts_.insert(
+                routed_experts_.end(),
+                block.routed_experts_by_position[position].begin(),
+                block.routed_experts_by_position[position].end());
+        }
     }
 
     Vector forward(std::uint32_t token, ModelState& state, ProfilePhase phase,
@@ -593,6 +862,17 @@ private:
                       layer, phase);
     }
 
+    void record_routing_decision(const RoutingDecision& decision) {
+        ++routing_decisions_;
+        routing_selected_experts_ += decision.selected_k;
+        routing_normalized_entropy_sum_ += decision.normalized_entropy;
+        routing_selected_mass_sum_ += decision.selected_cumulative_mass;
+        routing_boundary_confidence_sum_ += decision.boundary_confidence;
+        if (decision.quality_floor_escalated) {
+            ++routing_quality_escalated_decisions_;
+        }
+    }
+
     Vector moe(const Vector& input, std::size_t layer, ProfilePhase phase) {
         const auto base = layer_name(layer, "feed_forward.");
         const auto scores_raw = matvec(base + "router_weight",
@@ -607,14 +887,7 @@ private:
         const auto& decision = routing.value();
         const auto& order = decision.expert_ids;
         const auto selected_k = decision.selected_k;
-        ++routing_decisions_;
-        routing_selected_experts_ += selected_k;
-        routing_normalized_entropy_sum_ += decision.normalized_entropy;
-        routing_selected_mass_sum_ += decision.selected_cumulative_mass;
-        routing_boundary_confidence_sum_ += decision.boundary_confidence;
-        if (decision.quality_floor_escalated) {
-            ++routing_quality_escalated_decisions_;
-        }
+        record_routing_decision(decision);
         Vector latent;
         Vector mixed(config_.latent, 0.0F);
         std::vector<ExpertKey> selected;
@@ -926,6 +1199,20 @@ Result<GenerationResult> generate_speculative(
     if (!options.incremental || block_size == 0) {
         return Result<GenerationResult>::failure(ErrorCode::invalid_state);
     }
+    const bool expert_major =
+        options.speculative_verification ==
+        SpeculativeVerificationMode::expert_major;
+    if (expert_major &&
+        (backend.kind() != BackendKind::cpu ||
+         options.l1_expert_cache != L1ExpertCacheMode::disabled ||
+         options.l2_expert_schedule != L2ExpertScheduleMode::blocking ||
+         options.routing_policy.mode != RoutingMode::natural ||
+         options.profile_observation ||
+         decode_config(reader.model_config()).layers != 4)) {
+        return Result<GenerationResult>::failure(
+            ErrorCode::invalid_state,
+            "unsupported expert-major runtime combination");
+    }
     if (prompt.empty()) {
         return Result<GenerationResult>::failure(
             ErrorCode::invalid_extent, "empty prompt");
@@ -995,16 +1282,103 @@ Result<GenerationResult> generate_speculative(
                         ErrorCode::invalid_state,
                         "draft anchor does not match committed token");
                 }
-                auto verification = verify_greedy_draft(
-                    proposal.value(), max_draft_tokens,
-                    engine.vocabulary_size(),
-                    [&](std::uint32_t input_token) {
-                        auto target_logits = engine.forward(
-                            input_token, state, ProfilePhase::decode);
-                        ++result.target_decode_forward_calls;
-                        return Result<std::uint32_t>::success(
-                            argmax(target_logits));
-                    });
+                auto verification = Result<DraftVerification>::failure(
+                    ErrorCode::invalid_state);
+                if (expert_major) {
+                    if (proposal.value().candidate_tokens.size() >
+                        max_draft_tokens) {
+                        return Result<GenerationResult>::failure(
+                            ErrorCode::invalid_extent);
+                    }
+                    for (const auto candidate :
+                         proposal.value().candidate_tokens) {
+                        if (candidate >= engine.vocabulary_size()) {
+                            return Result<GenerationResult>::failure(
+                                ErrorCode::invalid_extent);
+                        }
+                    }
+                    std::vector<std::uint32_t> block_inputs;
+                    block_inputs.reserve(
+                        proposal.value().candidate_tokens.size() + 1);
+                    block_inputs.push_back(proposal.value().anchor_token);
+                    block_inputs.insert(
+                        block_inputs.end(),
+                        proposal.value().candidate_tokens.begin(),
+                        proposal.value().candidate_tokens.end());
+                    auto block = engine.forward_expert_major_block(
+                        block_inputs, state, ProfilePhase::decode);
+                    std::vector<std::uint32_t> target_tokens;
+                    target_tokens.reserve(block.logits.size());
+                    for (const auto& target_logits : block.logits) {
+                        target_tokens.push_back(argmax(target_logits));
+                    }
+                    verification = verify_greedy_target_block(
+                        proposal.value(), max_draft_tokens,
+                        engine.vocabulary_size(), target_tokens);
+                    if (verification) {
+                        const auto committed_positions =
+                            verification.value().committed_tokens.size();
+                        if (committed_positions == 0 ||
+                            committed_positions >
+                                block.states_after_positions.size()) {
+                            return Result<GenerationResult>::failure(
+                                ErrorCode::invalid_state);
+                        }
+                        state = std::move(
+                            block.states_after_positions[
+                                committed_positions - 1]);
+                        engine.commit_expert_major_routes(
+                            block, committed_positions);
+                        ++result.target_block_forward_calls;
+                        result.target_positions_evaluated +=
+                            block_inputs.size();
+                        result.target_positions_discarded +=
+                            block_inputs.size() - committed_positions;
+                        result.target_decode_forward_calls +=
+                            block_inputs.size();
+                        result.expert_major_unique_experts_sum +=
+                            block.unique_experts_sum;
+                        result.expert_major_unique_experts_max =
+                            std::max(
+                                result.expert_major_unique_experts_max,
+                                block.unique_experts_max);
+                        result.expert_major_assignments += block.assignments;
+                        result.expert_major_payload_loads +=
+                            block.payload_loads;
+                        result.expert_major_reused_assignments +=
+                            block.assignments - block.payload_loads;
+                        if (options.diagnostics) {
+                            for (std::size_t position = 0;
+                                 position <
+                                     block.routed_k_by_position.size();
+                                 ++position) {
+                                result.evaluated_routed_k.insert(
+                                    result.evaluated_routed_k.end(),
+                                    block.routed_k_by_position[position]
+                                        .begin(),
+                                    block.routed_k_by_position[position]
+                                        .end());
+                                result.evaluated_routed_experts.insert(
+                                    result.evaluated_routed_experts.end(),
+                                    block.routed_experts_by_position[position]
+                                        .begin(),
+                                    block.routed_experts_by_position[position]
+                                        .end());
+                            }
+                        }
+                    }
+                } else {
+                    verification = verify_greedy_draft(
+                        proposal.value(), max_draft_tokens,
+                        engine.vocabulary_size(),
+                        [&](std::uint32_t input_token) {
+                            auto target_logits = engine.forward(
+                                input_token, state, ProfilePhase::decode);
+                            ++result.target_decode_forward_calls;
+                            return Result<std::uint32_t>::success(
+                                argmax(target_logits));
+                        });
+                }
                 if (!verification) {
                     if (auto* loader = session.expert_loader()) {
                         loader->wait_idle();

@@ -6,13 +6,21 @@
 #include <deque>
 #include <filesystem>
 #include <future>
+#include <iostream>
+#include <source_location>
 #include <stdexcept>
 #include <string_view>
 #include <vector>
 
 namespace {
-void require(bool condition) {
-    if (!condition) throw std::runtime_error("session cache requirement failed");
+void require(
+    bool condition,
+    const std::source_location location = std::source_location::current()) {
+    if (!condition) {
+        std::cerr << "session requirement failed at line "
+                  << location.line() << '\n';
+        throw std::runtime_error("session cache requirement failed");
+    }
 }
 
 class ScriptedDraftProvider final : public k3x::DraftProvider {
@@ -258,6 +266,160 @@ int main(int argc, char** argv) {
     require(mixed_reads.calls == first_reads.calls);
     require(mixed_reads.requested_bytes == first_reads.requested_bytes);
     require(mixed.verifications.size() == 4);
+
+    auto exact_options = options;
+    exact_options.l1_expert_cache = k3x::L1ExpertCacheMode::disabled;
+    exact_options.l1_expert_cache_bytes = 0;
+    auto exact_greedy_reader = k3x::Reader::open(
+        std::filesystem::path(argv[1]), reader_options);
+    require(static_cast<bool>(exact_greedy_reader));
+    auto exact_greedy_backend = k3x::make_cpu_backend();
+    k3x::RuntimeSession exact_greedy_session(exact_options);
+    auto exact_greedy = k3x::generate_greedy(
+        exact_greedy_reader.value(), *exact_greedy_backend, prompt, 6,
+        exact_greedy_session);
+    require(static_cast<bool>(exact_greedy));
+
+    auto run_exact_speculative = [&](ScriptedDraftProvider& provider,
+                                     k3x::RuntimeOptions run_options) {
+        auto exact_reader = k3x::Reader::open(
+            std::filesystem::path(argv[1]), reader_options);
+        require(static_cast<bool>(exact_reader));
+        auto exact_backend = k3x::make_cpu_backend();
+        k3x::RuntimeSession exact_session(run_options);
+        auto generated = k3x::generate_speculative(
+            exact_reader.value(), *exact_backend, prompt, 6,
+            exact_session, provider, 2);
+        return std::pair{std::move(generated),
+                         exact_reader.value().counters()};
+    };
+
+    ScriptedDraftProvider token_major_perfect({
+        {.anchor_token = greedy_tokens[0],
+         .candidate_tokens = {greedy_tokens[1], greedy_tokens[2]}},
+        {.anchor_token = greedy_tokens[3],
+         .candidate_tokens = {greedy_tokens[4]}},
+    });
+    auto [token_major_perfect_result, token_major_perfect_reads] =
+        run_exact_speculative(token_major_perfect, exact_options);
+    require(static_cast<bool>(token_major_perfect_result));
+
+    auto expert_major_options = exact_options;
+    expert_major_options.speculative_verification =
+        k3x::SpeculativeVerificationMode::expert_major;
+    ScriptedDraftProvider expert_major_perfect({
+        {.anchor_token = greedy_tokens[0],
+         .candidate_tokens = {greedy_tokens[1], greedy_tokens[2]}},
+        {.anchor_token = greedy_tokens[3],
+         .candidate_tokens = {greedy_tokens[4]}},
+    });
+    auto [expert_major_perfect_result, expert_major_perfect_reads] =
+        run_exact_speculative(expert_major_perfect, expert_major_options);
+    require(static_cast<bool>(expert_major_perfect_result));
+    require(expert_major_perfect_result.value().token_ids ==
+            exact_greedy.value().token_ids);
+    require(expert_major_perfect_result.value().final_state ==
+            exact_greedy.value().final_state);
+    require(expert_major_perfect_result.value().routed_experts ==
+            exact_greedy.value().routed_experts);
+    require(expert_major_perfect_result.value().routed_k ==
+            exact_greedy.value().routed_k);
+    require(expert_major_perfect_result.value().target_block_forward_calls == 2);
+    require(expert_major_perfect_result.value().target_positions_evaluated == 5);
+    require(expert_major_perfect_result.value().target_positions_discarded == 0);
+    require(expert_major_perfect_result.value().expert_major_payload_loads ==
+            expert_major_perfect_result.value().expert_major_unique_experts_sum);
+    require(expert_major_perfect_result.value().expert_major_assignments >
+            expert_major_perfect_result.value().expert_major_payload_loads);
+    require(expert_major_perfect_result.value().expert_major_reused_assignments ==
+            expert_major_perfect_result.value().expert_major_assignments -
+                expert_major_perfect_result.value().expert_major_payload_loads);
+    require(expert_major_perfect_reads.requested_bytes <
+            token_major_perfect_reads.requested_bytes);
+    require(expert_major_perfect.verifications.size() ==
+            token_major_perfect.verifications.size());
+    require(expert_major_perfect.verifications[0].committed_tokens ==
+            token_major_perfect.verifications[0].committed_tokens);
+    require(expert_major_perfect.verifications[1].committed_tokens ==
+            token_major_perfect.verifications[1].committed_tokens);
+
+    ScriptedDraftProvider token_major_mixed({
+        {.anchor_token = greedy_tokens[0],
+         .candidate_tokens = {greedy_tokens[1] ^ 1U, greedy_tokens[2]}},
+        {.anchor_token = greedy_tokens[1], .candidate_tokens = {}},
+        {.anchor_token = greedy_tokens[2],
+         .candidate_tokens = {greedy_tokens[3], greedy_tokens[4] ^ 1U}},
+        {.anchor_token = greedy_tokens[4], .candidate_tokens = {}},
+    });
+    auto [token_major_mixed_result, token_major_mixed_reads] =
+        run_exact_speculative(token_major_mixed, exact_options);
+    require(static_cast<bool>(token_major_mixed_result));
+    ScriptedDraftProvider expert_major_mixed({
+        {.anchor_token = greedy_tokens[0],
+         .candidate_tokens = {greedy_tokens[1] ^ 1U, greedy_tokens[2]}},
+        {.anchor_token = greedy_tokens[1], .candidate_tokens = {}},
+        {.anchor_token = greedy_tokens[2],
+         .candidate_tokens = {greedy_tokens[3], greedy_tokens[4] ^ 1U}},
+        {.anchor_token = greedy_tokens[4], .candidate_tokens = {}},
+    });
+    auto [expert_major_mixed_result, expert_major_mixed_reads] =
+        run_exact_speculative(expert_major_mixed, expert_major_options);
+    require(static_cast<bool>(expert_major_mixed_result));
+    require(expert_major_mixed_result.value().token_ids ==
+            exact_greedy.value().token_ids);
+    require(expert_major_mixed_result.value().final_state ==
+            exact_greedy.value().final_state);
+    require(expert_major_mixed_result.value().routed_experts ==
+            exact_greedy.value().routed_experts);
+    require(expert_major_mixed_result.value().routed_k ==
+            exact_greedy.value().routed_k);
+    require(expert_major_mixed_result.value().target_block_forward_calls == 4);
+    require(expert_major_mixed_result.value().target_positions_evaluated == 8);
+    require(expert_major_mixed_result.value().target_positions_discarded == 3);
+    require(expert_major_mixed.verifications.size() ==
+            token_major_mixed.verifications.size());
+    for (std::size_t index = 0;
+         index < expert_major_mixed.verifications.size(); ++index) {
+        require(expert_major_mixed.verifications[index].committed_tokens ==
+                token_major_mixed.verifications[index].committed_tokens);
+        require(expert_major_mixed.verifications[index].accepted_draft_tokens ==
+                token_major_mixed.verifications[index].accepted_draft_tokens);
+    }
+
+    auto require_expert_major_preflight_rejection =
+        [&](k3x::RuntimeOptions rejected_options) {
+            auto rejected_reader = k3x::Reader::open(
+                std::filesystem::path(argv[1]), reader_options);
+            require(static_cast<bool>(rejected_reader));
+            const auto before = rejected_reader.value().counters();
+            auto rejected_backend = k3x::make_cpu_backend();
+            k3x::RuntimeSession rejected_session(rejected_options);
+            ScriptedDraftProvider rejected_provider({});
+            auto rejected = k3x::generate_speculative(
+                rejected_reader.value(), *rejected_backend, prompt, 2,
+                rejected_session, rejected_provider, 2);
+            require(!rejected);
+            require(rejected.error() == k3x::ErrorCode::invalid_state);
+            require(rejected_provider.requests.empty());
+            const auto after = rejected_reader.value().counters();
+            require(after.calls == before.calls);
+            require(after.requested_bytes == before.requested_bytes);
+        };
+
+    auto rejected_l1 = expert_major_options;
+    rejected_l1.l1_expert_cache = k3x::L1ExpertCacheMode::static_admission;
+    rejected_l1.l1_expert_cache_bytes = 65536;
+    require_expert_major_preflight_rejection(rejected_l1);
+    auto rejected_deadline = expert_major_options;
+    rejected_deadline.l2_expert_schedule = k3x::L2ExpertScheduleMode::deadline;
+    require_expert_major_preflight_rejection(rejected_deadline);
+    auto rejected_routing = expert_major_options;
+    rejected_routing.routing_policy.mode = k3x::RoutingMode::fixed;
+    rejected_routing.routing_policy.fixed_k = 1;
+    require_expert_major_preflight_rejection(rejected_routing);
+    auto rejected_profile = expert_major_options;
+    rejected_profile.profile_observation = true;
+    require_expert_major_preflight_rejection(rejected_profile);
 
     ScriptedDraftProvider unused({});
     auto [single_result, single_reads] = run_speculative(unused, 1, 2);

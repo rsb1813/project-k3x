@@ -20,6 +20,7 @@
 
 namespace k3x {
 enum class L2ExpertScheduleMode { blocking, deadline };
+enum class SpeculativeVerificationMode { token_major, expert_major };
 
 struct RuntimeOptions {
     bool incremental{true};
@@ -30,6 +31,8 @@ struct RuntimeOptions {
     bool profile_observation{};
     L2ExpertScheduleMode l2_expert_schedule{L2ExpertScheduleMode::blocking};
     RoutingPolicyConfig routing_policy{};
+    SpeculativeVerificationMode speculative_verification{
+        SpeculativeVerificationMode::token_major};
 };
 
 class RuntimeSession {
@@ -101,6 +104,16 @@ struct GenerationResult {
     std::uint64_t speculative_accepted_draft_tokens{};
     std::uint64_t speculative_committed_tokens{};
     std::uint64_t speculative_max_proposal_tokens{};
+    std::uint64_t target_block_forward_calls{};
+    std::uint64_t target_positions_evaluated{};
+    std::uint64_t target_positions_discarded{};
+    std::uint64_t expert_major_unique_experts_sum{};
+    std::uint64_t expert_major_unique_experts_max{};
+    std::uint64_t expert_major_assignments{};
+    std::uint64_t expert_major_reused_assignments{};
+    std::uint64_t expert_major_payload_loads{};
+    std::vector<std::uint32_t> evaluated_routed_experts;
+    std::vector<std::uint32_t> evaluated_routed_k;
     L1ExpertCacheStats l1_expert_cache;
     ExpertLoadSchedulerStats expert_load_scheduler;
     std::uint64_t routing_decisions{};
