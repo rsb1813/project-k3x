@@ -646,6 +646,103 @@ def test_cpp_expert_major_speculation_preserves_exact_state_and_reuses_payloads(
     assert not unused_output.exists()
 
 
+def test_cuda_expert_major_speculation_preserves_exact_state_and_unions_h2d(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    if Path(os.environ.get("K3X_BUILD_DIR", "build")).name != "build-cuda":
+        pytest.skip("CUDA expert-major parity is exercised only against build-cuda")
+    runner = cpp_binary("k3x_run")
+    artifact = tmp_path / "synthetic.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    common = [
+        str(runner),
+        "--model", str(artifact),
+        "--prompt-ids", "1,7,3,9",
+        "--generate", "6",
+        "--mode", "incremental",
+        "--diagnostics", "true",
+        "--backend", "cuda-custom",
+        "--dense-precision", "fp32",
+        "--cuda-boundary", "ffn-block",
+        "--cuda-allocation", "reused",
+        "--cuda-weights", "transient",
+        "--cuda-transfer", "synchronous",
+        "--cuda-moe-fusion", "none",
+    ]
+
+    def run(name: str, extra: list[str]) -> dict:
+        output = tmp_path / f"{name}.json"
+        subprocess.run([*common, *extra, "--json", str(output)], check=True)
+        return json.loads(output.read_text(encoding="utf-8"))
+
+    greedy = run("cuda-greedy", [])
+    tokens = greedy["token_ids"]
+    perfect = f"{tokens[0]}:{tokens[1]},{tokens[2]};{tokens[3]}:{tokens[4]}"
+    mixed = (
+        f"{tokens[0]}:{tokens[1] ^ 1},{tokens[2]};"
+        f"{tokens[1]}:;"
+        f"{tokens[2]}:{tokens[3]},{tokens[4] ^ 1};"
+        f"{tokens[4]}:"
+    )
+    for case, script in (("perfect", perfect), ("mixed", mixed)):
+        speculative = [
+            "--speculative-mode", "scripted-reference",
+            "--speculative-block-size", "2",
+            "--speculative-script", script,
+        ]
+        token_major = run(f"cuda-token-{case}", speculative)
+        expert_major = run(
+            f"cuda-expert-{case}",
+            [
+                *speculative,
+                "--speculative-verification", "expert-major",
+            ],
+        )
+        assert expert_major["token_ids"] == greedy["token_ids"]
+        assert expert_major["final_state"] == greedy["final_state"]
+        assert expert_major["routed_experts"] == greedy["routed_experts"]
+        assert expert_major["routed_k"] == greedy["routed_k"]
+        assert expert_major["speculative_verification"] == "expert-major"
+        assert token_major["speculative_verification"] == "token-major"
+        assert expert_major["speculative_accepted_draft_tokens"] == token_major[
+            "speculative_accepted_draft_tokens"
+        ]
+        assert expert_major["speculative_committed_tokens"] == token_major[
+            "speculative_committed_tokens"
+        ]
+        assert expert_major["batched_expert_ffn_calls"] == expert_major[
+            "expert_major_payload_loads"
+        ]
+        assert expert_major["batched_expert_ffn_tokens"] == expert_major[
+            "expert_major_assignments"
+        ]
+        assert token_major["batched_expert_ffn_calls"] == 0
+        assert token_major["batched_expert_ffn_tokens"] == 0
+        if case == "perfect":
+            assert expert_major["weight_h2d_bytes"] < token_major[
+                "weight_h2d_bytes"
+            ]
+
+    rejected_output = tmp_path / "unsupported-cuda-expert-major.json"
+    rejected = subprocess.run(
+        [
+            str(runner),
+            "--speculative-mode", "scripted-reference",
+            "--speculative-block-size", "2",
+            "--speculative-verification", "expert-major",
+            "--backend", "cuda-custom",
+            "--json", str(rejected_output),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert rejected.returncode == 2
+    assert rejected.stderr.strip() == (
+        "CUDA expert-major verification requires ffn-block boundary"
+    )
+    assert not rejected_output.exists()
+
+
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
@@ -703,7 +800,55 @@ def test_cpp_expert_major_speculation_preserves_exact_state_and_reuses_payloads(
                 "--backend",
                 "cuda-dense",
             ],
-            "expert-major verification requires the CPU backend",
+            "expert-major verification requires CPU or cuda-custom backend",
+        ),
+        (
+            [
+                "--speculative-mode", "scripted-reference",
+                "--speculative-block-size", "2",
+                "--speculative-verification", "expert-major",
+                "--backend", "cuda-custom",
+                "--cuda-boundary", "ffn-block",
+            ],
+            "CUDA expert-major verification requires reused allocation",
+        ),
+        (
+            [
+                "--speculative-mode", "scripted-reference",
+                "--speculative-block-size", "2",
+                "--speculative-verification", "expert-major",
+                "--backend", "cuda-custom",
+                "--cuda-boundary", "ffn-block",
+                "--cuda-allocation", "reused",
+                "--cuda-weights", "resident",
+                "--cuda-resident-bytes", "65536",
+            ],
+            "CUDA expert-major verification requires transient weights",
+        ),
+        (
+            [
+                "--speculative-mode", "scripted-reference",
+                "--speculative-block-size", "2",
+                "--speculative-verification", "expert-major",
+                "--backend", "cuda-custom",
+                "--cuda-boundary", "ffn-block",
+                "--cuda-allocation", "reused",
+                "--cuda-transfer", "prefetch",
+                "--cuda-pinned-bytes", "1048576",
+            ],
+            "CUDA expert-major verification requires synchronous transfer",
+        ),
+        (
+            [
+                "--speculative-mode", "scripted-reference",
+                "--speculative-block-size", "2",
+                "--speculative-verification", "expert-major",
+                "--backend", "cuda-custom",
+                "--cuda-boundary", "ffn-block",
+                "--cuda-allocation", "reused",
+                "--cuda-moe-fusion", "routed-accumulate",
+            ],
+            "CUDA expert-major verification requires CUDA MoE fusion none",
         ),
         (
             [

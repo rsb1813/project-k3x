@@ -622,9 +622,37 @@ int main(int argc, char** argv) {
     }
     if (runtime_options.speculative_verification ==
         k3x::SpeculativeVerificationMode::expert_major) {
-        if (backend_options.kind != k3x::BackendKind::cpu) {
-            std::cerr << "expert-major verification requires the CPU backend\n";
+        if (backend_options.kind != k3x::BackendKind::cpu &&
+            backend_options.kind != k3x::BackendKind::cuda_custom) {
+            std::cerr << "expert-major verification requires CPU or cuda-custom backend\n";
             return 2;
+        }
+        if (backend_options.kind == k3x::BackendKind::cuda_custom) {
+            if (backend_options.cuda_boundary !=
+                k3x::CudaBoundaryMode::ffn_block) {
+                std::cerr << "CUDA expert-major verification requires ffn-block boundary\n";
+                return 2;
+            }
+            if (backend_options.cuda_allocation !=
+                k3x::CudaAllocationMode::reused) {
+                std::cerr << "CUDA expert-major verification requires reused allocation\n";
+                return 2;
+            }
+            if (backend_options.cuda_weights !=
+                k3x::CudaWeightMode::transient) {
+                std::cerr << "CUDA expert-major verification requires transient weights\n";
+                return 2;
+            }
+            if (backend_options.cuda_transfer !=
+                k3x::CudaTransferMode::synchronous) {
+                std::cerr << "CUDA expert-major verification requires synchronous transfer\n";
+                return 2;
+            }
+            if (backend_options.cuda_moe_fusion !=
+                k3x::CudaMoeFusionMode::none) {
+                std::cerr << "CUDA expert-major verification requires CUDA MoE fusion none\n";
+                return 2;
+            }
         }
         if (runtime_options.l1_expert_cache !=
             k3x::L1ExpertCacheMode::disabled) {
@@ -959,6 +987,10 @@ int main(int argc, char** argv) {
            << runtime.grouped_projection_members
            << ",\"ffn_block_calls\":" << runtime.ffn_block_calls
            << ",\"ffn_block_experts\":" << runtime.ffn_block_experts
+           << ",\"batched_expert_ffn_calls\":"
+           << runtime.batched_expert_ffn_calls
+           << ",\"batched_expert_ffn_tokens\":"
+           << runtime.batched_expert_ffn_tokens
            << ",\"fused_moe_calls\":" << runtime.fused_moe_calls
            << ",\"fused_moe_experts\":" << runtime.fused_moe_experts
            << ",\"pinned_host_bytes\":" << runtime.pinned_host_bytes
