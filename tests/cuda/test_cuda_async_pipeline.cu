@@ -117,11 +117,17 @@ int main() {
         {1}, 8, k3x::ProfilePhase::decode, compute);
     const auto invalid_phase = pipeline.consume(
         {1}, 7, k3x::ProfilePhase::prefill, compute);
+    const auto invalid_sequence = pipeline.consume(
+        {prepared.value().value, prepared.value().use_sequence + 1}, 7,
+        k3x::ProfilePhase::decode, compute);
     if (invalid_zero || invalid_stale || invalid_layer || invalid_phase ||
+        invalid_sequence ||
         invalid_zero.error() != k3x::ErrorCode::invalid_state ||
         invalid_stale.error() != k3x::ErrorCode::invalid_state ||
         invalid_layer.error() != k3x::ErrorCode::invalid_state ||
-        invalid_phase.error() != k3x::ErrorCode::invalid_state) {
+        invalid_phase.error() != k3x::ErrorCode::invalid_state ||
+        invalid_sequence.error() != k3x::ErrorCode::invalid_state ||
+        !unchanged_success_counters(after_prepare, runtime)) {
         cudaStreamDestroy(compute);
         return 10;
     }

@@ -100,6 +100,7 @@ struct Mxfp4MlpView {
 
 struct Mxfp4PrefetchToken {
     std::uint64_t value{};
+    std::uint64_t use_sequence{};
 };
 
 class ComputeBackend {

@@ -180,10 +180,19 @@ def run_transfer_ablation(
         ):
             raise RuntimeError("prefetch transfer counters are invalid")
     for synchronous, prefetch in ((records[0], records[1]), (records[2], records[3])):
-        if int(prefetch["stream_synchronization_count"]) > int(
+        if any(
+            int(prefetch[field]) != int(synchronous[field])
+            for field in (
+                "host_to_device_bytes",
+                "weight_h2d_bytes",
+                "activation_h2d_bytes",
+            )
+        ):
+            raise RuntimeError("matched H2D traffic changed")
+        if int(prefetch["stream_synchronization_count"]) != int(
             synchronous["stream_synchronization_count"]
         ):
-            raise RuntimeError("prefetch added host synchronization")
+            raise RuntimeError("matched synchronization count changed")
 
     deltas: list[dict[str, object]] = []
     for synchronous, prefetch in ((records[0], records[1]), (records[2], records[3])):

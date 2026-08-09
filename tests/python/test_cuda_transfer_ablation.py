@@ -142,6 +142,22 @@ def test_transfer_ablation_writes_raw_records_and_measured_deltas(
         (1, {"async_prefetch_calls": 0}, "prefetch"),
         (1, {"stream_synchronization_count": 11}, "synchronization"),
         (1, {"host_to_device_bytes": 101}, "H2D"),
+        (
+            1,
+            {"host_to_device_bytes": 101, "weight_h2d_bytes": 61},
+            "matched H2D",
+        ),
+        (
+            1,
+            {"host_to_device_bytes": 101, "activation_h2d_bytes": 41},
+            "matched H2D",
+        ),
+        (
+            1,
+            {"weight_h2d_bytes": 61, "activation_h2d_bytes": 39},
+            "matched H2D",
+        ),
+        (1, {"stream_synchronization_count": 9}, "matched synchronization"),
         (1, {"backend": "cuda-dense"}, "identity"),
         (1, {"cuda_boundary": "operation"}, "identity"),
         (1, {"cuda_allocation": "per-operation"}, "identity"),

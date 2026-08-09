@@ -1744,8 +1744,9 @@ public:
             return Result<std::vector<std::vector<float>>>::failure(
                 ErrorCode::backend_unavailable);
         }
-        if (!prepared_mxfp4_ || token.value == 0 ||
+        if (!prepared_mxfp4_ || token.value == 0 || token.use_sequence == 0 ||
             token.value != prepared_mxfp4_->token.value ||
+            token.use_sequence != prepared_mxfp4_->token.use_sequence ||
             layer != prepared_mxfp4_->layer || phase != prepared_mxfp4_->phase) {
             return Result<std::vector<std::vector<float>>>::failure(
                 ErrorCode::invalid_state);

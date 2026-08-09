@@ -152,29 +152,52 @@ int test_owned_payload_and_accounting() {
 int test_error_atomicity() {
     Fixture fixture;
     const auto experts = fixture.views();
-    auto backend = k3x::make_cuda_backend(prefetch_options());
+    k3x::Profiler profiler;
+    auto backend = k3x::make_cuda_backend(prefetch_options(), &profiler);
     if (!backend) return 20;
     const auto token = backend.value()->prefetch_mxfp4_situ_mlp_group(
         experts, 1, 13, k3x::ProfilePhase::decode);
     if (!token) return 21;
 
     const auto before = backend.value()->runtime_stats();
+    const auto before_memory = backend.value()->memory_stats();
+    const auto before_profile = profiler.summary();
     const auto invalid_beta = backend.value()->mxfp4_situ_mlp_group_prepared(
         fixture.input, token.value(), 0.0F, std::nullopt, 13,
         k3x::ProfilePhase::decode);
     const auto foreign = backend.value()->mxfp4_situ_mlp_group_prepared(
-        fixture.input, {token.value().value + 1}, 2.0F, 1.5F, 13,
+        fixture.input, {token.value().value + 1, token.value().use_sequence},
+        2.0F, 1.5F, 13,
         k3x::ProfilePhase::decode);
+    const auto wrong_sequence =
+        backend.value()->mxfp4_situ_mlp_group_prepared(
+            fixture.input,
+            {token.value().value, token.value().use_sequence + 1},
+            2.0F, 1.5F, 13, k3x::ProfilePhase::decode);
     const auto wrong_input = backend.value()->mxfp4_situ_mlp_group_prepared(
         std::span<const float>(fixture.input).first(31), token.value(),
         2.0F, 1.5F, 13, k3x::ProfilePhase::decode);
     const auto after_invalid = backend.value()->runtime_stats();
+    const auto after_invalid_memory = backend.value()->memory_stats();
+    const auto after_invalid_profile = profiler.summary();
     if (invalid_beta || invalid_beta.error() != k3x::ErrorCode::invalid_mxfp4 ||
         foreign || foreign.error() != k3x::ErrorCode::invalid_state ||
+        wrong_sequence ||
+        wrong_sequence.error() != k3x::ErrorCode::invalid_state ||
         wrong_input || wrong_input.error() != k3x::ErrorCode::invalid_mxfp4 ||
         after_invalid.ffn_block_calls != before.ffn_block_calls ||
         after_invalid.stream_synchronization_count !=
-            before.stream_synchronization_count) {
+            before.stream_synchronization_count ||
+        after_invalid.device_allocation_count != before.device_allocation_count ||
+        after_invalid.activation_h2d_bytes != before.activation_h2d_bytes ||
+        after_invalid.transfer_stream_wait_count !=
+            before.transfer_stream_wait_count ||
+        after_invalid_memory.current_device_bytes !=
+            before_memory.current_device_bytes ||
+        after_invalid_memory.peak_device_bytes !=
+            before_memory.peak_device_bytes ||
+        after_invalid_profile.host_to_device_bytes !=
+            before_profile.host_to_device_bytes) {
         return 22;
     }
 

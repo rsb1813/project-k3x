@@ -105,6 +105,7 @@ enum class CudaTransferMode { synchronous, prefetch };
 
 struct Mxfp4PrefetchToken {
     std::uint64_t value{};
+    std::uint64_t use_sequence{};
 };
 ```
 

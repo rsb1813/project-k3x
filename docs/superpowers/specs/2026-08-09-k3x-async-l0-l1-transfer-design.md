@@ -70,6 +70,7 @@ The backend exposes one opaque logical identifier rather than device pointers. T
 ```cpp
 struct Mxfp4PrefetchToken {
     std::uint64_t value{};
+    std::uint64_t use_sequence{};
 };
 
 virtual Result<Mxfp4PrefetchToken> prefetch_mxfp4_situ_mlp_group(

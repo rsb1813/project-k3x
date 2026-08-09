@@ -63,7 +63,6 @@ cudaError_t create_timing_event(cudaEvent_t* event) {
 struct AsyncMxfp4Pipeline::Impl {
     struct Pending {
         Mxfp4PrefetchToken token;
-        std::uint64_t use_sequence{};
         std::uint32_t layer{};
         ProfilePhase phase{};
         std::uint64_t bytes{};
@@ -210,9 +209,9 @@ Result<Mxfp4PrefetchToken> AsyncMxfp4Pipeline::prepare(
             ErrorCode::backend_unavailable, "CUDA async expert upload failed");
     }
 
-    const Mxfp4PrefetchToken token{token_value};
+    const Mxfp4PrefetchToken token{token_value, use_sequence};
     impl_->pending = Impl::Pending{
-        token, use_sequence, layer, phase, static_cast<std::uint64_t>(total),
+        token, layer, phase, static_cast<std::uint64_t>(total),
         staging_nanoseconds, false, false};
     ++impl_->runtime->async_prefetch_calls;
     impl_->runtime->async_prefetch_bytes += total;
@@ -225,7 +224,9 @@ Result<std::span<const DeviceMxfp4MlpView>> AsyncMxfp4Pipeline::consume(
     Mxfp4PrefetchToken token, std::uint32_t layer, ProfilePhase phase,
     cudaStream_t compute_stream) {
     if (!impl_->pending || impl_->pending->consumed || token.value == 0 ||
+        token.use_sequence == 0 ||
         token.value != impl_->pending->token.value ||
+        token.use_sequence != impl_->pending->token.use_sequence ||
         layer != impl_->pending->layer || phase != impl_->pending->phase ||
         !compute_stream) {
         return Result<std::span<const DeviceMxfp4MlpView>>::failure(
@@ -250,7 +251,9 @@ Result<std::span<const DeviceMxfp4MlpView>> AsyncMxfp4Pipeline::consume(
 Result<AsyncTransferMetrics> AsyncMxfp4Pipeline::complete(
     Mxfp4PrefetchToken token) {
     if (!impl_->pending || !impl_->pending->consumed || token.value == 0 ||
-        token.value != impl_->pending->token.value) {
+        token.use_sequence == 0 ||
+        token.value != impl_->pending->token.value ||
+        token.use_sequence != impl_->pending->token.use_sequence) {
         return Result<AsyncTransferMetrics>::failure(ErrorCode::invalid_state);
     }
     float transfer_ms = 0.0F;
