@@ -208,14 +208,29 @@ def test_cpp_prefill_layers_logits_and_state_match_python(
 
 
 @pytest.mark.parametrize(
-    ("backend", "dense_precision", "cuda_batching", "tolerance"),
+    (
+        "backend",
+        "dense_precision",
+        "cuda_allocation",
+        "cuda_weights",
+        "cuda_batching",
+        "cuda_resident_bytes",
+        "tolerance",
+    ),
     [
-        ("cuda-dense", "fp32", "scalar", 1e-5),
-        ("cuda-custom", "fp32", "scalar", 1e-4),
-        ("cuda-dense", "bf16", "scalar", 2e-2),
-        ("cuda-custom", "bf16", "scalar", 2e-2),
-        ("cuda-dense", "fp32", "grouped", 1e-5),
-        ("cuda-custom", "fp32", "grouped", 1e-4),
+        (backend, "fp32", allocation, weights, batching,
+         8 * 1024 * 1024 if weights == "resident" else 0,
+         1e-5 if backend == "cuda-dense" else 1e-4)
+        for backend in ("cuda-dense", "cuda-custom")
+        for allocation in ("per-operation", "reused")
+        for weights in ("transient", "resident")
+        for batching in ("scalar", "grouped")
+    ]
+    + [
+        ("cuda-dense", "bf16", "reused", "resident", "grouped",
+         8 * 1024 * 1024, 2e-2),
+        ("cuda-custom", "bf16", "reused", "resident", "grouped",
+         8 * 1024 * 1024, 2e-2),
     ],
 )
 def test_cuda_backends_match_synthetic_graph_and_tokens(
@@ -223,14 +238,20 @@ def test_cuda_backends_match_synthetic_graph_and_tokens(
     tmp_path: Path,
     backend: str,
     dense_precision: str,
+    cuda_allocation: str,
+    cuda_weights: str,
     cuda_batching: str,
+    cuda_resident_bytes: int,
     tolerance: float,
 ) -> None:
     if Path(os.environ.get("K3X_BUILD_DIR", "build")).name != "build-cuda":
         pytest.skip("CUDA parity is exercised only against build-cuda")
     runner = cpp_binary("k3x_run")
     artifact = tmp_path / "synthetic.k3x"
-    output = tmp_path / f"{backend}-{dense_precision}-{cuda_batching}.json"
+    output = tmp_path / (
+        f"{backend}-{dense_precision}-{cuda_allocation}-"
+        f"{cuda_weights}-{cuda_batching}.json"
+    )
     convert(synthetic_source, artifact, chunk_bytes=257)
     subprocess.run(
         [
@@ -249,8 +270,14 @@ def test_cuda_backends_match_synthetic_graph_and_tokens(
             backend,
             "--dense-precision",
             dense_precision,
+            "--cuda-allocation",
+            cuda_allocation,
+            "--cuda-weights",
+            cuda_weights,
             "--cuda-batching",
             cuda_batching,
+            "--cuda-resident-bytes",
+            str(cuda_resident_bytes),
             "--json",
             str(output),
         ],
@@ -266,7 +293,10 @@ def test_cuda_backends_match_synthetic_graph_and_tokens(
     assert result["backend"] == backend
     assert result["device"] != "CPU"
     assert result["dense_precision"] == dense_precision
+    assert result["cuda_allocation"] == cuda_allocation
+    assert result["cuda_weights"] == cuda_weights
     assert result["cuda_batching"] == cuda_batching
+    assert result["cuda_resident_bytes"] == cuda_resident_bytes
     assert result["kernel_nanoseconds"] > 0
     assert result["host_to_device_bytes"] > 0
     assert result["device_to_host_bytes"] > 0
@@ -275,6 +305,9 @@ def test_cuda_backends_match_synthetic_graph_and_tokens(
     if cuda_batching == "grouped":
         assert result["grouped_projection_calls"] > 0
         assert result["grouped_projection_members"] > result["grouped_projection_calls"]
+    if cuda_weights == "resident":
+        assert result["weight_cache_misses"] > 0
+        assert result["resident_weight_bytes"] <= cuda_resident_bytes
     np.testing.assert_allclose(
         result["prefill_logits"],
         expected_logits.numpy().reshape(-1),

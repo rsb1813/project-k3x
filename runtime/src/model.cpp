@@ -396,26 +396,49 @@ private:
     Vector expert(const Vector& input, std::size_t layer, std::size_t expert_id,
                   ProfilePhase phase) {
         const auto base = layer_name(layer, "feed_forward.experts." + std::to_string(expert_id));
-        auto apply = [&](const std::string& suffix, const Vector& value) {
+        struct ExpertProjection {
+            std::uint64_t id;
+            std::vector<std::byte> packed;
+            std::vector<std::byte> scales;
+            std::size_t rows;
+            std::size_t cols;
+
+            Mxfp4WeightView view(std::size_t group_size) const {
+                return {id, packed, scales, rows, cols, group_size};
+            }
+        };
+        auto load = [&](const std::string& suffix) {
             const auto id = fnv1a64((base + "." + suffix).c_str());
             auto packed = reader_.read_tensor(id);
             auto scales = reader_.read_auxiliary(id);
             const auto record = std::find_if(reader_.tensors().begin(), reader_.tensors().end(),
                                              [id](const auto& item) { return item.tensor_id == id; });
             if (!packed || !scales || record == reader_.tensors().end()) throw std::runtime_error("missing expert");
-            auto result = backend_.mxfp4_matvec(
-                value,
-                {id, packed.value(), scales.value(), record->dimensions[0],
-                 record->dimensions[1], config_.group_size},
-                static_cast<std::uint32_t>(layer), phase);
-            if (!result) throw std::runtime_error("invalid expert");
-            return result.value();
+            return ExpertProjection{id, std::move(packed.value()),
+                                    std::move(scales.value()),
+                                    record->dimensions[0],
+                                    record->dimensions[1]};
         };
-        const auto gate = apply("gate", input);
-        const auto up = apply("up", input);
+        const std::array<ExpertProjection, 2> gate_up_payloads{{
+            load("gate"),
+            load("up"),
+        }};
+        const std::array<Mxfp4WeightView, 2> gate_up_views{{
+            gate_up_payloads[0].view(config_.group_size),
+            gate_up_payloads[1].view(config_.group_size),
+        }};
+        auto gate_up = backend_.mxfp4_matvec_group(
+            input, gate_up_views, static_cast<std::uint32_t>(layer), phase);
+        if (!gate_up) throw std::runtime_error("invalid expert");
         Vector activated(config_.expert_intermediate);
-        situ_glu(activated, gate, up, config_.situ_beta, config_.situ_linear);
-        return apply("down", activated);
+        situ_glu(activated, gate_up.value()[0], gate_up.value()[1],
+                 config_.situ_beta, config_.situ_linear);
+        const auto down = load("down");
+        auto output = backend_.mxfp4_matvec(
+            activated, down.view(config_.group_size),
+            static_cast<std::uint32_t>(layer), phase);
+        if (!output) throw std::runtime_error("invalid expert");
+        return output.value();
     }
 
     Vector moe(const Vector& input, std::size_t layer, ProfilePhase phase) {

@@ -143,7 +143,8 @@ public:
           mxfp4_input_scratch_(&memory_stats_, &runtime_stats_),
           mxfp4_packed_scratch_(&memory_stats_, &runtime_stats_),
           mxfp4_scales_scratch_(&memory_stats_, &runtime_stats_),
-          mxfp4_output_scratch_(&memory_stats_, &runtime_stats_) {
+          mxfp4_output_scratch_(&memory_stats_, &runtime_stats_),
+          mxfp4_group_output_scratch_(&memory_stats_, &runtime_stats_) {
         if (options_.cuda_weights == CudaWeightMode::resident) {
             resident_weights_ = std::make_unique<cuda::ResidentWeightTable>(
                 options_.cuda_resident_bytes, &memory_stats_, &runtime_stats_,
@@ -873,15 +874,223 @@ public:
                     ErrorCode::invalid_mxfp4);
             }
         }
-        std::vector<std::vector<float>> outputs;
-        outputs.reserve(weights.size());
-        for (const auto& weight : weights) {
-            auto output = mxfp4_matvec(input, weight, layer, phase);
-            if (!output) {
-                return Result<std::vector<std::vector<float>>>::failure(
-                    output.error(), output.message());
+        if (options_.kind != BackendKind::cuda_custom ||
+            options_.cuda_batching != CudaBatchingMode::grouped) {
+            std::vector<std::vector<float>> outputs;
+            outputs.reserve(weights.size());
+            for (const auto& weight : weights) {
+                auto output = mxfp4_matvec(input, weight, layer, phase);
+                if (!output) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        output.error(), output.message());
+                }
+                outputs.push_back(std::move(output.value()));
             }
-            outputs.push_back(std::move(output.value()));
+            return Result<std::vector<std::vector<float>>>::success(
+                std::move(outputs));
+        }
+        if (weights.empty()) {
+            return Result<std::vector<std::vector<float>>>::success({});
+        }
+
+        struct GroupMember {
+            void* device_packed{};
+            void* device_scales{};
+            std::size_t output_offset{};
+            std::uint64_t transfer_bytes{};
+        };
+        std::vector<GroupMember> members(weights.size());
+        std::size_t maximum_packed_bytes = 0;
+        std::size_t maximum_scale_bytes = 0;
+        std::size_t total_output_bytes = 0;
+        std::uint64_t total_weight_transfer = 0;
+        for (std::size_t index = 0; index < weights.size(); ++index) {
+            const auto& weight = weights[index];
+            auto& member = members[index];
+            member.output_offset = total_output_bytes;
+            total_output_bytes += weight.rows * sizeof(float);
+            maximum_packed_bytes =
+                std::max(maximum_packed_bytes, weight.packed.size_bytes());
+            maximum_scale_bytes =
+                std::max(maximum_scale_bytes, weight.scales.size_bytes());
+            member.transfer_bytes =
+                weight.packed.size_bytes() + weight.scales.size_bytes();
+            if (resident_weights_) {
+                const auto acquisition = resident_weights_->acquire(
+                    {weight.tensor_id, cuda::WeightRepresentation::mxfp4,
+                     weight.rows, weight.cols, weight.group_size},
+                    weight.packed, weight.scales);
+                if (!acquisition) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        acquisition.error(), acquisition.message());
+                }
+                if (acquisition.value().disposition !=
+                    cuda::ResidentDisposition::bypass) {
+                    member.device_packed =
+                        const_cast<void*>(acquisition.value().primary);
+                    member.device_scales =
+                        const_cast<void*>(acquisition.value().secondary);
+                    member.transfer_bytes = acquisition.value().uploaded_bytes;
+                }
+            }
+            total_weight_transfer += member.transfer_bytes;
+        }
+
+        const auto input_bytes = input.size_bytes();
+        cuda::DeviceAllocation local_input(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_packed(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_scales(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_output(&memory_stats_, &runtime_stats_);
+        void* device_input = nullptr;
+        void* transient_packed = nullptr;
+        void* transient_scales = nullptr;
+        void* device_output = nullptr;
+        if (options_.cuda_allocation == CudaAllocationMode::reused) {
+            if (mxfp4_input_scratch_.reserve(input_bytes) != cudaSuccess ||
+                mxfp4_packed_scratch_.reserve(maximum_packed_bytes) !=
+                    cudaSuccess ||
+                mxfp4_scales_scratch_.reserve(maximum_scale_bytes) !=
+                    cudaSuccess ||
+                mxfp4_group_output_scratch_.reserve(total_output_bytes) !=
+                    cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA grouped MXFP4 allocation failed");
+            }
+            device_input = mxfp4_input_scratch_.get();
+            transient_packed = mxfp4_packed_scratch_.get();
+            transient_scales = mxfp4_scales_scratch_.get();
+            device_output = mxfp4_group_output_scratch_.get();
+        } else if (local_input.allocate(input_bytes) != cudaSuccess ||
+                   local_packed.allocate(maximum_packed_bytes) != cudaSuccess ||
+                   local_scales.allocate(maximum_scale_bytes) != cudaSuccess ||
+                   local_output.allocate(total_output_bytes) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA grouped MXFP4 allocation failed");
+        } else {
+            device_input = local_input.get();
+            transient_packed = local_packed.get();
+            transient_scales = local_scales.get();
+            device_output = local_output.get();
+        }
+        if (cudaMemcpyAsync(device_input, input.data(), input_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA grouped MXFP4 activation upload failed");
+        }
+
+        std::vector<std::vector<float>> outputs;
+        outputs.resize(weights.size());
+        std::vector<std::unique_ptr<EventOwner>> local_starts;
+        std::vector<std::unique_ptr<EventOwner>> local_ends;
+        local_starts.reserve(weights.size());
+        local_ends.reserve(weights.size());
+        if (options_.cuda_allocation == CudaAllocationMode::reused) {
+            while (mxfp4_group_event_starts_.size() < weights.size()) {
+                mxfp4_group_event_starts_.push_back(
+                    std::make_unique<EventOwner>());
+                mxfp4_group_event_ends_.push_back(
+                    std::make_unique<EventOwner>());
+            }
+        }
+        const auto group_start = std::chrono::steady_clock::now();
+        for (std::size_t index = 0; index < weights.size(); ++index) {
+            const auto& weight = weights[index];
+            auto& member = members[index];
+            if (!member.device_packed) {
+                member.device_packed = transient_packed;
+                member.device_scales = transient_scales;
+                if (cudaMemcpyAsync(
+                        member.device_packed, weight.packed.data(),
+                        weight.packed.size_bytes(), cudaMemcpyHostToDevice,
+                        stream_) != cudaSuccess ||
+                    cudaMemcpyAsync(
+                        member.device_scales, weight.scales.data(),
+                        weight.scales.size_bytes(), cudaMemcpyHostToDevice,
+                        stream_) != cudaSuccess) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        ErrorCode::backend_unavailable,
+                        "CUDA grouped MXFP4 weight upload failed");
+                }
+            }
+            EventOwner* event_start = nullptr;
+            EventOwner* event_end = nullptr;
+            if (options_.cuda_allocation == CudaAllocationMode::reused) {
+                event_start = mxfp4_group_event_starts_[index].get();
+                event_end = mxfp4_group_event_ends_[index].get();
+            } else {
+                local_starts.push_back(std::make_unique<EventOwner>());
+                local_ends.push_back(std::make_unique<EventOwner>());
+                event_start = local_starts.back().get();
+                event_end = local_ends.back().get();
+            }
+            auto* member_output = static_cast<std::byte*>(device_output) +
+                                  member.output_offset;
+            if (event_start->ensure() != cudaSuccess ||
+                event_end->ensure() != cudaSuccess ||
+                cudaEventRecord(event_start->get(), stream_) != cudaSuccess ||
+                cuda::launch_mxfp4_matvec(
+                    static_cast<const float*>(device_input),
+                    static_cast<const std::uint8_t*>(member.device_packed),
+                    static_cast<const std::uint8_t*>(member.device_scales),
+                    static_cast<float*>(static_cast<void*>(member_output)),
+                    weight.rows, weight.cols, stream_) != cudaSuccess ||
+                cudaEventRecord(event_end->get(), stream_) != cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA grouped MXFP4 launch failed");
+            }
+            outputs[index].resize(weight.rows);
+            if (cudaMemcpyAsync(outputs[index].data(), member_output,
+                                weight.rows * sizeof(float),
+                                cudaMemcpyDeviceToHost, stream_) != cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA grouped MXFP4 output copy failed");
+            }
+        }
+        if (cudaStreamSynchronize(stream_) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA grouped MXFP4 synchronization failed");
+        }
+        ++runtime_stats_.stream_synchronization_count;
+        runtime_stats_.activation_h2d_bytes += input_bytes;
+        runtime_stats_.weight_h2d_bytes += total_weight_transfer;
+        ++runtime_stats_.grouped_projection_calls;
+        runtime_stats_.grouped_projection_members += weights.size();
+        record(phase, ProfileOperation::host_to_device,
+               NumericPrecision::mxfp4_e2m1_e8m0, layer, group_start, 0,
+               input_bytes + total_weight_transfer, 0, true);
+        record(phase, ProfileOperation::device_to_host,
+               NumericPrecision::mxfp4_e2m1_e8m0, layer, group_start, 0,
+               total_output_bytes, 0, true);
+        for (std::size_t index = 0; index < weights.size(); ++index) {
+            auto* event_start =
+                options_.cuda_allocation == CudaAllocationMode::reused
+                    ? mxfp4_group_event_starts_[index].get()
+                    : local_starts[index].get();
+            auto* event_end =
+                options_.cuda_allocation == CudaAllocationMode::reused
+                    ? mxfp4_group_event_ends_[index].get()
+                    : local_ends[index].get();
+            float elapsed_milliseconds = 0.0F;
+            if (cudaEventElapsedTime(&elapsed_milliseconds, event_start->get(),
+                                     event_end->get()) != cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA grouped MXFP4 event timing failed");
+            }
+            record(phase, ProfileOperation::mxfp4_matvec,
+                   NumericPrecision::mxfp4_e2m1_e8m0, layer, group_start,
+                   weights[index].packed.size_bytes() +
+                       weights[index].scales.size_bytes(),
+                   0,
+                   static_cast<std::uint64_t>(std::llround(
+                       static_cast<double>(elapsed_milliseconds) * 1.0e6)),
+                   true);
         }
         return Result<std::vector<std::vector<float>>>::success(
             std::move(outputs));
@@ -1002,12 +1211,15 @@ private:
     cuda::ScratchBuffer mxfp4_packed_scratch_;
     cuda::ScratchBuffer mxfp4_scales_scratch_;
     cuda::ScratchBuffer mxfp4_output_scratch_;
+    cuda::ScratchBuffer mxfp4_group_output_scratch_;
     EventOwner dense_event_start_;
     EventOwner dense_event_end_;
     EventOwner mxfp4_event_start_;
     EventOwner mxfp4_event_end_;
     std::vector<std::unique_ptr<EventOwner>> dense_group_event_starts_;
     std::vector<std::unique_ptr<EventOwner>> dense_group_event_ends_;
+    std::vector<std::unique_ptr<EventOwner>> mxfp4_group_event_starts_;
+    std::vector<std::unique_ptr<EventOwner>> mxfp4_group_event_ends_;
     std::map<DensePlanKey, std::unique_ptr<DensePlan>> dense_plans_;
     std::unique_ptr<cuda::ResidentWeightTable> resident_weights_;
 };

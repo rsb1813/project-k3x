@@ -177,6 +177,63 @@ int test_allocation_modes() {
     return 0;
 }
 
+int test_grouped_resident_execution() {
+    std::array<float, 64> input{};
+    input[0] = 1.0F;
+    input[1] = 2.0F;
+    input[2] = 1.5F;
+    input[3] = -0.5F;
+    input[32] = 0.25F;
+    input[33] = -0.5F;
+    std::array<std::byte, 96> packed{};
+    packed[0] = std::byte{0x10};
+    packed[1] = std::byte{0x72};
+    packed[16] = std::byte{0xD4};
+    packed[32] = std::byte{0x96};
+    packed[48] = std::byte{0x23};
+    packed[64] = std::byte{0xF5};
+    packed[80] = std::byte{0x4A};
+    const std::array<std::byte, 6> scales{
+        std::byte{127}, std::byte{128}, std::byte{126},
+        std::byte{129}, std::byte{125}, std::byte{127},
+    };
+    const std::array<k3x::Mxfp4WeightView, 2> weights{{
+        {401, packed, scales, 3, 64, 32},
+        {402, packed, scales, 3, 64, 32},
+    }};
+    const std::vector<float> expected{3.5F, 1.0F, -3.5F};
+    k3x::BackendOptions options;
+    options.kind = k3x::BackendKind::cuda_custom;
+    options.cuda_allocation = k3x::CudaAllocationMode::reused;
+    options.cuda_weights = k3x::CudaWeightMode::resident;
+    options.cuda_batching = k3x::CudaBatchingMode::grouped;
+    options.cuda_resident_bytes = 204;
+    auto backend = k3x::make_cuda_backend(options);
+    if (!backend) return 60;
+    for (const auto& weight : weights) {
+        const auto warm = backend.value()->mxfp4_matvec(
+            input, weight, 12, k3x::ProfilePhase::decode);
+        if (!warm || warm.value() != expected) return 61;
+    }
+    const auto before = backend.value()->runtime_stats();
+    const auto output = backend.value()->mxfp4_matvec_group(
+        input, weights, 12, k3x::ProfilePhase::decode);
+    if (!output || output.value().size() != 2 ||
+        output.value()[0] != expected || output.value()[1] != expected) return 62;
+    const auto after = backend.value()->runtime_stats();
+    if (after.weight_cache_hits != before.weight_cache_hits + 2 ||
+        after.weight_h2d_bytes != before.weight_h2d_bytes ||
+        after.activation_h2d_bytes !=
+            before.activation_h2d_bytes + input.size() * sizeof(float) ||
+        after.stream_synchronization_count !=
+            before.stream_synchronization_count + 1 ||
+        after.grouped_projection_calls !=
+            before.grouped_projection_calls + 1 ||
+        after.grouped_projection_members !=
+            before.grouped_projection_members + 2) return 63;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -254,5 +311,7 @@ int main() {
     if (stride_result != 0) return stride_result;
     const auto contract_result = test_rejects_incompatible_contracts();
     if (contract_result != 0) return contract_result;
-    return test_allocation_modes();
+    const auto allocation_result = test_allocation_modes();
+    if (allocation_result != 0) return allocation_result;
+    return test_grouped_resident_execution();
 }
