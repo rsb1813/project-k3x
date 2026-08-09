@@ -112,6 +112,7 @@ else()
 
     add_executable(test_cuda_mxfp4 tests/cuda/test_cuda_mxfp4.cu)
     target_link_libraries(test_cuda_mxfp4 PRIVATE k3x_runtime)
+    target_include_directories(test_cuda_mxfp4 PRIVATE runtime/cuda)
     set_target_properties(test_cuda_mxfp4 PROPERTIES CUDA_ARCHITECTURES "120-real")
     add_test(NAME cuda_mxfp4 COMMAND test_cuda_mxfp4)
 

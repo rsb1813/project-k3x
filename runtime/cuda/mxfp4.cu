@@ -28,7 +28,8 @@ __device__ __forceinline__ float decode_e2m1(std::uint8_t code) {
 __global__ void mxfp4_matvec_kernel(
     const float* input, const std::uint8_t* packed,
     const std::uint8_t* scales, float* output,
-    std::size_t rows, std::size_t cols) {
+    std::size_t rows, std::size_t cols, float contribution,
+    bool accumulate) {
     const auto row = static_cast<std::size_t>(blockIdx.x);
     if (row >= rows) return;
 
@@ -53,7 +54,11 @@ __global__ void mxfp4_matvec_kernel(
         }
         __syncthreads();
     }
-    if (threadIdx.x == 0) output[row] = partials[0];
+    if (threadIdx.x == 0) {
+        output[row] = accumulate
+            ? fmaf(contribution, partials[0], output[row])
+            : contribution * partials[0];
+    }
 }
 
 }  // namespace
@@ -65,7 +70,19 @@ cudaError_t launch_mxfp4_matvec(
     constexpr unsigned threads = 256;
     mxfp4_matvec_kernel<<<static_cast<unsigned>(rows), threads,
                            threads * sizeof(float), stream>>>(
-        input, packed, scales, output, rows, cols);
+        input, packed, scales, output, rows, cols, 1.0F, false);
+    return cudaGetLastError();
+}
+
+cudaError_t launch_mxfp4_matvec_accumulate(
+    const float* input, const std::uint8_t* packed,
+    const std::uint8_t* scales, float* output,
+    std::size_t rows, std::size_t cols, float contribution,
+    bool accumulate, cudaStream_t stream) {
+    constexpr unsigned threads = 256;
+    mxfp4_matvec_kernel<<<static_cast<unsigned>(rows), threads,
+                           threads * sizeof(float), stream>>>(
+        input, packed, scales, output, rows, cols, contribution, accumulate);
     return cudaGetLastError();
 }
 

@@ -1,6 +1,9 @@
 // native K3 MXFP4 CUDA matvec의 수치 결과와 프로파일 계약을 검증합니다.
 #include "k3x/backend.hpp"
 #include "k3x/ops.hpp"
+#include "mxfp4.cuh"
+
+#include <cuda_runtime_api.h>
 
 #include <array>
 #include <cmath>
@@ -234,6 +237,83 @@ int test_grouped_resident_execution() {
     return 0;
 }
 
+int test_scaled_ordered_accumulation() {
+    constexpr std::size_t rows = 2;
+    constexpr std::size_t cols = 320;
+    std::array<float, cols> input{};
+    input[0] = 1.0F;
+    input[1] = -2.0F;
+    input[256] = 2.0F;
+    input[257] = 3.0F;
+    std::array<std::byte, rows * cols / 2> packed{};
+    packed[0] = std::byte{0x71};
+    packed[128] = std::byte{0x21};
+    packed[cols / 2] = std::byte{0xD4};
+    packed[cols / 2 + 128] = std::byte{0xF5};
+    std::array<std::byte, rows * cols / 32> scales{};
+    scales.fill(std::byte{127});
+    scales[8] = std::byte{128};
+    scales[rows * cols / 32 - 2] = std::byte{126};
+
+    const auto oracle = k3x::mxfp4_matmul(
+        input, packed, scales, rows, cols, 32);
+    if (!oracle) return 70;
+
+    float* device_input = nullptr;
+    std::byte* device_packed = nullptr;
+    std::byte* device_scales = nullptr;
+    float* device_output = nullptr;
+    if (cudaMalloc(&device_input, input.size() * sizeof(float)) != cudaSuccess ||
+        cudaMalloc(&device_packed, packed.size()) != cudaSuccess ||
+        cudaMalloc(&device_scales, scales.size()) != cudaSuccess ||
+        cudaMalloc(&device_output, rows * sizeof(float)) != cudaSuccess) {
+        return 71;
+    }
+    if (cudaMemcpy(device_input, input.data(), input.size() * sizeof(float),
+                   cudaMemcpyHostToDevice) != cudaSuccess ||
+        cudaMemcpy(device_packed, packed.data(), packed.size(),
+                   cudaMemcpyHostToDevice) != cudaSuccess ||
+        cudaMemcpy(device_scales, scales.data(), scales.size(),
+                   cudaMemcpyHostToDevice) != cudaSuccess) {
+        return 72;
+    }
+
+    if (k3x::cuda::launch_mxfp4_matvec_accumulate(
+            device_input,
+            reinterpret_cast<const std::uint8_t*>(device_packed),
+            reinterpret_cast<const std::uint8_t*>(device_scales),
+            device_output, rows, cols, -0.5F, false, nullptr) != cudaSuccess ||
+        k3x::cuda::launch_mxfp4_matvec_accumulate(
+            device_input,
+            reinterpret_cast<const std::uint8_t*>(device_packed),
+            reinterpret_cast<const std::uint8_t*>(device_scales),
+            device_output, rows, cols, 0.25F, true, nullptr) != cudaSuccess ||
+        k3x::cuda::launch_mxfp4_matvec_accumulate(
+            device_input,
+            reinterpret_cast<const std::uint8_t*>(device_packed),
+            reinterpret_cast<const std::uint8_t*>(device_scales),
+            device_output, rows, cols, 0.0F, true, nullptr) != cudaSuccess ||
+        cudaDeviceSynchronize() != cudaSuccess) {
+        return 73;
+    }
+
+    std::array<float, rows> actual{};
+    if (cudaMemcpy(actual.data(), device_output, actual.size() * sizeof(float),
+                   cudaMemcpyDeviceToHost) != cudaSuccess) {
+        return 74;
+    }
+    for (std::size_t row = 0; row < rows; ++row) {
+        const auto expected = -0.25F * oracle.value()[row];
+        if (!nearly_equal(actual[row], expected)) return 75;
+    }
+
+    cudaFree(device_output);
+    cudaFree(device_scales);
+    cudaFree(device_packed);
+    cudaFree(device_input);
+    return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -313,5 +393,7 @@ int main() {
     if (contract_result != 0) return contract_result;
     const auto allocation_result = test_allocation_modes();
     if (allocation_result != 0) return allocation_result;
-    return test_grouped_resident_execution();
+    const auto grouped_result = test_grouped_resident_execution();
+    if (grouped_result != 0) return grouped_result;
+    return test_scaled_ordered_accumulation();
 }

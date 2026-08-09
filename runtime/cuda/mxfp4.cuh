@@ -13,4 +13,10 @@ cudaError_t launch_mxfp4_matvec(
     const std::uint8_t* scales, float* output,
     std::size_t rows, std::size_t cols, cudaStream_t stream);
 
+cudaError_t launch_mxfp4_matvec_accumulate(
+    const float* input, const std::uint8_t* packed,
+    const std::uint8_t* scales, float* output,
+    std::size_t rows, std::size_t cols, float contribution,
+    bool accumulate, cudaStream_t stream);
+
 }  // namespace k3x::cuda
