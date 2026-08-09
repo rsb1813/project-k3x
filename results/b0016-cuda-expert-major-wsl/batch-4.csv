@@ -1,2 +1,2 @@
 artifact_kind,routing_semantics,execution,batch_size,expert_payload_bytes,warmup,iterations,latency_nanoseconds_median,maximum_absolute_error,kernel_nanoseconds,device_to_host_bytes,weight_h2d_bytes,activation_h2d_bytes,batched_expert_ffn_calls,batched_expert_ffn_tokens,peak_vram_bytes
-released_dimension_single_expert,False,batch,4,17547264,3,20,1999276,0,12673312,1146880,350945280,1146880,20,80,6111232
+released_dimension_single_expert,False,batch,4,17547264,3,20,2631900,0,14045536,1146880,350945280,1146880,20,80,6111232

@@ -120,9 +120,9 @@ State audited on 2026-08-10 against public baseline `ea4b1e0`. The active develo
 
 ## Latest measured bottleneck
 
-B-0016 proves the intended CUDA weight-reuse boundary. On the released 17,547,264-byte expert, batch-2 reduces weight H2D by 50% and median latency by 50.79%; batch-4 reduces weight H2D by 75% and latency by 73.09%. Activation H2D and D2H are unchanged, so remaining per-group cost is gate/up/down kernel work and token-proportional activation/result traffic. The fixture has no routing semantics and is not full-model TPS.
+B-0016 proves the intended CUDA weight-reuse boundary. On the released 17,547,264-byte expert, batch-2 reduces weight H2D by 50% and median latency by 49.55%; batch-4 reduces weight H2D by 75% and latency by 60.75%. Activation H2D and D2H are unchanged, so remaining per-group cost is gate/up/down kernel work and token-proportional activation/result traffic. The fixture has no routing semantics and is not full-model TPS.
 
-End-to-end reuse remains acceptance-sensitive. Perfect block-2 CUDA expert-major measures 66.1869 tok/s versus token-major 60.0987 with slightly lower Reader/H2D traffic. Mixed block-2 evaluates eight positions, discards three, raises H2D to 6,754,464 bytes, and falls to 39.9912 tok/s versus 59.4970. The next speculative bottleneck is avoiding rejected-suffix work through representative drafting and acceptance-aware block sizing.
+End-to-end reuse remains acceptance-sensitive. Perfect block-2 CUDA expert-major measures 70.1067 tok/s versus token-major 60.1815 with slightly lower Reader/H2D traffic. Mixed block-2 evaluates eight positions, discards three, raises H2D to 6,754,464 bytes, and falls to 40.7627 tok/s versus 57.2332. The next speculative bottleneck is avoiding rejected-suffix work through representative drafting and acceptance-aware block sizing.
 
 The next CUDA systems bottleneck is extending one-expert batches to representative multi-expert/full-layer groups while KDA, MLA, routing, residual/state, and non-FFN orchestration remain CPU-driven. GPU utilization, memory bandwidth, physical NVMe, and overlap are still unmeasured for this boundary.
 
@@ -133,9 +133,9 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 ## Last known-good state
 
 - Public baseline `ea4b1e0` includes the synchronized Milestone 11–14 README and TITAN Ledger plus explicit PR #11/#12 merge provenance. Post-merge `main` correctness run `31329727859` succeeded.
-- M15 design/plan heads are `b54e4b5`/`f574a36`; portable batch, native launcher, CUDA FFN, and runtime heads are `b9b10dc`, `459303e`, `b0c1a96`, and `e99bbc0`; B-0016 tooling and direct CLI fix are `7899603` and `884a74e`.
-- Current full verification passes CPU CTest 13/13 and pytest 262 passed/47 skipped, CUDA CTest 22/22 and pytest 301 passed/8 skipped. The released batch-2 Compute Sanitizer run reports zero errors.
-- B-0016 executable artifact SHA-256 is `039d61ee9c2e13e27c9a2514bb476f8b122b8b37be0b7f85baf26c1a6611a2e9`; released artifact SHA-256 is `aab7aea48b03bdcd8e0b4d98c4780128ab689d2bba005089a49970eb0e326890`; canonical aggregate SHA-256 is `218bba0595002b6e0c40cd998ac611b929fd81c45a236bdeed732bc1a6311f0f`.
+- M15 design/plan heads are `b54e4b5`/`f574a36`; portable batch, native launcher, CUDA FFN, and runtime heads are `b9b10dc`, `459303e`, `b0c1a96`, and `e99bbc0`; B-0016 tooling, direct CLI fix, and LF-stable digest fix are `7899603`, `884a74e`, and `5b7b73b`.
+- Current full verification passes CPU CTest 13/13 and pytest 262 passed/47 skipped, liburing/direct CTest 14/14 and pytest 264 passed/45 skipped, ASan/UBSan CTest 14/14, and CUDA CTest 22/22 with pytest 301 passed/8 skipped. Native MXFP4, CUDA FFN, released batch-2, perfect expert-major CLI, and mixed expert-major CLI Compute Sanitizer runs each report zero errors.
+- B-0016 executable artifact SHA-256 is `039d61ee9c2e13e27c9a2514bb476f8b122b8b37be0b7f85baf26c1a6611a2e9`; released artifact SHA-256 is `aab7aea48b03bdcd8e0b4d98c4780128ab689d2bba005089a49970eb0e326890`; canonical aggregate SHA-256 is `09a2537337df1fd2b8b39439f92ba7306cb09a6ed5e3f8bdc8db7d9d787029aa`.
 - Independent evidence validation recomputed all nine raw JSON/CSV digest pairs and the aggregate. Results are under `results/b0016-cuda-expert-major-wsl/`; public integration and post-merge CI remain pending.
 - PR #11 merged at `edc6d605` and PR #12 merged at `9e59a9db`; both merge commits are ancestors of the audited public baseline. Their post-merge correctness runs `31318993688` and `31322191670` succeeded.
 - M14 exact block runtime head `862d401`, CLI/telemetry head `bdf4a66`, and B-0015 result head `1e73121` remain the CPU reference lineage.
