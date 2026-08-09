@@ -126,6 +126,14 @@
 - [x] 전체 local verification, final review, review fix, TITAN Ledger 갱신.
 - [x] Public GitHub PR #8, branch/PR CI, main fast-forward, post-merge CI 확인.
 
+## Milestone 9 — Runtime-switchable expert cache policies
+
+- [x] SpecMD 원문과 공개 구현 상태 재확인.
+- [x] LRU/LFU/Least-Stale exact policy 설계와 TDD 계획 작성.
+- [ ] Deterministic trace oracle과 victim/collision tests.
+- [ ] Runtime/CLI/telemetry integration.
+- [ ] B-0010 ablation, full verification, review, ledger, public integration.
+
 ## Milestone 6 independent L2 reader
 
 - [x] 기존 Reader hot path와 Linux I/O capability 경계 조사.
