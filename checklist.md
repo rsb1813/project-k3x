@@ -140,6 +140,14 @@
 
 - [x] Reconfirm that public PR #11, PR #12, and PR #13 are merged.
 - [x] Audit README and TITAN Ledger documents for stale Milestone 11–13 status.
+
+## Public documentation reconciliation — Milestones 11–14
+
+- [x] Verify PR #11 and PR #12 are merged and their merge commits are in public `main` history.
+- [x] Add the live `main` correctness badge and explicit PR #11/#12 merge provenance to the English README.
+- [x] Reconcile `PROJECT_STATE.md` with public baseline `46105f8` and the Milestone 15 design-only boundary.
+- [x] Audit ARCHITECTURE, DECISIONS, BENCHMARKS, PERFORMANCE_MODEL, PLAN, K3X_FORMAT, and reference docs; retain accurate historical or constitutional text unchanged.
+- [x] Validate the Markdown diff and prepare the documentation change for public merge.
 - [x] Update the README milestone badge and current implementation summary.
 - [x] Correct the stale speculative-implementation statement and publication HEAD in `PROJECT_STATE.md`.
 - [x] Run documentation checks, commit, publish, and verify public `main`.

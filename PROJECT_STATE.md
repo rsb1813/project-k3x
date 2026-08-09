@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 14 exact CPU expert-major speculative verification is implemented, measured, fully verified, final-reviewed, and publicly integrated. Token-major verification remains the default.
+Milestone 14 exact CPU expert-major speculative verification is implemented, measured, fully verified, final-reviewed, and publicly integrated. Token-major verification remains the default. Milestone 15 CUDA expert-major design preparation has started, but no Milestone 15 runtime implementation or benchmark is claimed yet.
 
-State recorded on 2026-08-10 from public Milestone 14 integration head `012e598`. The active branch is `codex/milestone-fourteen-expert-major-verification`. PR #11, PR #12, PR #13, documentation PR #14, and Milestone 14 PR #15 are merged; their implementations, dedicated English README sections, measurements, and ledgers are public.
+State audited on 2026-08-10 against public documentation baseline `46105f8`. The active development branch is `codex/milestone-fifteen-cuda-expert-major`; this documentation reconciliation is isolated on `codex/docs-sync-m11-m14`. PR #11, PR #12, PR #13, documentation PR #14, and Milestone 14 PR #15 are merged; their implementations, dedicated English README sections, measurements, and ledgers are public.
 
 ## Completed work
 
@@ -70,6 +70,7 @@ State recorded on 2026-08-10 from public Milestone 14 integration head `012e598`
 ## Work in progress
 
 - Milestone 14 library/runtime execution, CLI identity, telemetry, B-0015, the full applicable verification matrix, final evidence review, PR, merge, and post-merge CI gates are complete.
+- Milestone 15 is at design preparation only. The intended exact CUDA expert-major boundary, multi-token grouping contract, and H2D union accounting have not yet been accepted, implemented, or measured.
 - B-0015 perfect expert-major blocks reduce logical Reader traffic and improve tiny CPU decode, while the mixed row evaluates three rejected positions and regresses both traffic and decode. The evidence therefore supports exact reuse semantics but not a default change.
 - The current expert-major path is CPU-only and intentionally excludes L1 caching, deadline scheduling, reduced/adaptive routing, and profile observation. CUDA expert-major scheduling, H2D unioning, acceptance-aware block sizing, and cross-layer prediction remain unimplemented.
 - DSpark learned drafting, confidence scheduling, EcoSpec, MoE-Spec, and AcceptMoE remain unimplemented. The accepted interface is lifecycle-compatible, not checkpoint- or tensor-ABI compatible with DeepSpec.
@@ -127,6 +128,8 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
+- Public documentation baseline `46105f8` includes the fully synchronized Milestone 14 README and TITAN Ledger. Its final `main` correctness run `31329200483` succeeded.
+- PR #11 merged at `edc6d605` and PR #12 merged at `9e59a9db`; both merge commits are ancestors of the audited public baseline. Their post-merge correctness runs `31318993688` and `31322191670` succeeded.
 - M14 exact block runtime head `862d401`, CLI/telemetry head `bdf4a66`, and B-0015 result head `1e73121` form the current development state.
 - Pre-publication verification passed CPU CTest 13/13 and Python 253/44, liburing/direct CTest 14/14 and Python 257/42, CUDA CTest 22/22 and Python 291/8, and ASan/UBSan liburing CTest 14/14 plus targeted Python 95/35. CUDA FFN Compute Sanitizer reported zero errors; the CPU-only expert-major CLI has no instrumented CUDA API and is covered by ASan/UBSan rather than a fabricated Compute Sanitizer result.
 - B-0015 artifact SHA-256 is `29f3fd10c95dcde9f2b012e10e36962363b5cdd79dfeda5f5e3bbaca0cb89b75`; canonical aggregate-record SHA-256 is `cb95eff274713a21b821695d75ff2655da735513c99215ec5ec14f5ed995b813`.
