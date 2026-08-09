@@ -622,6 +622,6 @@ Update `ARCHITECTURE.md`, `DECISIONS.md`, `BENCHMARKS.md`, README, checklist, an
 
 Capture `git status --short` and the full milestone diff. Request one Terra high reviewer to report only Critical or Important correctness, lifetime, event-ordering, accounting, and documentation issues. The reviewer must not modify files. Apply evidence-backed findings in one batch and rerun affected tests and sanitizer targets.
 
-- [ ] **Step 8: Commit and publish**
+- [x] **Step 8: Commit and publish**
 
 Commit the ledger/results, push `codex/milestone-four-async-l0-l1`, open a draft PR, wait for Linux CI, mark ready only after checks pass, verify `origin/main` ancestry, fast-forward public `main`, and confirm post-merge CI. Preserve the worktree for the next milestone.

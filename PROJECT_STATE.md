@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 4 exact asynchronous L1-to-L0 transfer implementation, B-0005 measurement, and final read-only review are complete. Public PR/CI integration is in progress.
+Milestone 4 exact asynchronous L1-to-L0 transfer implementation, B-0005 measurement, final read-only review, public merge, and post-merge CI are complete.
 
-State recorded on 2026-08-09 after review fix `190459b`, complete post-fix CPU/CUDA suites, affected CUDA memcheck targets, and FP32/BF16 post-fix smokes passed. B-0005 remains the 3-warmup/20-sample measurement at `99cf1e4` because the valid execution order is unchanged.
+State recorded on 2026-08-09 after PR #4 fast-forwarded public `main` to `c961026` and post-merge correctness run `31298966035` succeeded. B-0005 remains the 3-warmup/20-sample measurement at `99cf1e4` because review and CI fixes do not change the valid execution order.
 
 ## Completed work
 
@@ -30,10 +30,10 @@ State recorded on 2026-08-09 after review fix `190459b`, complete post-fix CPU/C
 
 ## Work in progress
 
-- Milestone 4 code, review fixes, and measurement artifacts are locally complete. Public PR/CI integration remains.
+- No Milestone 4 work remains in progress. The next milestone is a bounded persistent L1 expert cache feeding the tested prepared-transfer boundary.
 - The TITAN Ledger, README, checklist, context notes, and compact/raw B-0005 artifacts are synchronized with the measured Milestone 4 implementation.
 - Final Terra high review found three Important contract/test gaps. Commit `190459b` enforces use-sequence identity before side effects, strengthens failure-atomicity coverage, and requires matched H2D/synchronization equality. No Critical or Important finding remains unaddressed.
-- Public `main` remains at the completed Milestone 3 ancestry until the Milestone 4 PR passes review and CI.
+- Public PR #4 merged by ancestry-verified fast-forward at `c961026`; post-merge correctness run `31298966035` succeeded.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; builds: `build-cpu` and `build-cuda`.
 
@@ -50,11 +50,10 @@ State recorded on 2026-08-09 after review fix `190459b`, complete post-fix CPU/C
 
 ## Next concrete tasks
 
-1. Commit the synchronized Milestone 4 ledger/results, publish the branch through PR/CI, verify ancestry, fast-forward public `main`, and confirm post-merge CI.
-2. Design a bounded persistent L1 expert cache that owns exact source bytes independently of the current temporary reader vectors and can feed the existing prepared-transfer boundary.
-3. Add an independently switchable L2 NVMe reader and benchmark buffered I/O, `io_uring`, and `O_DIRECT` on native Linux before choosing a default.
-4. Add full-dimension bounded checkpoint slices before any full Kimi K3 throughput claim, then implement deadline-aware L2-to-L1-to-L0 scheduling.
-5. Continue with Least-Stale/cache policies, task/session profiles, adaptive Top-K, and exact rescue in charter order.
+1. Design a bounded persistent L1 expert cache that owns exact source bytes independently of the current temporary reader vectors and can feed the existing prepared-transfer boundary.
+2. Add an independently switchable L2 NVMe reader and benchmark buffered I/O, `io_uring`, and `O_DIRECT` on native Linux before choosing a default.
+3. Add full-dimension bounded checkpoint slices before any full Kimi K3 throughput claim, then implement deadline-aware L2-to-L1-to-L0 scheduling.
+4. Continue with Least-Stale/cache policies, task/session profiles, adaptive Top-K, and exact rescue in charter order.
 
 ## Hardware assumptions
 
@@ -81,9 +80,10 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Public Milestone 3 `main`: `b6c3d473ffe99d009d75a3e909d8681bc110bca3`; implementation merge `5de2514` passed post-merge correctness run `31295154288`, and `b6c3d47` then closed the ledger.
+- Public Milestone 4 implementation `main`: `c961026b2603da1bc45c973894aaba908b2b2371`; PR #4 and post-merge correctness run `31298966035` succeeded.
 - B-0005 measurement commit: `99cf1e4164510824ee67755c410b74887793fa8a` (`feat: add asynchronous transfer ablation`).
 - Latest validated code commit: `190459b` (`fix: enforce async transfer identity invariants`); the valid B-0005 execution path and ordering are unchanged.
+- CI portability fix: `c961026` (`test: detect CPU-only builds by capability`); it changes test environment detection only.
 - CPU verification: CTest 5/5; pytest 98 passed and 27 CUDA-only skipped.
 - CUDA verification: CTest 14/14; pytest 124 passed and one CPU-build-only skipped.
 - Compute Sanitizer: `test_cuda_device`, `test_cuda_dense`, `test_cuda_mxfp4`, `test_cuda_memory`, `test_cuda_pinned_memory`, `test_cuda_async_pipeline`, `test_cuda_residency`, `test_cuda_situ`, `test_cuda_ffn`, and `test_cuda_async_ffn` each report `ERROR SUMMARY: 0 errors`.
