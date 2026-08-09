@@ -15,12 +15,15 @@
 #include <vector>
 
 namespace k3x {
+class RuntimeProfile;
+
 enum class L1ExpertCacheMode {
     disabled,
     static_admission,
     lru,
     lfu,
     least_stale,
+    profiled,
 };
 
 struct L1ExpertCacheStats {
@@ -68,7 +71,9 @@ using ExpertPayloadLoader = std::function<Result<ExpertMlpPayload>()>;
 
 class HostExpertStore {
 public:
-    HostExpertStore(L1ExpertCacheMode mode, std::size_t capacity_bytes);
+    HostExpertStore(L1ExpertCacheMode mode, std::size_t capacity_bytes,
+                    RuntimeProfile* profile = nullptr,
+                    std::uint64_t profile_prior_strength = 0);
 
     Result<ExpertPayloadHandle> get_or_load(
         ExpertKey key, const ExpertPayloadLoader& loader);
@@ -94,6 +99,8 @@ private:
 
     L1ExpertCacheMode mode_;
     std::size_t capacity_bytes_{};
+    RuntimeProfile* profile_{};
+    std::uint64_t profile_prior_strength_{};
     L1ExpertCacheStats stats_;
     std::unordered_map<ExpertKey, Entry, KeyHash> entries_;
     std::unordered_set<ExpertKey, KeyHash> protected_;

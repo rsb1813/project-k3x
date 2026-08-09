@@ -139,7 +139,7 @@
 - [x] Runtime-only metadata, persistent profile, and profiled eviction design.
 - [x] TDD implementation and evidence plan.
 - [x] Bounded profile data model and crash-safe canonical persistence.
-- [ ] Opt-in profiled exact eviction with prior-to-live crossover.
+- [x] Opt-in profiled exact eviction with prior-to-live crossover.
 - [ ] Runtime/CLI integration and prompt/output non-interference proof.
 - [ ] B-0011, full verification, review, ledger, and public integration.
 

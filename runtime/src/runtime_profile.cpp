@@ -191,7 +191,8 @@ double RuntimeProfile::prior_weight(std::uint64_t prior_strength) const noexcept
     if (prior_route_observations_ == 0) return 0.0;
     if (live_route_observations_ == 0) return 1.0;
     return static_cast<double>(prior_strength) /
-           static_cast<double>(prior_strength + live_route_observations_);
+           (static_cast<double>(prior_strength) +
+            static_cast<double>(live_route_observations_));
 }
 
 double RuntimeProfile::usefulness(ExpertKey key,

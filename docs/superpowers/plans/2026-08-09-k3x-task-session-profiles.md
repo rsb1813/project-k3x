@@ -12,9 +12,9 @@ Add bounded runtime-only metadata and deterministic persistent routing profiles 
 
 ## Task 2 — Profiled exact eviction
 
-- [ ] Add RED traces for helpful prior, conflicting prior, live-observation crossover, selected-set protection, and unchanged legacy policies.
-- [ ] Implement explicit `profiled` scoring with separate prior and live evidence.
-- [ ] Verify deterministic victim and counter behavior.
+- [x] Add RED traces for helpful prior, conflicting prior, live-observation crossover, selected-set protection, and unchanged legacy policies.
+- [x] Implement explicit `profiled` scoring with separate prior and live evidence.
+- [x] Verify deterministic victim and counter behavior.
 
 ## Task 3 — Runtime and CLI integration
 

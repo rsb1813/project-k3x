@@ -1,5 +1,6 @@
 // 영속적 L1 expert store의 원자적 admission과 exact bypass 계약을 검증합니다.
 #include "k3x/host_expert_store.hpp"
+#include "k3x/runtime_profile.hpp"
 
 #include <atomic>
 #include <array>
@@ -8,6 +9,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <stdexcept>
 #include <thread>
@@ -254,6 +256,47 @@ int main() {
     assert(least_stale_future.stats().collision_misses == 0);
     assert(least_stale_future.contains({1, 0}));
     assert(!least_stale_future.contains({3, 0}));
+
+    k3x::RuntimeProfile prior_seed;
+    for (std::uint64_t cycle = 0; cycle < 5; ++cycle) {
+        prior_seed.observe(cycle, 0, std::array{ExpertKey{0, 0}});
+    }
+    prior_seed.observe(5, 0, std::array{ExpertKey{0, 1}});
+    const auto prior_path = std::filesystem::temp_directory_path() /
+        ("k3x-profiled-cache-prior-" +
+         std::to_string(std::chrono::steady_clock::now()
+                            .time_since_epoch().count()) +
+         ".k3xp");
+    assert(prior_seed.save(prior_path));
+    auto helpful_profile = k3x::RuntimeProfile::load(prior_path);
+    auto conflicting_profile = k3x::RuntimeProfile::load(prior_path);
+    assert(helpful_profile && conflicting_profile);
+
+    HostExpertStore profiled_helpful(
+        L1ExpertCacheMode::profiled, 3264, &helpful_profile.value(), 1);
+    load_key(profiled_helpful, {0, 0}, 310);
+    load_key(profiled_helpful, {0, 1}, 320);
+    profiled_helpful.begin_access_set(
+        0, 1, std::array{ExpertKey{1, 0}});
+    load_key(profiled_helpful, {1, 0}, 330);
+    assert(profiled_helpful.contains({0, 0}));
+    assert(!profiled_helpful.contains({0, 1}));
+
+    for (std::uint64_t cycle = 0; cycle < 4; ++cycle) {
+        conflicting_profile.value().observe(
+            cycle, 0, std::array{ExpertKey{0, 1}});
+    }
+    HostExpertStore profiled_crossover(
+        L1ExpertCacheMode::profiled, 3264,
+        &conflicting_profile.value(), 1);
+    load_key(profiled_crossover, {0, 0}, 340);
+    load_key(profiled_crossover, {0, 1}, 350);
+    profiled_crossover.begin_access_set(
+        4, 1, std::array{ExpertKey{1, 0}});
+    load_key(profiled_crossover, {1, 0}, 360);
+    assert(!profiled_crossover.contains({0, 0}));
+    assert(profiled_crossover.contains({0, 1}));
+    std::filesystem::remove(prior_path);
 
     return 0;
 }

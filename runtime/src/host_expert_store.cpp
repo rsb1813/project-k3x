@@ -1,5 +1,6 @@
 // bounded L1 expert store의 atomic admission과 exact bypass를 구현합니다.
 #include "k3x/host_expert_store.hpp"
+#include "k3x/runtime_profile.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -52,8 +53,11 @@ Result<std::size_t> charged_bytes(const ExpertMlpPayload& payload) {
 }
 
 HostExpertStore::HostExpertStore(L1ExpertCacheMode mode,
-                                 std::size_t capacity_bytes)
-    : mode_(mode), capacity_bytes_(capacity_bytes) {}
+                                 std::size_t capacity_bytes,
+                                 RuntimeProfile* profile,
+                                 std::uint64_t profile_prior_strength)
+    : mode_(mode), capacity_bytes_(capacity_bytes), profile_(profile),
+      profile_prior_strength_(profile_prior_strength) {}
 
 std::size_t HostExpertStore::KeyHash::operator()(
     const ExpertKey& key) const noexcept {
@@ -124,7 +128,7 @@ Result<ExpertPayloadHandle> HostExpertStore::get_or_load(
                                      left.insertion) <
                             std::tie(right.frequency, right.last_access,
                                      right.insertion);
-            } else {
+            } else if (mode_ == L1ExpertCacheMode::least_stale) {
                 const auto left_current = left.last_cycle == active_cycle_;
                 const auto right_current = right.last_cycle == active_cycle_;
                 const auto spatial_priority = [this](ExpertKey key) {
@@ -142,6 +146,15 @@ Result<ExpertPayloadHandle> HostExpertStore::get_or_load(
                     std::tuple(right_current,
                                spatial_priority(victim->first),
                                right.last_access, right.insertion);
+            } else {
+                const auto left_score = profile_ ? profile_->usefulness(
+                    candidate->first, profile_prior_strength_) : 0.0;
+                const auto right_score = profile_ ? profile_->usefulness(
+                    victim->first, profile_prior_strength_) : 0.0;
+                preferred = std::tuple(left_score, left.last_access,
+                                       left.insertion) <
+                            std::tuple(right_score, right.last_access,
+                                       right.insertion);
             }
             if (preferred) victim = candidate;
         }
@@ -169,6 +182,7 @@ void HostExpertStore::begin_access_set(
     std::lock_guard lock(mutex_);
     active_cycle_ = forward_cycle;
     active_layer_ = layer;
+    if (profile_) profile_->observe(forward_cycle, layer, selected);
     protected_.clear();
     for (const auto key : selected) {
         protected_.insert(key);
