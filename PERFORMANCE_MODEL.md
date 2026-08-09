@@ -112,7 +112,7 @@ The following values were measured on 2026-08-08 using the deterministic tiny sy
 
 Reproduce the record with the commands in [`README.md`](README.md). JSON and CSV are generated under an ignored `build-results/` directory so host-specific results are not mistaken for portable project data.
 
-## Milestone 13–14 speculative verification accounting
+## Milestone 13–15 speculative verification accounting
 
 The accepted token-major verifier is a correctness reference, not a traffic optimization. For a proposal with `p` candidate tokens and `a` accepted candidates, it performs `a + 1` target forwards and commits `a + 1` tokens, including the target bonus token. Rejected suffix candidates are never executed. Its target work and committed KDA/MLA state therefore match ordinary greedy decoding; proposal and lifecycle overhead can only make this reference equal or slower.
 
@@ -122,7 +122,11 @@ Milestone 14 now implements the first exact CPU expert-major reference. For each
 
 B-0015 demonstrates why acceptance belongs in the traffic model. Perfect block-2 execution loads 24 unique payloads for 30 assignments, reuses six assignments, and reduces logical Reader bytes from 665,616 to 655,824 relative to token-major. The mixed trace loads 39 payloads for 48 assignments but evaluates eight positions to commit five, raising logical Reader bytes to 680,304. On this fixture the block traffic benefit is therefore the union reuse saved on committed work minus payloads spent on rejected suffix positions. These are logical synthetic Reader bytes, not physical P44 Pro or H2D measurements.
 
-The next model must use a measured acceptance distribution and per-layer union size to estimate expected bytes per committed token. A favorable perfect block is insufficient: the mixed row shows that rejection can erase reuse and add traffic. Token-major remains the default until representative drafting, native-Linux physical I/O, and CUDA H2D union evidence exist.
+Milestone 15 adds physical CUDA H2D evidence for one expert reused across multiple tokens. For a native expert payload of `E = 17,547,264` bytes and a group of `b` tokens, repeated transient scalar execution transfers `bE` weight bytes per iteration, while the batch primitive transfers `E`. B-0016 observes exactly this identity for `b=2` and `b=4`: 20 iterations use 701,890,560 versus 350,945,280 bytes and 1,403,781,120 versus 350,945,280 bytes. Activation H2D and result D2H stay proportional to token count and are identical within each scalar/batch pair.
+
+The released-dimension batch reduces median boundary latency by 50.79% for two tokens and 73.09% for four tokens, while aggregate kernel time falls by 35.16% and 53.46%. This isolates expert-weight reuse but does not include routing, multi-expert union formation, KDA/MLA, rejection cost, physical NVMe, or full-layer concurrency. The synthetic CUDA graph confirms exact integration: perfect block-2 slightly reduces weight H2D from 4,981,824 to 4,972,032 bytes, while the mixed row increases it to 6,627,744 bytes because three rejected positions are evaluated.
+
+The next model must combine a measured acceptance distribution, per-layer unique-expert union, expert group-size distribution, and current residency to estimate expected bytes per committed token. A favorable perfect block or repeated single expert is insufficient: the mixed row shows that rejection can erase reuse and add traffic. Token-major remains the default until representative drafting, native-Linux physical I/O, and full-layer CUDA evidence exist.
 
 ## Required production measurements
 

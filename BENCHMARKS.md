@@ -597,6 +597,38 @@ Pre-publication verification passed CPU CTest 13/13 and pytest 253/44, liburing/
 
 Public branch and PR correctness runs `31328853375` and `31328869071` succeeded at integration head `012e598`. PR #15 merged by fast-forward, and post-merge `main` correctness run `31329045623` also succeeded at that head.
 
+## B-0016 — Milestone 15 exact CUDA expert-major execution
+
+- Date: 2026-08-10.
+- Commit: batch/runtime implementation `e99bbc0`; measurement tooling `7899603`; direct CLI correction `884a74e`.
+- Hardware: AMD Ryzen 7 9800X3D and NVIDIA GeForce RTX 5080 16 GB under WSL2 Ubuntu 24.04.4; CUDA 13.3 native `sm_120`.
+- Model/checkpoint: executable synthetic `artifacts/synthetic.k3x`, SHA-256 `039d61ee9c2e13e27c9a2514bb476f8b122b8b37be0b7f85baf26c1a6611a2e9`; non-executable released-dimension storage fixture `artifacts/m12-bounded.k3x`, SHA-256 `aab7aea48b03bdcd8e0b4d98c4780128ab689d2bba005089a49970eb0e326890`.
+- Mode: incremental natural Top-2, `cuda-custom + ffn-block + reused + transient + synchronous + fusion none`, disabled L1, blocking `pread + buffered`, 4 prompt tokens, 6 generated tokens, 3 warmups, 20 measured samples.
+- Cases: CUDA greedy; token-major and expert-major perfect block-2; token-major and expert-major mixed block-2; released single-expert scalar/batch pairs at batch sizes two and four.
+
+| Graph case | Decode tok/s | Prefill tok/s | TTFT ms | Peak RSS | Peak VRAM | Acceptance | Evaluated / discarded | Batch calls / tokens | Kernel ms | Logical Reader GB/generated token | H2D GB/generated token |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| greedy | 61.2690 | 25.4532 | 869.8782 | 507,441,152 B | 43,680 B | n/a | 0 / 0 | 0 / 0 | 26.1533 | 0.000110936 | 0.000845760 |
+| token-major perfect-2 | 60.0987 | 26.1094 | 862.1426 | 507,596,800 B | 43,680 B | 1.00 | 0 / 0 | 0 / 0 | 27.2120 | 0.000110936 | 0.000845760 |
+| expert-major perfect-2 | 66.1869 | 26.5158 | 862.2326 | 507,670,528 B | 44,192 B | 1.00 | 5 / 0 | 24 / 30 | 24.5167 | 0.000109304 | 0.000844448 |
+| token-major mixed-2 | 59.4970 | 26.4221 | 866.7287 | 507,707,392 B | 43,680 B | 0.25 | 0 / 0 | 0 / 0 | 27.2904 | 0.000110936 | 0.000845760 |
+| expert-major mixed-2 | 39.9912 | 25.4448 | 865.2640 | 507,797,504 B | 44,192 B | 0.25 | 8 / 3 | 39 / 48 | 36.8958 | 0.000113384 | 0.001125744 |
+
+All graph rows preserve the greedy token sequence, final KDA/MLA state, and committed expert/K traces. Average Top-K is 2, L1 hits/misses are zero because the cache is disabled, and perfect/mixed speculative acceptance is 1.0/0.25. Logical Reader GB/token is not physical NVMe GB/token. GPU utilization and memory bandwidth were not captured, so no value is inferred for them. The perfect expert-major row is 10.13% faster than its token-major pair and slightly reduces logical Reader and H2D traffic; the mixed row is 32.79% slower and increases both because it evaluates three rejected positions. No favorable direction was required.
+
+| Released case | Median latency ms | Aggregate kernel ms | Weight H2D | Activation H2D | D2H | Peak VRAM | Batch calls / tokens | Max abs. error |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| scalar-2 | 3.7948 | 13.5063 | 701,890,560 B | 573,440 B | 573,440 B | 5,914,624 B | 0 / 0 | 0 |
+| batch-2 | 1.8675 | 8.7572 | 350,945,280 B | 573,440 B | 573,440 B | 5,980,160 B | 20 / 40 | 0 |
+| scalar-4 | 7.4285 | 27.2306 | 1,403,781,120 B | 1,146,880 B | 1,146,880 B | 5,914,624 B | 0 / 0 | 0 |
+| batch-4 | 1.9993 | 12.6733 | 350,945,280 B | 1,146,880 B | 1,146,880 B | 6,111,232 B | 20 / 80 | 0 |
+
+The released fixture has `routing_semantics=false`. Each scalar call transfers the 17,547,264-byte expert once per token; each batch call transfers it once per iteration. Batch-2 reduces weight H2D by 50%, median latency by 50.79%, and kernel time by 35.16%. Batch-4 reduces weight H2D by 75%, median latency by 73.09%, and kernel time by 53.46%. Activation H2D and D2H remain identical within each pair. This is a single-expert kernel/traffic result, not full-layer routing, full-model TPS, physical NVMe, or quality evidence.
+
+Raw JSON/CSV and diagnostics are under `results/b0016-cuda-expert-major-wsl/`. Canonical aggregate-record SHA-256 is `218bba0595002b6e0c40cd998ac611b929fd81c45a236bdeed732bc1a6311f0f`; summary JSON/CSV SHA-256 is `d9ee486e968de6e409e6b7211059c6daa83bb8e518a9e06ce7d09bced32e0667` / `0d9a919722410a57b3fdd45eaf35340795ecdf68e01998c43d50ac0bc7deb56c`. Independent validation recomputed all nine raw JSON/CSV digest pairs and the canonical aggregate.
+
+Verification passed CPU CTest 13/13 and pytest 262/47, CUDA CTest 22/22 and pytest 301/8. The released batch-2 executable under Compute Sanitizer reported `ERROR SUMMARY: 0 errors`. Public PR and post-merge CI evidence remain pending at this ledger revision.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
@@ -605,6 +637,6 @@ Public branch and PR correctness runs `31328853375` and `31328869071` succeeded 
 - Native-Linux repetition of B-0009 with representative multi-expert pressure and controlled warm/cold preparation before selecting any deadline policy.
 - Native-Linux repetition of B-0010 with a representative routing trace, full-size experts, and controlled warm/cold preparation before selecting any cache policy.
 - Native-Linux repetition of B-0011 with repository-duration sessions and controlled helpful, stale, and adversarial priors before selecting any profile policy.
-- Native-Linux and CUDA repetition of B-0015 with physical NVMe/H2D accounting and representative acceptance distributions before any speculative default claim.
+- Native-Linux repetition of B-0016 with physical NVMe accounting, GPU utilization, memory bandwidth, multi-expert/full-layer groups, and representative acceptance distributions before any speculative default claim.
 - Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.
