@@ -44,6 +44,13 @@ int main() {
     assert(close(natural.value().normalized_weights[2], 0.8F / 2.7F));
     assert(close(natural.value().normalized_weights[3], 0.7F / 2.7F));
     assert(close(natural.value().selected_cumulative_mass, 1.0F));
+    auto natural_with_floor = k3x::select_routing(
+        natural_scores, natural_bias, 4,
+        RoutingPolicyConfig{.mode = RoutingMode::natural,
+                            .quality_floor_k = 16});
+    assert(natural_with_floor);
+    assert(natural_with_floor.value().selected_k == 4);
+    assert(!natural_with_floor.value().quality_floor_escalated);
 
     std::array<float, 16> descending{};
     std::array<float, 16> zero_bias{};

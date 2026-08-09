@@ -129,6 +129,23 @@ def test_critical_routing_forces_natural_top16(tmp_path: Path) -> None:
     assert critical["routing_quality_floor_k"] == 16
 
 
+def test_natural_reference_ignores_quality_floor_on_default_top2(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    artifact = tmp_path / "synthetic.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    baseline = _run(artifact, tmp_path / "baseline.json")
+    critical = _run(
+        artifact,
+        tmp_path / "critical.json",
+        "--routing-critical", "true",
+    )
+    assert critical["token_ids"] == baseline["token_ids"]
+    assert critical["prefill_routed_experts"] == baseline["prefill_routed_experts"]
+    assert critical["prefill_routed_k"] == [2] * 12
+    assert critical["routing_quality_escalated_decisions"] == 0
+
+
 def test_cpp_runner_rejects_invalid_routing_options() -> None:
     cases = [
         (["--routing-mode", "resident-first"], "unknown routing mode: resident-first"),

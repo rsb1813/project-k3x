@@ -97,6 +97,21 @@ def test_torch_policy_keeps_bias_out_of_contribution_weights() -> None:
     )
 
 
+def test_natural_policy_ignores_an_external_floor_above_checkpoint_k() -> None:
+    scores = torch.tensor([0.8, 0.7, 0.6, 0.5], dtype=torch.float32)
+    decision = select_routing(
+        scores,
+        torch.zeros_like(scores),
+        natural_top_k=2,
+        config=RoutingPolicyConfig(
+            mode=RoutingMode.NATURAL,
+            quality_floor_k=16,
+        ),
+    )
+    assert decision.selected_k == 2
+    assert not decision.quality_floor_escalated
+
+
 def test_top16_reference_runs_fixed_and_adaptive_end_to_end() -> None:
     config = SyntheticK3Config.default().replace(num_experts=24, top_k=16)
     natural = build_synthetic_model(config=config)

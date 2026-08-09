@@ -57,7 +57,8 @@ Result<RoutingDecision> select_routing(
     }
     if (config.quality_floor_k != 0 &&
         (!allowed_k(config.quality_floor_k) ||
-         config.quality_floor_k > natural_top_k)) {
+         (config.mode != RoutingMode::natural &&
+          config.quality_floor_k > natural_top_k))) {
         return fail("invalid routing quality floor");
     }
     if (config.mode == RoutingMode::fixed &&

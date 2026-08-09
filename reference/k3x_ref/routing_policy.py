@@ -67,7 +67,10 @@ def validate_routing_policy(
         raise ValueError("invalid adaptive routing threshold")
     if config.quality_floor_k and (
         config.quality_floor_k not in _K_LADDER
-        or config.quality_floor_k > natural_top_k
+        or (
+            config.mode is not RoutingMode.NATURAL
+            and config.quality_floor_k > natural_top_k
+        )
     ):
         raise ValueError("invalid routing quality floor")
     if config.mode is RoutingMode.FIXED and (
