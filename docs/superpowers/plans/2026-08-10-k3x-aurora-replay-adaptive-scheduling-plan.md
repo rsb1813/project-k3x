@@ -538,7 +538,7 @@ git commit -m "feat: expose AURORA replay runtime"
 - Produces: deterministic B-0017 raw JSON/CSV, summary digests, exact parity report, and measured fixed/adaptive comparison.
 - Preserves: no default change without favorable representative evidence.
 
-- [ ] **Step 1: Write the failing ablation-schema test**
+- [x] **Step 1: Write the failing ablation-schema test**
 
 Create `tests/python/test_aurora_replay_ablation.py` with a Korean first-line comment. Require the matrix names below and reject any record that lacks exact target parity or separated draft bytes.
 
@@ -561,7 +561,7 @@ assert record["reader_completed_bytes"] > 0
 
 Add raw JSON/CSV SHA-256 and canonical aggregate checks patterned after B-0016, using LF CSV writers.
 
-- [ ] **Step 2: Run and verify RED**
+- [x] **Step 2: Run and verify RED**
 
 Run:
 
@@ -571,7 +571,7 @@ python -m pytest -q tests/python/test_aurora_replay_ablation.py
 
 Expected: import fails because `tools.ablate_aurora_replay` does not exist.
 
-- [ ] **Step 3: Implement and smoke the runner**
+- [x] **Step 3: Implement and smoke the runner**
 
 Create `tools/ablate_aurora_replay.py` with a Korean first-line comment. Materialize the 24-expert natural Top-16 fixture through existing converter helpers, run one warmup/one sample smoke, compare every AURORA row against natural diagnostics, and write raw artifacts plus checksummed summaries. Never infer physical NVMe, GPU utilization, or quality values that were not measured.
 
@@ -587,7 +587,7 @@ python -m pytest -q tests/python/test_aurora_replay_ablation.py
 
 Expected: the smoke and focused cross-check pass.
 
-- [ ] **Step 4: Run the canonical measurement**
+- [x] **Step 4: Run the canonical measurement**
 
 Run with three warmups and twenty samples.
 
@@ -600,7 +600,7 @@ python tools/ablate_aurora_replay.py \
 
 Record the measured direction even if every replay row is slower. Recompute every raw JSON/CSV hash and the canonical aggregate from the committed bytes.
 
-- [ ] **Step 5: Run the full verification matrix**
+- [x] **Step 5: Run the full verification matrix**
 
 Run CPU, liburing/direct, ASan/UBSan, and CUDA builds with the same capability flags used by B-0016. At minimum run:
 
