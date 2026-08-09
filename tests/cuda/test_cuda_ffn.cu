@@ -1,6 +1,7 @@
 // cuBLASLt와 strict SiTU를 연결한 dense FFN block의 전송과 출력을 검증합니다.
 #include "k3x/backend.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cmath>
@@ -207,6 +208,81 @@ int warm_expert_weights(k3x::ComputeBackend& backend,
                                   k3x::ProfilePhase::decode)) return 2;
         if (!backend.mxfp4_matvec(down_input, expert.down, 10,
                                   k3x::ProfilePhase::decode)) return 3;
+    }
+    return 0;
+}
+
+int test_exact_mxfp4_token_batch() {
+    const Mxfp4Fixture fixture;
+    const auto expert = fixture.views()[0];
+    auto second_input = fixture.input;
+    second_input[1] = -4.0F;
+    std::array<float, 64> inputs{};
+    std::copy(fixture.input.begin(), fixture.input.end(), inputs.begin());
+    std::copy(second_input.begin(), second_input.end(), inputs.begin() + 32);
+
+    auto cpu = k3x::make_cpu_backend();
+    const auto expected = cpu->mxfp4_situ_mlp_batch(
+        inputs, 2, expert, 2.0F, 1.5F, 10,
+        k3x::ProfilePhase::decode);
+    if (!expected) return 90;
+
+    k3x::BackendOptions options;
+    options.kind = k3x::BackendKind::cuda_custom;
+    options.cuda_boundary = k3x::CudaBoundaryMode::ffn_block;
+    options.cuda_allocation = k3x::CudaAllocationMode::reused;
+    options.cuda_weights = k3x::CudaWeightMode::transient;
+    options.cuda_transfer = k3x::CudaTransferMode::synchronous;
+    options.cuda_moe_fusion = k3x::CudaMoeFusionMode::none;
+    k3x::Profiler profiler;
+    auto backend = k3x::make_cuda_backend(options, &profiler);
+    if (!backend) return 91;
+    const auto before = backend.value()->runtime_stats();
+    const auto before_profile = profiler.summary();
+    const auto actual = backend.value()->mxfp4_situ_mlp_batch(
+        inputs, 2, expert, 2.0F, 1.5F, 10,
+        k3x::ProfilePhase::decode);
+    if (!actual || actual.value().size() != 2 ||
+        !nearly_equal(actual.value()[0], expected.value()[0], 1.0e-6F) ||
+        !nearly_equal(actual.value()[1], expected.value()[1], 1.0e-6F)) {
+        return 92;
+    }
+    const auto after = backend.value()->runtime_stats();
+    const auto after_profile = profiler.summary();
+    constexpr std::uint64_t expert_weight_bytes = 512 + 32 + 512 + 32 + 16 + 1;
+    if (after.weight_h2d_bytes - before.weight_h2d_bytes !=
+            expert_weight_bytes ||
+        after.activation_h2d_bytes - before.activation_h2d_bytes !=
+            inputs.size() * sizeof(float) ||
+        after.stream_synchronization_count -
+                before.stream_synchronization_count != 1 ||
+        after.ffn_block_calls - before.ffn_block_calls != 1 ||
+        after.ffn_block_experts - before.ffn_block_experts != 1 ||
+        after.batched_expert_ffn_calls -
+                before.batched_expert_ffn_calls != 1 ||
+        after.batched_expert_ffn_tokens -
+                before.batched_expert_ffn_tokens != 2 ||
+        after_profile.device_to_host_bytes -
+                before_profile.device_to_host_bytes != 2 * sizeof(float)) {
+        return 93;
+    }
+
+    const auto before_invalid = backend.value()->runtime_stats();
+    const auto before_invalid_events = profiler.events().size();
+    const auto rejected = backend.value()->mxfp4_situ_mlp_batch(
+        std::span<const float>(inputs).first(63), 2, expert, 2.0F, 1.5F,
+        10, k3x::ProfilePhase::decode);
+    const auto after_invalid = backend.value()->runtime_stats();
+    if (rejected || rejected.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        after_invalid.device_allocation_count !=
+            before_invalid.device_allocation_count ||
+        after_invalid.weight_h2d_bytes != before_invalid.weight_h2d_bytes ||
+        after_invalid.activation_h2d_bytes !=
+            before_invalid.activation_h2d_bytes ||
+        after_invalid.batched_expert_ffn_calls !=
+            before_invalid.batched_expert_ffn_calls ||
+        profiler.events().size() != before_invalid_events) {
+        return 94;
     }
     return 0;
 }
@@ -446,6 +522,7 @@ int main() {
     if (const auto result = test_fp32_and_residency()) return result;
     if (const auto result = test_bf16()) return result;
     if (const auto result = test_validation()) return result;
+    if (const auto result = test_exact_mxfp4_token_batch()) return result;
     if (const auto result = test_exact_mxfp4_group()) return result;
     if (const auto result = test_exact_mxfp4_group_rejects_non_native_group_size()) {
         return result;

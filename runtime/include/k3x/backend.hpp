@@ -58,6 +58,8 @@ struct BackendRuntimeStats {
     std::uint64_t grouped_projection_members{};
     std::uint64_t ffn_block_calls{};
     std::uint64_t ffn_block_experts{};
+    std::uint64_t batched_expert_ffn_calls{};
+    std::uint64_t batched_expert_ffn_tokens{};
     std::uint64_t fused_moe_calls{};
     std::uint64_t fused_moe_experts{};
     std::uint64_t pinned_host_bytes{};

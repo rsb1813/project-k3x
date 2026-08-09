@@ -55,6 +55,8 @@ int main() {
     if (runtime_stats.grouped_projection_members != 0) return 44;
     if (runtime_stats.ffn_block_calls != 0) return 59;
     if (runtime_stats.ffn_block_experts != 0) return 60;
+    if (runtime_stats.batched_expert_ffn_calls != 0) return 76;
+    if (runtime_stats.batched_expert_ffn_tokens != 0) return 77;
     if (runtime_stats.pinned_host_bytes != 0 ||
         runtime_stats.peak_pinned_host_bytes != 0 ||
         runtime_stats.async_prefetch_calls != 0 ||
