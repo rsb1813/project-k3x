@@ -22,6 +22,17 @@ k3x::Result<std::uint32_t> next_token(std::uint32_t input,
     ++calls;
     return k3x::Result<std::uint32_t>::success(input + 1);
 }
+
+class DefaultStatsProvider final : public k3x::DraftProvider {
+public:
+    k3x::Result<k3x::DraftProposal> propose(
+        const k3x::DraftRequest& request) override {
+        return k3x::Result<k3x::DraftProposal>::success(
+            {.anchor_token = request.anchor_token});
+    }
+
+    void update(const k3x::DraftVerification&) override {}
+};
 }
 
 int main() {
@@ -39,6 +50,13 @@ int main() {
         assert((result.value().committed_tokens ==
                 std::vector<std::uint32_t>{11, 12, 13}));
         assert(calls == 3);
+        assert(result.value().target_positions_evaluated == 0);
+        assert(result.value().target_positions_discarded == 0);
+        assert(result.value().expert_major_payload_loads == 0);
+        assert(result.value().expert_major_assignments == 0);
+        const auto stats = DefaultStatsProvider{}.stats();
+        assert(stats.proposal_calls == 0);
+        assert(stats.selected_length_4 == 0);
     }
     {
         std::size_t calls = 0;
