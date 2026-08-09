@@ -264,3 +264,10 @@
 - M13 public integration head `463e9ca`는 branch/PR correctness run `31324378917`/`31324381376`을 통과했고 PR #13으로 fast-forward merge되었다. Post-merge main correctness run `31324492327`도 성공했다.
 - 사용자의 전체 문서 갱신 요청에 따라 PR #11/#12/#13의 `MERGED` 상태와 공개 `main`을 다시 대조했다. README의 Milestone 11·12·13 전용 절과 ARCHITECTURE/DECISIONS/BENCHMARKS 원장은 이미 일치했지만, README 상단 배지가 Milestone 10에 머물렀고 `PROJECT_STATE.md`에 token-major speculation을 미구현으로 표시한 모순 및 최신 publication head 누락이 있어 현재 증거에 맞게 수정했다.
 - 문서 동기화 head `4984728`은 PR #14로 fast-forward merge되었다. Push/PR correctness run `31325118488`/`31325132631`과 post-merge main run `31325294591`이 모두 성공했으며, 로컬 CPU CTest 12/12와 `K3X_BUILD_DIR=build-cpu` Python 245 passed/44 skipped도 통과했다. 최초 Python 명령은 build 디렉터리 환경 변수를 빠뜨려 `build/k3x_run` FileNotFoundError 92건을 냈고, 실제 설정을 확인한 교정 실행으로 통과했다.
+
+## 2026-08-10 Milestone 14 설계
+
+- 공개 main `df263c2`에서 `codex/milestone-fourteen-expert-major-verification` 브랜치를 기존 linked worktree에 생성했다. 직전 기준 검증은 CPU CTest 12/12와 Python 245 passed/44 skipped다.
+- 현재 `Engine::forward`는 한 토큰의 전체 레이어와 persistent state를 즉시 변경한다. 단순 route replay는 실제 hidden state, target logits, Reader traffic, state commit을 검증하지 못하고, 전체 CUDA block 구현은 KDA/MLA rollback과 expert batching을 한 번에 묶는다. 따라서 첫 경계는 CPU·blocking·L1 disabled·natural routing으로 제한한 실제 layer-major block 실행이다.
+- vLLM Kimi K3 commit `44351f81`은 multi-token `KimiMoE.forward`와 speculative KDA metadata의 `num_accepted_tokens` 경계를 제공한다. MoE-Spec `2602.16052` Appendix C는 active expert별 token gather와 batched computation을, SpecMoE `2604.10152`는 duplicate migration coalescing을 기술한다. EcoSpec `2607.12696`과 AcceptMoE `2608.02989`는 token 수, expert union, transfer traffic을 분리해 측정해야 함을 뒷받침하지만 그 정책은 이후 lossy 실험으로 남긴다.
+- 선택 설계는 proposal input `[anchor,candidates...]` 전체를 레이어별로 실행하고, 각 MoE 레이어에서 natural route union을 first-use order로 만든다. Payload는 unique expert당 한 번 load하고 각 token/router-slot 결과를 저장한 뒤 token별 원래 router 순서로 누적한다. KDA는 위치별 snapshot, MLA는 temporary append 후 crop으로 accepted prefix state만 commit한다.

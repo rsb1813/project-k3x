@@ -144,6 +144,18 @@
 - [x] Correct the stale speculative-implementation statement and publication HEAD in `PROJECT_STATE.md`.
 - [x] Run documentation checks, commit, publish, and verify public `main`.
 
+## Milestone 14 — Exact expert-major speculative verification
+
+- [x] Re-read the TITAN Ledger and current token-major/runtime boundaries.
+- [x] Inspect official vLLM Kimi K3 multi-token state handling and primary MoE speculative papers.
+- [x] Compare full CUDA, route replay, and exact CPU layer-major approaches.
+- [x] Write the exact CPU expert-major design with state, routing, traffic, and failure invariants.
+- [x] Self-review and commit the design specification.
+- [ ] Write and commit the detailed TDD implementation plan.
+- [ ] Implement the pure expert-major plan and block verifier through RED→GREEN.
+- [ ] Integrate exact block execution, CLI identity, telemetry, and failure atomicity.
+- [ ] Run B-0015, full verification, ledger update, review, and public integration.
+
 ## Milestone 8 — Deadline-aware exact expert loading
 
 - [x] Deadline scheduler contract와 deterministic unit tests.
