@@ -33,8 +33,8 @@ Implement and measure an opt-in, exact current-layer deadline-aware L2 expert lo
 
 - [x] Add a blocking/deadline ablation crossed with supported Reader modes.
 - [x] Require exact tokens, routing, logical bytes, and successful-load parity.
-- [ ] Run warm synthetic measurements and preserve raw JSON/CSV.
-- [ ] Do not claim native P44 Pro, cold-cache, or full-model performance.
+- [x] Run warm synthetic measurements and preserve raw JSON/CSV.
+- [x] Do not claim native P44 Pro, cold-cache, or full-model performance.
 
 ## Task 6 — Verification, review, ledger, and publication
 

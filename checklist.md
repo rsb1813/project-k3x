@@ -122,7 +122,7 @@
 - [x] Blocking reference를 보존하는 exact current-layer runtime integration.
 - [x] CLI와 deadline scheduler telemetry.
 - [x] B-0009 8-case ablation runner와 correctness 계약.
-- [ ] B-0009 실제 측정.
+- [x] B-0009 WSL2 ext4 3-warmup/20-sample 측정과 raw 교차검증.
 - [ ] 전체 verification, final review, TITAN Ledger, public integration.
 
 ## Milestone 6 independent L2 reader
