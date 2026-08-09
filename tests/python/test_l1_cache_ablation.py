@@ -1,12 +1,16 @@
 # L1 expert cache ablation의 축 격리와 exact acceptance 계약을 검증합니다.
 import os
+import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from conftest import cpp_binary
 from k3x_converter.writer import convert
+from tools import ablate_l1_expert_cache
 from tools.ablate_l1_expert_cache import l1_cache_matrix, run_l1_cache_ablation
+from tools.benchmark_synthetic import BenchmarkRecord
 
 
 def test_l1_cache_matrix_crosses_only_cache_and_transfer() -> None:
@@ -42,6 +46,89 @@ def test_l1_cache_matrix_crosses_only_cache_and_transfer() -> None:
     )
 
 
+def _measured_record(name: str) -> BenchmarkRecord:
+    root = Path(__file__).parents[2]
+    payload = json.loads(
+        (root / "results" / "b0006-l1-cache-fp32" / f"{name}.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    return BenchmarkRecord(**payload)
+
+
+def _fake_benchmark(changes: dict[str, tuple[str, object]] | None = None):
+    changes = changes or {}
+
+    def run(*_args, **kwargs) -> BenchmarkRecord:
+        name = f"{kwargs['l1_expert_cache']}-{kwargs['cuda_transfer']}"
+        record = _measured_record(name)
+        if name in changes:
+            field, value = changes[name]
+            record = replace(record, **{field: value})
+        return record
+
+    return run
+
+
+def test_l1_cache_ablation_validates_fake_records(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        ablate_l1_expert_cache, "benchmark_once", _fake_benchmark()
+    )
+    summary = run_l1_cache_ablation(
+        Path("fixture.k3x"),
+        Path("runner"),
+        dense_precision="fp32",
+        l1_expert_cache_bytes=65536,
+        cuda_pinned_bytes=1024 * 1024,
+        warmup=3,
+        iterations=20,
+        output_dir=tmp_path,
+    )
+    assert len(summary["records"]) == 4
+    assert all(record["parity_status"] == "exact" for record in summary["records"])
+
+
+@pytest.mark.parametrize(
+    ("name", "field", "value", "message"),
+    [
+        ("static-synchronous", "token_ids", (0,), "token parity"),
+        ("static-synchronous", "routed_experts", (0,), "routing parity"),
+        ("disabled-synchronous", "l1_expert_cache_hits", 1, "disabled L1"),
+        ("static-synchronous", "l1_expert_cache_hits", 0, "static L1"),
+        ("static-synchronous", "l1_expert_cache_bypasses", 1, "static L1"),
+        ("static-synchronous", "l1_expert_cache_resident_bytes", 65537, "static L1"),
+        ("static-synchronous", "reader_read_calls", 428, "logical reads"),
+        ("static-synchronous", "host_to_device_bytes", 5074561, "GPU execution"),
+    ],
+)
+def test_l1_cache_ablation_rejects_invalid_records(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    name: str,
+    field: str,
+    value: object,
+    message: str,
+) -> None:
+    monkeypatch.setattr(
+        ablate_l1_expert_cache,
+        "benchmark_once",
+        _fake_benchmark({name: (field, value)}),
+    )
+    with pytest.raises(RuntimeError, match=message):
+        run_l1_cache_ablation(
+            Path("fixture.k3x"),
+            Path("runner"),
+            dense_precision="fp32",
+            l1_expert_cache_bytes=65536,
+            cuda_pinned_bytes=1024 * 1024,
+            warmup=3,
+            iterations=20,
+            output_dir=tmp_path,
+        )
+
+
 def test_l1_cache_ablation_runs_exact_cuda_matrix(
     synthetic_source: Path, tmp_path: Path
 ) -> None:
@@ -65,4 +152,3 @@ def test_l1_cache_ablation_runs_exact_cuda_matrix(
         assert record["parity_status"] == "exact"
         assert (tmp_path / "ablation" / f"{record['name']}.json").is_file()
         assert (tmp_path / "ablation" / f"{record['name']}.csv").is_file()
-
