@@ -56,6 +56,47 @@ def _measured_record(name: str) -> BenchmarkRecord:
     return BenchmarkRecord(**payload)
 
 
+def test_b0006_compact_manifest_matches_all_raw_records() -> None:
+    root = Path(__file__).parents[2]
+    compact = json.loads(
+        (root / "results" / "b0006-l1-cache.json").read_text(encoding="utf-8")
+    )
+    field_map = {
+        "decode_tok_s": "decode_tokens_per_second",
+        "prefill_tok_s": "prefill_tokens_per_second",
+        "ttft_ms": "ttft_ms",
+        "peak_rss_bytes": "peak_rss_bytes",
+        "logical_read_bytes_per_token": "file_read_bytes_per_token",
+        "reader_calls": "reader_read_calls",
+        "reader_bytes": "reader_completed_bytes",
+        "l1_hits": "l1_expert_cache_hits",
+        "l1_misses": "l1_expert_cache_misses",
+        "l1_bypasses": "l1_expert_cache_bypasses",
+        "l1_resident_bytes": "l1_expert_cache_resident_bytes",
+        "h2d_bytes": "host_to_device_bytes",
+        "d2h_bytes": "device_to_host_bytes",
+        "peak_vram_bytes": "peak_vram_bytes",
+        "kernel_nanoseconds": "kernel_nanoseconds",
+        "async_prefetch_calls": "async_prefetch_calls",
+        "transfer_stall_nanoseconds": "transfer_stall_nanoseconds",
+        "max_absolute_error": "max_absolute_error",
+    }
+    assert len(compact["records"]) == 8
+    for record in compact["records"]:
+        raw = json.loads(
+            (
+                root
+                / "results"
+                / f"b0006-l1-cache-{record['precision']}"
+                / f"{record['name']}.json"
+            ).read_text(encoding="utf-8")
+        )
+        for compact_field, raw_field in field_map.items():
+            assert record[compact_field] == raw[raw_field]
+        assert raw["token_ids"] == compact["generated_token_ids"]
+        assert raw["routed_experts"] == compact["routed_experts"]
+
+
 def _fake_benchmark(changes: dict[str, tuple[str, object]] | None = None):
     changes = changes or {}
 
