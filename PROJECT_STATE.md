@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 17 persistent AURORA draft state is in final verification. The cursor, provider, `aurora-persistent` CLI, and five cursor telemetry fields are implemented. Provider-level and token-major/CPU expert-major target parity match the replay oracle on the Top-16 synthetic artifact. Canonical B-0018 measured four exact replay/persistent pairs and independently verified all raw and summary digests. Full build variants, sanitizer coverage, TITAN Ledger synchronization, review, and publication remain pending. Milestone 16 replay remains the exact non-default oracle and the natural strict target verifier remains authoritative.
+Milestone 17 persistent AURORA draft state is implemented, measured, and in final review before publication. The cursor, provider, `aurora-persistent` CLI, five cursor telemetry fields, canonical B-0018, full CPU/io_uring/CUDA verification, ASan/UBSan coverage, Compute Sanitizer, and TITAN Ledger synchronization are complete. Complete-prefix replay remains the exact non-default oracle and the natural strict target verifier remains authoritative. Public PR integration and post-merge CI remain pending.
 
-State audited on 2026-08-10 against public ledger head `44aa049` and isolated branch `codex/milestone-seventeen-persistent-aurora`. The fresh CPU baseline passes CTest 14/14 and Python 268 passed/47 skipped. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 against public ledger head `44aa049` and isolated branch `codex/milestone-seventeen-persistent-aurora` through evidence commit `de63023`. The current CPU matrix passes CTest 14/14 and Python 272 passed/47 skipped. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
@@ -75,11 +75,15 @@ State audited on 2026-08-10 against public ledger head `44aa049` and isolated br
 - Pure adaptive `{1,2,4}` proposal scheduler driven by observed prefix survival and target expert-major load/assignment cost, including immediate rejection backoff and bounded smallest-rung recovery.
 - End-to-end `aurora-replay` CLI and benchmark schema with fixed K4/6/8/12 drafting, fixed/adaptive blocks, token/expert-major natural target verification, strict capability preflight, and zero draft telemetry for ordinary greedy execution.
 - B-0017 seven-case natural/fixed/adaptive replay measurement with exact token/final-state/committed-route parity, 14/14 raw artifact digest validation, canonical aggregate verification, and combined CUDA expert-major AURORA Compute Sanitizer coverage.
+- Opaque persistent draft cursor with one-time context prefill, fixed-size KDA checkpoints, append-only MLA logical marks/crop, target-bonus teacher forcing, malformed-commit atomicity, and direct fresh-oracle flattened-state parity.
+- `AuroraPersistentDraftProvider` with lazy cursor creation, replay-equivalent lifecycle and adaptive scheduling, separate Reader/routing/time telemetry, and exact fixed/adaptive token-major plus CPU expert-major target parity.
+- `aurora-persistent` CLI and JSON/CSV schema with default-zero context-prefill, incremental-forward, rollback, MLA-crop, and KDA-checkpoint counters.
+- B-0018 nine-case natural/replay/persistent measurement with four exact matched pairs, 18 raw digest checks, LF-stable summary digest, canonical aggregate, and independently recomputed headline percentages.
 
 ## Work in progress
 
-- Milestone 17 design selects a one-time reduced-K context prefill, transactional incremental proposal state, bounded KDA checkpoints, MLA logical suffix crop, and target-bonus teacher forcing. Implementation and B-0018 remain pending.
-- Complete-prefix `aurora-replay` remains executable and is the required candidate/state oracle. No default, draft precision, residency, scheduler threshold, or target verifier changes are accepted in Milestone 17.
+- Milestone 17 implementation, B-0018, full verification, evidence cross-checks, and ledger synchronization are complete; final review and public integration remain in progress.
+- Complete-prefix `aurora-replay` remains executable as the required candidate/state oracle. No default, draft precision, residency, scheduler threshold, or target verifier changed in Milestone 17.
 - Milestone 16 implementation, B-0017, full verification, evidence cross-checks, final self-review, public integration, and documentation reconciliation are complete.
 - The scheduler explores `{1,2,4}` one rung at a time, uses Laplace-smoothed observed prefix survival and actual expert-major payload-load/assignment ratio, immediately backs off after rejection, and retries the smallest rung after one zero-draft step. These thresholds are an experimental B-0017 identity, not a runtime default.
 - Complete-prefix replay intentionally remains the candidate oracle for persistent KDA/MLA draft-state work. Reduced precision, resident-only drafting, confidence prediction, and learned DSpark integration remain unimplemented.
@@ -92,8 +96,8 @@ State audited on 2026-08-10 against public ledger head `44aa049` and isolated br
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
-- Linux Python environment: `/home/jolib/.venvs/k3x-m1`; builds: `build-cpu`, `build-uring`, `build-cuda`, and `build-uring-asan`.
+- Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-seventeen-persistent-aurora`.
+- Linux Python environment: `/home/jolib/.venvs/k3x-m1`; builds: `build`, `build-uring`, `build-cuda`, and `build-uring-asan`.
 
 ## Known failures and blockers
 
@@ -110,9 +114,9 @@ State audited on 2026-08-10 against public ledger head `44aa049` and isolated br
 
 ## Next concrete tasks
 
-1. Implement cursor creation and initial proposal through an artifact-backed witnessed RED/GREEN cycle.
-2. Implement commit/rollback and replay-oracle parity without deep-copying MLA context.
-3. Integrate `aurora-persistent`, run B-0018 and the full verification matrix, then update the TITAN Ledger with measured evidence.
+1. Complete final diff/evidence review and resolve only Critical or Important findings.
+2. Publish and merge Milestone 17, then verify public `main` CI and update the public integration ledger.
+3. Start the next isolated milestone from measured B-0018: compare exact draft GPU execution, expert residency, and reduced precision as separate axes before selecting one.
 
 ## Hardware assumptions
 
@@ -129,9 +133,9 @@ State audited on 2026-08-10 against public ledger head `44aa049` and isolated br
 
 ## Latest measured bottleneck
 
-B-0017 identifies complete-prefix replay as the immediate AURORA bottleneck. Natural greedy measures 1140.3391 tok/s on the tiny Top-16 CPU fixture. The best replay row, fixed block-2 expert-major, measures 611.7589 tok/s, reduces target Reader traffic to 1,102,416 bytes, but adds 1,454,112 draft Reader bytes and repeats 13 prefix positions. Adaptive token/expert rows repeat 20 positions, add 2,181,168 draft bytes, and regress by 60.77%/62.52%. Every replay row preserves exact target output and remains non-default.
+B-0018 removes complete-prefix replay. Fixed persistent rows reduce draft Reader bytes from 1,454,112 to 785,808 (-45.96%) and improve paired token/expert decode by 14.97%/14.55%. Adaptive persistent rows reduce draft bytes from 2,181,168 to 805,392 (-63.08%) and improve paired decode by 41.75%/27.08%. They replay zero context positions, prefill five once, and preserve proposal counts, acceptance, target tokens, final state, and committed routes.
 
-The next speculative boundary is persistent KDA/MLA draft state that reproduces the replay oracle without recomputing the full committed prefix. Scheduler retuning cannot remove this measured work amplification. Representative acceptance, coding quality, resident-expert pressure, and native-Linux physical I/O remain unmeasured.
+Persistent rows still measure 38.08% to 52.26% below the tiny natural greedy baseline of 1147.7689 tok/s. The immediate speculative bottleneck is now the extra per-token reduced-K draft graph itself rather than prefix reconstruction. Exact GPU drafting, resident experts, and reduced precision are separate future axes. Representative acceptance, coding quality, resident-expert pressure, and native-Linux physical I/O remain unmeasured.
 
 The next CUDA systems bottleneck is extending one-expert batches to representative multi-expert/full-layer groups while KDA, MLA, routing, residual/state, and non-FFN orchestration remain CPU-driven. GPU utilization, memory bandwidth, physical NVMe, and overlap are still unmeasured for this boundary.
 
@@ -141,10 +145,14 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
+- Milestone 17 cursor/transaction head `6b3955a`, provider head `c28a732`, CLI/schema head `3459ca6`, and B-0018 evidence head `de63023` are the current verified lineage.
+- Current full verification passes CPU CTest 14/14 and pytest 272 passed/47 skipped, liburing/direct CTest 15/15 and pytest 278 passed/41 skipped, ASan/UBSan liburing CTest 15/15 plus five artifact-backed persistent tests, and CUDA CTest 23/23 with pytest 311 passed/8 skipped. The persistent CUDA expert-major Compute Sanitizer run reports zero errors.
+- B-0018 artifact SHA-256 is `81560d6250869426d739040c6e30d9a881b1f37f7a3f639345d27dd69a80ce96`; runner SHA-256 is `0eb212731be6e0a5344048aa6f6d76fb57732423017568112ec9d27f7b74d48d`; canonical aggregate SHA-256 is `abcef1afca7d6208808941323565bce44f25ecc6e9e0d28292ad54bfc7760cd0`; summary JSON/CSV SHA-256 is `a332af2d336cecb3060812a577f16e605bc832f4f21b74f315dfbbf8fd4f6132` / `c65d3bb9d8805f66249d0bb6ba380b8aa2508fd53a073c1bc3dece82e00fe472`.
+- Independent B-0018 validation recomputes all 18 raw JSON/CSV digests, the summary CSV digest, canonical aggregate, exact pair invariants, and headline percentage deltas. Results are under `results/b0018-persistent-aurora-wsl/`.
 - Milestone 16 runtime head `bc45538` contains the replay provider, adaptive scheduler, target feedback, runtime integration, CLI, and telemetry. Evidence head `51ff8e7` contains B-0017 tooling, raw artifacts, summaries, cross-checks, and verification records.
 - Public Milestone 16 integration head `df5c07d` includes the complete implementation, B-0017 evidence, README, and synchronized TITAN Ledger. PR #20 branch/PR correctness runs `31337234073`/`31337240722` and post-merge `main` correctness run `31337365175` succeeded.
 - Public Milestone 16 documentation head `0eb0966` records PR #20 and its CI across README, BENCHMARKS, checklist, context notes, plan, and project state. PR #21 push/PR correctness runs `31337548635`/`31337554179` and post-merge `main` correctness run `31337694471` succeeded.
-- Current full verification passes CPU CTest 14/14 and pytest 268 passed/47 skipped, liburing/direct CTest 15/15 and pytest 274 passed/41 skipped, ASan/UBSan liburing CTest 15/15, and CUDA CTest 23/23 with pytest 307 passed/8 skipped. The combined CUDA expert-major AURORA CLI Compute Sanitizer run reports zero errors.
+- Historical Milestone 16 verification passed CPU CTest 14/14 and pytest 268 passed/47 skipped, liburing/direct CTest 15/15 and pytest 274 passed/41 skipped, ASan/UBSan liburing CTest 15/15, and CUDA CTest 23/23 with pytest 307 passed/8 skipped. The combined CUDA expert-major AURORA CLI Compute Sanitizer run reported zero errors.
 - B-0017 artifact SHA-256 is `c1110ad2a1fe981f92b01e36aaafa216d0d8ea45a6608270f3cf706816c17a7c`; runner SHA-256 is `a20f708073bd27150d27d8eddf5c926072f1b96020257e625ab3caa895a536f7`; canonical aggregate SHA-256 is `fb7febf52c75281417b77c3f7d40787f738dba8a35490cc86d43ac5072cacd23`; summary JSON/CSV SHA-256 is `fdd94c5696d1505e17e0dbc41d465d8edad38b132896f5a3742277c09b852871` / `865d228fb88b1bc22fe147b04e1ce003559f04534052d8ce0180b753832d9551`.
 - Independent B-0017 evidence validation recomputed all 14 raw JSON/CSV digests, the canonical aggregate, exact token/state/route parity, and LF-stable summary bytes. Results are under `results/b0017-aurora-replay-wsl/`.
 - Public Milestone 15 integration head `c18df33` includes the synchronized Milestone 11–15 implementation lineage, B-0016 evidence, LF-stable artifact digests, and final-review fix. Branch/PR correctness runs `31332732339`/`31332745907` and post-merge `main` run `31332852551` succeeded.
@@ -179,4 +187,4 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Proposed component status
 
-AURORA's replay reference, adaptive scheduler, target feedback, CLI, telemetry, and B-0017 are implemented and measured as an experimental non-default path. Persistent draft state, reduced precision, resident-only drafting, and learned drafting remain proposed. APOLLO, TITAN COUNCIL, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None of the proposed-only components is claimed as implemented or benchmarked.
+AURORA's replay reference, persistent reduced-Top-K CPU draft state, adaptive scheduler, target feedback, CLI, telemetry, B-0017, and B-0018 are implemented and measured as experimental non-default paths. Reduced precision, resident-only drafting, GPU drafting, and learned drafting remain proposed. APOLLO, TITAN COUNCIL, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None of the proposed-only components is claimed as implemented or benchmarked.

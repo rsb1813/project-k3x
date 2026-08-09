@@ -294,7 +294,13 @@ The pure scheduler explores proposal lengths 1, 2, and 4 one rung at a time. It 
 
 B-0017 measures seven Top-16 synthetic rows. All preserve natural target tokens, final KDA/MLA state, and committed routing. Every replay row is 46.35% to 62.52% slower than natural greedy because complete-prefix CPU replay adds 1,454,112 to 2,181,168 logical draft Reader bytes. The reference therefore remains an explicit non-default experiment and correctness oracle. Persistent draft state, reduced precision, resident-only drafting, trained DSpark, EcoSpec path selection, MoE-Spec budgets, and AcceptMoE verifier selection remain unimplemented. The normative design is in [`docs/superpowers/specs/2026-08-10-k3x-aurora-replay-adaptive-scheduling-design.md`](docs/superpowers/specs/2026-08-10-k3x-aurora-replay-adaptive-scheduling-design.md).
 
-Milestone 17 accepts, but has not yet implemented, a transactional persistent draft cursor. The proposed cursor snapshots bounded KDA convolution/recurrent state, records MLA logical sizes, crops rejected suffix positions, and teacher-forces the target bonus token. Complete-prefix replay remains the oracle until B-0018 proves identical candidates and state. The normative design is in [`docs/superpowers/specs/2026-08-10-k3x-persistent-aurora-draft-state-design.md`](docs/superpowers/specs/2026-08-10-k3x-persistent-aurora-draft-state-design.md).
+## Milestone 17 persistent AURORA draft state
+
+The implemented opaque `IncrementalDraftCursor` owns one fixed-reduced-Top-K CPU engine and mutable draft state. Creation prefills `prompt + verified generated prefix` once. Each proposal derives candidates from current logits, forwards all but the last candidate, snapshots fixed-size KDA state after processed candidate positions, and retains only MLA logical length/vector-size marks. Commit validates the accepted prefix before Reader access, restores the matching KDA checkpoint and crops rejected MLA suffix positions when necessary, processes an unconsumed final accepted candidate, and always teacher-forces the target bonus token.
+
+`AuroraPersistentDraftProvider` preserves the replay provider's one-outstanding-proposal lifecycle, exact committed-history check, adaptive scheduler, and fail-closed validation. It creates the cursor lazily, including after an initial zero-length scheduling step. Five counters separate one-time context prefill, incremental draft forwards, rollbacks, cropped MLA positions, and copied KDA checkpoint bytes. The `aurora-persistent` CLI uses a separate draft Reader/backend and leaves the natural target verifier authoritative. Replay remains available as the exact oracle and default speculation remains `none`.
+
+B-0018 proves equal proposal/acceptance counts and exact target token, final-state, and committed-route parity for fixed/adaptive token-major and CPU expert-major pairs. Persistent execution removes all repeated-prefix positions and reduces logical draft Reader bytes by 45.96% to 63.08% relative to replay on the Top-16 synthetic fixture. Reduced precision, resident-only drafting, learned DSpark, serialization/VAULT, multi-branch APOLLO state, and CUDA draft execution remain unimplemented. The normative design is in [`docs/superpowers/specs/2026-08-10-k3x-persistent-aurora-draft-state-design.md`](docs/superpowers/specs/2026-08-10-k3x-persistent-aurora-draft-state-design.md).
 
 ## TITAN component registry
 
@@ -307,7 +313,7 @@ Status meanings are strict. `Implemented` requires code and passing tests. `Expe
 | CHRONOS | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
 | BLACKSTAR | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
 | PROMETHEUS-X | DSpark-compatible speculative decoding extended with MoE-aware expert-cost scheduling | Proposed |
-| AURORA | Self-speculative K3 fast-path drafter using reduced Top-K, reduced precision, and resident experts while retaining target verification | Experimental replay reference; implemented, measured slower, non-default |
+| AURORA | Self-speculative K3 fast-path drafter using reduced Top-K, reduced precision, and resident experts while retaining target verification | Experimental replay and persistent reduced-Top-K CPU state implemented; reduced precision, residency, and learned drafting proposed |
 | ORBIT | Multi-layer lookahead expert residency and prefetch prediction | Proposed |
 | MERCURY | Dynamic CPU/GPU expert placement using predicted transfer-plus-compute latency | Proposed |
 | HELIOS | Automatic hardware/workload tuning for cache, Top-K, speculation, I/O, and placement parameters | Proposed |

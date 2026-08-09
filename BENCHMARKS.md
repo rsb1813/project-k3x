@@ -658,6 +658,35 @@ Verification passed CPU CTest 14/14 and pytest 268/47, liburing/direct CTest 15/
 
 Public branch and pull-request correctness runs `31337234073` and `31337240722` passed. PR #20 was rebase-merged at public integration head `df5c07d`, and post-merge `main` correctness run `31337365175` passed.
 
+## B-0018 — Milestone 17 persistent AURORA draft state
+
+- Date: 2026-08-10.
+- Commit: cursor/provider `c28a732`; CLI/schema `3459ca6`; measurement evidence `de63023`.
+- Hardware: AMD Ryzen 7 9800X3D under WSL2 Ubuntu 24.04.4. The RTX 5080 was used for verification, not the CPU timing rows.
+- Model/checkpoint: runner-generated temporary synthetic natural Top-16 K3X artifact, SHA-256 `81560d6250869426d739040c6e30d9a881b1f37f7a3f639345d27dd69a80ce96`.
+- Mode: incremental natural target Top-16, fixed reduced draft Top-4, disabled L1, blocking `pread + buffered`, 4 prompt tokens, 6 generated tokens, 3 warmups, and 20 measured samples.
+- Cases: natural greedy plus matched replay/persistent fixed block-2 and adaptive pairs for token-major and CPU expert-major target verification.
+
+| Case | Decode tok/s | Prefill tok/s | TTFT ms | Peak RSS | Acceptance | Target eval / discard | Target Reader bytes | Draft Reader bytes | Replay / prefill positions | Draft forwards | Rollback / crop | Pair decode delta | Draft-byte reduction |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| natural greedy | 1147.7689 | 988.5636 | 22.1083 | 5,967,872 B | n/a | 0 / 0 | 1,294,992 | 0 | 0 / 0 | 0 | 0 / 0 | n/a | n/a |
+| replay fixed-2 token | 588.0806 | 938.8070 | 32.5735 | 6,553,600 B | 1.0000 | 0 / 0 | 1,294,992 | 1,454,112 | 13 / 0 | 0 | 0 / 0 | reference | reference |
+| persistent fixed-2 token | 676.0989 | 951.5176 | 32.2148 | 6,418,432 B | 1.0000 | 0 / 0 | 1,294,992 | 785,808 | 0 / 5 | 5 | 0 / 0 | +14.967% | -45.960% |
+| replay adaptive token | 474.6266 | 936.8968 | 32.3788 | 6,586,368 B | 0.5000 | 0 / 0 | 1,294,992 | 2,181,168 | 20 / 0 | 0 | 0 / 0 | reference | reference |
+| persistent adaptive token | 672.8063 | 938.1414 | 32.7912 | 6,688,768 B | 0.5000 | 0 / 0 | 1,294,992 | 805,392 | 0 / 5 | 6 | 1 / 1 | +41.755% | -63.075% |
+| replay fixed-2 expert | 620.4730 | 950.2246 | 32.5430 | 6,529,024 B | 1.0000 | 5 / 0 | 1,102,416 | 1,454,112 | 13 / 0 | 0 | 0 / 0 | reference | reference |
+| persistent fixed-2 expert | 710.7307 | 938.8591 | 32.5896 | 6,733,824 B | 1.0000 | 5 / 0 | 1,102,416 | 785,808 | 0 / 5 | 5 | 0 / 0 | +14.547% | -45.960% |
+| replay adaptive expert | 431.2070 | 934.4310 | 32.3639 | 6,549,504 B | 0.5000 | 7 / 2 | 1,197,072 | 2,181,168 | 20 / 0 | 0 | 0 / 0 | reference | reference |
+| persistent adaptive expert | 547.9973 | 955.9389 | 33.3736 | 6,586,368 B | 0.5000 | 7 / 2 | 1,197,072 | 805,392 | 0 / 5 | 6 | 1 / 1 | +27.085% | -63.075% |
+
+Every matched pair has identical proposed and accepted draft-token counts. All nine rows preserve the natural target token sequence, final KDA/MLA state, and committed expert/K trace exactly. Fixed persistent rows copy 57,600 KDA checkpoint bytes; adaptive persistent rows copy 76,800 bytes and perform one rollback/crop. These are state-copy counters, not Reader or physical storage bytes.
+
+Persistent execution is faster than replay in all four pairs because it eliminates repeated complete-prefix work, but every persistent row remains 38.08% to 52.26% slower than the tiny natural greedy baseline. This benchmark therefore accepts the state architecture while keeping speculation non-default. Reduced precision, draft residency, learned proposals, full-model coding quality, physical NVMe traffic, and native-Linux performance remain unmeasured.
+
+Raw JSON/CSV and independently cross-checked summaries are under `results/b0018-persistent-aurora-wsl/`. Runner SHA-256 is `0eb212731be6e0a5344048aa6f6d76fb57732423017568112ec9d27f7b74d48d`; canonical aggregate-record SHA-256 is `abcef1afca7d6208808941323565bce44f25ecc6e9e0d28292ad54bfc7760cd0`; summary JSON/CSV SHA-256 is `a332af2d336cecb3060812a577f16e605bc832f4f21b74f315dfbbf8fd4f6132` / `c65d3bb9d8805f66249d0bb6ba380b8aa2508fd53a073c1bc3dece82e00fe472`. Independent validation recomputes all 18 raw digests, the summary CSV digest, canonical aggregate, exact pair invariants, and headline percentages from committed bytes.
+
+Verification passed CPU CTest 14/14 and pytest 272/47, liburing/direct CTest 15/15 and pytest 278/41, ASan/UBSan liburing CTest 15/15 plus five artifact-backed persistent tests, and CUDA CTest 23/23 with pytest 311/8. Compute Sanitizer reported `ERROR SUMMARY: 0 errors` for `aurora-persistent + expert-major + cuda-custom`. CPU cursor memory safety is established by ASan/UBSan; the CUDA check covers the target path rather than claiming GPU instrumentation of CPU state code.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
@@ -667,6 +696,6 @@ Public branch and pull-request correctness runs `31337234073` and `31337240722` 
 - Native-Linux repetition of B-0010 with a representative routing trace, full-size experts, and controlled warm/cold preparation before selecting any cache policy.
 - Native-Linux repetition of B-0011 with repository-duration sessions and controlled helpful, stale, and adversarial priors before selecting any profile policy.
 - Native-Linux repetition of B-0016 with physical NVMe accounting, GPU utilization, memory bandwidth, multi-expert/full-layer groups, and representative acceptance distributions before any speculative default claim.
-- Persistent-state AURORA parity and representative native-Linux measurement with physical I/O, realistic acceptance, coding quality, and resident-expert pressure before any self-speculative default claim.
+- Representative native-Linux persistent AURORA measurement with physical I/O, realistic acceptance, coding quality, and resident-expert pressure before any self-speculative default claim.
 - Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.
