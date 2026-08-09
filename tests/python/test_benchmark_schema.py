@@ -84,6 +84,12 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     assert payload["scope"] == "synthetic-milestone-zero"
     assert payload["evidence"] == "measured"
+    assert payload["l1_expert_cache_mode"] == "disabled"
+    assert payload["l1_expert_cache_bytes"] == 0
+    assert payload["l1_expert_cache_hits"] == 0
+    assert payload["reader_read_calls"] == 0
+    assert payload["reader_requested_bytes"] == 0
+    assert payload["reader_completed_bytes"] == 0
     assert isinstance(payload["peak_rss_bytes"], int)
     assert payload["backend"] == "cpu"
     assert payload["device"] == "CPU"
@@ -302,6 +308,14 @@ def test_benchmark_once_collects_cpu_backend_profile(
     assert record.cuda_transfer == "synchronous"
     assert record.cuda_resident_bytes == 0
     assert record.cuda_pinned_bytes == 0
+    assert record.l1_expert_cache_mode == "disabled"
+    assert record.l1_expert_cache_bytes == 0
+    assert record.l1_expert_cache_hits == 0
+    assert record.l1_expert_cache_misses == 0
+    assert record.l1_expert_cache_bypasses == 0
+    assert record.l1_expert_cache_resident_bytes == 0
+    assert record.reader_read_calls > 0
+    assert record.reader_requested_bytes >= record.reader_completed_bytes > 0
     assert record.kernel_nanoseconds == 0
     assert record.host_to_device_bytes == 0
     assert record.weight_h2d_bytes == 0
@@ -336,6 +350,33 @@ def test_benchmark_once_collects_cpu_backend_profile(
     assert record.device_overlap is False
     assert record.max_absolute_error == 0.0
     assert record.max_relative_error == 0.0
+
+
+def test_benchmark_once_reports_static_l1_and_reader_accounting(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    artifact = tmp_path / "synthetic.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    record = benchmark_once(
+        artifact,
+        cpp_binary("k3x_run"),
+        warmup=0,
+        iterations=1,
+        backend="cpu",
+        l1_expert_cache="static",
+        l1_expert_cache_bytes=65536,
+    )
+    assert record.l1_expert_cache_mode == "static"
+    assert record.l1_expert_cache_bytes == 65536
+    assert record.l1_expert_cache_hits > 0
+    assert record.l1_expert_cache_misses > 0
+    assert record.l1_expert_cache_bypasses == 0
+    assert 0 < record.l1_expert_cache_resident_bytes <= 65536
+    assert record.peak_l1_expert_cache_resident_bytes == (
+        record.l1_expert_cache_resident_bytes
+    )
+    assert record.reader_read_calls > 0
+    assert record.reader_requested_bytes >= record.reader_completed_bytes > 0
 
 
 @pytest.mark.parametrize(

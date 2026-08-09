@@ -80,6 +80,16 @@ class BenchmarkRecord:
     per_layer_nanoseconds: tuple[int, ...]
     token_ids: tuple[int, ...]
     routed_experts: tuple[int, ...]
+    l1_expert_cache_mode: str = "disabled"
+    l1_expert_cache_bytes: int = 0
+    l1_expert_cache_hits: int = 0
+    l1_expert_cache_misses: int = 0
+    l1_expert_cache_bypasses: int = 0
+    l1_expert_cache_resident_bytes: int = 0
+    peak_l1_expert_cache_resident_bytes: int = 0
+    reader_read_calls: int = 0
+    reader_requested_bytes: int = 0
+    reader_completed_bytes: int = 0
 
     def __post_init__(self) -> None:
         if self.scope not in {
@@ -127,6 +137,8 @@ def _run_process(
     cuda_transfer: str,
     cuda_resident_bytes: int,
     cuda_pinned_bytes: int,
+    l1_expert_cache: str,
+    l1_expert_cache_bytes: int,
     diagnostics: bool = False,
 ) -> tuple[dict, int, float]:
     command = [
@@ -140,6 +152,8 @@ def _run_process(
         "--cuda-transfer", cuda_transfer,
         "--cuda-resident-bytes", str(cuda_resident_bytes),
         "--cuda-pinned-bytes", str(cuda_pinned_bytes),
+        "--l1-expert-cache", l1_expert_cache,
+        "--l1-expert-cache-bytes", str(l1_expert_cache_bytes),
     ]
     if diagnostics:
         command.extend(["--diagnostics", "true"])
@@ -222,6 +236,8 @@ def benchmark_once(
     cuda_transfer: str = "synchronous",
     cuda_resident_bytes: int = 0,
     cuda_pinned_bytes: int = 0,
+    l1_expert_cache: str = "disabled",
+    l1_expert_cache_bytes: int = 0,
 ) -> BenchmarkRecord:
     if warmup < 0 or iterations <= 0:
         raise ValueError("warmup must be non-negative and iterations must be positive")
@@ -248,6 +264,8 @@ def benchmark_once(
                 cuda_transfer=cuda_transfer,
                 cuda_resident_bytes=cuda_resident_bytes,
                 cuda_pinned_bytes=cuda_pinned_bytes,
+                l1_expert_cache=l1_expert_cache,
+                l1_expert_cache_bytes=l1_expert_cache_bytes,
             )
             _, ttft_peak, ttft = _run_process(
                 artifact,
@@ -263,6 +281,8 @@ def benchmark_once(
                 cuda_transfer=cuda_transfer,
                 cuda_resident_bytes=cuda_resident_bytes,
                 cuda_pinned_bytes=cuda_pinned_bytes,
+                l1_expert_cache=l1_expert_cache,
+                l1_expert_cache_bytes=l1_expert_cache_bytes,
             )
             if index >= warmup:
                 samples.append(sample)
@@ -286,6 +306,8 @@ def benchmark_once(
                 cuda_transfer="synchronous",
                 cuda_resident_bytes=0,
                 cuda_pinned_bytes=0,
+                l1_expert_cache="disabled",
+                l1_expert_cache_bytes=0,
                 diagnostics=True,
             )
             candidate, _, _ = _run_process(
@@ -302,6 +324,8 @@ def benchmark_once(
                 cuda_transfer=cuda_transfer,
                 cuda_resident_bytes=cuda_resident_bytes,
                 cuda_pinned_bytes=cuda_pinned_bytes,
+                l1_expert_cache=l1_expert_cache,
+                l1_expert_cache_bytes=l1_expert_cache_bytes,
                 diagnostics=True,
             )
             max_absolute_error, max_relative_error = _numerical_errors(
@@ -319,6 +343,16 @@ def benchmark_once(
         "cuda_transfer",
         "cuda_resident_bytes",
         "cuda_pinned_bytes",
+        "l1_expert_cache_mode",
+        "l1_expert_cache_bytes",
+        "l1_expert_cache_hits",
+        "l1_expert_cache_misses",
+        "l1_expert_cache_bypasses",
+        "l1_expert_cache_resident_bytes",
+        "peak_l1_expert_cache_resident_bytes",
+        "reader_read_calls",
+        "reader_requested_bytes",
+        "reader_completed_bytes",
         "device_allocation_count",
         "device_free_count",
         "stream_synchronization_count",
@@ -359,6 +393,8 @@ def benchmark_once(
         cuda_transfer,
         cuda_resident_bytes,
         cuda_pinned_bytes,
+        l1_expert_cache,
+        l1_expert_cache_bytes,
     )
     option_fields = (
         "backend",
@@ -370,6 +406,8 @@ def benchmark_once(
         "cuda_transfer",
         "cuda_resident_bytes",
         "cuda_pinned_bytes",
+        "l1_expert_cache_mode",
+        "l1_expert_cache_bytes",
     )
     observed_options = tuple(samples[0][field] for field in option_fields)
     if observed_options != expected_options:
@@ -471,6 +509,20 @@ def benchmark_once(
         per_layer_nanoseconds=layer_ns,
         token_ids=tuple(samples[0]["token_ids"]),
         routed_experts=routed_experts,
+        l1_expert_cache_mode=samples[0]["l1_expert_cache_mode"],
+        l1_expert_cache_bytes=samples[0]["l1_expert_cache_bytes"],
+        l1_expert_cache_hits=samples[0]["l1_expert_cache_hits"],
+        l1_expert_cache_misses=samples[0]["l1_expert_cache_misses"],
+        l1_expert_cache_bypasses=samples[0]["l1_expert_cache_bypasses"],
+        l1_expert_cache_resident_bytes=samples[0][
+            "l1_expert_cache_resident_bytes"
+        ],
+        peak_l1_expert_cache_resident_bytes=samples[0][
+            "peak_l1_expert_cache_resident_bytes"
+        ],
+        reader_read_calls=samples[0]["reader_read_calls"],
+        reader_requested_bytes=samples[0]["reader_requested_bytes"],
+        reader_completed_bytes=samples[0]["reader_completed_bytes"],
     )
 
 
@@ -505,6 +557,10 @@ def main() -> int:
     )
     parser.add_argument("--cuda-resident-bytes", type=int, default=0)
     parser.add_argument("--cuda-pinned-bytes", type=int, default=0)
+    parser.add_argument(
+        "--l1-expert-cache", choices=("disabled", "static"), default="disabled"
+    )
+    parser.add_argument("--l1-expert-cache-bytes", type=int, default=0)
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--csv", type=Path, required=True)
     args = parser.parse_args()
@@ -522,6 +578,8 @@ def main() -> int:
         cuda_transfer=args.cuda_transfer,
         cuda_resident_bytes=args.cuda_resident_bytes,
         cuda_pinned_bytes=args.cuda_pinned_bytes,
+        l1_expert_cache=args.l1_expert_cache,
+        l1_expert_cache_bytes=args.l1_expert_cache_bytes,
     )
     write_results(result, args.json, args.csv)
     print(json.dumps(asdict(result), sort_keys=True, separators=(",", ":")))

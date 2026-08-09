@@ -362,6 +362,11 @@ int main(int argc, char** argv) {
            << ",\"prefill_nanoseconds\":" << result.value().prefill_nanoseconds
            << ",\"read_bytes\":" << reader.value().counters().completed_bytes
            << ",\"read_calls\":" << reader.value().counters().calls
+           << ",\"reader_read_calls\":" << reader.value().counters().calls
+           << ",\"reader_requested_bytes\":"
+           << reader.value().counters().requested_bytes
+           << ",\"reader_completed_bytes\":"
+           << reader.value().counters().completed_bytes
            << ",\"per_layer_nanoseconds\":[";
     for (std::size_t index = 0; index < result.value().per_layer_nanoseconds.size(); ++index) {
         if (index) output << ',';

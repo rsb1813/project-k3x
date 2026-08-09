@@ -364,6 +364,9 @@ def test_static_l1_cache_preserves_cpu_graph_and_avoids_reader_calls(
     assert 0 < static["l1_expert_cache_resident_bytes"] <= 65536
     assert static["read_calls"] < disabled["read_calls"]
     assert static["read_bytes"] < disabled["read_bytes"]
+    assert static["reader_read_calls"] == static["read_calls"]
+    assert static["reader_completed_bytes"] == static["read_bytes"]
+    assert static["reader_requested_bytes"] >= static["reader_completed_bytes"]
     assert tiny["token_ids"] == disabled["token_ids"]
     assert tiny["prefill_routed_experts"] == disabled["prefill_routed_experts"]
     assert tiny["l1_expert_cache_hits"] == 0
