@@ -627,7 +627,7 @@ The released fixture has `routing_semantics=false`. Each scalar call transfers t
 
 Raw JSON/CSV and diagnostics are under `results/b0016-cuda-expert-major-wsl/`. Canonical aggregate-record SHA-256 is `09a2537337df1fd2b8b39439f92ba7306cb09a6ed5e3f8bdc8db7d9d787029aa`; summary JSON/CSV SHA-256 is `5c8c32a6fed499a1ff8ddf2d0f2e0fdaa214e6a62715933edea850c5f42812540` / `f100f15803741531d88976a4cc64c0a0975acd94f71be99fce6bb45fe4422f65`. CSV writers explicitly use LF so Git text normalization preserves these digests. Independent validation recomputed all nine raw JSON/CSV digest pairs and the canonical aggregate.
 
-Verification passed CPU CTest 13/13 and pytest 262/47, liburing/direct CTest 14/14 and pytest 264/45, ASan/UBSan CTest 14/14, and CUDA CTest 22/22 with pytest 301/8. Compute Sanitizer reported `ERROR SUMMARY: 0 errors` for native MXFP4, CUDA FFN, released batch-2, perfect expert-major CLI, and mixed expert-major CLI. Public PR and post-merge CI evidence remain pending at this ledger revision.
+Verification passed CPU CTest 13/13 and pytest 262/47, liburing/direct CTest 14/14 and pytest 264/45, ASan/UBSan CTest 14/14, and CUDA CTest 22/22 with pytest 301/8. Compute Sanitizer reported `ERROR SUMMARY: 0 errors` for native MXFP4, CUDA FFN, released batch-2, perfect expert-major CLI, and mixed expert-major CLI. Branch and pull-request correctness runs `31332732339` and `31332745907` passed, PR #17 was rebase-merged at public integration head `c18df33`, and post-merge `main` run `31332852551` passed.
 
 ## Pending benchmark gates
 
