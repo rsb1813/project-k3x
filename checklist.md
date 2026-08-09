@@ -75,4 +75,5 @@
 - [x] allocation reuse 구현과 독립 ablation.
 - [x] exact static weight residency 구현과 독립 ablation.
 - [x] dense/MXFP4 grouped projection 구현과 독립 ablation.
+- [x] weight/activation H2D profiler 분리와 deterministic ablation runner 구현.
 - [ ] 전체 correctness, memcheck, benchmark, TITAN Ledger 갱신.

@@ -8,6 +8,7 @@ import pytest
 
 from conftest import cpp_binary
 from k3x_converter.writer import convert
+from tools.ablate_cuda_residency import cuda_residency_matrix, run_ablation
 from tools.benchmark_synthetic import BenchmarkRecord, benchmark_once, write_results
 
 
@@ -91,6 +92,104 @@ def test_schema_accepts_explicit_milestone_one_scope() -> None:
         **{**_record().__dict__, "scope": "synthetic-milestone-one"}
     )
     assert record.scope == "synthetic-milestone-one"
+
+
+def test_cuda_residency_matrix_changes_one_axis_at_a_time() -> None:
+    matrix = cuda_residency_matrix()
+    assert tuple(item["name"] for item in matrix) == (
+        "reference",
+        "reuse",
+        "residency",
+        "grouped",
+    )
+    assert tuple(
+        (
+            item["cuda_allocation"],
+            item["cuda_weights"],
+            item["cuda_batching"],
+        )
+        for item in matrix
+    ) == (
+        ("per-operation", "transient", "scalar"),
+        ("reused", "transient", "scalar"),
+        ("reused", "resident", "scalar"),
+        ("reused", "resident", "grouped"),
+    )
+
+
+def test_cuda_residency_ablation_runs_sequential_stages_and_writes_summary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    observed: list[tuple[str, str, str, int]] = []
+
+    def fake_benchmark_once(*args: object, **kwargs: object) -> BenchmarkRecord:
+        observed.append(
+            (
+                str(kwargs["cuda_allocation"]),
+                str(kwargs["cuda_weights"]),
+                str(kwargs["cuda_batching"]),
+                int(kwargs["cuda_resident_bytes"]),
+            )
+        )
+        return BenchmarkRecord(
+            **{
+                **_record().__dict__,
+                "backend": str(kwargs["backend"]),
+                "cuda_allocation": str(kwargs["cuda_allocation"]),
+                "cuda_weights": str(kwargs["cuda_weights"]),
+                "cuda_batching": str(kwargs["cuda_batching"]),
+                "cuda_resident_bytes": int(kwargs["cuda_resident_bytes"]),
+                "device_allocation_count": len(observed),
+            }
+        )
+
+    monkeypatch.setattr(
+        "tools.ablate_cuda_residency.benchmark_once", fake_benchmark_once
+    )
+    output_dir = tmp_path / "ablation"
+    summary = run_ablation(
+        tmp_path / "model.k3x",
+        tmp_path / "k3x_run",
+        backend="cuda-custom",
+        dense_precision="fp32",
+        cuda_resident_bytes=4096,
+        warmup=0,
+        iterations=1,
+        output_dir=output_dir,
+    )
+    assert observed == [
+        ("per-operation", "transient", "scalar", 0),
+        ("reused", "transient", "scalar", 0),
+        ("reused", "resident", "scalar", 4096),
+        ("reused", "resident", "grouped", 4096),
+    ]
+    assert [item["name"] for item in summary["records"]] == [
+        "reference",
+        "reuse",
+        "residency",
+        "grouped",
+    ]
+    assert summary["deltas"][0]["device_allocation_count"] == 1
+    assert (output_dir / "summary.json").is_file()
+    for name in ("reference", "reuse", "residency", "grouped"):
+        assert (output_dir / f"{name}.json").is_file()
+        assert (output_dir / f"{name}.csv").is_file()
+
+
+def test_cuda_residency_ablation_requires_positive_resident_capacity(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="positive"):
+        run_ablation(
+            tmp_path / "model.k3x",
+            tmp_path / "k3x_run",
+            backend="cuda-custom",
+            dense_precision="fp32",
+            cuda_resident_bytes=0,
+            warmup=0,
+            iterations=1,
+            output_dir=tmp_path / "ablation",
+        )
 
 
 def test_schema_rejects_projected_values_as_measured() -> None:

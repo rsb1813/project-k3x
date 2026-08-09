@@ -22,6 +22,14 @@ ProfileSummary Profiler::summary() const noexcept {
         result.logical_bytes += event.logical_bytes;
         if (event.operation == ProfileOperation::host_to_device) {
             result.host_to_device_bytes += event.transfer_bytes;
+        } else if (event.operation ==
+                   ProfileOperation::weight_host_to_device) {
+            result.host_to_device_bytes += event.transfer_bytes;
+            result.weight_host_to_device_bytes += event.transfer_bytes;
+        } else if (event.operation ==
+                   ProfileOperation::activation_host_to_device) {
+            result.host_to_device_bytes += event.transfer_bytes;
+            result.activation_host_to_device_bytes += event.transfer_bytes;
         } else if (event.operation == ProfileOperation::device_to_host) {
             result.device_to_host_bytes += event.transfer_bytes;
         }

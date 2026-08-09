@@ -15,6 +15,8 @@ enum class ProfileOperation {
     dense_matvec,
     mxfp4_matvec,
     host_to_device,
+    weight_host_to_device,
+    activation_host_to_device,
     device_to_host,
 };
 
@@ -40,6 +42,8 @@ struct ProfileSummary {
     std::uint64_t device_nanoseconds{};
     std::uint64_t logical_bytes{};
     std::uint64_t host_to_device_bytes{};
+    std::uint64_t weight_host_to_device_bytes{};
+    std::uint64_t activation_host_to_device_bytes{};
     std::uint64_t device_to_host_bytes{};
     std::size_t failed_operations{};
 };

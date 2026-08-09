@@ -190,8 +190,10 @@ int main(int argc, char** argv) {
            << effective_options.cuda_resident_bytes;
     output << ",\"kernel_nanoseconds\":" << profile.device_nanoseconds
            << ",\"host_to_device_bytes\":" << profile.host_to_device_bytes
-           << ",\"weight_h2d_bytes\":" << runtime.weight_h2d_bytes
-           << ",\"activation_h2d_bytes\":" << runtime.activation_h2d_bytes
+           << ",\"weight_h2d_bytes\":"
+           << profile.weight_host_to_device_bytes
+           << ",\"activation_h2d_bytes\":"
+           << profile.activation_host_to_device_bytes
            << ",\"device_to_host_bytes\":" << profile.device_to_host_bytes
            << ",\"peak_vram_bytes\":" << memory.peak_device_bytes
            << ",\"device_allocation_count\":" << runtime.device_allocation_count

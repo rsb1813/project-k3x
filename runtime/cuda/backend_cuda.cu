@@ -280,8 +280,10 @@ public:
             return Result<std::vector<float>>::failure(
                 ErrorCode::backend_unavailable, "CUDA host-to-device copy failed");
         }
-        record(phase, ProfileOperation::host_to_device, precision, layer,
-               h2d_start, 0, input_bytes + weight_transfer_bytes, 0, true);
+        record(phase, ProfileOperation::activation_host_to_device, precision,
+               layer, h2d_start, 0, input_bytes, 0, true);
+        record(phase, ProfileOperation::weight_host_to_device, precision, layer,
+               h2d_start, 0, weight_transfer_bytes, 0, true);
         runtime_stats_.activation_h2d_bytes += input_bytes;
         runtime_stats_.weight_h2d_bytes += weight_transfer_bytes;
 
@@ -515,9 +517,10 @@ public:
             return Result<std::vector<float>>::failure(
                 ErrorCode::backend_unavailable, "CUDA host-to-device copy failed");
         }
-        record(phase, ProfileOperation::host_to_device, precision, layer,
-               h2d_start, 0,
-               input_bytes + weight_transfer_bytes, 0, true);
+        record(phase, ProfileOperation::activation_host_to_device, precision,
+               layer, h2d_start, 0, input_bytes, 0, true);
+        record(phase, ProfileOperation::weight_host_to_device, precision, layer,
+               h2d_start, 0, weight_transfer_bytes, 0, true);
         runtime_stats_.activation_h2d_bytes += input_bytes;
         runtime_stats_.weight_h2d_bytes += weight_transfer_bytes;
 
@@ -832,8 +835,10 @@ public:
         runtime_stats_.weight_h2d_bytes += total_weight_transfer;
         ++runtime_stats_.grouped_projection_calls;
         runtime_stats_.grouped_projection_members += weights.size();
-        record(phase, ProfileOperation::host_to_device, precision, layer,
-               d2h_start, 0, input_bytes + total_weight_transfer, 0, true);
+        record(phase, ProfileOperation::activation_host_to_device, precision,
+               layer, d2h_start, 0, input_bytes, 0, true);
+        record(phase, ProfileOperation::weight_host_to_device, precision, layer,
+               d2h_start, 0, total_weight_transfer, 0, true);
         record(phase, ProfileOperation::device_to_host, precision, layer,
                d2h_start, 0, total_output_bytes, 0, true);
         for (std::size_t index = 0; index < weights.size(); ++index) {
@@ -1061,9 +1066,12 @@ public:
         runtime_stats_.weight_h2d_bytes += total_weight_transfer;
         ++runtime_stats_.grouped_projection_calls;
         runtime_stats_.grouped_projection_members += weights.size();
-        record(phase, ProfileOperation::host_to_device,
+        record(phase, ProfileOperation::activation_host_to_device,
                NumericPrecision::mxfp4_e2m1_e8m0, layer, group_start, 0,
-               input_bytes + total_weight_transfer, 0, true);
+               input_bytes, 0, true);
+        record(phase, ProfileOperation::weight_host_to_device,
+               NumericPrecision::mxfp4_e2m1_e8m0, layer, group_start, 0,
+               total_weight_transfer, 0, true);
         record(phase, ProfileOperation::device_to_host,
                NumericPrecision::mxfp4_e2m1_e8m0, layer, group_start, 0,
                total_output_bytes, 0, true);
