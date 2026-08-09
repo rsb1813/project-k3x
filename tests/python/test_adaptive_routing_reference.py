@@ -75,6 +75,7 @@ def test_torch_policy_uses_mass_entropy_boundary_and_quality_floor() -> None:
         ),
     )
     assert escalated.selected_k == 12
+    assert escalated.quality_floor_escalated
 
 
 def test_torch_policy_keeps_bias_out_of_contribution_weights() -> None:

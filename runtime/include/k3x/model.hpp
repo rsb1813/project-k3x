@@ -5,6 +5,7 @@
 #include "k3x/expert_scheduler.hpp"
 #include "k3x/host_expert_store.hpp"
 #include "k3x/reader.hpp"
+#include "k3x/routing_policy.hpp"
 #include "k3x/runtime_profile.hpp"
 #include "k3x/status.hpp"
 
@@ -27,6 +28,7 @@ struct RuntimeOptions {
     std::uint64_t profile_prior_strength{64};
     bool profile_observation{};
     L2ExpertScheduleMode l2_expert_schedule{L2ExpertScheduleMode::blocking};
+    RoutingPolicyConfig routing_policy{};
 };
 
 class RuntimeSession {
@@ -86,10 +88,19 @@ struct GenerationResult {
     std::vector<float> prefill_logits;
     std::vector<float> prefill_state;
     std::vector<std::uint32_t> prefill_routed_experts;
+    std::vector<std::uint32_t> prefill_routed_k;
     std::uint64_t prefill_nanoseconds{};
     std::uint64_t decode_nanoseconds{};
     L1ExpertCacheStats l1_expert_cache;
     ExpertLoadSchedulerStats expert_load_scheduler;
+    std::uint64_t routing_decisions{};
+    std::uint32_t routing_natural_top_k{};
+    std::uint64_t routing_selected_experts{};
+    std::uint64_t routing_quality_escalated_decisions{};
+    std::uint64_t cold_rescue_count{};
+    double routing_normalized_entropy_sum{};
+    double routing_selected_mass_sum{};
+    double routing_boundary_confidence_sum{};
 };
 
 Result<GenerationResult> generate_greedy(Reader& reader,

@@ -106,27 +106,31 @@ Result<RoutingDecision> select_routing(
     decision.entropy_effective_support = std::exp(entropy);
 
     std::size_t selected_k = natural_top_k;
+    std::size_t unfloored_selected_k = natural_top_k;
     if (config.mode == RoutingMode::fixed) {
+        unfloored_selected_k = config.fixed_k;
         selected_k = std::max(config.fixed_k, config.quality_floor_k);
     } else if (config.mode == RoutingMode::adaptive) {
-        float cumulative = 0.0F;
-        for (std::size_t slot = 0; slot < natural_top_k; ++slot) {
-            cumulative += natural_probabilities[slot];
-            const auto candidate = slot + 1;
-            if (!allowed_k(candidate) || candidate < config.quality_floor_k) {
-                continue;
+        const auto choose_adaptive = [&](std::size_t quality_floor) {
+            float cumulative = 0.0F;
+            for (std::size_t slot = 0; slot < natural_top_k; ++slot) {
+                cumulative += natural_probabilities[slot];
+                const auto candidate = slot + 1;
+                if (!allowed_k(candidate) || candidate < quality_floor) continue;
+                const auto confidence =
+                    boundary_confidence(natural_probabilities, candidate);
+                if (cumulative + comparison_epsilon >= config.mass_target &&
+                    static_cast<float>(candidate) + comparison_epsilon >=
+                        decision.entropy_effective_support &&
+                    confidence + comparison_epsilon >=
+                        config.minimum_boundary_gap) {
+                    return candidate;
+                }
             }
-            const auto confidence =
-                boundary_confidence(natural_probabilities, candidate);
-            if (cumulative + comparison_epsilon >= config.mass_target &&
-                static_cast<float>(candidate) + comparison_epsilon >=
-                    decision.entropy_effective_support &&
-                confidence + comparison_epsilon >=
-                    config.minimum_boundary_gap) {
-                selected_k = candidate;
-                break;
-            }
-        }
+            return natural_top_k;
+        };
+        unfloored_selected_k = choose_adaptive(0);
+        selected_k = choose_adaptive(config.quality_floor_k);
     }
 
     decision.selected_k = selected_k;
@@ -137,6 +141,7 @@ Result<RoutingDecision> select_routing(
         natural_probabilities.begin() + selected_k, 0.0F);
     decision.boundary_confidence =
         boundary_confidence(natural_probabilities, selected_k);
+    decision.quality_floor_escalated = selected_k > unfloored_selected_k;
     float selected_denominator = 0.0F;
     for (const auto expert : decision.expert_ids) {
         selected_denominator += scores[expert];

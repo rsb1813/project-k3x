@@ -85,6 +85,9 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["scope"] == "synthetic-milestone-zero"
     assert payload["evidence"] == "measured"
     assert payload["l1_expert_cache_mode"] == "disabled"
+    assert payload["routing_mode"] == "natural"
+    assert payload["routing_average_top_k"] == 0.0
+    assert payload["cold_rescue_count"] == 0
     assert payload["l1_expert_cache_bytes"] == 0
     assert payload["l1_expert_cache_hits"] == 0
     assert payload["l1_expert_cache_evictions"] == 0
@@ -144,6 +147,7 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert row["per_layer_nanoseconds"] == "1;2;3;4"
     assert row["token_ids"] == "43;32;28;49;9;28"
     assert row["routed_experts"] == ""
+    assert row["routed_k"] == ""
 
 
 def test_ffn_boundary_matrix_and_runner_preserve_parity(
@@ -351,6 +355,12 @@ def test_benchmark_once_collects_cpu_backend_profile(
     assert record.reader_failures == 0
     assert record.reader_storage_nanoseconds > 0
     assert record.routed_experts
+    assert record.routed_k
+    assert record.routing_mode == "natural"
+    assert record.routing_natural_top_k > 0
+    assert record.routing_average_top_k == record.routing_natural_top_k
+    assert record.routing_quality_escalated_decisions == 0
+    assert record.cold_rescue_count == 0
     if record.process_io_available:
         assert record.process_rchar_bytes is not None
         assert record.process_rchar_bytes >= record.reader_completed_bytes

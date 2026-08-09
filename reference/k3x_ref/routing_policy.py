@@ -34,6 +34,7 @@ class RoutingDecision:
     entropy_effective_support: float
     selected_cumulative_mass: float
     boundary_confidence: float
+    quality_floor_escalated: bool
 
 
 _K_LADDER = (4, 6, 8, 12, 16)
@@ -119,24 +120,30 @@ def select_routing(
     effective_support = math.exp(entropy)
 
     selected_k = natural_top_k
+    unfloored_selected_k = natural_top_k
     if config.mode is RoutingMode.FIXED:
+        unfloored_selected_k = config.fixed_k
         selected_k = max(config.fixed_k, config.quality_floor_k)
     elif config.mode is RoutingMode.ADAPTIVE:
-        cumulative = 0.0
-        for slot, probability in enumerate(probabilities):
-            cumulative += float(probability)
-            candidate = slot + 1
-            if candidate not in _K_LADDER or candidate < config.quality_floor_k:
-                continue
-            confidence = _boundary_confidence(probabilities, candidate)
-            if (
-                cumulative + _COMPARISON_EPSILON >= config.mass_target
-                and candidate + _COMPARISON_EPSILON >= effective_support
-                and confidence + _COMPARISON_EPSILON
-                >= config.minimum_boundary_gap
-            ):
-                selected_k = candidate
-                break
+        def choose_adaptive(quality_floor: int) -> int:
+            cumulative = 0.0
+            for slot, probability in enumerate(probabilities):
+                cumulative += float(probability)
+                candidate = slot + 1
+                if candidate not in _K_LADDER or candidate < quality_floor:
+                    continue
+                confidence = _boundary_confidence(probabilities, candidate)
+                if (
+                    cumulative + _COMPARISON_EPSILON >= config.mass_target
+                    and candidate + _COMPARISON_EPSILON >= effective_support
+                    and confidence + _COMPARISON_EPSILON
+                    >= config.minimum_boundary_gap
+                ):
+                    return candidate
+            return natural_top_k
+
+        unfloored_selected_k = choose_adaptive(0)
+        selected_k = choose_adaptive(config.quality_floor_k)
 
     expert_ids = full_order[:selected_k]
     selected_scores = scores[expert_ids]
@@ -153,4 +160,5 @@ def select_routing(
         entropy_effective_support=effective_support,
         selected_cumulative_mass=float(probabilities[:selected_k].sum()),
         boundary_confidence=_boundary_confidence(probabilities, selected_k),
+        quality_floor_escalated=selected_k > unfloored_selected_k,
     )

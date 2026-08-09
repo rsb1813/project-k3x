@@ -18,10 +18,10 @@ Add a deterministic runtime routing-policy boundary with natural Top-K reference
 
 ## Task 3 — Runtime, CLI, and exact rescue
 
-- [ ] Replace direct `config_.top_k` loop bounds with one immutable per-layer routing decision.
-- [ ] Add natural/fixed/adaptive CLI validation and explicit failure/critical quality-floor mapping.
-- [ ] Count exact selected cold loads only with an enabled L1 cache and prove residency never changes routing.
-- [ ] Export variable-K diagnostics and routing/rescue telemetry through JSON/CSV.
+- [x] Replace direct `config_.top_k` loop bounds with one immutable per-layer routing decision.
+- [x] Add natural/fixed/adaptive CLI validation and explicit failure/critical quality-floor mapping.
+- [x] Count exact selected cold loads only with an enabled L1 cache and prove residency never changes routing.
+- [x] Export variable-K diagnostics and routing/rescue telemetry through JSON/CSV.
 
 ## Task 4 — B-0012 and quality evidence
 

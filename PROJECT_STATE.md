@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 10 is published and verified. Milestone 11 Tasks 1–2 standalone routing policy, configurable fixture, 16-of-24 model, and PyTorch reference execution are implemented and verified; C++ Engine/CLI integration remains.
+Milestone 10 is published and verified. Milestone 11 Tasks 1–3 standalone routing policy, configurable 16-of-24 reference model, C++ Engine/CLI integration, quality escalation, telemetry, and exact selected-expert rescue are implemented and verified; B-0012 measurement and final verification remain.
 
 State recorded on 2026-08-09 at verified Milestone 10 publication head `a82d733`. Publication-record correctness runs `31316068815` and `31316069868` succeeded, and the active branch is `codex/milestone-eleven-adaptive-topk-rescue`.
 
@@ -61,7 +61,7 @@ State recorded on 2026-08-09 at verified Milestone 10 publication head `a82d733`
 
 ## Work in progress
 
-- Milestone 11 standalone natural/fixed/adaptive policy and PyTorch 16-of-24 reference execution are complete. Fixed K16 equals natural Top-16 exactly in the reference. The policy is not connected to the C++ Engine or CLI yet, so existing runtime behavior remains unchanged.
+- Milestone 11 natural/fixed/adaptive policy and PyTorch/C++ 16-of-24 execution are complete. Fixed K16 equals natural Top-16 exactly, reduced K matches the Python oracle, and agent failure/critical signals raise the executed K floor. Selected cold experts use the exact MXFP4 load path and residency does not substitute routing IDs. Natural remains the default; reduced K remains explicitly lossy and unmeasured on the full model.
 - Milestone 9 Terra high final review found one valid Important shared-session policy-context issue. Commit `fd05d95` serializes complete generation calls; re-review found no remaining Critical or Important issue and withdrew an initial collision interpretation concern after deterministic future-layer trace review.
 - Static, LRU, LFU, Least-Stale, profiled eviction, and all non-default L2 modes remain experimental and opt-in. Transition prediction and cross-layer asynchronous L2 scheduling remain unimplemented.
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
@@ -81,7 +81,7 @@ State recorded on 2026-08-09 at verified Milestone 10 publication head `a82d733`
 - GPU utilization, GPU memory bandwidth, and physical NVMe GB/token remain unmeasured. Reader storage elapsed time, logical/aligned bytes, process `rchar/read_bytes`, and L1-to-L0 timing are measured under their stated scopes.
 - WSL2 `/mnt/c` is 9p/DrvFS and rejects direct alignment. liburing 2.5 and direct I/O were validated on WSL2 ext4 `/tmp`, which remains a correctness/capability environment rather than native P44 Pro performance authority.
 - ThreadSanitizer builds successfully but its runtime exits under WSL2 with `unexpected memory mapping`; no TSan execution result is claimed. ASan/UBSan and explicit concurrency regressions pass.
-- Full-model quality, coding/agentic quality, adaptive Top-K, cold rescue, speculation, proxy, and pruning remain unimplemented or unmeasured.
+- Full-model quality, coding/agentic quality, adaptive Top-K and cold-rescue effectiveness, speculation, proxy, and pruning remain unmeasured; speculation, proxy, and pruning remain unimplemented.
 
 ## Next concrete tasks
 

@@ -83,6 +83,7 @@ int main() {
                             .quality_floor_k = 12});
     assert(escalated);
     assert(escalated.value().selected_k == 12);
+    assert(escalated.value().quality_floor_escalated);
 
     std::array<float, 16> weak_boundary{};
     weak_boundary.fill(1.0e-9F);

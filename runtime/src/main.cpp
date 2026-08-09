@@ -3,6 +3,7 @@
 
 #include <charconv>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -93,6 +94,12 @@ int main(int argc, char** argv) {
     std::string l2_cache_name = "buffered";
     std::string l2_queue_depth_text = "8";
     std::string l2_schedule_name = "blocking";
+    std::string routing_mode_name = "natural";
+    std::string routing_fixed_k_text = "0";
+    std::string routing_mass_target_text = "0.9";
+    std::string routing_boundary_gap_text = "0";
+    std::string routing_agent_failures_text = "0";
+    std::string routing_critical_text = "false";
     bool diagnostics = false;
     std::size_t count = 0;
     for (int index = 1; index + 1 < argc; index += 2) {
@@ -123,6 +130,12 @@ int main(int argc, char** argv) {
         else if (key == "--l2-cache") l2_cache_name = value;
         else if (key == "--l2-queue-depth") l2_queue_depth_text = value;
         else if (key == "--l2-schedule") l2_schedule_name = value;
+        else if (key == "--routing-mode") routing_mode_name = value;
+        else if (key == "--routing-fixed-k") routing_fixed_k_text = value;
+        else if (key == "--routing-mass-target") routing_mass_target_text = value;
+        else if (key == "--routing-min-boundary-gap") routing_boundary_gap_text = value;
+        else if (key == "--routing-agent-failures") routing_agent_failures_text = value;
+        else if (key == "--routing-critical") routing_critical_text = value;
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
     }
 
@@ -131,6 +144,88 @@ int main(int argc, char** argv) {
     k3x::ReaderOptions reader_options;
     runtime_options.incremental = mode == "incremental";
     runtime_options.diagnostics = diagnostics;
+    if (routing_mode_name == "natural") {
+        runtime_options.routing_policy.mode = k3x::RoutingMode::natural;
+    } else if (routing_mode_name == "fixed") {
+        runtime_options.routing_policy.mode = k3x::RoutingMode::fixed;
+    } else if (routing_mode_name == "adaptive") {
+        runtime_options.routing_policy.mode = k3x::RoutingMode::adaptive;
+    } else {
+        std::cerr << "unknown routing mode: " << routing_mode_name << '\n';
+        return 2;
+    }
+    const auto parse_size = [](const std::string& text, std::size_t& value) {
+        const auto* begin = text.data();
+        const auto* end = begin + text.size();
+        const auto parsed = std::from_chars(begin, end, value);
+        return !text.empty() && parsed.ec == std::errc{} && parsed.ptr == end;
+    };
+    const auto parse_float = [](const std::string& text, float& value) {
+        const auto* begin = text.data();
+        const auto* end = begin + text.size();
+        const auto parsed = std::from_chars(
+            begin, end, value, std::chars_format::general);
+        return !text.empty() && parsed.ec == std::errc{} && parsed.ptr == end &&
+               std::isfinite(value);
+    };
+    if (!parse_size(routing_fixed_k_text,
+                    runtime_options.routing_policy.fixed_k)) {
+        std::cerr << "invalid routing fixed K: " << routing_fixed_k_text << '\n';
+        return 2;
+    }
+    const auto allowed_routing_k = [](std::size_t value) {
+        return value == 4 || value == 6 || value == 8 || value == 12 ||
+               value == 16;
+    };
+    if (runtime_options.routing_policy.mode == k3x::RoutingMode::fixed &&
+        !allowed_routing_k(runtime_options.routing_policy.fixed_k)) {
+        std::cerr << "fixed routing requires K4, K6, K8, K12, or K16\n";
+        return 2;
+    }
+    if (runtime_options.routing_policy.mode == k3x::RoutingMode::natural &&
+        runtime_options.routing_policy.fixed_k != 0) {
+        std::cerr << "natural routing requires --routing-fixed-k 0\n";
+        return 2;
+    }
+    if (runtime_options.routing_policy.mode == k3x::RoutingMode::adaptive &&
+        runtime_options.routing_policy.fixed_k != 0) {
+        std::cerr << "adaptive routing requires --routing-fixed-k 0\n";
+        return 2;
+    }
+    if (!parse_float(routing_mass_target_text,
+                     runtime_options.routing_policy.mass_target) ||
+        runtime_options.routing_policy.mass_target <= 0.0F ||
+        runtime_options.routing_policy.mass_target > 1.0F) {
+        std::cerr << "invalid routing mass target: "
+                  << routing_mass_target_text << '\n';
+        return 2;
+    }
+    if (!parse_float(routing_boundary_gap_text,
+                     runtime_options.routing_policy.minimum_boundary_gap) ||
+        runtime_options.routing_policy.minimum_boundary_gap < 0.0F ||
+        runtime_options.routing_policy.minimum_boundary_gap > 1.0F) {
+        std::cerr << "invalid routing boundary gap: "
+                  << routing_boundary_gap_text << '\n';
+        return 2;
+    }
+    std::size_t routing_agent_failures = 0;
+    if (!parse_size(routing_agent_failures_text, routing_agent_failures)) {
+        std::cerr << "invalid routing agent failure count: "
+                  << routing_agent_failures_text << '\n';
+        return 2;
+    }
+    if (routing_critical_text != "true" && routing_critical_text != "false") {
+        std::cerr << "invalid routing critical flag: "
+                  << routing_critical_text << '\n';
+        return 2;
+    }
+    if (routing_critical_text == "true" || routing_agent_failures >= 3) {
+        runtime_options.routing_policy.quality_floor_k = 16;
+    } else if (routing_agent_failures == 2) {
+        runtime_options.routing_policy.quality_floor_k = 12;
+    } else if (routing_agent_failures == 1) {
+        runtime_options.routing_policy.quality_floor_k = 8;
+    }
     if (l1_expert_cache_name == "disabled") {
         runtime_options.l1_expert_cache = k3x::L1ExpertCacheMode::disabled;
     } else if (l1_expert_cache_name == "static") {
@@ -515,6 +610,41 @@ int main(int argc, char** argv) {
            << result.value().l1_expert_cache.resident_bytes
            << ",\"peak_l1_expert_cache_resident_bytes\":"
            << result.value().l1_expert_cache.peak_resident_bytes;
+    output << ",\"routing_mode\":";
+    write_json_string(output, routing_mode_name);
+    const auto routing_decisions = result.value().routing_decisions;
+    const auto routing_average = [&](double sum) {
+        return routing_decisions ? sum / static_cast<double>(routing_decisions)
+                                 : 0.0;
+    };
+    output << ",\"routing_natural_top_k\":"
+           << result.value().routing_natural_top_k
+           << ",\"routing_fixed_k\":"
+           << runtime_options.routing_policy.fixed_k
+           << ",\"routing_mass_target\":"
+           << runtime_options.routing_policy.mass_target
+           << ",\"routing_min_boundary_gap\":"
+           << runtime_options.routing_policy.minimum_boundary_gap
+           << ",\"routing_quality_floor_k\":"
+           << runtime_options.routing_policy.quality_floor_k
+           << ",\"routing_agent_failures\":" << routing_agent_failures
+           << ",\"routing_critical\":"
+           << (routing_critical_text == "true" ? "true" : "false")
+           << ",\"routing_decisions\":" << routing_decisions
+           << ",\"routing_selected_experts\":"
+           << result.value().routing_selected_experts
+           << ",\"routing_average_top_k\":"
+           << routing_average(result.value().routing_selected_experts)
+           << ",\"routing_average_normalized_entropy\":"
+           << routing_average(result.value().routing_normalized_entropy_sum)
+           << ",\"routing_average_selected_mass\":"
+           << routing_average(result.value().routing_selected_mass_sum)
+           << ",\"routing_average_boundary_confidence\":"
+           << routing_average(result.value().routing_boundary_confidence_sum)
+           << ",\"routing_quality_escalated_decisions\":"
+           << result.value().routing_quality_escalated_decisions
+           << ",\"cold_rescue_count\":"
+           << result.value().cold_rescue_count;
     output << ",\"runtime_profile_metadata_count\":"
            << session.profile().metadata().size()
            << ",\"runtime_profile_prior_weight\":"
@@ -673,6 +803,12 @@ int main(int argc, char** argv) {
          index < result.value().prefill_routed_experts.size(); ++index) {
         if (index) output << ',';
         output << result.value().prefill_routed_experts[index];
+    }
+    output << "],\"prefill_routed_k\":[";
+    for (std::size_t index = 0;
+         index < result.value().prefill_routed_k.size(); ++index) {
+        if (index) output << ',';
+        output << result.value().prefill_routed_k[index];
     }
     output << "],\"token_ids\":[";
     for (std::size_t index = 0; index < result.value().token_ids.size(); ++index) {

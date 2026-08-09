@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import platform
 import statistics
 import struct
@@ -125,6 +126,23 @@ class BenchmarkRecord:
     process_io_available: bool = False
     process_rchar_bytes: int | None = None
     process_read_bytes: int | None = None
+    routing_mode: str = "natural"
+    routing_natural_top_k: int = 0
+    routing_fixed_k: int = 0
+    routing_mass_target: float = 0.9
+    routing_min_boundary_gap: float = 0.0
+    routing_quality_floor_k: int = 0
+    routing_agent_failures: int = 0
+    routing_critical: bool = False
+    routing_decisions: int = 0
+    routing_selected_experts: int = 0
+    routing_average_top_k: float = 0.0
+    routing_average_normalized_entropy: float = 0.0
+    routing_average_selected_mass: float = 0.0
+    routing_average_boundary_confidence: float = 0.0
+    routing_quality_escalated_decisions: int = 0
+    cold_rescue_count: int = 0
+    routed_k: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         if self.scope not in {
@@ -151,6 +169,7 @@ def write_results(record: BenchmarkRecord, json_path: Path, csv_path: Path) -> N
     csv_payload["routed_experts"] = ";".join(
         str(value) for value in record.routed_experts
     )
+    csv_payload["routed_k"] = ";".join(str(value) for value in record.routed_k)
     with csv_path.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=csv_payload.keys())
         writer.writeheader()
@@ -182,6 +201,12 @@ def _run_process(
     runtime_metadata: str = "",
     runtime_profile_in: Path | None = None,
     runtime_profile_out: Path | None = None,
+    routing_mode: str = "natural",
+    routing_fixed_k: int = 0,
+    routing_mass_target: float = 0.9,
+    routing_min_boundary_gap: float = 0.0,
+    routing_agent_failures: int = 0,
+    routing_critical: bool = False,
     diagnostics: bool = False,
 ) -> tuple[dict, int, float]:
     command = [
@@ -202,6 +227,12 @@ def _run_process(
         "--l2-cache", l2_cache,
         "--l2-queue-depth", str(l2_queue_depth),
         "--l2-schedule", l2_expert_schedule,
+        "--routing-mode", routing_mode,
+        "--routing-fixed-k", str(routing_fixed_k),
+        "--routing-mass-target", str(routing_mass_target),
+        "--routing-min-boundary-gap", str(routing_min_boundary_gap),
+        "--routing-agent-failures", str(routing_agent_failures),
+        "--routing-critical", str(routing_critical).lower(),
     ]
     if runtime_metadata:
         command.extend(["--runtime-metadata", runtime_metadata])
@@ -300,6 +331,12 @@ def benchmark_once(
     runtime_metadata: str = "",
     runtime_profile_in: Path | None = None,
     runtime_profile_out: Path | None = None,
+    routing_mode: str = "natural",
+    routing_fixed_k: int = 0,
+    routing_mass_target: float = 0.9,
+    routing_min_boundary_gap: float = 0.0,
+    routing_agent_failures: int = 0,
+    routing_critical: bool = False,
 ) -> BenchmarkRecord:
     if warmup < 0 or iterations <= 0:
         raise ValueError("warmup must be non-negative and iterations must be positive")
@@ -309,6 +346,7 @@ def benchmark_once(
     peaks: list[int] = []
     ttft_samples: list[float] = []
     routed_experts: tuple[int, ...] = ()
+    routed_k: tuple[int, ...] = ()
     with tempfile.TemporaryDirectory(prefix="k3x-benchmark-") as temporary:
         root = Path(temporary)
         for index in range(warmup + iterations):
@@ -339,6 +377,12 @@ def benchmark_once(
                     root / f"profile-run-{index}.k3xp"
                     if runtime_profile_out is not None else None
                 ),
+                routing_mode=routing_mode,
+                routing_fixed_k=routing_fixed_k,
+                routing_mass_target=routing_mass_target,
+                routing_min_boundary_gap=routing_min_boundary_gap,
+                routing_agent_failures=routing_agent_failures,
+                routing_critical=routing_critical,
             )
             _, ttft_peak, ttft = _run_process(
                 artifact,
@@ -367,6 +411,12 @@ def benchmark_once(
                     root / f"profile-ttft-{index}.k3xp"
                     if runtime_profile_out is not None else None
                 ),
+                routing_mode=routing_mode,
+                routing_fixed_k=routing_fixed_k,
+                routing_mass_target=routing_mass_target,
+                routing_min_boundary_gap=routing_min_boundary_gap,
+                routing_agent_failures=routing_agent_failures,
+                routing_critical=routing_critical,
             )
             if index >= warmup:
                 samples.append(sample)
@@ -395,11 +445,18 @@ def benchmark_once(
                 l2_cache=l2_cache,
                 l2_queue_depth=l2_queue_depth,
                 l2_expert_schedule=l2_expert_schedule,
+                routing_mode=routing_mode,
+                routing_fixed_k=routing_fixed_k,
+                routing_mass_target=routing_mass_target,
+                routing_min_boundary_gap=routing_min_boundary_gap,
+                routing_agent_failures=routing_agent_failures,
+                routing_critical=routing_critical,
                 diagnostics=True,
             )
             if diagnostic["token_ids"] != samples[0]["token_ids"]:
                 raise RuntimeError("CPU diagnostic token sequence diverged")
             routed_experts = tuple(diagnostic["prefill_routed_experts"])
+            routed_k = tuple(diagnostic["prefill_routed_k"])
         else:
             reference, _, _ = _run_process(
                 artifact,
@@ -421,6 +478,12 @@ def benchmark_once(
                 l2_cache=l2_cache,
                 l2_queue_depth=l2_queue_depth,
                 l2_expert_schedule=l2_expert_schedule,
+                routing_mode=routing_mode,
+                routing_fixed_k=routing_fixed_k,
+                routing_mass_target=routing_mass_target,
+                routing_min_boundary_gap=routing_min_boundary_gap,
+                routing_agent_failures=routing_agent_failures,
+                routing_critical=routing_critical,
                 diagnostics=True,
             )
             candidate, _, _ = _run_process(
@@ -443,12 +506,19 @@ def benchmark_once(
                 l2_cache=l2_cache,
                 l2_queue_depth=l2_queue_depth,
                 l2_expert_schedule=l2_expert_schedule,
+                routing_mode=routing_mode,
+                routing_fixed_k=routing_fixed_k,
+                routing_mass_target=routing_mass_target,
+                routing_min_boundary_gap=routing_min_boundary_gap,
+                routing_agent_failures=routing_agent_failures,
+                routing_critical=routing_critical,
                 diagnostics=True,
             )
             max_absolute_error, max_relative_error = _numerical_errors(
                 reference, candidate
             )
             routed_experts = tuple(candidate["prefill_routed_experts"])
+            routed_k = tuple(candidate["prefill_routed_k"])
         if runtime_profile_out is not None:
             materialized, _, _ = _run_process(
                 artifact,
@@ -474,6 +544,12 @@ def benchmark_once(
                 runtime_metadata=runtime_metadata,
                 runtime_profile_in=runtime_profile_in,
                 runtime_profile_out=runtime_profile_out,
+                routing_mode=routing_mode,
+                routing_fixed_k=routing_fixed_k,
+                routing_mass_target=routing_mass_target,
+                routing_min_boundary_gap=routing_min_boundary_gap,
+                routing_agent_failures=routing_agent_failures,
+                routing_critical=routing_critical,
             )
             if (
                 materialized["token_ids"] != samples[0]["token_ids"]
@@ -508,6 +584,22 @@ def benchmark_once(
         "runtime_profile_live_observations",
         "runtime_profile_load_bytes",
         "runtime_profile_save_bytes",
+        "routing_mode",
+        "routing_natural_top_k",
+        "routing_fixed_k",
+        "routing_mass_target",
+        "routing_min_boundary_gap",
+        "routing_quality_floor_k",
+        "routing_agent_failures",
+        "routing_critical",
+        "routing_decisions",
+        "routing_selected_experts",
+        "routing_average_top_k",
+        "routing_average_normalized_entropy",
+        "routing_average_selected_mass",
+        "routing_average_boundary_confidence",
+        "routing_quality_escalated_decisions",
+        "cold_rescue_count",
         "l2_expert_schedule",
         "expert_load_submissions",
         "expert_load_inline_resident_hits",
@@ -574,6 +666,12 @@ def benchmark_once(
         l2_io,
         l2_cache,
         l2_queue_depth,
+        routing_mode,
+        routing_fixed_k,
+        routing_mass_target,
+        routing_min_boundary_gap,
+        routing_agent_failures,
+        routing_critical,
     )
     option_fields = (
         "backend",
@@ -591,9 +689,24 @@ def benchmark_once(
         "l2_io_engine",
         "l2_cache_mode",
         "l2_queue_depth",
+        "routing_mode",
+        "routing_fixed_k",
+        "routing_mass_target",
+        "routing_min_boundary_gap",
+        "routing_agent_failures",
+        "routing_critical",
     )
     observed_options = tuple(samples[0][field] for field in option_fields)
-    if observed_options != expected_options:
+    float_option_fields = {"routing_mass_target", "routing_min_boundary_gap"}
+    options_match = all(
+        math.isclose(observed, expected, rel_tol=1.0e-6, abs_tol=1.0e-7)
+        if field in float_option_fields
+        else observed == expected
+        for field, observed, expected in zip(
+            option_fields, observed_options, expected_options, strict=True
+        )
+    )
+    if not options_match:
         raise RuntimeError("runner metadata did not match requested benchmark options")
     if any(
         item["async_prefetch_ready_before_use"]
@@ -692,6 +805,7 @@ def benchmark_once(
         per_layer_nanoseconds=layer_ns,
         token_ids=tuple(samples[0]["token_ids"]),
         routed_experts=routed_experts,
+        routed_k=routed_k,
         l1_expert_cache_mode=samples[0]["l1_expert_cache_mode"],
         l1_expert_cache_bytes=samples[0]["l1_expert_cache_bytes"],
         l1_expert_cache_hits=samples[0]["l1_expert_cache_hits"],
@@ -775,6 +889,30 @@ def benchmark_once(
             int(statistics.median(item["process_read_bytes"] for item in samples))
             if samples[0]["process_io_available"] else None
         ),
+        routing_mode=samples[0]["routing_mode"],
+        routing_natural_top_k=samples[0]["routing_natural_top_k"],
+        routing_fixed_k=samples[0]["routing_fixed_k"],
+        routing_mass_target=samples[0]["routing_mass_target"],
+        routing_min_boundary_gap=samples[0]["routing_min_boundary_gap"],
+        routing_quality_floor_k=samples[0]["routing_quality_floor_k"],
+        routing_agent_failures=samples[0]["routing_agent_failures"],
+        routing_critical=bool(samples[0]["routing_critical"]),
+        routing_decisions=samples[0]["routing_decisions"],
+        routing_selected_experts=samples[0]["routing_selected_experts"],
+        routing_average_top_k=samples[0]["routing_average_top_k"],
+        routing_average_normalized_entropy=samples[0][
+            "routing_average_normalized_entropy"
+        ],
+        routing_average_selected_mass=samples[0][
+            "routing_average_selected_mass"
+        ],
+        routing_average_boundary_confidence=samples[0][
+            "routing_average_boundary_confidence"
+        ],
+        routing_quality_escalated_decisions=samples[0][
+            "routing_quality_escalated_decisions"
+        ],
+        cold_rescue_count=samples[0]["cold_rescue_count"],
     )
 
 
@@ -822,6 +960,15 @@ def main() -> int:
         "--l2-expert-schedule", choices=("blocking", "deadline"),
         default="blocking",
     )
+    parser.add_argument(
+        "--routing-mode", choices=("natural", "fixed", "adaptive"),
+        default="natural",
+    )
+    parser.add_argument("--routing-fixed-k", type=int, default=0)
+    parser.add_argument("--routing-mass-target", type=float, default=0.9)
+    parser.add_argument("--routing-min-boundary-gap", type=float, default=0.0)
+    parser.add_argument("--routing-agent-failures", type=int, default=0)
+    parser.add_argument("--routing-critical", action="store_true")
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--csv", type=Path, required=True)
     args = parser.parse_args()
@@ -845,6 +992,12 @@ def main() -> int:
         l2_cache=args.l2_cache,
         l2_queue_depth=args.l2_queue_depth,
         l2_expert_schedule=args.l2_expert_schedule,
+        routing_mode=args.routing_mode,
+        routing_fixed_k=args.routing_fixed_k,
+        routing_mass_target=args.routing_mass_target,
+        routing_min_boundary_gap=args.routing_min_boundary_gap,
+        routing_agent_failures=args.routing_agent_failures,
+        routing_critical=args.routing_critical,
     )
     write_results(result, args.json, args.csv)
     print(json.dumps(asdict(result), sort_keys=True, separators=(",", ":")))

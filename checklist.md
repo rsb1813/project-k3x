@@ -151,7 +151,7 @@
 - [x] Write the accepted design and TDD implementation plan.
 - [x] Implement and verify the pure routing policy.
 - [x] Add the 16-of-24 reference fixture and end-to-end parity.
-- [ ] Integrate CLI, telemetry, escalation, and exact rescue.
+- [x] Integrate CLI, telemetry, escalation, and exact rescue.
 - [ ] Run B-0012, full verification, ledger, review, and public integration.
 
 ## Milestone 6 independent L2 reader

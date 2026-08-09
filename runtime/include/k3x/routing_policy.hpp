@@ -28,6 +28,7 @@ struct RoutingDecision {
     float entropy_effective_support{};
     float selected_cumulative_mass{};
     float boundary_confidence{};
+    bool quality_floor_escalated{};
 };
 
 Result<RoutingDecision> select_routing(

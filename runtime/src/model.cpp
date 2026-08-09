@@ -92,8 +92,21 @@ public:
     const std::vector<std::uint32_t>& routed_experts() const {
         return routed_experts_;
     }
+    const std::vector<std::uint32_t>& routed_k() const { return routed_k_; }
     L1ExpertCacheStats expert_cache_stats() const {
         return expert_store_.stats();
+    }
+    void export_routing_stats(GenerationResult& result) const {
+        result.routing_natural_top_k = config_.top_k;
+        result.routing_decisions = routing_decisions_;
+        result.routing_selected_experts = routing_selected_experts_;
+        result.routing_quality_escalated_decisions =
+            routing_quality_escalated_decisions_;
+        result.cold_rescue_count = cold_rescue_count_;
+        result.routing_normalized_entropy_sum = routing_normalized_entropy_sum_;
+        result.routing_selected_mass_sum = routing_selected_mass_sum_;
+        result.routing_boundary_confidence_sum =
+            routing_boundary_confidence_sum_;
     }
 
     Vector forward(std::uint32_t token, ModelState& state, ProfilePhase phase,
@@ -586,24 +599,37 @@ private:
                                        layer, phase);
         const auto& bias = tensor(base + "correction_bias");
         Vector scores(config_.experts);
-        std::vector<std::size_t> order(config_.experts);
-        std::iota(order.begin(), order.end(), 0);
         for (std::size_t index = 0; index < scores.size(); ++index) scores[index] = sigmoid(scores_raw[index]);
-        std::stable_sort(order.begin(), order.end(), [&](auto left, auto right) {
-            return scores[left] + bias[left] > scores[right] + bias[right];
-        });
+        auto routing = select_routing(
+            scores, bias, config_.top_k, session_.options().routing_policy);
+        if (!routing) throw std::runtime_error(routing.message());
+        const auto& decision = routing.value();
+        const auto& order = decision.expert_ids;
+        const auto selected_k = decision.selected_k;
+        ++routing_decisions_;
+        routing_selected_experts_ += selected_k;
+        routing_normalized_entropy_sum_ += decision.normalized_entropy;
+        routing_selected_mass_sum_ += decision.selected_cumulative_mass;
+        routing_boundary_confidence_sum_ += decision.boundary_confidence;
+        if (decision.quality_floor_escalated) {
+            ++routing_quality_escalated_decisions_;
+        }
         Vector latent;
         Vector mixed(config_.latent, 0.0F);
-        float denominator = 0.0F;
-        for (std::size_t slot = 0; slot < config_.top_k; ++slot) denominator += scores[order[slot]];
         std::vector<ExpertKey> selected;
-        selected.reserve(config_.top_k);
-        for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
+        selected.reserve(selected_k);
+        for (std::size_t slot = 0; slot < selected_k; ++slot) {
             selected.push_back({layer, order[slot]});
+            if (session_.options().l1_expert_cache !=
+                    L1ExpertCacheMode::disabled &&
+                !expert_store_.contains(selected.back())) {
+                ++cold_rescue_count_;
+            }
         }
         expert_store_.begin_access_set(active_forward_cycle_, layer, selected);
         if (trace_routing_) {
-            for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
+            routed_k_.push_back(static_cast<std::uint32_t>(selected_k));
+            for (std::size_t slot = 0; slot < selected_k; ++slot) {
                 routed_experts_.push_back(
                     static_cast<std::uint32_t>(order[slot]));
             }
@@ -615,14 +641,14 @@ private:
                 ? std::chrono::nanoseconds{
                       counters.storage_nanoseconds / counters.batch_submissions}
                 : std::chrono::nanoseconds{0};
-            expert_tickets.resize(config_.top_k);
-            std::vector<bool> resident(config_.top_k);
-            for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
+            expert_tickets.resize(selected_k);
+            std::vector<bool> resident(selected_k);
+            for (std::size_t slot = 0; slot < selected_k; ++slot) {
                 resident[slot] = expert_store_.contains(
                     {layer, order[slot]});
             }
             for (const bool resident_pass : {true, false}) {
-                for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
+                for (std::size_t slot = 0; slot < selected_k; ++slot) {
                     if (resident[slot] == resident_pass) {
                         expert_tickets[slot] = schedule_expert(
                             layer, order[slot], resident[slot], estimate);
@@ -642,8 +668,8 @@ private:
         }
         if (backend_.options().cuda_boundary == CudaBoundaryMode::ffn_block) {
             std::vector<ExpertPayloadHandle> payloads;
-            payloads.reserve(config_.top_k);
-            for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
+            payloads.reserve(selected_k);
+            for (std::size_t slot = 0; slot < selected_k; ++slot) {
                 if (expert_loader_) {
                     auto payload = expert_tickets[slot].wait();
                     if (!payload) throw std::runtime_error("missing expert");
@@ -683,15 +709,15 @@ private:
             if (!expert_outputs) {
                 throw std::runtime_error("expert FFN backend failure");
             }
-            for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
-                const auto weight = scores[order[slot]] /
-                    std::max(denominator, 1e-20F) * config_.routed_scale;
+            for (std::size_t slot = 0; slot < selected_k; ++slot) {
+                const auto weight = decision.normalized_weights[slot] *
+                                    config_.routed_scale;
                 for (std::size_t index = 0; index < mixed.size(); ++index) {
                     mixed[index] += weight * expert_outputs.value()[slot][index];
                 }
             }
         } else {
-            for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
+            for (std::size_t slot = 0; slot < selected_k; ++slot) {
                 Vector expert_output;
                 if (expert_loader_) {
                     auto payload = expert_tickets[slot].wait();
@@ -702,8 +728,8 @@ private:
                     expert_output = expert(
                         latent, layer, order[slot], phase);
                 }
-                const auto weight = scores[order[slot]] /
-                    std::max(denominator, 1e-20F) * config_.routed_scale;
+                const auto weight = decision.normalized_weights[slot] *
+                                    config_.routed_scale;
                 for (std::size_t index = 0; index < mixed.size(); ++index) {
                     mixed[index] += weight * expert_output[index];
                 }
@@ -730,6 +756,14 @@ private:
     std::unordered_map<std::uint64_t, Vector> tensors_;
     std::vector<std::uint64_t> layer_nanoseconds_ = std::vector<std::uint64_t>(config_.layers);
     std::vector<std::uint32_t> routed_experts_;
+    std::vector<std::uint32_t> routed_k_;
+    std::uint64_t routing_decisions_{};
+    std::uint64_t routing_selected_experts_{};
+    std::uint64_t routing_quality_escalated_decisions_{};
+    std::uint64_t cold_rescue_count_{};
+    double routing_normalized_entropy_sum_{};
+    double routing_selected_mass_sum_{};
+    double routing_boundary_confidence_sum_{};
     std::uint64_t active_forward_cycle_{};
     std::uint64_t next_prefetch_sequence_{1};
 };
@@ -777,6 +811,7 @@ Result<GenerationResult> generate_greedy(Reader& reader,
         if (options.diagnostics) {
                 result.prefill_state = engine.flatten_state(state);
                 result.prefill_routed_experts = engine.routed_experts();
+                result.prefill_routed_k = engine.routed_k();
             }
             if (count) {
                 auto token = argmax(logits);
@@ -815,6 +850,7 @@ Result<GenerationResult> generate_greedy(Reader& reader,
         result.l1_expert_cache = engine.expert_cache_stats();
         result.expert_load_scheduler =
             session.expert_load_scheduler_stats();
+        engine.export_routing_stats(result);
         return Result<GenerationResult>::success(std::move(result));
     } catch (const std::exception& error) {
         if (auto* loader = session.expert_loader()) loader->wait_idle();
