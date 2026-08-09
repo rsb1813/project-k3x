@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 15 exact CUDA expert-major execution is implemented, measured, and locally fully verified. The accepted boundary batches multiple token latents for one native MXFP4 expert while preserving the Milestone 14 state, routing, and commit semantics. Token-major remains the default, CPU expert-major remains the portable exact oracle, and Milestone 15 public PR integration is pending.
+Milestone 15 exact CUDA expert-major execution is implemented, measured, fully verified, independently reviewed, and publicly integrated. The accepted boundary batches multiple token latents for one native MXFP4 expert while preserving the Milestone 14 state, routing, and commit semantics. Token-major remains the default and CPU expert-major remains the portable exact oracle because the measured mixed-acceptance row regressed.
 
-State audited on 2026-08-10 against public baseline `ea4b1e0`. The active development branch is `codex/milestone-fifteen-cuda-expert-major`. PR #11, PR #12, PR #13, documentation PR #14, Milestone 14 PR #15, and documentation reconciliation PR #16 are merged. Milestone 15 code and B-0016 evidence are local to the active branch until its public PR and post-merge CI complete.
+State audited on 2026-08-10 against public Milestone 15 integration head `c18df33`. PR #11 through PR #17 are merged, including Milestone 15 PR #17. Its branch and pull-request correctness runs `31332732339` and `31332745907` passed, followed by successful post-merge `main` run `31332852551`. The active branch `codex/milestone-fifteen-publication` only reconciles this public state in the ledger and README.
 
 ## Completed work
 
@@ -74,7 +74,7 @@ State audited on 2026-08-10 against public baseline `ea4b1e0`. The active develo
 
 ## Work in progress
 
-- Milestone 15 implementation, B-0016, complete CPU/CUDA verification, Compute Sanitizer, and TITAN Ledger synchronization are complete locally. Final read-only review, public PR integration, and post-merge CI remain.
+- Milestone 15 implementation, B-0016, complete CPU/CUDA verification, Compute Sanitizer, final read-only review, public PR integration, and post-merge CI are complete.
 - B-0016 perfect CUDA expert-major blocks slightly reduce synthetic Reader/H2D traffic and improve tiny decode, while the mixed row evaluates three rejected positions and regresses traffic and decode. Released single-expert batching proves exact one-payload-per-group H2D reuse at batch sizes two and four. Neither result supports a default change.
 - The CUDA expert-major path intentionally excludes L1 caching, deadline scheduling, reduced/adaptive routing, profile observation, asynchronous transfer, and routed-accumulate fusion. Acceptance-aware block sizing, representative drafting, multi-expert persistent scheduling, and cross-layer prediction remain unimplemented.
 - DSpark learned drafting, confidence scheduling, EcoSpec, MoE-Spec, and AcceptMoE remain unimplemented. The accepted interface is lifecycle-compatible, not checkpoint- or tensor-ABI compatible with DeepSpec.
@@ -101,8 +101,8 @@ State audited on 2026-08-10 against public baseline `ea4b1e0`. The active develo
 
 ## Next concrete tasks
 
-1. Complete Milestone 15 final review, public PR integration, merge, and post-merge correctness CI.
-2. Add representative learned or self-speculative acceptance traces, then design acceptance-aware dynamic verification block sizing without changing target semantics.
+1. Define a representative learned-drafter or AURORA self-speculative acceptance-trace interface without changing target verification semantics.
+2. Design acceptance-aware dynamic verification block sizing and its expert-residency cost model, then record the accepted boundary before implementation.
 3. Measure multi-expert/full-layer CUDA grouping with GPU utilization, memory bandwidth, physical NVMe/H2D attribution, and native Linux before considering a persistent kernel or default change.
 
 ## Hardware assumptions
@@ -132,11 +132,11 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Public baseline `ea4b1e0` includes the synchronized Milestone 11–14 README and TITAN Ledger plus explicit PR #11/#12 merge provenance. Post-merge `main` correctness run `31329727859` succeeded.
+- Public Milestone 15 integration head `c18df33` includes the synchronized Milestone 11–15 implementation lineage, B-0016 evidence, LF-stable artifact digests, and final-review fix. Branch/PR correctness runs `31332732339`/`31332745907` and post-merge `main` run `31332852551` succeeded.
 - M15 design/plan heads are `b54e4b5`/`f574a36`; portable batch, native launcher, CUDA FFN, and runtime heads are `b9b10dc`, `459303e`, `b0c1a96`, and `e99bbc0`; B-0016 tooling, direct CLI fix, and LF-stable digest fix are `7899603`, `884a74e`, and `5b7b73b`.
 - Current full verification passes CPU CTest 13/13 and pytest 262 passed/47 skipped, liburing/direct CTest 14/14 and pytest 264 passed/45 skipped, ASan/UBSan CTest 14/14, and CUDA CTest 22/22 with pytest 301 passed/8 skipped. Native MXFP4, CUDA FFN, released batch-2, perfect expert-major CLI, and mixed expert-major CLI Compute Sanitizer runs each report zero errors.
 - B-0016 executable artifact SHA-256 is `039d61ee9c2e13e27c9a2514bb476f8b122b8b37be0b7f85baf26c1a6611a2e9`; released artifact SHA-256 is `aab7aea48b03bdcd8e0b4d98c4780128ab689d2bba005089a49970eb0e326890`; canonical aggregate SHA-256 is `09a2537337df1fd2b8b39439f92ba7306cb09a6ed5e3f8bdc8db7d9d787029aa`.
-- Independent evidence validation recomputed all nine raw JSON/CSV digest pairs and the aggregate. Results are under `results/b0016-cuda-expert-major-wsl/`; public integration and post-merge CI remain pending.
+- Independent evidence validation recomputed all nine raw JSON/CSV digest pairs and the aggregate. Results are under `results/b0016-cuda-expert-major-wsl/` and are included in public integration head `c18df33`.
 - PR #11 merged at `edc6d605` and PR #12 merged at `9e59a9db`; both merge commits are ancestors of the audited public baseline. Their post-merge correctness runs `31318993688` and `31322191670` succeeded.
 - M14 exact block runtime head `862d401`, CLI/telemetry head `bdf4a66`, and B-0015 result head `1e73121` remain the CPU reference lineage.
 - Pre-publication verification passed CPU CTest 13/13 and Python 253/44, liburing/direct CTest 14/14 and Python 257/42, CUDA CTest 22/22 and Python 291/8, and ASan/UBSan liburing CTest 14/14 plus targeted Python 95/35. CUDA FFN Compute Sanitizer reported zero errors; the CPU-only expert-major CLI has no instrumented CUDA API and is covered by ASan/UBSan rather than a fabricated Compute Sanitizer result.

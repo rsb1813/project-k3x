@@ -159,7 +159,7 @@
 - [x] Implement the backend batch contract through witnessed RED and GREEN cycles.
 - [x] Integrate the exact CUDA runtime, CLI capability gate, and telemetry.
 - [x] Run B-0016, full verification, sanitizer, and ledger synchronization.
-- [ ] Complete final review, public PR integration, and post-merge CI verification.
+- [x] Complete final review, public PR integration, and post-merge CI verification.
 - [x] Update the README milestone badge and current implementation summary.
 - [x] Correct the stale speculative-implementation statement and publication HEAD in `PROJECT_STATE.md`.
 - [x] Run documentation checks, commit, publish, and verify public `main`.
