@@ -13,6 +13,7 @@ enable_testing()
 add_library(k3x_runtime
     runtime/src/crc32c.cpp
     runtime/src/sha256.cpp
+    runtime/src/direct_io.cpp
     runtime/src/reader.cpp
     runtime/src/ops.cpp
     runtime/src/profile.cpp

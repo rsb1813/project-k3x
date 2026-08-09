@@ -66,7 +66,29 @@ def test_cpp_reader_reports_unbuilt_io_uring_mode(
         text=True,
     )
     assert result.returncode == 12
-    assert result.stderr.strip() == "STORAGE_UNAVAILABLE"
+    assert result.stderr.strip() == (
+        "STORAGE_UNAVAILABLE: requested L2 mode is not built"
+    )
+
+
+@pytest.mark.skipif(
+    os.environ.get("K3X_TEST_DIRECT") != "1",
+    reason="requires a Linux filesystem with STATX_DIOALIGN",
+)
+@pytest.mark.parametrize("mode", ["direct", "io-uring-direct"])
+def test_cpp_reader_uses_direct_bounce_buffers_for_small_extents(
+    synthetic_source: Path, tmp_path: Path, mode: str
+) -> None:
+    if mode == "io-uring-direct" and os.environ.get("K3X_TEST_IO_URING") != "1":
+        pytest.skip("requires the optional liburing build")
+    artifact = tmp_path / f"{mode}.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    result = subprocess.run(
+        [str(cpp_binary("test_reader")), str(artifact), mode],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_cpp_binary_uses_configured_build_directory(

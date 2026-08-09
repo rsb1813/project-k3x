@@ -63,6 +63,8 @@ public:
     const std::array<std::byte, model_config_bytes>& model_config() const { return model_config_; }
     const ReadCounters& counters() const { return counters_; }
     const ReaderOptions& options() const { return options_; }
+    std::uint64_t direct_memory_alignment() const;
+    std::uint64_t direct_offset_alignment() const;
 private:
     Reader();
     struct DataPlane;

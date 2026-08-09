@@ -17,8 +17,17 @@ int main(int argc, char** argv) {
     if (argc != 2 && argc != 3) return 2;
     k3x::ReaderOptions reader_options;
     if (argc == 3) {
-        if (std::string_view(argv[2]) != "io-uring") return 2;
-        reader_options.io_engine = k3x::L2IoEngine::io_uring;
+        const auto mode = std::string_view(argv[2]);
+        if (mode != "io-uring" && mode != "direct" &&
+            mode != "io-uring-direct") {
+            return 2;
+        }
+        if (mode != "direct") {
+            reader_options.io_engine = k3x::L2IoEngine::io_uring;
+        }
+        if (mode != "io-uring") {
+            reader_options.cache_mode = k3x::L2CacheMode::direct;
+        }
     }
     auto reader = k3x::Reader::open(
         std::filesystem::path(argv[1]), reader_options);
@@ -41,6 +50,10 @@ int main(int argc, char** argv) {
     require(first_cache.misses == 18);
     require(first_reads.calls - first_reads.batch_submissions ==
             first_cache.misses * 5);
+    if (reader_options.cache_mode == k3x::L2CacheMode::direct) {
+        require(first_reads.storage_submitted_bytes >
+                first_reads.requested_bytes);
+    }
 
     auto second = k3x::generate_greedy(
         reader.value(), *backend, prompt, 6, session);

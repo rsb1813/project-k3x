@@ -2,6 +2,7 @@
 #include "k3x/reader.hpp"
 
 #include "k3x/checksums.hpp"
+#include "direct_io.hpp"
 #include "io_completion.hpp"
 
 #include <algorithm>
@@ -100,10 +101,25 @@ struct Reader::DataPlane {
         const std::filesystem::path& path, const ReaderOptions& options) {
         auto result = std::unique_ptr<DataPlane>(new DataPlane);
         result->engine = options.io_engine;
+        result->cache_mode = options.cache_mode;
 #ifdef _WIN32
+        if (options.cache_mode == L2CacheMode::direct) {
+            return Result<std::unique_ptr<DataPlane>>::failure(
+                ErrorCode::storage_unavailable);
+        }
         result->path = path;
 #else
-        result->descriptor = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+        int flags = O_RDONLY | O_CLOEXEC;
+        if (options.cache_mode == L2CacheMode::direct) {
+            auto alignment = detail::query_direct_io_alignment(path);
+            if (!alignment) {
+                return Result<std::unique_ptr<DataPlane>>::failure(
+                    alignment.error(), alignment.message());
+            }
+            result->direct_alignment = alignment.value();
+            flags |= O_DIRECT;
+        }
+        result->descriptor = ::open(path.c_str(), flags);
         if (result->descriptor < 0) {
             return Result<std::unique_ptr<DataPlane>>::failure(
                 ErrorCode::io_error);
@@ -163,6 +179,20 @@ struct Reader::DataPlane {
         return Result<std::vector<std::vector<std::byte>>>::success(
             std::move(values));
 #else
+        if (cache_mode == L2CacheMode::direct) {
+            if (engine == L2IoEngine::pread) {
+                return detail::read_direct_pread(
+                    descriptor, requests, direct_alignment, counters);
+            }
+#ifdef K3X_ENABLE_IO_URING
+            return detail::read_direct_io_uring(
+                descriptor, ring, requests, queue_depth,
+                direct_alignment, counters);
+#else
+            return Result<std::vector<std::vector<std::byte>>>::failure(
+                ErrorCode::storage_unavailable);
+#endif
+        }
         if (engine == L2IoEngine::io_uring) {
 #ifdef K3X_ENABLE_IO_URING
             return read_io_uring(requests, queue_depth, counters);
@@ -187,6 +217,8 @@ struct Reader::DataPlane {
     }
 
     L2IoEngine engine{L2IoEngine::pread};
+    L2CacheMode cache_mode{L2CacheMode::buffered};
+    detail::DirectIoAlignment direct_alignment{};
 #ifdef _WIN32
     std::filesystem::path path;
 #else
@@ -322,6 +354,14 @@ Reader::Reader(Reader&&) noexcept = default;
 Reader& Reader::operator=(Reader&&) noexcept = default;
 Reader::~Reader() = default;
 
+std::uint64_t Reader::direct_memory_alignment() const {
+    return data_plane_ ? data_plane_->direct_alignment.memory : 0;
+}
+
+std::uint64_t Reader::direct_offset_alignment() const {
+    return data_plane_ ? data_plane_->direct_alignment.offset : 0;
+}
+
 std::uint64_t fnv1a64(const char* value) {
     std::uint64_t hash = 0xcbf29ce484222325ULL;
     while (*value) {
@@ -344,10 +384,12 @@ Result<Reader> Reader::open(const std::filesystem::path& path,
         return Result<Reader>::failure(ErrorCode::invalid_state,
                                        "L2 queue depth is out of range");
     }
+#ifdef _WIN32
     if (options.cache_mode != L2CacheMode::buffered) {
         return Result<Reader>::failure(ErrorCode::storage_unavailable,
                                        "requested L2 mode is not built");
     }
+#endif
 #ifndef K3X_ENABLE_IO_URING
     if (options.io_engine == L2IoEngine::io_uring) {
         return Result<Reader>::failure(ErrorCode::storage_unavailable,

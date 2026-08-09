@@ -449,6 +449,24 @@ def test_io_uring_batches_exact_experts_and_reuses_session_cache(
     )
 
 
+@pytest.mark.skipif(
+    os.environ.get("K3X_TEST_DIRECT") != "1",
+    reason="requires a Linux filesystem with STATX_DIOALIGN",
+)
+@pytest.mark.parametrize("mode", ["direct", "io-uring-direct"])
+def test_direct_modes_preserve_exact_experts_and_session_cache(
+    synthetic_source: Path, tmp_path: Path, mode: str
+) -> None:
+    if mode == "io-uring-direct" and os.environ.get("K3X_TEST_IO_URING") != "1":
+        pytest.skip("requires the optional liburing build")
+    artifact = tmp_path / f"{mode}-session.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    subprocess.run(
+        [str(cpp_binary("test_model_session")), str(artifact), mode],
+        check=True,
+    )
+
+
 def test_cpp_prefill_layers_logits_and_state_match_python(
     synthetic_source: Path, tmp_path: Path
 ) -> None:
