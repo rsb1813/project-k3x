@@ -132,3 +132,4 @@
 - CUDA 13.3 공식 문서에 따라 bounded reusable page-locked slab, 별도 non-default transfer stream, readiness event와 compute-stream wait를 필수 계약으로 선택했다. 무제한 pinning, per-request `cudaHostRegister`, default-stream copy는 배제한다.
 - 세 대안 중 router 이후 exact payload를 prepare하고 routed-down projection과 H2D를 겹친 뒤 single-use token으로 consume하는 two-phase 경계를 선택했다. Expert 내부 pipeline은 첫 transfer를 숨기지 못하고, 범용 worker scheduler는 L2/cache/predictor를 성급히 결합하므로 연기했다.
 - 첫 async 조합은 `cuda-custom + ffn-block + reused + transient`로 제한하고 synchronous를 기본값으로 보존한다. Static residency와 async admission 결합, L1 persistent cache, L2 NVMe async read, eviction, predictor는 다음 독립 milestone이다.
+- 상세 TDD 계획은 공개 계약, 고정 pinned slab, single-flight transfer pipeline, prepared FFN, graph overlap, 계측, B-0005와 원장 갱신의 여덟 의미 단위로 나눴다. 자체 검토에서 copyable opaque token과 backend-enforced single-use를 선택하고, 모든 async counter를 첫 계약 task로 이동했으며, CUDA 임시 override와 synchronous-plus-capacity 거부 검증을 명시했다.

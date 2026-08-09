@@ -25,7 +25,7 @@ Primary references:
 
 ### Selected: two-phase exact prefetch token
 
-After natural routing selects the expert set, the runtime loads the exact payloads into ordinary system RAM, prepares one bounded pinned slab, and enqueues one H2D transfer on a dedicated stream. While that transfer proceeds, the existing routed-down projection runs on the compute stream. A move-only token later identifies the prepared expert group.
+After natural routing selects the expert set, the runtime loads the exact payloads into ordinary system RAM, prepares one bounded pinned slab, and enqueues one H2D transfer on a dedicated stream. While that transfer proceeds, the existing routed-down projection runs on the compute stream. An opaque single-use token later identifies the prepared expert group.
 
 This is the smallest boundary that exposes an actual use deadline and useful overlap without introducing a predictor or L2 scheduler.
 
@@ -65,7 +65,7 @@ CudaTransferMode cuda_transfer{CudaTransferMode::synchronous};
 std::uint64_t cuda_pinned_bytes{};
 ```
 
-The backend exposes one move-only logical identifier rather than device pointers:
+The backend exposes one opaque logical identifier rather than device pointers. The backend, not C++ copy semantics, enforces single-flight and single-use behavior:
 
 ```cpp
 struct Mxfp4PrefetchToken {

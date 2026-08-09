@@ -96,7 +96,7 @@
 - [x] CUDA 13.3 pinned-memory, overlap, event dependency 공식 계약 확인.
 - [x] two-phase exact prefetch token 설계와 범위 확정.
 - [x] 설계 명세 self-review와 semantic commit.
-- [ ] 상세 TDD 구현 계획 작성과 self-review.
+- [x] 상세 TDD 구현 계획 작성과 self-review.
 - [ ] bounded pinned staging과 transfer stream primitive 구현.
 - [ ] prepared exact MXFP4 expert FFN과 graph scheduling 연결.
 - [ ] profiler/schema/ablation runner 확장.
