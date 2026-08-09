@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 5 public integration is complete. Milestone 6 independent exact L2 reader implementation, local verification, and non-authoritative WSL2 B-0007 measurement are complete; final review and public integration are in progress.
+Milestone 5 public integration is complete. Milestone 6 independent exact L2 reader implementation, local verification, non-authoritative WSL2 B-0007 measurement, and final review are complete; public integration is in progress.
 
-State recorded on 2026-08-09 at verified Milestone 6 code commit `5049f26`. Public `main` remains at Milestone 5 ledger closure `a7e8acf`; active branch is `codex/milestone-six-l2-reader`.
+State recorded on 2026-08-09 at verified Milestone 6 review-fix commit `5160205`. Public `main` remains at Milestone 5 ledger closure `a7e8acf`; active branch is `codex/milestone-six-l2-reader`.
 
 ## Completed work
 
@@ -41,7 +41,8 @@ State recorded on 2026-08-09 at verified Milestone 6 code commit `5049f26`. Publ
 
 ## Work in progress
 
-- Milestone 6 code and measurement ledger await one final Terra high read-only review and public PR/CI integration.
+- Milestone 6 code and measurement ledger await public PR/CI integration.
+- Final Terra high review found two Important issues: io_uring failure-path buffer lifetime and a premature multi-megabyte-fixture claim. Commit `5160205` closes and invalidates a failed ring before buffers leave scope, adds a pending-read lifetime regression, and marks the fixture proposed. No Critical or Important finding remains unaddressed.
 - Static L1 admission and all non-default L2 modes remain experimental and opt-in. LRU, LFU, Least-Stale, eviction, task/session priors, prediction, and cross-layer asynchronous L2 scheduling remain unimplemented.
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - `pread + buffered` remains the default because B-0007 is WSL2 ext4 evidence, not native P44 Pro evidence.
@@ -62,11 +63,11 @@ State recorded on 2026-08-09 at verified Milestone 6 code commit `5049f26`. Publ
 
 ## Next concrete tasks
 
-1. Complete one final Critical/Important read-only review, apply evidence-backed fixes once, and rerun affected verification.
-2. Publish Milestone 6 through a public PR, require Linux CI, ancestry-check the merge, and confirm post-merge CI.
-3. Add a full-dimension bounded checkpoint slice so storage request sizes and alignment amplification become representative without downloading the full model.
-4. Implement deadline-aware cross-layer L2-to-L1 scheduling while preserving the exact blocking Reader mode.
-5. Run native-Linux P44 Pro warm/cold B-0007 only when that environment exists, then continue with Least-Stale, task/session profiles, adaptive Top-K, and exact rescue.
+1. Publish Milestone 6 through a public PR, require Linux CI, ancestry-check the merge, and confirm post-merge CI.
+2. Add a full-dimension bounded checkpoint slice so storage request sizes and alignment amplification become representative without downloading the full model.
+3. Implement deadline-aware cross-layer L2-to-L1 scheduling while preserving the exact blocking Reader mode.
+4. Run native-Linux P44 Pro warm/cold B-0007 only when that environment exists.
+5. Continue with Least-Stale, task/session profiles, adaptive Top-K, and exact rescue in charter order.
 
 ## Hardware assumptions
 
@@ -94,10 +95,11 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 ## Last known-good state
 
 - Public `main`: Milestone 5 ledger closure `a7e8acf7011e1583a0fb561e4bf93b093302e796`; correctness run `31302070711` succeeded.
-- Latest verified Milestone 6 code and B-0007 measurement commit: `5049f26` (`feat: measure and ablate L2 reader modes`).
-- CPU verification: CTest 8/8; pytest 135 passed and 40 skipped.
-- Liburing/direct verification: CTest 8/8; pytest 136 passed and 39 skipped.
-- CUDA verification: CTest 17/17; pytest 168 passed and 7 skipped.
+- Latest verified Milestone 6 review-fix commit: `5160205` (`fix: close failed io_uring batches safely`).
+- B-0007 successful-path measurement commit: `5049f26` (`feat: measure and ablate L2 reader modes`); raw ledger commit: `2e656ae`.
+- CPU verification: CTest 8/8; pytest 136 passed and 40 skipped.
+- Liburing/direct verification: CTest 9/9; pytest 137 passed and 39 skipped; ASan/UBSan CTest 9/9.
+- CUDA verification: CTest 17/17; pytest 169 passed and 7 skipped.
 - Compute Sanitizer: `test_cuda_device`, `test_cuda_dense`, `test_cuda_mxfp4`, `test_cuda_memory`, `test_cuda_pinned_memory`, `test_cuda_async_pipeline`, `test_cuda_residency`, `test_cuda_situ`, `test_cuda_ffn`, and `test_cuda_async_ffn` each report `ERROR SUMMARY: 0 errors`.
 - Exact generated tokens: `[43, 32, 28, 49, 9, 28]` and the same 24-entry routing trace across all B-0007 rows.
 - B-0007 artifact SHA-256: `039d61ee9c2e13e27c9a2514bb476f8b122b8b37be0b7f85baf26c1a6611a2e9`.
