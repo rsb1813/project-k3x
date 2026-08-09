@@ -115,6 +115,14 @@
 - [x] TITAN Ledger 최종 검토와 검토 수정 후 전체 검증.
 - [x] Public GitHub PR, CI, main 반영과 post-merge CI 확인.
 
+## Milestone 8 — Deadline-aware exact expert loading
+
+- [ ] Deadline scheduler contract와 deterministic unit tests.
+- [ ] Reader 및 L1 store concurrency safety.
+- [ ] Blocking reference를 보존하는 exact current-layer runtime integration.
+- [ ] CLI, telemetry, B-0009 ablation.
+- [ ] 전체 verification, final review, TITAN Ledger, public integration.
+
 ## Milestone 6 independent L2 reader
 
 - [x] 기존 Reader hot path와 Linux I/O capability 경계 조사.
