@@ -5,12 +5,14 @@
 #include "device_memory.cuh"
 #include "mxfp4.cuh"
 #include "resident_weights.cuh"
+#include "situ.cuh"
 
 #include <cublasLt.h>
 #include <cuda_bf16.h>
 #include <cuda_runtime_api.h>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -140,6 +142,12 @@ public:
           dense_weight_scratch_(&memory_stats_, &runtime_stats_),
           dense_output_scratch_(&memory_stats_, &runtime_stats_),
           dense_group_output_scratch_(&memory_stats_, &runtime_stats_),
+          ffn_input_scratch_(&memory_stats_, &runtime_stats_),
+          ffn_weight_scratch_(&memory_stats_, &runtime_stats_),
+          ffn_gate_scratch_(&memory_stats_, &runtime_stats_),
+          ffn_up_scratch_(&memory_stats_, &runtime_stats_),
+          ffn_activation_scratch_(&memory_stats_, &runtime_stats_),
+          ffn_output_scratch_(&memory_stats_, &runtime_stats_),
           mxfp4_input_scratch_(&memory_stats_, &runtime_stats_),
           mxfp4_packed_scratch_(&memory_stats_, &runtime_stats_),
           mxfp4_scales_scratch_(&memory_stats_, &runtime_stats_),
@@ -1105,9 +1113,286 @@ public:
     }
 
     Result<std::vector<float>> dense_situ_mlp(
-        std::span<const float>, DenseMlpView, float, std::optional<float>,
-        std::uint32_t, ProfilePhase) override {
-        return Result<std::vector<float>>::failure(ErrorCode::invalid_extent);
+        std::span<const float> input, DenseMlpView weights, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) override {
+        const auto operation_start = std::chrono::steady_clock::now();
+        const auto precision = numeric_precision();
+        if (options_.kind != BackendKind::cuda_custom ||
+            options_.cuda_boundary != CudaBoundaryMode::ffn_block ||
+            !valid_dense_mlp(input, weights) || !std::isfinite(situ_beta) ||
+            situ_beta <= 0.0F ||
+            (situ_linear &&
+             (!std::isfinite(*situ_linear) || *situ_linear <= 0.0F))) {
+            return Result<std::vector<float>>::failure(ErrorCode::invalid_extent);
+        }
+
+        std::vector<__nv_bfloat16> bf16_input;
+        std::array<std::vector<__nv_bfloat16>, 3> bf16_weights;
+        const void* host_input = input.data();
+        std::size_t input_bytes = input.size_bytes();
+        const auto input_type =
+            options_.dense_precision == DensePrecision::fp32
+                ? CUDA_R_32F
+                : CUDA_R_16BF;
+        const auto weight_type = input_type;
+        if (options_.dense_precision == DensePrecision::bf16_rounded) {
+            bf16_input.reserve(input.size());
+            for (const auto value : input) {
+                bf16_input.push_back(__float2bfloat16_rn(value));
+            }
+            host_input = bf16_input.data();
+            input_bytes = bf16_input.size() * sizeof(__nv_bfloat16);
+        }
+
+        struct WeightMember {
+            DenseWeightView view;
+            const void* host{};
+            std::size_t bytes{};
+            void* device{};
+            std::uint64_t transfer_bytes{};
+        };
+        std::array<WeightMember, 3> members{{
+            {weights.gate}, {weights.up}, {weights.down}}};
+        std::size_t maximum_weight_bytes = 0;
+        std::uint64_t total_weight_transfer = 0;
+        for (std::size_t index = 0; index < members.size(); ++index) {
+            auto& member = members[index];
+            member.host = member.view.values.data();
+            member.bytes = member.view.values.size_bytes();
+            if (options_.dense_precision == DensePrecision::bf16_rounded) {
+                auto& converted = bf16_weights[index];
+                converted.reserve(member.view.values.size());
+                for (const auto value : member.view.values) {
+                    converted.push_back(__float2bfloat16_rn(value));
+                }
+                member.host = converted.data();
+                member.bytes = converted.size() * sizeof(__nv_bfloat16);
+            }
+            member.transfer_bytes = member.bytes;
+            maximum_weight_bytes = std::max(maximum_weight_bytes, member.bytes);
+            if (resident_weights_) {
+                const auto representation =
+                    options_.dense_precision == DensePrecision::fp32
+                        ? cuda::WeightRepresentation::dense_fp32
+                        : cuda::WeightRepresentation::dense_bf16;
+                const auto acquisition = resident_weights_->acquire(
+                    {member.view.tensor_id, representation, member.view.rows,
+                     member.view.cols, 0},
+                    std::span(static_cast<const std::byte*>(member.host),
+                              member.bytes),
+                    {});
+                if (!acquisition) {
+                    return Result<std::vector<float>>::failure(
+                        acquisition.error(), acquisition.message());
+                }
+                if (acquisition.value().disposition !=
+                    cuda::ResidentDisposition::bypass) {
+                    member.device =
+                        const_cast<void*>(acquisition.value().primary);
+                    member.transfer_bytes = acquisition.value().uploaded_bytes;
+                }
+            }
+            total_weight_transfer += member.transfer_bytes;
+        }
+
+        const auto intermediate_count = weights.gate.rows;
+        const auto gate_bytes = intermediate_count * sizeof(float);
+        const auto activation_bytes = intermediate_count *
+            (options_.dense_precision == DensePrecision::fp32
+                 ? sizeof(float)
+                 : sizeof(__nv_bfloat16));
+        const auto output_bytes = weights.down.rows * sizeof(float);
+        cuda::DeviceAllocation local_input(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_weight(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_gate(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_up(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_activation(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_output(&memory_stats_, &runtime_stats_);
+        void* device_input = nullptr;
+        void* transient_weight = nullptr;
+        void* device_gate = nullptr;
+        void* device_up = nullptr;
+        void* device_activation = nullptr;
+        void* device_output = nullptr;
+        if (options_.cuda_allocation == CudaAllocationMode::reused) {
+            if (ffn_input_scratch_.reserve(input_bytes) != cudaSuccess ||
+                ffn_weight_scratch_.reserve(maximum_weight_bytes) != cudaSuccess ||
+                ffn_gate_scratch_.reserve(gate_bytes) != cudaSuccess ||
+                ffn_up_scratch_.reserve(gate_bytes) != cudaSuccess ||
+                ffn_activation_scratch_.reserve(activation_bytes) != cudaSuccess ||
+                ffn_output_scratch_.reserve(output_bytes) != cudaSuccess) {
+                return Result<std::vector<float>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA FFN reusable allocation failed");
+            }
+            device_input = ffn_input_scratch_.get();
+            transient_weight = ffn_weight_scratch_.get();
+            device_gate = ffn_gate_scratch_.get();
+            device_up = ffn_up_scratch_.get();
+            device_activation = ffn_activation_scratch_.get();
+            device_output = ffn_output_scratch_.get();
+        } else if (local_input.allocate(input_bytes) != cudaSuccess ||
+                   local_weight.allocate(maximum_weight_bytes) != cudaSuccess ||
+                   local_gate.allocate(gate_bytes) != cudaSuccess ||
+                   local_up.allocate(gate_bytes) != cudaSuccess ||
+                   local_activation.allocate(activation_bytes) != cudaSuccess ||
+                   local_output.allocate(output_bytes) != cudaSuccess) {
+            return Result<std::vector<float>>::failure(
+                ErrorCode::backend_unavailable, "CUDA FFN allocation failed");
+        } else {
+            device_input = local_input.get();
+            transient_weight = local_weight.get();
+            device_gate = local_gate.get();
+            device_up = local_up.get();
+            device_activation = local_activation.get();
+            device_output = local_output.get();
+        }
+
+        std::vector<std::unique_ptr<DensePlan>> local_plans;
+        const auto resolve_plan = [&](std::size_t rows, std::size_t cols)
+            -> DensePlan* {
+            const DensePlanKey key{rows, cols, static_cast<int>(input_type),
+                                   static_cast<int>(weight_type)};
+            if (options_.cuda_allocation == CudaAllocationMode::reused) {
+                const auto found = dense_plans_.find(key);
+                if (found != dense_plans_.end()) return found->second.get();
+                auto candidate = std::make_unique<DensePlan>();
+                if (!initialize_dense_plan(*candidate, rows, cols, input_type,
+                                           weight_type)) return nullptr;
+                auto* result = candidate.get();
+                dense_plans_.emplace(key, std::move(candidate));
+                return result;
+            }
+            auto candidate = std::make_unique<DensePlan>();
+            if (!initialize_dense_plan(*candidate, rows, cols, input_type,
+                                       weight_type)) return nullptr;
+            auto* result = candidate.get();
+            local_plans.push_back(std::move(candidate));
+            return result;
+        };
+        auto* gate_plan = resolve_plan(weights.gate.rows, weights.gate.cols);
+        auto* up_plan = resolve_plan(weights.up.rows, weights.up.cols);
+        auto* down_plan = resolve_plan(weights.down.rows, weights.down.cols);
+        if (!gate_plan || !up_plan || !down_plan) {
+            return Result<std::vector<float>>::failure(
+                ErrorCode::backend_unavailable, "CUDA FFN plan creation failed");
+        }
+
+        EventOwner gate_start, gate_end, up_start, up_end;
+        EventOwner situ_start, situ_end, down_start, down_end;
+        for (auto* event : {&gate_start, &gate_end, &up_start, &up_end,
+                            &situ_start, &situ_end, &down_start, &down_end}) {
+            if (event->ensure() != cudaSuccess) {
+                return Result<std::vector<float>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA FFN event creation failed");
+            }
+        }
+        if (cudaMemcpyAsync(device_input, host_input, input_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess) {
+            return Result<std::vector<float>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA FFN activation upload failed");
+        }
+
+        constexpr float alpha = 1.0F;
+        constexpr float beta = 0.0F;
+        const auto run_matmul = [&](WeightMember& member, DensePlan* plan,
+                                    const void* matmul_input, void* output,
+                                    EventOwner& start, EventOwner& end) {
+            if (!member.device) {
+                member.device = transient_weight;
+                if (cudaMemcpyAsync(member.device, member.host, member.bytes,
+                                    cudaMemcpyHostToDevice, stream_) !=
+                    cudaSuccess) return false;
+            }
+            return cudaEventRecord(start.get(), stream_) == cudaSuccess &&
+                   cublasLtMatmul(
+                       handle_, plan->operation.get(), &alpha, member.device,
+                       plan->weight_layout.get(), matmul_input,
+                       plan->input_layout.get(), &beta, output,
+                       plan->output_layout.get(), output,
+                       plan->output_layout.get(), &plan->heuristic.algo,
+                       nullptr, 0, stream_) == CUBLAS_STATUS_SUCCESS &&
+                   cudaEventRecord(end.get(), stream_) == cudaSuccess;
+        };
+        if (!run_matmul(members[0], gate_plan, device_input, device_gate,
+                        gate_start, gate_end)) {
+            return Result<std::vector<float>>::failure(
+                ErrorCode::backend_unavailable, "CUDA FFN gate failed");
+        }
+        if (!run_matmul(members[1], up_plan, device_input, device_up,
+                        up_start, up_end)) {
+            return Result<std::vector<float>>::failure(
+                ErrorCode::backend_unavailable, "CUDA FFN up failed");
+        }
+        if (cudaEventRecord(situ_start.get(), stream_) != cudaSuccess ||
+            cuda::launch_situ_glu(
+                static_cast<const float*>(device_gate),
+                static_cast<const float*>(device_up), device_activation,
+                intermediate_count, situ_beta, situ_linear.has_value(),
+                situ_linear.value_or(0.0F),
+                options_.dense_precision == DensePrecision::bf16_rounded,
+                stream_) != cudaSuccess ||
+            cudaEventRecord(situ_end.get(), stream_) != cudaSuccess) {
+            return Result<std::vector<float>>::failure(
+                ErrorCode::backend_unavailable, "CUDA FFN SiTU failed");
+        }
+        if (!run_matmul(members[2], down_plan, device_activation, device_output,
+                        down_start, down_end)) {
+            return Result<std::vector<float>>::failure(
+                ErrorCode::backend_unavailable, "CUDA FFN down failed");
+        }
+
+        std::vector<float> output(weights.down.rows);
+        const auto d2h_start = std::chrono::steady_clock::now();
+        if (cudaMemcpyAsync(output.data(), device_output, output_bytes,
+                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+            cudaStreamSynchronize(stream_) != cudaSuccess) {
+            return Result<std::vector<float>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA FFN output copy or synchronization failed");
+        }
+
+        const auto elapsed = [](EventOwner& start, EventOwner& end,
+                                std::uint64_t& nanoseconds) {
+            float milliseconds = 0.0F;
+            if (cudaEventElapsedTime(&milliseconds, start.get(), end.get()) !=
+                cudaSuccess) return false;
+            nanoseconds = static_cast<std::uint64_t>(std::llround(
+                static_cast<double>(milliseconds) * 1.0e6));
+            return true;
+        };
+        std::uint64_t gate_ns = 0, up_ns = 0, situ_ns = 0, down_ns = 0;
+        if (!elapsed(gate_start, gate_end, gate_ns) ||
+            !elapsed(up_start, up_end, up_ns) ||
+            !elapsed(situ_start, situ_end, situ_ns) ||
+            !elapsed(down_start, down_end, down_ns)) {
+            return Result<std::vector<float>>::failure(
+                ErrorCode::backend_unavailable, "CUDA FFN event timing failed");
+        }
+
+        ++runtime_stats_.stream_synchronization_count;
+        runtime_stats_.activation_h2d_bytes += input_bytes;
+        runtime_stats_.weight_h2d_bytes += total_weight_transfer;
+        ++runtime_stats_.ffn_block_calls;
+        record(phase, ProfileOperation::activation_host_to_device, precision,
+               layer, operation_start, 0, input_bytes, 0, true);
+        record(phase, ProfileOperation::weight_host_to_device, precision, layer,
+               operation_start, 0, total_weight_transfer, 0, true);
+        record(phase, ProfileOperation::device_to_host, precision, layer,
+               d2h_start, 0, output_bytes, 0, true);
+        record(phase, ProfileOperation::dense_matvec, precision, layer,
+               operation_start, weights.gate.values.size_bytes(), 0, gate_ns,
+               true);
+        record(phase, ProfileOperation::dense_matvec, precision, layer,
+               operation_start, weights.up.values.size_bytes(), 0, up_ns, true);
+        record(phase, ProfileOperation::dense_matvec, precision, layer,
+               operation_start, weights.down.values.size_bytes(), 0, down_ns,
+               true);
+        static_cast<void>(situ_ns);
+        return Result<std::vector<float>>::success(std::move(output));
     }
 
     Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_group(
@@ -1159,6 +1444,24 @@ private:
             return false;
         }
         return weight.values.size() == weight.rows * weight.cols;
+    }
+
+    static bool valid_dense_size(std::size_t input_size,
+                                 DenseWeightView weight) {
+        if (input_size != weight.cols || !weight.rows || !weight.cols ||
+            weight.rows > weight.values.size() ||
+            weight.rows > weight.values.size() / weight.cols) {
+            return false;
+        }
+        return weight.values.size() == weight.rows * weight.cols;
+    }
+
+    static bool valid_dense_mlp(std::span<const float> input,
+                                DenseMlpView weights) {
+        return valid_dense(input, weights.gate) &&
+               valid_dense(input, weights.up) && weights.gate.rows != 0 &&
+               weights.gate.rows == weights.up.rows &&
+               valid_dense_size(weights.gate.rows, weights.down);
     }
 
     static bool valid_mxfp4(std::span<const float> input,
@@ -1228,6 +1531,12 @@ private:
     cuda::ScratchBuffer dense_weight_scratch_;
     cuda::ScratchBuffer dense_output_scratch_;
     cuda::ScratchBuffer dense_group_output_scratch_;
+    cuda::ScratchBuffer ffn_input_scratch_;
+    cuda::ScratchBuffer ffn_weight_scratch_;
+    cuda::ScratchBuffer ffn_gate_scratch_;
+    cuda::ScratchBuffer ffn_up_scratch_;
+    cuda::ScratchBuffer ffn_activation_scratch_;
+    cuda::ScratchBuffer ffn_output_scratch_;
     cuda::ScratchBuffer mxfp4_input_scratch_;
     cuda::ScratchBuffer mxfp4_packed_scratch_;
     cuda::ScratchBuffer mxfp4_scales_scratch_;

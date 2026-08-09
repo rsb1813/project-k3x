@@ -287,7 +287,7 @@ git commit -m "feat: add strict CUDA SiTU activation"
 - Implements: `CudaBackend::dense_situ_mlp()`.
 - Produces: one activation upload, one final output download, one synchronization, and one successful block count.
 
-- [ ] **Step 1: Write failing FP32, BF16, residency, and validation tests**
+- [x] **Step 1: Write failing FP32, BF16, residency, and validation tests**
 
 Start the new test with.
 
@@ -299,7 +299,7 @@ Use a `3 → 4 → 2` literal block. Compare FP32 with the CPU block oracle with
 
 Warm all three resident weights and require one input H2D, zero new weight H2D, one final D2H, one synchronization, `ffn_block_calls + 1`, and unchanged expert count. Reject mismatched gate/up input widths, unequal intermediate rows, invalid down columns, zero dimensions, and metadata collisions without successful counter increments.
 
-- [ ] **Step 2: Add target and verify RED**
+- [x] **Step 2: Add target and verify RED**
 
 Add `test_cuda_ffn` to `CMakeLists.txt` and run.
 
@@ -308,13 +308,13 @@ cmake --build build-cuda -j2
 ctest --test-dir build-cuda -R cuda_ffn --output-on-failure
 ```
 
-- [ ] **Step 3: Implement one-stream dense block execution**
+- [x] **Step 3: Implement one-stream dense block execution**
 
 Preflight the triplet. Convert input and weights to BF16 only when requested. Resolve all three weights through the existing resident table before activation upload. Reuse one transient weight slot safely through same-stream ordering.
 
 Reserve checked arena offsets for gate FP32, up FP32, activated FP32 or BF16, and final FP32 output. Enqueue gate, up, strict SiTU, down, and final D2H, then synchronize exactly once. Read all CUDA events after that sync. Record actual split H2D, one D2H, three matvec events, and one SiTU event. Increment block counters only after timing extraction succeeds.
 
-- [ ] **Step 4: Verify block behavior and sanitizer**
+- [x] **Step 4: Verify block behavior and sanitizer**
 
 ```bash
 cmake --build build-cuda -j2
@@ -322,7 +322,7 @@ ctest --test-dir build-cuda -R "cuda_(dense|ffn)" --output-on-failure
 /usr/local/cuda/bin/compute-sanitizer --tool memcheck build-cuda/test_cuda_ffn
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add CMakeLists.txt runtime/cuda/backend_cuda.cu tests/cuda/test_cuda_ffn.cu

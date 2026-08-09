@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 2 implementation, measurement, public merge, and Linux CI are complete. Milestone 3 implementation is in progress; the boundary contract, portable CPU oracle, and strict CUDA SiTU primitive are complete.
+Milestone 2 implementation, measurement, public merge, and Linux CI are complete. Milestone 3 implementation is in progress; dense/shared CUDA FFN block execution is complete and exact routed-expert grouping is next.
 
 State recorded on 2026-08-09 on branch `codex/milestone-three-ffn-blocks` after selecting the dependency-closed CUDA FFN boundary.
 
@@ -27,6 +27,7 @@ State recorded on 2026-08-09 on branch `codex/milestone-three-ffn-blocks` after 
 - Task 1 implements `operation|ffn-block`, rejects non-`cuda-custom` block requests before backend construction, and serializes zero-initialized FFN block counters.
 - Task 2 implements preflight-complete dense and ordered native MXFP4 CPU block composition as the CUDA correctness oracle.
 - Task 3 implements strict FP32 SiTU computation with FP32 or BF16-RNE device output. CUDA literal/guard CTest passed and Compute Sanitizer reported 0 errors; fast math is absent.
+- Task 4 implements one-stream dense FFN execution with one input upload, one final output download, and one final synchronization. Warm resident weights remain device-resident through gate/up/SiTU/down.
 - Latest full CPU verification remains CTest 5/5 and pytest 68 passed/23 skipped.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; builds: `build-linux` and `build-cuda`.
@@ -43,7 +44,7 @@ State recorded on 2026-08-09 on branch `codex/milestone-three-ffn-blocks` after 
 
 ## Next concrete tasks
 
-1. Implement dense/shared CUDA FFN block execution with FP32/BF16, residency, and validation tests first.
+1. Implement exact native MXFP4 routed-expert block grouping with ordered-output, residency, atomic-validation, and capacity tests first.
 2. Implement and independently measure dense/shared and exact native MXFP4 FFN blocks while preserving the operation reference path.
 3. Build the first asynchronous L0/L1 transfer pipeline only after the wider boundary exposes representative transfer deadlines.
 4. Add full-dimension bounded checkpoint slices before any full Kimi K3 throughput claim.
