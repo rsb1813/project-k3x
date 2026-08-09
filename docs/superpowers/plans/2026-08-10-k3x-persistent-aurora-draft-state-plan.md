@@ -237,7 +237,7 @@ git commit -m "feat: crop persistent draft state"
 - Consumes: `IncrementalDraftCursor`, `AdaptiveDraftScheduler`, existing replay provider and `DraftVerification`.
 - Produces: `AuroraPersistentDraftProvider`, five new default-zero draft counters, and end-to-end provider stats.
 
-- [ ] **Step 1: Write the provider parity RED**
+- [x] **Step 1: Write the provider parity RED**
 
 In `test_aurora.cpp`, construct replay and persistent providers with separate Readers/backends and identical fixed-K4 block-2 schedulers. Feed each the same `DraftRequest`, require equal candidates, apply the same full-accept verification, then require equal next candidates. Repeat with first-token rejection and a zero-candidate scheduler step.
 
@@ -252,11 +252,11 @@ require(stats.reader_bytes < replay_provider->stats().reader_bytes);
 
 Run the focused artifact test and verify compilation fails because `AuroraPersistentDraftProvider` is missing.
 
-- [ ] **Step 2: Implement the persistent provider minimally**
+- [x] **Step 2: Implement the persistent provider minimally**
 
 Declare `AuroraPersistentConfig` and `AuroraPersistentDraftProvider` in `aurora.hpp`. Reuse the existing option validator through one private helper instead of duplicating conditions. Create the cursor lazily from `prompt_ + request.generated_tokens`, delegate selected proposal length, validate update before cursor commit, and update expected history and scheduler only after cursor success. Preserve the no-throw `update` method by latching errors.
 
-- [ ] **Step 3: Extend provider and generation telemetry through RED/GREEN**
+- [x] **Step 3: Extend provider and generation telemetry through RED/GREEN**
 
 Add these fields to `DraftProviderStats` and `GenerationResult`.
 
@@ -270,11 +270,11 @@ std::uint64_t kda_checkpoint_bytes{};
 
 First add assertions that ordinary greedy and replay keep the fields zero and persistent copies cursor values. Observe missing-field compilation failures, implement the copies in `generate_speculative`, and rerun.
 
-- [ ] **Step 4: Add end-to-end target parity cases**
+- [x] **Step 4: Add end-to-end target parity cases**
 
 In `test_model_session.cpp`, add persistent token-major and CPU expert-major runs using the same fixed/adaptive traces as replay. Require natural target token IDs, final state, committed routes, accepted counts, and proposal counts to match replay. Draft routing and bytes remain separate from target counters.
 
-- [ ] **Step 5: Verify provider GREEN and commit**
+- [x] **Step 5: Verify provider GREEN and commit**
 
 ```bash
 cmake --build build -j2

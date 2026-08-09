@@ -111,6 +111,12 @@ public:
         result.routing_boundary_confidence_sum =
             routing_boundary_confidence_sum_;
     }
+    std::uint64_t routing_decisions() const noexcept {
+        return routing_decisions_;
+    }
+    std::uint64_t routing_selected_experts() const noexcept {
+        return routing_selected_experts_;
+    }
 
     struct ExpertMajorBlockResult {
         std::vector<Vector> logits;
@@ -1160,7 +1166,6 @@ struct IncrementalDraftCursor::Impl {
         }
         return elements * sizeof(float);
     }
-
     Checkpoint capture() {
         const auto bytes = kda_bytes();
         if (stats.kda_checkpoint_bytes >
@@ -1337,7 +1342,11 @@ Result<bool> IncrementalDraftCursor::commit(
 }
 
 IncrementalDraftCursorStats IncrementalDraftCursor::stats() const noexcept {
-    return impl_->stats;
+    auto result = impl_->stats;
+    result.routing_decisions = impl_->engine.routing_decisions();
+    result.routing_selected_experts =
+        impl_->engine.routing_selected_experts();
+    return result;
 }
 
 IncrementalDraftCursorDiagnostics
@@ -1730,6 +1739,15 @@ Result<GenerationResult> generate_speculative(
         result.draft_selected_length_4 = draft_stats.selected_length_4;
         result.draft_scheduler_growths = draft_stats.scheduler_growths;
         result.draft_scheduler_backoffs = draft_stats.scheduler_backoffs;
+        result.draft_context_prefill_tokens =
+            draft_stats.context_prefill_tokens;
+        result.draft_incremental_forward_calls =
+            draft_stats.incremental_forward_calls;
+        result.draft_rollback_events = draft_stats.rollback_events;
+        result.draft_mla_positions_cropped =
+            draft_stats.mla_positions_cropped;
+        result.draft_kda_checkpoint_bytes =
+            draft_stats.kda_checkpoint_bytes;
         return Result<GenerationResult>::success(std::move(result));
     } catch (const std::exception& error) {
         if (auto* loader = session.expert_loader()) loader->wait_idle();

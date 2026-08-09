@@ -117,6 +117,11 @@ struct GenerationResult {
     std::uint64_t draft_selected_length_4{};
     std::uint64_t draft_scheduler_growths{};
     std::uint64_t draft_scheduler_backoffs{};
+    std::uint64_t draft_context_prefill_tokens{};
+    std::uint64_t draft_incremental_forward_calls{};
+    std::uint64_t draft_rollback_events{};
+    std::uint64_t draft_mla_positions_cropped{};
+    std::uint64_t draft_kda_checkpoint_bytes{};
     std::uint64_t target_block_forward_calls{};
     std::uint64_t target_positions_evaluated{};
     std::uint64_t target_positions_discarded{};

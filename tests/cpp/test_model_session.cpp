@@ -105,6 +105,11 @@ int main(int argc, char** argv) {
     require(first.value().draft_candidate_tokens == 0);
     require(first.value().draft_reader_bytes == 0);
     require(first.value().draft_scheduler_growths == 0);
+    require(first.value().draft_context_prefill_tokens == 0);
+    require(first.value().draft_incremental_forward_calls == 0);
+    require(first.value().draft_rollback_events == 0);
+    require(first.value().draft_mla_positions_cropped == 0);
+    require(first.value().draft_kda_checkpoint_bytes == 0);
     const auto first_reads = reader.value().counters();
     const auto first_cache = first.value().l1_expert_cache;
     require(first.value().expert_load_scheduler.submissions == 0);
