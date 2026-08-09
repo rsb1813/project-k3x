@@ -183,7 +183,7 @@
 - [x] Reinspect DeepSpec `005e03b8` draft-cache crop and verified-context update code.
 - [x] Compare complete state copy, partial replay, and transactional KDA snapshot plus MLA crop designs.
 - [x] Write, self-review, and commit the persistent draft-state design.
-- [ ] Write, self-review, and commit the detailed TDD implementation plan.
+- [x] Write, self-review, and commit the detailed TDD implementation plan.
 - [ ] Implement the incremental cursor and rollback contract through witnessed RED/GREEN cycles.
 - [ ] Integrate the persistent provider, CLI, schema, and replay-oracle parity.
 - [ ] Run B-0018, the full verification matrix, sanitizer coverage, and evidence cross-checks.
