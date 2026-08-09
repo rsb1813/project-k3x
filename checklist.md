@@ -136,6 +136,14 @@
 - [x] B-0014 correctness and overhead measurement.
 - [x] Full verification, sanitizer, ledger, review, and public integration.
 
+## Milestone 11–13 documentation synchronization
+
+- [x] Reconfirm that public PR #11, PR #12, and PR #13 are merged.
+- [x] Audit README and TITAN Ledger documents for stale Milestone 11–13 status.
+- [x] Update the README milestone badge and current implementation summary.
+- [x] Correct the stale speculative-implementation statement and publication HEAD in `PROJECT_STATE.md`.
+- [ ] Run documentation checks, commit, publish, and verify public `main`.
+
 ## Milestone 8 — Deadline-aware exact expert loading
 
 - [x] Deadline scheduler contract와 deterministic unit tests.
