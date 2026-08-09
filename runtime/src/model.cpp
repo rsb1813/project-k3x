@@ -88,6 +88,7 @@ public:
     }
 
     ModelState empty_state() const { return state_template_; }
+    std::size_t vocabulary_size() const noexcept { return config_.vocab; }
     const std::vector<std::uint64_t>& layer_nanoseconds() const { return layer_nanoseconds_; }
     const std::vector<std::uint32_t>& routed_experts() const {
         return routed_experts_;
@@ -869,6 +870,9 @@ Result<GenerationResult> generate_greedy(Reader& reader,
                         std::chrono::steady_clock::now() - decode_start).count();
                 }
             }
+            if (options.diagnostics) {
+                result.final_state = engine.flatten_state(state);
+            }
         } else {
             std::vector<std::uint32_t> sequence(prompt.begin(), prompt.end());
             const auto decode_start = std::chrono::steady_clock::now();
@@ -892,11 +896,154 @@ Result<GenerationResult> generate_greedy(Reader& reader,
         result.l1_expert_cache = engine.expert_cache_stats();
         result.expert_load_scheduler =
             session.expert_load_scheduler_stats();
+        if (options.diagnostics) {
+            result.routed_experts = engine.routed_experts();
+            result.routed_k = engine.routed_k();
+        }
         engine.export_routing_stats(result);
         return Result<GenerationResult>::success(std::move(result));
     } catch (const std::exception& error) {
         if (auto* loader = session.expert_loader()) loader->wait_idle();
         return Result<GenerationResult>::failure(ErrorCode::invalid_extent, error.what());
+    }
+}
+
+Result<GenerationResult> generate_speculative(
+    Reader& reader, ComputeBackend& backend,
+    std::span<const std::uint32_t> prompt, std::size_t count,
+    RuntimeSession& session, DraftProvider& draft_provider,
+    std::size_t block_size) {
+    auto generation_guard = session.acquire_generation_guard();
+    if (reader.superblock().optional_features & optional_storage_fixture) {
+        return Result<GenerationResult>::failure(
+            ErrorCode::non_executable_artifact);
+    }
+    const auto& options = session.options();
+    if (!options.incremental || block_size == 0) {
+        return Result<GenerationResult>::failure(ErrorCode::invalid_state);
+    }
+    if (prompt.empty()) {
+        return Result<GenerationResult>::failure(
+            ErrorCode::invalid_extent, "empty prompt");
+    }
+    try {
+        Engine engine(reader, backend, session);
+        GenerationResult result;
+        auto state = engine.empty_state();
+        Vector logits;
+        if (options.diagnostics) {
+            result.prefill_layer_outputs.resize(
+                engine.layer_nanoseconds().size());
+        }
+        const auto prefill_start = std::chrono::steady_clock::now();
+        for (const auto token : prompt) {
+            std::vector<Vector> token_layers;
+            logits = engine.forward(
+                token, state, ProfilePhase::prefill,
+                options.diagnostics ? &token_layers : nullptr);
+            if (options.diagnostics) {
+                result.prefill_logits.insert(
+                    result.prefill_logits.end(), logits.begin(), logits.end());
+                for (std::size_t layer = 0; layer < token_layers.size();
+                     ++layer) {
+                    result.prefill_layer_outputs[layer].insert(
+                        result.prefill_layer_outputs[layer].end(),
+                        token_layers[layer].begin(),
+                        token_layers[layer].end());
+                }
+            }
+        }
+        result.prefill_nanoseconds =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - prefill_start).count();
+        if (options.diagnostics) {
+            result.prefill_state = engine.flatten_state(state);
+            result.prefill_routed_experts = engine.routed_experts();
+            result.prefill_routed_k = engine.routed_k();
+        }
+
+        if (count != 0) {
+            result.token_ids.push_back(argmax(logits));
+            const auto decode_start = std::chrono::steady_clock::now();
+            while (result.token_ids.size() < count) {
+                const auto remaining = count - result.token_ids.size();
+                const auto max_draft_tokens =
+                    std::min(block_size, remaining - 1);
+                const DraftRequest request{
+                    .anchor_token = result.token_ids.back(),
+                    .max_draft_tokens = max_draft_tokens,
+                    .generated_position = result.token_ids.size(),
+                    .generated_tokens = result.token_ids,
+                };
+                auto proposal = draft_provider.propose(request);
+                if (!proposal) {
+                    if (auto* loader = session.expert_loader()) {
+                        loader->wait_idle();
+                    }
+                    return Result<GenerationResult>::failure(
+                        proposal.error(), proposal.message());
+                }
+                if (proposal.value().anchor_token != request.anchor_token) {
+                    if (auto* loader = session.expert_loader()) {
+                        loader->wait_idle();
+                    }
+                    return Result<GenerationResult>::failure(
+                        ErrorCode::invalid_state,
+                        "draft anchor does not match committed token");
+                }
+                auto verification = verify_greedy_draft(
+                    proposal.value(), max_draft_tokens,
+                    engine.vocabulary_size(),
+                    [&](std::uint32_t input_token) {
+                        auto target_logits = engine.forward(
+                            input_token, state, ProfilePhase::decode);
+                        return Result<std::uint32_t>::success(
+                            argmax(target_logits));
+                    });
+                if (!verification) {
+                    if (auto* loader = session.expert_loader()) {
+                        loader->wait_idle();
+                    }
+                    return Result<GenerationResult>::failure(
+                        verification.error(), verification.message());
+                }
+                draft_provider.update(verification.value());
+                ++result.speculative_verification_blocks;
+                result.speculative_proposed_draft_tokens +=
+                    verification.value().proposed_draft_tokens;
+                result.speculative_accepted_draft_tokens +=
+                    verification.value().accepted_draft_tokens;
+                result.speculative_committed_tokens +=
+                    verification.value().committed_tokens.size();
+                result.speculative_max_proposal_tokens = std::max(
+                    result.speculative_max_proposal_tokens,
+                    static_cast<std::uint64_t>(
+                        verification.value().proposed_draft_tokens));
+                result.token_ids.insert(
+                    result.token_ids.end(),
+                    verification.value().committed_tokens.begin(),
+                    verification.value().committed_tokens.end());
+            }
+            result.decode_nanoseconds =
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now() - decode_start).count();
+        }
+        if (options.diagnostics) {
+            result.final_state = engine.flatten_state(state);
+            result.routed_experts = engine.routed_experts();
+            result.routed_k = engine.routed_k();
+        }
+        if (auto* loader = session.expert_loader()) loader->wait_idle();
+        result.per_layer_nanoseconds = engine.layer_nanoseconds();
+        result.l1_expert_cache = engine.expert_cache_stats();
+        result.expert_load_scheduler =
+            session.expert_load_scheduler_stats();
+        engine.export_routing_stats(result);
+        return Result<GenerationResult>::success(std::move(result));
+    } catch (const std::exception& error) {
+        if (auto* loader = session.expert_loader()) loader->wait_idle();
+        return Result<GenerationResult>::failure(
+            ErrorCode::invalid_extent, error.what());
     }
 }
 

@@ -7,6 +7,7 @@
 #include "k3x/reader.hpp"
 #include "k3x/routing_policy.hpp"
 #include "k3x/runtime_profile.hpp"
+#include "k3x/speculative.hpp"
 #include "k3x/status.hpp"
 
 #include <atomic>
@@ -89,8 +90,16 @@ struct GenerationResult {
     std::vector<float> prefill_state;
     std::vector<std::uint32_t> prefill_routed_experts;
     std::vector<std::uint32_t> prefill_routed_k;
+    std::vector<float> final_state;
+    std::vector<std::uint32_t> routed_experts;
+    std::vector<std::uint32_t> routed_k;
     std::uint64_t prefill_nanoseconds{};
     std::uint64_t decode_nanoseconds{};
+    std::uint64_t speculative_verification_blocks{};
+    std::uint64_t speculative_proposed_draft_tokens{};
+    std::uint64_t speculative_accepted_draft_tokens{};
+    std::uint64_t speculative_committed_tokens{};
+    std::uint64_t speculative_max_proposal_tokens{};
     L1ExpertCacheStats l1_expert_cache;
     ExpertLoadSchedulerStats expert_load_scheduler;
     std::uint64_t routing_decisions{};
@@ -114,6 +123,12 @@ Result<GenerationResult> generate_greedy(Reader& reader,
                                          std::span<const std::uint32_t> prompt,
                                          std::size_t count,
                                          RuntimeSession& session);
+
+Result<GenerationResult> generate_speculative(
+    Reader& reader, ComputeBackend& backend,
+    std::span<const std::uint32_t> prompt, std::size_t count,
+    RuntimeSession& session, DraftProvider& draft_provider,
+    std::size_t block_size);
 
 Result<GenerationResult> generate_greedy(Reader& reader,
                                          ComputeBackend& backend,

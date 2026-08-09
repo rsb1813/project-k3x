@@ -131,7 +131,7 @@
 - [x] TITAN Ledger, DSpark paper, DeepSpec implementation, current state boundary review.
 - [x] Exact greedy token-major verification design and TDD plan.
 - [x] Pure proposal/verification/provider contract with native tests.
-- [ ] Incremental runtime integration with greedy token/state/routing parity.
+- [x] Incremental runtime integration with greedy token/state/routing parity.
 - [ ] Telemetry and deterministic scripted-draft end-to-end harness.
 - [ ] B-0014 correctness and overhead measurement.
 - [ ] Full verification, sanitizer, ledger, review, and public integration.
