@@ -100,4 +100,4 @@
 - [x] bounded pinned staging과 transfer stream primitive 구현.
 - [x] prepared exact MXFP4 expert FFN과 graph scheduling 연결.
 - [x] profiler/schema/ablation runner 확장.
-- [ ] 전체 correctness, sanitizer, B-0005, TITAN Ledger 갱신.
+- [x] 전체 correctness, sanitizer, B-0005, TITAN Ledger 갱신.

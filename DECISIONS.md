@@ -229,3 +229,25 @@
 - Benchmark result: B-0004 measures FP32 operation-scalar at 16.3576 decode tok/s and FFN-block-scalar at 17.0713, a 4.36% gain. D2H falls 24.77%, activation H2D falls 26.48%, and synchronization falls 32.86%. FP32 FFN-block-grouped reaches 17.0270. BF16 block-scalar reaches 16.9847 with exact tokens but maximum absolute error 0.00402409, so it does not beat FP32 block-scalar.
 - Reason: the dependency-closed boundary produces a measured end-to-end gain and materially reduces traffic while preserving exact routing, but the evidence is one tiny synthetic WSL2 graph. Kernel time rises and most wall time remains in the CPU-driven graph, so changing the public default would overstate generality.
 - Revisit: after KDA/MLA or a larger dependency-closed layer block moves to CUDA, after native-Linux repetition, and after a full-dimension bounded checkpoint slice establishes representative expert sizes and transfer deadlines.
+
+## D-021 — Keep exact L1-to-L0 prefetch opt-in after B-0005
+
+- Date: 2026-08-09.
+- Status: accepted and measured.
+- Decision: retain `synchronous` as the default transfer mode. Expose the bounded exact `prefetch` path only for `cuda-custom + ffn-block + reused + transient` with an explicit positive pinned capacity. Build the next storage milestone around a persistent bounded L1 expert cache and independently measured L2 read path before considering prefetch as a default.
+- Alternatives considered: default the new prefetch mechanism immediately; combine it with static residency or an eviction policy now; implement a general worker/deadline scheduler before proving one exact dependency boundary; retain the narrow two-phase exact prefetch switch.
+- Evidence: a fixed pinned/device slab, separate nonblocking transfer stream, reusable CUDA events, single-use prepared tokens, full native MXFP4 preflight, and graph-level routing/token parity are covered by native and Python tests. Complete verification passes CPU CTest 5/5 and pytest 94 passed/27 skipped, CUDA CTest 14/14 and pytest 120 passed/1 skipped. All ten CUDA test binaries report Compute Sanitizer `ERROR SUMMARY: 0 errors`.
+- Benchmark result: B-0005 measures FP32 synchronous/prefetch scalar at 16.9701/16.7947 decode tok/s and grouped at 16.7055/16.7914. BF16 scalar measures 16.6366/16.5735 and grouped 16.5529/16.7021. Every row preserves exact tokens and routing; prefetch keeps H2D bytes and host synchronization unchanged, performs 27 prepares and waits with all 27 ready before use, and consumes a 1 MiB pinned/device slab. Exposed stall is 0.198--0.312 ms per run.
+- Reason: the mechanism proves correct asynchronous transfer and event ordering, but its matched end-to-end effect on this tiny CPU-driven graph is within -1.03% to +0.90%. That is insufficient evidence to spend pinned memory by default or to couple unmeasured L1/L2 policy into the exact path.
+- Revisit: after a persistent bounded L1 cache removes synchronous repeated file reads and pageable staging, after asynchronous L2 I/O is benchmarked on native Linux, and after full-dimension bounded expert slices provide representative transfer deadlines.
+
+## D-022 — Validate prepared identity before work and preserve activation overlap
+
+- Date: 2026-08-09.
+- Status: accepted after final review.
+- Decision: include the expected use sequence in `Mxfp4PrefetchToken` and validate token ID, sequence, layer, phase, input shape, and activation parameters through backend-owned metadata before scratch growth, activation H2D, or transfer-event submission. Keep activation H2D before the compute-stream readiness wait so it can overlap the expert transfer.
+- Alternatives considered: rely on token ID alone; move pipeline `consume` before all allocation and activation upload; add a separate public validation method; extend the existing backend prevalidation with use sequence and stronger side-effect tests.
+- Evidence: the backend already rejected token ID, layer, phase, input, and parameter mismatches before work, but the pipeline stored `use_sequence` without checking it. Moving the wait before activation H2D would unnecessarily serialize two independent transfers. New tests require foreign and wrong-sequence failures to preserve device allocation, current/peak device memory, activation H2D, transfer waits, profiler H2D, and the valid pending request.
+- Benchmark result: no new performance measurement. The valid transfer and compute order measured in B-0005 is unchanged; FP32/BF16 post-fix one-sample smokes preserve exact tokens, routing, matched H2D, and synchronization.
+- Reason: sequence identity closes the stated token contract, while duplicate backend prevalidation provides failure atomicity without sacrificing the intended activation/expert-copy overlap.
+- Revisit: when the runtime supports multiple outstanding requests or deadline-aware scheduling; the token may then need a scheduler-owned generation and request identity in addition to use sequence.

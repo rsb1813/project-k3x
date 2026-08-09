@@ -1,0 +1,28 @@
+{
+  "benchmark_id": "B-0005",
+  "commit": "99cf1e4",
+  "date": "2026-08-09",
+  "artifact_sha256": "e245c52759dffcfaccfe182bbba56fa069288d99f0d70a1cd779169bb51e6993",
+  "maximum_source_read_bytes": 257,
+  "hardware": "AMD Ryzen 7 9800X3D; NVIDIA GeForce RTX 5080",
+  "environment": "WSL2 Ubuntu 24.04.4; Linux 6.18.33.2; CUDA 13.3.1; sm_120",
+  "warmup": 3,
+  "samples": 20,
+  "prompt_token_ids": [1, 7, 3, 9],
+  "generated_token_ids": [43, 32, 28, 49, 9, 28],
+  "routed_experts": [4, 7, 7, 3, 3, 7, 7, 4, 3, 7, 7, 3, 0, 5, 4, 5, 0, 3, 4, 5, 7, 5, 0, 5],
+  "raw_result_directories": [
+    "results/b0005-async-transfer-fp32",
+    "results/b0005-async-transfer-bf16"
+  ],
+  "records": [
+    {"precision":"fp32","name":"synchronous-scalar","decode_tok_s":16.97011201132615,"prefill_tok_s":8.787815873441698,"ttft_ms":1147.2103465,"rss_bytes":507334656,"h2d_bytes":5074560,"weight_h2d_bytes":4981824,"activation_h2d_bytes":92736,"d2h_bytes":83952,"peak_vram_bytes":43680,"sync":423,"kernel_ns":20056320,"max_abs_error":1.7900000004456018e-7,"pinned_bytes":0,"prefetch_calls":0,"prefetch_bytes":0,"ready":0,"late":0,"waits":0,"staging_ns":0,"transfer_ns":0,"stall_ns":0},
+    {"precision":"fp32","name":"prefetch-scalar","decode_tok_s":16.794712860475126,"prefill_tok_s":8.713300689801846,"ttft_ms":1144.9384395,"rss_bytes":507432960,"h2d_bytes":5074560,"weight_h2d_bytes":4981824,"activation_h2d_bytes":92736,"d2h_bytes":83952,"peak_vram_bytes":1091712,"sync":423,"kernel_ns":20576608,"max_abs_error":1.7900000004456018e-7,"pinned_bytes":1048576,"prefetch_calls":27,"prefetch_bytes":88128,"ready":27,"late":0,"waits":27,"staging_ns":8987,"transfer_ns":154576,"stall_ns":198160},
+    {"precision":"fp32","name":"synchronous-grouped","decode_tok_s":16.705458858160103,"prefill_tok_s":8.838058582205182,"ttft_ms":1145.0390705,"rss_bytes":507125760,"h2d_bytes":5060736,"weight_h2d_bytes":4981824,"activation_h2d_bytes":78912,"d2h_bytes":83952,"peak_vram_bytes":44448,"sync":369,"kernel_ns":22032896,"max_abs_error":1.7900000004456018e-7,"pinned_bytes":0,"prefetch_calls":0,"prefetch_bytes":0,"ready":0,"late":0,"waits":0,"staging_ns":0,"transfer_ns":0,"stall_ns":0},
+    {"precision":"fp32","name":"prefetch-grouped","decode_tok_s":16.791437514058842,"prefill_tok_s":8.877330515784033,"ttft_ms":1153.4827305,"rss_bytes":507170816,"h2d_bytes":5060736,"weight_h2d_bytes":4981824,"activation_h2d_bytes":78912,"d2h_bytes":83952,"peak_vram_bytes":1092480,"sync":369,"kernel_ns":21357168,"max_abs_error":1.7900000004456018e-7,"pinned_bytes":1048576,"prefetch_calls":27,"prefetch_bytes":88128,"ready":27,"late":0,"waits":27,"staging_ns":9447,"transfer_ns":210640,"stall_ns":311840},
+    {"precision":"bf16","name":"synchronous-scalar","decode_tok_s":16.636578886924664,"prefill_tok_s":8.874989462198059,"ttft_ms":1145.690372,"rss_bytes":481959936,"h2d_bytes":2583072,"weight_h2d_bytes":2534976,"activation_h2d_bytes":48096,"d2h_bytes":83952,"peak_vram_bytes":22752,"sync":423,"kernel_ns":20668976,"max_abs_error":0.0040240890000000085,"pinned_bytes":0,"prefetch_calls":0,"prefetch_bytes":0,"ready":0,"late":0,"waits":0,"staging_ns":0,"transfer_ns":0,"stall_ns":0},
+    {"precision":"bf16","name":"prefetch-scalar","decode_tok_s":16.57346745738923,"prefill_tok_s":8.924514957632093,"ttft_ms":1147.869549,"rss_bytes":481980416,"h2d_bytes":2583072,"weight_h2d_bytes":2534976,"activation_h2d_bytes":48096,"d2h_bytes":83952,"peak_vram_bytes":1070784,"sync":423,"kernel_ns":18515856,"max_abs_error":0.0040240890000000085,"pinned_bytes":1048576,"prefetch_calls":27,"prefetch_bytes":88128,"ready":27,"late":0,"waits":27,"staging_ns":9275,"transfer_ns":163344,"stall_ns":230304},
+    {"precision":"bf16","name":"synchronous-grouped","decode_tok_s":16.552939228695966,"prefill_tok_s":9.048827047716815,"ttft_ms":1141.8303685,"rss_bytes":481890304,"h2d_bytes":2576160,"weight_h2d_bytes":2534976,"activation_h2d_bytes":41184,"d2h_bytes":83952,"peak_vram_bytes":23520,"sync":369,"kernel_ns":21075488,"max_abs_error":0.0040240890000000085,"pinned_bytes":0,"prefetch_calls":0,"prefetch_bytes":0,"ready":0,"late":0,"waits":0,"staging_ns":0,"transfer_ns":0,"stall_ns":0},
+    {"precision":"bf16","name":"prefetch-grouped","decode_tok_s":16.702131108919907,"prefill_tok_s":9.053901638349224,"ttft_ms":1136.1921555,"rss_bytes":481947648,"h2d_bytes":2576160,"weight_h2d_bytes":2534976,"activation_h2d_bytes":41184,"d2h_bytes":83952,"peak_vram_bytes":1071552,"sync":369,"kernel_ns":19864080,"max_abs_error":0.0040240890000000085,"pinned_bytes":1048576,"prefetch_calls":27,"prefetch_bytes":88128,"ready":27,"late":0,"waits":27,"staging_ns":8957,"transfer_ns":198416,"stall_ns":287536}
+  ]
+}

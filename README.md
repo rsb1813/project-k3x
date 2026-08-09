@@ -98,6 +98,12 @@ Static residency stores exact FP32, BF16-rounded, or native E2M1 plus E8M0/32 re
 
 The block boundary is `cuda-custom` only and remains opt-in. The default `operation` path is the correctness reference. B-0004 measures FP32 block-scalar at 17.0713 decode tok/s versus 16.3576 for its matched operation row, with 24.77% less D2H and 32.86% fewer synchronizations. This is a tiny synthetic WSL2 result, not a full Kimi K3 throughput claim.
 
+## Milestone 4 — exact asynchronous L1-to-L0 transfer
+
+`--cuda-transfer prefetch` stages the naturally routed native MXFP4 expert triplets through one bounded pinned slab and a separate nonblocking CUDA stream. A readiness event lets the routed-down projection overlap the copy, and a single-use prepared token binds the process-global ID, use sequence, layer, and phase. Exact expert bytes, routing scores, order, recurrent state, and output tokens are unchanged.
+
+This first boundary is deliberately limited to `cuda-custom + ffn-block + reused + transient` and requires `--cuda-pinned-bytes`. It does not implement persistent L1 caching or asynchronous NVMe reads. B-0005 found matched decode changes between -1.03% and +0.90% on the tiny WSL2 graph, so synchronous transfer remains the default.
+
 ## Quick start
 
 ### 1. Create an environment
@@ -167,7 +173,7 @@ Use `build\k3x_run.exe` on Windows.
 
 Select `--backend cuda-dense` or `--backend cuda-custom` only with a CUDA-enabled build. Use `--dense-precision bf16` for the opt-in BF16-rounded dense path. An unavailable CUDA request fails with `BACKEND_UNAVAILABLE`; it never changes the requested backend.
 
-The CUDA switches are `--cuda-allocation`, `--cuda-weights`, `--cuda-batching`, `--cuda-boundary`, and `--cuda-resident-bytes`. Defaults retain the exact operation reference behavior. `--cuda-boundary ffn-block` requires `--backend cuda-custom`.
+The CUDA switches are `--cuda-allocation`, `--cuda-weights`, `--cuda-batching`, `--cuda-boundary`, `--cuda-transfer`, `--cuda-resident-bytes`, and `--cuda-pinned-bytes`. Defaults retain the exact synchronous operation reference behavior. `--cuda-boundary ffn-block` requires `--backend cuda-custom`; the initial prefetch mode additionally requires reused allocation, transient weights, and a positive pinned capacity.
 
 ### 6. Reproduce the synthetic benchmark
 
@@ -208,6 +214,19 @@ python tools/ablate_cuda_ffn.py \
   --warmup 3 \
   --iterations 20 \
   --output-dir build-results/b0004-ffn-blocks-fp32
+```
+
+Run the matched exact transfer ablation with synchronous/prefetch and scalar/grouped cases.
+
+```bash
+python tools/ablate_cuda_transfer.py \
+  --artifact build-fixtures/synthetic.k3x \
+  --runner build-cuda/k3x_run \
+  --dense-precision fp32 \
+  --cuda-pinned-bytes 1048576 \
+  --warmup 3 \
+  --iterations 20 \
+  --output-dir build-results/b0005-async-transfer-fp32
 ```
 
 ## Measured results
@@ -251,6 +270,17 @@ Milestone 3 then compares matched `cuda-custom + reused + resident` operation an
 | BF16 decode tok/s | 16.3874 | **16.9847** | 16.1931 | 16.9632 |
 
 All eight B-0004 rows generate `[43, 32, 28, 49, 9, 28]`. FP32 block-scalar is the fastest measured Milestone 3 CUDA row, but `operation` remains the default because the evidence is synthetic, WSL2-only, and still dominated by the CPU-resident graph.
+
+Milestone 4 compares matched exact transient-weight transfers at the FFN-block boundary.
+
+| Precision / scheduling | Synchronous | Prefetch | Decode change |
+|---|---:|---:|---:|
+| FP32 scalar | **16.9701** | 16.7947 | -1.03% |
+| FP32 grouped | 16.7055 | **16.7914** | +0.51% |
+| BF16 scalar | **16.6366** | 16.5735 | -0.38% |
+| BF16 grouped | 16.5529 | **16.7021** | +0.90% |
+
+All B-0005 rows preserve the same tokens and routing. Prefetch performs 27 exact preparations and waits with no additional host synchronization, but uses 1 MiB each of pinned host and device staging and exposes 0.198--0.312 ms transfer stall per run. It remains opt-in until persistent L1 caching and representative expert sizes make the overlap boundary meaningful.
 
 ## K3X checkpoint format
 
@@ -300,9 +330,10 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.
+- [x] Bounded exact L1-to-L0 expert prefetch with pinned staging, transfer-stream events, accounting, and matched ablation.
 - [ ] Exact full-dimension CPU/GPU runtime over bounded checkpoint slices.
 - [ ] Wider layer/block GPU execution and fused K3-specific kernels.
-- [ ] Three-tier asynchronous storage and deadline scheduler.
+- [ ] Persistent L1 expert cache, asynchronous L2 NVMe reads, and deadline scheduler.
 - [ ] Least-Stale, task/session, and transition-aware expert caches.
 - [ ] Adaptive Top-K with exact cold-expert rescue.
 - [ ] Expert-major speculative verification and cost-aware experiments.

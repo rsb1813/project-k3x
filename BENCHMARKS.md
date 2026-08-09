@@ -162,6 +162,49 @@ Raw JSON/CSV records are stored under `results/b0004-ffn-blocks-fp32/` and `resu
 
 Post-measurement validation note: final read-only review found that the new FFN-block preflight accepted non-native MXFP4 group metadata even though the CUDA kernel is fixed to E8M0/32. Commit `3df8d3f` adds a RED/GREEN regression for group sizes 16 and 64 and rejects all non-32 gate/up/down views before side effects. The valid group-32 execution path measured at `0f6bbdd` is unchanged. Post-fix CPU CTest 5/5 and pytest 70/26, CUDA CTest 11/11 and pytest 95/1, `test_cuda_ffn` Compute Sanitizer 0 errors, and one-sample FP32/BF16 four-case smoke all passed. The smoke is validation evidence, not a replacement performance measurement.
 
+## B-0005 — Milestone 4 exact L1-to-L0 transfer ablation
+
+| Field | Value |
+|---|---|
+| Evidence | measured |
+| Date | 2026-08-09 |
+| Measurement commit | `99cf1e4` |
+| Hardware | AMD Ryzen 7 9800X3D host; NVIDIA GeForce RTX 5080, 16,303 MiB |
+| Environment | WSL2 Ubuntu 24.04.4, Linux 6.18.33.2, CUDA Toolkit 13.3.1, native `sm_120` |
+| Model/checkpoint | regenerated seeded 4-layer, 24-expert, 178-tensor synthetic K3X; artifact SHA-256 `e245c52759dffcfaccfe182bbba56fa069288d99f0d70a1cd779169bb51e6993`; converter maximum source read 257 bytes |
+| Mode | `cuda-custom`, `ffn-block`, reused allocations, transient exact weights; synchronous/prefetch crossed with scalar/grouped scheduling |
+| Context length | 4 prompt tokens, IDs `[1, 7, 3, 9]` |
+| Generated tokens | 6, IDs `[43, 32, 28, 49, 9, 28]` in every row |
+| Routing | exact 24-entry prefill trace identical in every row; fixed synthetic Top-2, average Top-K 2 |
+| Warmup / samples | 3 / 20 separate process runs per row |
+| Pinned capacity | 0 for synchronous; 1,048,576 bytes for prefetch |
+| NVMe GB/token | not measured; logical K3X reads are 110,936 bytes/generated token but no OS/block-device counter exists |
+| GPU utilization / memory bandwidth | not measured |
+| Storage I/O stall time | not measured; file reads remain synchronous and are outside the new L1-to-L0 transfer timer |
+| Expert-cache hit rate / cold rescue | not applicable; weights are transient and no L1/L2 cache or rescue exists |
+| Speculative acceptance / unique experts per verification block | not applicable; speculation is disabled |
+
+| Precision / transfer / scheduling | Decode tok/s | Prefill tok/s | TTFT ms | System RSS bytes | H2D bytes/run | H2D GB/token | D2H bytes/run | Peak backend VRAM bytes | Sync | Prefetch calls / ready / late | Transfer wait | Stage / transfer / exposed stall ms | Kernel ms/run | Max abs. error |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| FP32 synchronous scalar | **16.9701** | 8.7878 | 1,147.210 | 507,334,656 | 5,074,560 | 0.000845760 | 83,952 | 43,680 | 423 | 0 / 0 / 0 | 0 | 0 / 0 / 0 | 20.056 | 1.790e-7 |
+| FP32 prefetch scalar | 16.7947 | 8.7133 | **1,144.938** | 507,432,960 | 5,074,560 | 0.000845760 | 83,952 | 1,091,712 | 423 | 27 / 27 / 0 | 27 | 0.009 / 0.155 / 0.198 | 20.577 | 1.790e-7 |
+| FP32 synchronous grouped | 16.7055 | 8.8381 | **1,145.039** | 507,125,760 | 5,060,736 | 0.000843456 | 83,952 | 44,448 | 369 | 0 / 0 / 0 | 0 | 0 / 0 / 0 | 22.033 | 1.790e-7 |
+| FP32 prefetch grouped | **16.7914** | 8.8773 | 1,153.483 | 507,170,816 | 5,060,736 | 0.000843456 | 83,952 | 1,092,480 | 369 | 27 / 27 / 0 | 27 | 0.009 / 0.211 / 0.312 | 21.357 | 1.790e-7 |
+| BF16 synchronous scalar | **16.6366** | 8.8750 | **1,145.690** | 481,959,936 | 2,583,072 | 0.000430512 | 83,952 | 22,752 | 423 | 0 / 0 / 0 | 0 | 0 / 0 / 0 | 20.669 | 0.00402409 |
+| BF16 prefetch scalar | 16.5735 | 8.9245 | 1,147.870 | 481,980,416 | 2,583,072 | 0.000430512 | 83,952 | 1,070,784 | 423 | 27 / 27 / 0 | 27 | 0.009 / 0.163 / 0.230 | 18.516 | 0.00402409 |
+| BF16 synchronous grouped | 16.5529 | 9.0488 | 1,141.830 | 481,890,304 | 2,576,160 | 0.000429360 | 83,952 | 23,520 | 369 | 0 / 0 / 0 | 0 | 0 / 0 / 0 | 21.075 | 0.00402409 |
+| BF16 prefetch grouped | **16.7021** | **9.0539** | **1,136.192** | 481,947,648 | 2,576,160 | 0.000429360 | 83,952 | 1,071,552 | 369 | 27 / 27 / 0 | 27 | 0.009 / 0.198 / 0.288 | 19.864 | 0.00402409 |
+
+Matched prefetch decode changes are -1.03% for FP32 scalar, +0.51% for FP32 grouped, -0.38% for BF16 scalar, and +0.90% for BF16 grouped. Prefetch changes neither total H2D bytes nor synchronization count because it changes transfer ordering rather than payload volume. All 27 prepared blocks in each prefetch row were ready when consumed, yet event-based exposed stall remains 0.198--0.312 ms per run and the fixed slabs add 1,048,032 bytes to peak backend VRAM plus 1 MiB of pinned host memory.
+
+Every row preserves the exact generated tokens and the same natural routing trace. FP32 retains the existing numerical tolerance. BF16 retains maximum absolute error 0.00402409 and is not promoted to a quality default. The small mixed throughput deltas do not justify enabling prefetch by default.
+
+The measured boundary still starts after synchronous K3X extent reads and pageable host allocation. The next bottleneck to isolate is therefore repeated file-to-host materialization and the absent persistent L1 expert cache, followed by native-Linux L2 I/O and deadline scheduling. CPU KDA/MLA, routing, residual/state work, and non-FFN orchestration also continue to dominate this tiny graph.
+
+Raw JSON/CSV records are stored under `results/b0005-async-transfer-fp32/` and `results/b0005-async-transfer-bf16/`; the compact cross-checked manifest is `results/b0005-async-transfer.json`.
+
+Post-measurement validation note: final read-only review found that the prepared token stored but did not enforce its exact use sequence, and that the ablation runner allowed matched-pair H2D or synchronization counters to differ. Commit `190459b` adds sequence identity to the token, rejects mismatches before allocation/H2D/event side effects while preserving the valid pending request, and requires exact matched total/weight/activation H2D plus synchronization. The valid B-0005 execution order is unchanged. Post-fix CPU CTest 5/5 and pytest 98 passed/27 skipped, CUDA CTest 14/14 and pytest 124 passed/1 skipped, both affected CUDA memcheck targets with zero errors, and FP32/BF16 one-sample four-case smokes passed. The smokes are validation evidence, not replacement performance measurements.
+
 ## Derived bottleneck model — not a benchmark
 
 The released dimensions imply 17,547,264 bytes per native MXFP4 routed expert. With no cache reuse, natural Top-16 across 92 MoE layers implies 25,829,572,608 expert bytes/token. Applying the P44 Pro published 7.0 GB/s sequential figure gives a derived expert-only ceiling of about 0.271 tok/s and implies roughly 94.6% expert NVMe-byte avoidance for a 5 tok/s target.
@@ -171,6 +214,6 @@ These values are capacity and traffic estimates. They are not inserted into B-00
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
-- Native-Linux repetition of B-0004 and a larger KDA/MLA or decoder subgraph boundary.
+- Native-Linux repetition of B-0004/B-0005 and a larger KDA/MLA or decoder subgraph boundary.
 - Full-dimension bounded-slice runtime before any full-model throughput claim.
-- Tiered-runtime NVMe, pinned H2D, cache-hit, utilization, memory-bandwidth, and I/O-stall counters.
+- Persistent L1 and L2 runtime NVMe, cache-hit, utilization, memory-bandwidth, and storage I/O-stall counters.
