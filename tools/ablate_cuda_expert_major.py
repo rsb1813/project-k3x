@@ -7,8 +7,14 @@ import hashlib
 import json
 import math
 import subprocess
+import sys
 from dataclasses import asdict
 from pathlib import Path
+
+if __package__ in {None, ""}:
+    repository = Path(__file__).resolve().parents[1]
+    for import_root in (repository, repository / "converter", repository / "reference"):
+        sys.path.insert(0, str(import_root))
 
 from tools.ablate_expert_major_verification import expert_major_matrix
 from tools.benchmark_synthetic import benchmark_once, write_results
@@ -51,7 +57,7 @@ def _cuda_diagnostic(
         "--cuda-transfer", "synchronous",
         "--cuda-moe-fusion", "none",
         "--l1-expert-cache", "disabled",
-        "--l2-expert-schedule", "blocking",
+        "--l2-schedule", "blocking",
         "--diagnostics", "true",
         "--speculative-mode", mode,
         "--speculative-verification", verification,

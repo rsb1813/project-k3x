@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -47,6 +48,16 @@ def test_released_batch_matrix_has_exact_scalar_batch_pairs() -> None:
         ("scalar-4", "scalar", 4),
         ("batch-4", "batch", 4),
     )
+
+
+def test_cuda_expert_major_tool_supports_direct_cli_execution() -> None:
+    result = subprocess.run(
+        [sys.executable, "tools/ablate_cuda_expert_major.py", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--released-artifact" in result.stdout
 
 
 def test_released_cuda_batch_bench_reuses_one_expert_payload(
