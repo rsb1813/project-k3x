@@ -45,6 +45,8 @@ The superblock is exactly 4096 bytes. Bytes 232 through 4091 are reserved.
 
 The directory digest hashes the exact tensor-directory bytes, layer-directory bytes, expert-directory bytes, and model-config bytes in that order, excluding alignment padding. The root digest hashes the declared finalized file length while treating bytes 200 through 231 and 4092 through 4095 as zero. The CRC is written last.
 
+Optional feature bit 0 identifies a non-executable `STORAGE_FIXTURE`. Readers may inspect its tensor and expert extents, but model runtimes must reject graph execution before reading model tensors. Unknown optional bits remain ignorable. Required feature handling is unchanged.
+
 ## Directory headers
 
 Every directory begins with a 16-byte header containing a four-byte tag, `u32 record_size`, and `u64 record_count`. Tags are `TENS`, `LAYR`, and `EXPT`.

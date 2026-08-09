@@ -6,6 +6,7 @@ import pytest
 from k3x_converter.format import K3XError
 from k3x_converter.resume import read_resume_manifest
 from k3x_converter.writer import convert
+from k3x_ref.storage_fixture import write_bounded_expert_source
 
 
 def test_conversion_resumes_without_rewriting_completed_extents(
@@ -62,3 +63,46 @@ def test_resume_recovers_crash_after_final_rename(
     recovered = convert(synthetic_source, output, chunk_bytes=257)
     assert recovered.completed is True
     assert not resume.exists()
+
+
+def test_full_dimension_storage_fixture_resumes_exact_extents(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "bounded-source"
+    write_bounded_expert_source(source, chunk_bytes=257 * 1024)
+    output = tmp_path / "bounded.k3x"
+
+    first = convert(
+        source,
+        output,
+        chunk_bytes=193 * 1024,
+        stop_after_extents=2,
+    )
+    before = read_resume_manifest(output.with_suffix(".k3x.resume.json"))
+    second = convert(source, output, chunk_bytes=193 * 1024)
+
+    assert first.completed is False
+    assert len(before.completed) == 2
+    assert second.completed is True
+    assert second.reused_extent_ids == tuple(
+        item.extent_id for item in before.completed
+    )
+    assert second.maximum_source_read_bytes <= 193 * 1024
+
+
+def test_full_dimension_storage_fixture_resume_rejects_changed_source(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "bounded-source"
+    report = write_bounded_expert_source(source, chunk_bytes=257 * 1024)
+    output = tmp_path / "bounded.k3x"
+    convert(source, output, chunk_bytes=193 * 1024, stop_after_extents=1)
+
+    with report.shard_path.open("r+b") as stream:
+        stream.seek(-1, 2)
+        original = stream.read(1)
+        stream.seek(-1, 2)
+        stream.write(bytes([original[0] ^ 1]))
+
+    with pytest.raises(K3XError, match="SOURCE_FINGERPRINT_MISMATCH"):
+        convert(source, output, chunk_bytes=193 * 1024)

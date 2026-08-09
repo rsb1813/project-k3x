@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import struct
 import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -15,6 +16,7 @@ from .format import (
     EXPERT_RECORD_BYTES,
     LAYER_RECORD_BYTES,
     MODEL_CONFIG_BYTES,
+    OPTIONAL_STORAGE_FIXTURE,
     SUPERBLOCK_BYTES,
     TENSOR_RECORD_BYTES,
     DType,
@@ -72,7 +74,10 @@ def _fingerprint_source(source: Path, chunk_bytes: int) -> tuple[bytes, int]:
 
 def _load_plans(source: Path) -> tuple[dict, list[_TensorPlan]]:
     manifest = json.loads((source / "source-manifest.json").read_text(encoding="utf-8"))
-    if manifest.get("format") != "synthetic-k3-source-v1":
+    if manifest.get("format") not in (
+        "synthetic-k3-source-v1",
+        "k3-storage-slice-v1",
+    ):
         raise K3XError("UNSUPPORTED_SOURCE_FORMAT")
     tensors: dict[str, SourceTensor] = {}
     for shard_name in sorted(set(manifest["weight_map"].values())):
@@ -109,7 +114,56 @@ def _load_plans(source: Path) -> tuple[dict, list[_TensorPlan]]:
     ids = [fnv1a64(item.name) for item in plans]
     if len(ids) != len(set(ids)):
         raise K3XError("TENSOR_ID_COLLISION")
+    if manifest["format"] == "k3-storage-slice-v1":
+        _validate_storage_fixture(manifest, plans)
     return manifest, plans
+
+
+def _validate_storage_fixture(manifest: dict, plans: list[_TensorPlan]) -> None:
+    if manifest.get("artifact_kind") != "storage_fixture":
+        raise K3XError("INVALID_STORAGE_FIXTURE_KIND")
+    config = manifest.get("config", {})
+    expected_config = {
+        "hidden_size": 7168,
+        "num_experts": 896,
+        "top_k": 16,
+        "routed_latent_size": 3584,
+        "expert_intermediate_size": 3072,
+        "mxfp4_group_size": 32,
+    }
+    if any(config.get(key) != value for key, value in expected_config.items()):
+        raise K3XError("INVALID_STORAGE_FIXTURE_CONFIG")
+    if len(config.get("layer_kinds", ())) != 93:
+        raise K3XError("INVALID_STORAGE_FIXTURE_CONFIG")
+    layer_id = manifest.get("layer_id")
+    expert_id = manifest.get("expert_id")
+    if not isinstance(layer_id, int) or not 1 <= layer_id < 93:
+        raise K3XError("INVALID_STORAGE_FIXTURE_IDENTITY")
+    if not isinstance(expert_id, int) or not 0 <= expert_id < 896:
+        raise K3XError("INVALID_STORAGE_FIXTURE_IDENTITY")
+    base = f"model.layers.{layer_id}.feed_forward.experts.{expert_id}"
+    expected_shapes = {
+        f"{base}.gate": (3072, 3584),
+        f"{base}.up": (3072, 3584),
+        f"{base}.down": (3584, 3072),
+    }
+    if {plan.name for plan in plans} != set(expected_shapes):
+        raise K3XError("INCOMPLETE_STORAGE_FIXTURE_EXPERT")
+    for plan in plans:
+        shape = expected_shapes[plan.name]
+        values = shape[0] * shape[1]
+        if (
+            plan.dimensions != shape
+            or plan.quantization != Quantization.MXFP4
+            or plan.data.dtype != "U8"
+            or plan.data.length != values // 2
+            or plan.auxiliary is None
+            or plan.auxiliary.dtype != "U8"
+            or plan.auxiliary.length != values // 32
+        ):
+            raise K3XError("INVALID_STORAGE_FIXTURE_SHAPE", plan.name)
+    if manifest.get("payload_bytes") != 17_547_264:
+        raise K3XError("INVALID_STORAGE_FIXTURE_LENGTH")
 
 
 def _configuration_bytes(config: dict) -> bytes:
@@ -191,9 +245,17 @@ def convert(
     if chunk_bytes <= 0:
         raise K3XError("INVALID_CHUNK_SIZE")
     manifest, plans = _load_plans(source)
+    optional_features = (
+        OPTIONAL_STORAGE_FIXTURE
+        if manifest["format"] == "k3-storage-slice-v1"
+        else 0
+    )
     source_fingerprint, maximum_read = _fingerprint_source(source, chunk_bytes)
     config_bytes = _configuration_bytes(manifest["config"])
-    config_fingerprint = hashlib.sha256(config_bytes).hexdigest()
+    fingerprint_bytes = config_bytes
+    if optional_features:
+        fingerprint_bytes += struct.pack("<Q", optional_features)
+    config_fingerprint = hashlib.sha256(fingerprint_bytes).hexdigest()
     if dry_run:
         return ConversionReport(False, (), maximum_read, output)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -215,6 +277,7 @@ def convert(
                 if (
                     finalized.superblock.source_sha256 != source_fingerprint
                     or finalized.superblock.file_uuid != bytes.fromhex(ledger.file_uuid)
+                    or finalized.superblock.optional_features != optional_features
                     or finalized.model_config != config_bytes
                 ):
                     raise K3XError("FINAL_ARTIFACT_MISMATCH")
@@ -311,6 +374,7 @@ def convert(
         directory_digest = hashlib.sha256(b"".join(data for _, data in offsets)).digest()
         block = Superblock(
             source_fingerprint, file_uuid, state=1,
+            optional_features=optional_features,
             tensor_directory_offset=offsets[0][0], tensor_directory_length=len(tensor_directory),
             layer_directory_offset=offsets[1][0], layer_directory_length=len(layer_directory),
             expert_directory_offset=offsets[2][0], expert_directory_length=len(expert_directory),

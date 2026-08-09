@@ -81,29 +81,29 @@ Commit as `feat: stream full-dimension expert fixture`.
 - Changes: `_load_plans(source)` accepts only `synthetic-k3-source-v1` and `k3-storage-slice-v1`; the latter must declare `artifact_kind=storage_fixture` and exactly one complete gate/up/down expert.
 - Changes: finalized bounded artifacts set `Superblock.optional_features & OPTIONAL_STORAGE_FIXTURE` and preserve that identity through resume validation.
 
-- [ ] **Step 1: Write failing conversion and malformed-source tests.**
+- [x] **Step 1: Write failing conversion and malformed-source tests.**
 
 Convert the real bounded source with `chunk_bytes=193 * 1024` and assert one expert record, three MXFP4 tensor records, six extents, `sum(data_length + auxiliary_length) == 17_547_264`, exact released shapes, optional bit 0, and `maximum_source_read_bytes <= 193 * 1024`.
 
 Create separate malformed manifests for a missing down tensor, wrong `artifact_kind`, wrong expert dimensions, and an unsupported source format. Assert stable K3X error codes and no finalized output.
 
-- [ ] **Step 2: Run the tests and verify RED.**
+- [x] **Step 2: Run the tests and verify RED.**
 
 Run the three targeted Python test files. Expect `UNSUPPORTED_SOURCE_FORMAT` for the valid bounded source and missing optional-feature identity.
 
-- [ ] **Step 3: Implement the minimum converter support.**
+- [x] **Step 3: Implement the minimum converter support.**
 
 Add source-kind validation before planning extents, derive the storage optional bit once, include it in the conversion configuration fingerprint, set it in the finalized superblock, and compare it when recovering an already-finalized conversion. Do not relax synthetic source validation or add a generic partial-model execution mode.
 
-- [ ] **Step 4: Add and verify real resume coverage.**
+- [x] **Step 4: Add and verify real resume coverage.**
 
 Stop after two extents, resume the same bounded source, assert those extent IDs are reused, verify the final root digest, then mutate source identity and assert resume fails closed.
 
-- [ ] **Step 5: Run targeted and full Python tests.**
+- [x] **Step 5: Run targeted and full Python tests.**
 
 Run the targeted files followed by `K3X_BUILD_DIR=build-cpu python -m pytest -q`.
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
 
 Commit as `feat: convert bounded storage fixtures`.
 

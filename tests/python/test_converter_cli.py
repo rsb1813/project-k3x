@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from k3x_converter.cli import main
+from k3x_ref.storage_fixture import write_bounded_expert_source
 
 
 def test_dry_run_does_not_create_artifact(
@@ -20,3 +21,18 @@ def test_convert_then_validate_from_cli(
     assert main(["convert", str(synthetic_source), str(artifact), "--chunk-bytes", "257"]) == 0
     assert main(["validate", str(artifact)]) == 0
     assert '"valid":true' in capsys.readouterr().out
+
+
+def test_bounded_storage_fixture_converts_and_validates_from_cli(
+    tmp_path: Path, capsys
+) -> None:
+    source = tmp_path / "bounded-source"
+    write_bounded_expert_source(source, chunk_bytes=257 * 1024)
+    artifact = tmp_path / "bounded.k3x"
+    assert main(
+        ["convert", str(source), str(artifact), "--chunk-bytes", str(193 * 1024)]
+    ) == 0
+    assert main(["validate", str(artifact)]) == 0
+    output = capsys.readouterr().out
+    assert '"completed":true' in output
+    assert '"valid":true' in output

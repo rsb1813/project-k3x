@@ -8,6 +8,7 @@ import google_crc32c
 import pytest
 
 from k3x_converter.format import (
+    OPTIONAL_STORAGE_FIXTURE,
     SUPERBLOCK_BYTES,
     DType,
     ExpertRecord,
@@ -22,6 +23,7 @@ from k3x_converter.format import (
 from k3x_converter.reader import K3XReader
 from k3x_converter.safetensors_reader import inspect_shard, iter_tensor_chunks
 from k3x_converter.writer import convert
+from k3x_ref.storage_fixture import write_bounded_expert_source
 
 
 def test_superblock_has_literal_offsets_and_zero_reserved_bytes() -> None:
@@ -146,3 +148,65 @@ def test_native_mxfp4_payload_round_trips_byte_for_byte(
     actual_data, actual_auxiliary = reader.read_tensor_extents(record)
     assert actual_data == b"".join(iter_tensor_chunks(packed, 257))
     assert actual_auxiliary == b"".join(iter_tensor_chunks(scale, 257))
+
+
+def test_full_dimension_storage_fixture_round_trips_with_optional_identity(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "bounded-source"
+    write_bounded_expert_source(source, chunk_bytes=257 * 1024)
+    artifact = tmp_path / "bounded.k3x"
+
+    report = convert(source, artifact, chunk_bytes=193 * 1024)
+    reader = K3XReader.open(artifact)
+
+    assert report.completed is True
+    assert report.maximum_source_read_bytes <= 193 * 1024
+    assert reader.superblock.optional_features == OPTIONAL_STORAGE_FIXTURE
+    assert len(reader.tensor_records) == 3
+    assert len(reader.expert_records) == 1
+    assert sum(
+        record.data_length + record.auxiliary_length
+        for record in reader.tensor_records
+    ) == 17_547_264
+    assert {
+        record.dimensions for record in reader.tensor_records
+    } == {(3072, 3584), (3584, 3072)}
+    assert all(
+        record.quantization == Quantization.MXFP4
+        for record in reader.tensor_records
+    )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "error_code"),
+    (
+        ("artifact_kind", "INVALID_STORAGE_FIXTURE_KIND"),
+        ("missing_shape", "INCOMPLETE_MXFP4_TENSOR"),
+        ("wrong_shape", "INVALID_STORAGE_FIXTURE_SHAPE"),
+        ("unsupported_format", "UNSUPPORTED_SOURCE_FORMAT"),
+    ),
+)
+def test_storage_fixture_manifest_rejects_malformed_identity(
+    tmp_path: Path, mutation: str, error_code: str
+) -> None:
+    source = tmp_path / mutation
+    write_bounded_expert_source(source, chunk_bytes=257 * 1024)
+    manifest_path = source / "source-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    down = "model.layers.1.feed_forward.experts.0.down"
+    if mutation == "artifact_kind":
+        manifest["artifact_kind"] = "executable"
+    elif mutation == "missing_shape":
+        del manifest["packed_shapes"][down]
+    elif mutation == "wrong_shape":
+        manifest["packed_shapes"][down] = [3584, 3040]
+    else:
+        manifest["format"] = "unknown-source-v9"
+    manifest_path.write_text(
+        json.dumps(manifest, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(K3XError, match=error_code):
+        convert(source, tmp_path / f"{mutation}.k3x", chunk_bytes=193 * 1024)
