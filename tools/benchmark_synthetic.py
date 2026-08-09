@@ -81,6 +81,9 @@ class BenchmarkRecord:
     per_layer_nanoseconds: tuple[int, ...]
     token_ids: tuple[int, ...]
     routed_experts: tuple[int, ...]
+    cuda_moe_fusion: str = "none"
+    fused_moe_calls: int = 0
+    fused_moe_experts: int = 0
     l1_expert_cache_mode: str = "disabled"
     l1_expert_cache_bytes: int = 0
     l1_expert_cache_hits: int = 0
@@ -196,6 +199,7 @@ def _run_process(
     cuda_transfer: str,
     cuda_resident_bytes: int,
     cuda_pinned_bytes: int,
+    cuda_moe_fusion: str,
     l1_expert_cache: str,
     l1_expert_cache_bytes: int,
     l2_io: str,
@@ -225,6 +229,7 @@ def _run_process(
         "--cuda-transfer", cuda_transfer,
         "--cuda-resident-bytes", str(cuda_resident_bytes),
         "--cuda-pinned-bytes", str(cuda_pinned_bytes),
+        "--cuda-moe-fusion", cuda_moe_fusion,
         "--l1-expert-cache", l1_expert_cache,
         "--l1-expert-cache-bytes", str(l1_expert_cache_bytes),
         "--profile-prior-strength", str(profile_prior_strength),
@@ -324,6 +329,7 @@ def benchmark_once(
     cuda_batching: str = "scalar",
     cuda_boundary: str = "operation",
     cuda_transfer: str = "synchronous",
+    cuda_moe_fusion: str = "none",
     cuda_resident_bytes: int = 0,
     cuda_pinned_bytes: int = 0,
     l1_expert_cache: str = "disabled",
@@ -367,6 +373,7 @@ def benchmark_once(
                 cuda_batching=cuda_batching,
                 cuda_boundary=cuda_boundary,
                 cuda_transfer=cuda_transfer,
+                cuda_moe_fusion=cuda_moe_fusion,
                 cuda_resident_bytes=cuda_resident_bytes,
                 cuda_pinned_bytes=cuda_pinned_bytes,
                 l1_expert_cache=l1_expert_cache,
@@ -401,6 +408,7 @@ def benchmark_once(
                 cuda_batching=cuda_batching,
                 cuda_boundary=cuda_boundary,
                 cuda_transfer=cuda_transfer,
+                cuda_moe_fusion=cuda_moe_fusion,
                 cuda_resident_bytes=cuda_resident_bytes,
                 cuda_pinned_bytes=cuda_pinned_bytes,
                 l1_expert_cache=l1_expert_cache,
@@ -442,6 +450,7 @@ def benchmark_once(
                 cuda_batching="scalar",
                 cuda_boundary="operation",
                 cuda_transfer="synchronous",
+                cuda_moe_fusion="none",
                 cuda_resident_bytes=0,
                 cuda_pinned_bytes=0,
                 l1_expert_cache="disabled",
@@ -475,6 +484,7 @@ def benchmark_once(
                 cuda_batching="scalar",
                 cuda_boundary="operation",
                 cuda_transfer="synchronous",
+                cuda_moe_fusion="none",
                 cuda_resident_bytes=0,
                 cuda_pinned_bytes=0,
                 l1_expert_cache="disabled",
@@ -503,6 +513,7 @@ def benchmark_once(
                 cuda_batching=cuda_batching,
                 cuda_boundary=cuda_boundary,
                 cuda_transfer=cuda_transfer,
+                cuda_moe_fusion=cuda_moe_fusion,
                 cuda_resident_bytes=cuda_resident_bytes,
                 cuda_pinned_bytes=cuda_pinned_bytes,
                 l1_expert_cache=l1_expert_cache,
@@ -537,6 +548,7 @@ def benchmark_once(
                 cuda_batching=cuda_batching,
                 cuda_boundary=cuda_boundary,
                 cuda_transfer=cuda_transfer,
+                cuda_moe_fusion=cuda_moe_fusion,
                 cuda_resident_bytes=cuda_resident_bytes,
                 cuda_pinned_bytes=cuda_pinned_bytes,
                 l1_expert_cache=l1_expert_cache,
@@ -641,6 +653,9 @@ def benchmark_once(
         "grouped_projection_members",
         "ffn_block_calls",
         "ffn_block_experts",
+        "cuda_moe_fusion",
+        "fused_moe_calls",
+        "fused_moe_experts",
         "pinned_host_bytes",
         "peak_pinned_host_bytes",
         "async_prefetch_calls",
@@ -663,6 +678,7 @@ def benchmark_once(
         cuda_batching,
         cuda_boundary,
         cuda_transfer,
+        cuda_moe_fusion,
         cuda_resident_bytes,
         cuda_pinned_bytes,
         l1_expert_cache,
@@ -686,6 +702,7 @@ def benchmark_once(
         "cuda_batching",
         "cuda_boundary",
         "cuda_transfer",
+        "cuda_moe_fusion",
         "cuda_resident_bytes",
         "cuda_pinned_bytes",
         "l1_expert_cache_mode",
@@ -750,6 +767,7 @@ def benchmark_once(
         cuda_batching=samples[0]["cuda_batching"],
         cuda_boundary=samples[0]["cuda_boundary"],
         cuda_transfer=samples[0]["cuda_transfer"],
+        cuda_moe_fusion=samples[0]["cuda_moe_fusion"],
         cuda_resident_bytes=samples[0]["cuda_resident_bytes"],
         cuda_pinned_bytes=samples[0]["cuda_pinned_bytes"],
         kernel_nanoseconds=int(
@@ -778,6 +796,8 @@ def benchmark_once(
         grouped_projection_members=samples[0]["grouped_projection_members"],
         ffn_block_calls=samples[0]["ffn_block_calls"],
         ffn_block_experts=samples[0]["ffn_block_experts"],
+        fused_moe_calls=samples[0]["fused_moe_calls"],
+        fused_moe_experts=samples[0]["fused_moe_experts"],
         pinned_host_bytes=samples[0]["pinned_host_bytes"],
         peak_pinned_host_bytes=samples[0]["peak_pinned_host_bytes"],
         async_prefetch_calls=samples[0]["async_prefetch_calls"],
@@ -950,6 +970,10 @@ def main() -> int:
         "--cuda-transfer", choices=("synchronous", "prefetch"),
         default="synchronous",
     )
+    parser.add_argument(
+        "--cuda-moe-fusion", choices=("none", "routed-accumulate"),
+        default="none",
+    )
     parser.add_argument("--cuda-resident-bytes", type=int, default=0)
     parser.add_argument("--cuda-pinned-bytes", type=int, default=0)
     parser.add_argument(
@@ -989,6 +1013,7 @@ def main() -> int:
         cuda_batching=args.cuda_batching,
         cuda_boundary=args.cuda_boundary,
         cuda_transfer=args.cuda_transfer,
+        cuda_moe_fusion=args.cuda_moe_fusion,
         cuda_resident_bytes=args.cuda_resident_bytes,
         cuda_pinned_bytes=args.cuda_pinned_bytes,
         l1_expert_cache=args.l1_expert_cache,

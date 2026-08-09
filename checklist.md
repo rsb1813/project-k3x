@@ -123,7 +123,7 @@
 - [x] Accumulating native MXFP4 kernel을 RED에서 GREEN으로 구현.
 - [x] Synchronous/prepared fused expert-group backend 경로 구현.
 - [x] 기본값을 보존하는 runtime switch와 telemetry 연결.
-- [ ] B-0013 synthetic 및 released-dimension bounded 측정 도구 구현.
+- [x] B-0013 synthetic 및 released-dimension bounded 측정 도구 구현.
 - [ ] 전체 correctness, sanitizer, RTX 5080 ablation, ledger, review, public integration.
 
 ## Milestone 8 — Deadline-aware exact expert loading

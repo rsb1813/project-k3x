@@ -187,5 +187,10 @@ target_link_libraries(k3x_run PRIVATE k3x_runtime)
 add_executable(k3x_storage_bench runtime/src/storage_bench.cpp)
 target_link_libraries(k3x_storage_bench PRIVATE k3x_runtime)
 
+if(K3X_ENABLE_CUDA)
+    add_executable(k3x_cuda_expert_bench runtime/src/cuda_expert_bench.cpp)
+    target_link_libraries(k3x_cuda_expert_bench PRIVATE k3x_runtime)
+endif()
+
 add_executable(test_model_session tests/cpp/test_model_session.cpp runtime/src/model.cpp)
 target_link_libraries(test_model_session PRIVATE k3x_runtime)
