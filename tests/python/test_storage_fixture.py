@@ -7,7 +7,11 @@ from pathlib import Path
 
 import pytest
 
+from k3x_converter.format import K3XError
+from k3x_converter.reader import K3XReader
 from k3x_converter.safetensors_reader import inspect_shard
+from k3x_converter.writer import convert
+import k3x_ref.storage_fixture as storage_fixture
 from k3x_ref.storage_fixture import write_bounded_expert_source
 
 
@@ -93,3 +97,66 @@ def test_bounded_expert_source_rejects_invalid_arguments_before_finalizing(
         write_bounded_expert_source(output, layer_id=0)
     with pytest.raises(ValueError, match="expert_id"):
         write_bounded_expert_source(output, expert_id=896)
+
+
+def test_storage_fixture_conversion_rejects_mutated_shard(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    report = write_bounded_expert_source(source, chunk_bytes=257 * 1024)
+    with report.shard_path.open("r+b") as stream:
+        stream.seek(-1, 2)
+        original = stream.read(1)
+        stream.seek(-1, 2)
+        stream.write(bytes([original[0] ^ 1]))
+
+    with pytest.raises(K3XError, match="SOURCE_SHARD_SHA256_MISMATCH"):
+        convert(source, tmp_path / "mutated.k3x", chunk_bytes=193 * 1024)
+
+
+def test_storage_fixture_conversion_rejects_tensor_digest_mismatch(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    report = write_bounded_expert_source(source, chunk_bytes=257 * 1024)
+    manifest = json.loads(report.manifest_path.read_text(encoding="utf-8"))
+    manifest["tensor_sha256"][f"{GATE}.weight_packed"] = "0" * 64
+    report.manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(K3XError, match="SOURCE_TENSOR_SHA256_MISMATCH"):
+        convert(source, tmp_path / "bad-tensor.k3x", chunk_bytes=193 * 1024)
+
+
+def test_manifest_publish_failure_keeps_previous_fixture_readable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source"
+    first = write_bounded_expert_source(source, seed=1, chunk_bytes=257 * 1024)
+    original_manifest = first.manifest_path.read_bytes()
+
+    def fail_manifest_publish(path: Path, value: dict[str, object]) -> None:
+        raise RuntimeError("simulated manifest publish failure")
+
+    monkeypatch.setattr(storage_fixture, "_write_json_atomic", fail_manifest_publish)
+    with pytest.raises(RuntimeError, match="simulated manifest publish failure"):
+        write_bounded_expert_source(source, seed=2, chunk_bytes=257 * 1024)
+
+    assert first.manifest_path.read_bytes() == original_manifest
+    manifest = json.loads(original_manifest)
+    referenced = source / next(iter(manifest["weight_map"].values()))
+    assert _file_sha256(referenced) == manifest["source_sha256"]
+
+
+def test_unreferenced_shard_does_not_change_source_identity(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    write_bounded_expert_source(source, chunk_bytes=257 * 1024)
+    first = tmp_path / "first.k3x"
+    second = tmp_path / "second.k3x"
+    convert(source, first, chunk_bytes=193 * 1024)
+
+    (source / "unreferenced.safetensors").write_bytes(b"not a source shard")
+    convert(source, second, chunk_bytes=193 * 1024)
+
+    assert K3XReader.open(first).superblock.source_sha256 == (
+        K3XReader.open(second).superblock.source_sha256
+    )

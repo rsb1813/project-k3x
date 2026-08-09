@@ -5,12 +5,13 @@ import hashlib
 import json
 import os
 import struct
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
 
-_SHARD_NAME = "bounded-expert.safetensors"
+_SHARD_STEM = "bounded-expert"
 _MANIFEST_NAME = "source-manifest.json"
 _PACKED_BYTES = 5_505_024
 _SCALE_BYTES = 344_064
@@ -121,9 +122,8 @@ def write_bounded_expert_source(
 
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
-    shard_path = root / _SHARD_NAME
     manifest_path = root / _MANIFEST_NAME
-    shard_partial = shard_path.with_suffix(shard_path.suffix + ".partial")
+    shard_partial = root / f".{_SHARD_STEM}-{uuid.uuid4().hex}.safetensors.partial"
 
     base = f"model.layers.{layer_id}.feed_forward.experts.{expert_id}"
     tensor_specs: list[tuple[str, int, int | None, int | None]] = []
@@ -175,12 +175,14 @@ def write_bounded_expert_source(
             raise RuntimeError("bounded source shard length mismatch")
         with shard_partial.open("rb") as stream:
             source_sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
+        shard_name = f"{_SHARD_STEM}-{source_sha256}.safetensors"
+        shard_path = root / shard_name
         os.replace(shard_partial, shard_path)
     except BaseException:
         shard_partial.unlink(missing_ok=True)
         raise
 
-    weight_map = {name: _SHARD_NAME for name, _, _, _ in tensor_specs}
+    weight_map = {name: shard_name for name, _, _, _ in tensor_specs}
     manifest: dict[str, object] = {
         "format": "k3-storage-slice-v1",
         "artifact_kind": "storage_fixture",

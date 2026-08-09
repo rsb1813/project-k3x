@@ -1,6 +1,8 @@
 # K3X 변환 중단 뒤 검증된 extent만 재사용하는지 검증합니다.
+import json
 from pathlib import Path
 
+import google_crc32c
 import pytest
 
 from k3x_converter.format import K3XError
@@ -104,5 +106,61 @@ def test_full_dimension_storage_fixture_resume_rejects_changed_source(
         stream.seek(-1, 2)
         stream.write(bytes([original[0] ^ 1]))
 
-    with pytest.raises(K3XError, match="SOURCE_FINGERPRINT_MISMATCH"):
+    with pytest.raises(K3XError, match="SOURCE_SHARD_SHA256_MISMATCH"):
+        convert(source, output, chunk_bytes=193 * 1024)
+
+
+@pytest.mark.parametrize("corruption", ("duplicate", "unknown", "zero", "offset"))
+def test_storage_fixture_resume_rejects_noncanonical_extent_ledger(
+    tmp_path: Path, corruption: str
+) -> None:
+    source = tmp_path / "bounded-source"
+    write_bounded_expert_source(source, chunk_bytes=257 * 1024)
+    output = tmp_path / "bounded.k3x"
+    convert(source, output, chunk_bytes=193 * 1024, stop_after_extents=2)
+    resume = output.with_suffix(".k3x.resume.json")
+    ledger = json.loads(resume.read_text(encoding="utf-8"))
+
+    if corruption == "duplicate":
+        ledger["completed"][1]["extent_id"] = ledger["completed"][0]["extent_id"]
+    elif corruption == "unknown":
+        ledger["completed"][0]["extent_id"] = "0000000000000000:data"
+    elif corruption == "zero":
+        ledger["completed"][0]["length"] = 0
+    else:
+        ledger["completed"][0]["offset"] += 4096
+    resume.write_text(json.dumps(ledger), encoding="utf-8")
+
+    with pytest.raises(K3XError, match="INVALID_RESUME_EXTENT"):
+        convert(source, output, chunk_bytes=193 * 1024)
+
+
+def test_storage_fixture_resume_rejects_partial_bytes_not_matching_source(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "bounded-source"
+    write_bounded_expert_source(source, chunk_bytes=257 * 1024)
+    output = tmp_path / "bounded.k3x"
+    convert(source, output, chunk_bytes=193 * 1024, stop_after_extents=1)
+    resume = output.with_suffix(".k3x.resume.json")
+    partial = output.with_suffix(".k3x.partial")
+    ledger = json.loads(resume.read_text(encoding="utf-8"))
+    item = ledger["completed"][0]
+
+    with partial.open("r+b") as stream:
+        stream.seek(item["offset"])
+        original = stream.read(1)
+        stream.seek(item["offset"])
+        stream.write(bytes([original[0] ^ 1]))
+        stream.seek(item["offset"])
+        checksum = google_crc32c.Checksum()
+        remaining = item["length"]
+        while remaining:
+            chunk = stream.read(min(193 * 1024, remaining))
+            checksum.update(chunk)
+            remaining -= len(chunk)
+    item["crc32c"] = int.from_bytes(checksum.digest(), "big")
+    resume.write_text(json.dumps(ledger), encoding="utf-8")
+
+    with pytest.raises(K3XError, match="RESUME_SOURCE_EXTENT_MISMATCH"):
         convert(source, output, chunk_bytes=193 * 1024)

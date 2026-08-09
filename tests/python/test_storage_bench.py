@@ -14,7 +14,8 @@ from k3x_ref.storage_fixture import write_bounded_expert_source
 
 def _source_digest(source: Path) -> str:
     manifest = json.loads((source / "source-manifest.json").read_text(encoding="utf-8"))
-    tensors = inspect_shard(source / "bounded-expert.safetensors")
+    shard_name = next(iter(manifest["weight_map"].values()))
+    tensors = inspect_shard(source / shard_name)
     base = "model.layers.1.feed_forward.experts.0"
     digest = hashlib.sha256()
     for role in ("gate", "up", "down"):

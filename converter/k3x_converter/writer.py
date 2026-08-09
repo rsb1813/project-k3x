@@ -59,10 +59,13 @@ class _TensorPlan:
     expert_id: int
 
 
-def _fingerprint_source(source: Path, chunk_bytes: int) -> tuple[bytes, int]:
+def _fingerprint_source(
+    source: Path, manifest: dict, chunk_bytes: int
+) -> tuple[bytes, int]:
     digest = hashlib.sha256()
     maximum = 0
-    paths = [source / "source-manifest.json", *sorted(source.glob("*.safetensors"))]
+    shard_names = sorted(set(manifest["weight_map"].values()))
+    paths = [source / "source-manifest.json", *(source / name for name in shard_names)]
     for path in paths:
         digest.update(path.name.encode("utf-8") + b"\0")
         with path.open("rb") as stream:
@@ -70,6 +73,32 @@ def _fingerprint_source(source: Path, chunk_bytes: int) -> tuple[bytes, int]:
                 maximum = max(maximum, len(chunk))
                 digest.update(chunk)
     return digest.digest(), maximum
+
+
+def _sha256_path(path: Path, chunk_bytes: int) -> tuple[str, int]:
+    digest = hashlib.sha256()
+    maximum = 0
+    with path.open("rb") as stream:
+        while chunk := stream.read(chunk_bytes):
+            maximum = max(maximum, len(chunk))
+            digest.update(chunk)
+    return digest.hexdigest(), maximum
+
+
+def _sha256_tensor(tensor: SourceTensor, chunk_bytes: int) -> tuple[str, int]:
+    digest = hashlib.sha256()
+    maximum = 0
+    for chunk in iter_tensor_chunks(tensor, chunk_bytes):
+        maximum = max(maximum, len(chunk))
+        digest.update(chunk)
+    return digest.hexdigest(), maximum
+
+
+def _crc_tensor(tensor: SourceTensor, chunk_bytes: int) -> int:
+    checksum = google_crc32c.Checksum()
+    for chunk in iter_tensor_chunks(tensor, chunk_bytes):
+        checksum.update(chunk)
+    return int.from_bytes(checksum.digest(), "big")
 
 
 def _load_plans(source: Path) -> tuple[dict, list[_TensorPlan]]:
@@ -174,6 +203,65 @@ def _validate_storage_fixture(manifest: dict, plans: list[_TensorPlan]) -> None:
         raise K3XError("INVALID_STORAGE_FIXTURE_LENGTH")
 
 
+def _validate_storage_fixture_hashes(
+    manifest: dict,
+    plans: list[_TensorPlan],
+    source: Path,
+    chunk_bytes: int,
+) -> int:
+    shard_names = set(manifest["weight_map"].values())
+    if len(shard_names) != 1:
+        raise K3XError("INVALID_STORAGE_FIXTURE_SHARD_SET")
+    shard_digest, maximum = _sha256_path(source / next(iter(shard_names)), chunk_bytes)
+    if manifest.get("source_sha256") != shard_digest:
+        raise K3XError("SOURCE_SHARD_SHA256_MISMATCH")
+
+    tensors: dict[str, SourceTensor] = {}
+    for plan in plans:
+        tensors[plan.data.name] = plan.data
+        if plan.auxiliary is not None:
+            tensors[plan.auxiliary.name] = plan.auxiliary
+    expected = manifest.get("tensor_sha256")
+    if not isinstance(expected, dict) or set(expected) != set(tensors):
+        raise K3XError("SOURCE_TENSOR_SHA256_MISMATCH")
+    for name, tensor in tensors.items():
+        digest, observed = _sha256_tensor(tensor, chunk_bytes)
+        maximum = max(maximum, observed)
+        if expected.get(name) != digest:
+            raise K3XError("SOURCE_TENSOR_SHA256_MISMATCH", name)
+    return maximum
+
+
+def _expected_extents(plans: list[_TensorPlan]) -> list[tuple[str, SourceTensor]]:
+    result: list[tuple[str, SourceTensor]] = []
+    for plan in plans:
+        for suffix, tensor in (("data", plan.data), ("auxiliary", plan.auxiliary)):
+            if tensor is not None:
+                result.append((f"{fnv1a64(plan.name):016x}:{suffix}", tensor))
+    return result
+
+
+def _validate_resume_extents(
+    completed: tuple[CompletedExtent, ...],
+    expected: list[tuple[str, SourceTensor]],
+    chunk_bytes: int,
+) -> None:
+    if len(completed) > len(expected):
+        raise K3XError("INVALID_RESUME_EXTENT")
+    expected_offset = align_up(SUPERBLOCK_BYTES)
+    for item, (extent_id, source_tensor) in zip(completed, expected):
+        if (
+            item.extent_id != extent_id
+            or item.offset != expected_offset
+            or item.length != source_tensor.length
+            or item.length <= 0
+        ):
+            raise K3XError("INVALID_RESUME_EXTENT", item.extent_id)
+        if item.crc32c != _crc_tensor(source_tensor, chunk_bytes):
+            raise K3XError("RESUME_SOURCE_EXTENT_MISMATCH", item.extent_id)
+        expected_offset = align_up(item.offset + item.length)
+
+
 def _configuration_bytes(config: dict) -> bytes:
     integers = (
         config["vocab_size"], config["hidden_size"], len(config["layer_kinds"]),
@@ -258,7 +346,13 @@ def convert(
         if manifest["format"] == "k3-storage-slice-v1"
         else 0
     )
-    source_fingerprint, maximum_read = _fingerprint_source(source, chunk_bytes)
+    maximum_read = 0
+    if optional_features:
+        maximum_read = _validate_storage_fixture_hashes(
+            manifest, plans, source, chunk_bytes
+        )
+    source_fingerprint, observed = _fingerprint_source(source, manifest, chunk_bytes)
+    maximum_read = max(maximum_read, observed)
     config_bytes = _configuration_bytes(manifest["config"])
     fingerprint_bytes = config_bytes
     if optional_features:
@@ -277,6 +371,9 @@ def convert(
             raise K3XError("SOURCE_FINGERPRINT_MISMATCH")
         if ledger.converter_version != CONVERTER_VERSION or ledger.configuration_fingerprint != config_fingerprint:
             raise K3XError("RESUME_CONFIGURATION_MISMATCH")
+        _validate_resume_extents(
+            ledger.completed, _expected_extents(plans), chunk_bytes
+        )
         if not partial.exists():
             if output.exists():
                 from .reader import K3XReader
