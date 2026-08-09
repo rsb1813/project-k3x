@@ -40,6 +40,7 @@ struct ReadCounters {
     std::uint64_t completions{};
     std::uint64_t short_reads{};
     std::uint64_t failures{};
+    std::uint64_t storage_nanoseconds{};
 };
 
 class Reader {

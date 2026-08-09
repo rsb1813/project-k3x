@@ -2,6 +2,7 @@
 #include "k3x/model.hpp"
 
 #include <charconv>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -12,6 +13,46 @@
 #include <string_view>
 
 namespace {
+
+struct ProcessIoSnapshot {
+    bool available{};
+    std::uint64_t rchar{};
+    std::uint64_t read_bytes{};
+};
+
+ProcessIoSnapshot process_io_snapshot() {
+#ifdef __linux__
+    std::ifstream input("/proc/self/io");
+    std::string key;
+    std::uint64_t value = 0;
+    ProcessIoSnapshot snapshot;
+    bool found_rchar = false;
+    bool found_read_bytes = false;
+    while (input >> key >> value) {
+        if (key == "rchar:") {
+            snapshot.rchar = value;
+            found_rchar = true;
+        } else if (key == "read_bytes:") {
+            snapshot.read_bytes = value;
+            found_read_bytes = true;
+        }
+    }
+    snapshot.available = found_rchar && found_read_bytes;
+    return snapshot;
+#else
+    return {};
+#endif
+}
+
+ProcessIoSnapshot process_io_delta(const ProcessIoSnapshot& before,
+                                   const ProcessIoSnapshot& after) {
+    if (!before.available || !after.available ||
+        after.rchar < before.rchar || after.read_bytes < before.read_bytes) {
+        return {};
+    }
+    return ProcessIoSnapshot{
+        true, after.rchar - before.rchar, after.read_bytes - before.read_bytes};
+}
 
 void write_json_string(std::ostream& output, std::string_view value) {
     output << '"';
@@ -298,16 +339,17 @@ int main(int argc, char** argv) {
     while (std::getline(parser, item, ',')) prompt.push_back(static_cast<std::uint32_t>(std::stoul(item)));
     auto reader = k3x::Reader::open(model_path, reader_options);
     if (!reader) {
-        std::cerr << (reader.message().empty() ? k3x::error_code_name(reader.error())
-                                               : reader.message()) << '\n';
+        write_error(reader.error(), reader.message());
         return 3;
     }
     k3x::RuntimeSession session(runtime_options);
+    const auto process_io_before = process_io_snapshot();
     auto result = k3x::generate_greedy(
         reader.value(), *backend, prompt, count, session);
+    const auto process_io = process_io_delta(
+        process_io_before, process_io_snapshot());
     if (!result) {
-        std::cerr << (result.message().empty() ? k3x::error_code_name(result.error())
-                                               : result.message()) << '\n';
+        write_error(result.error(), result.message());
         return 4;
     }
     std::ofstream output(output_path);
@@ -351,6 +393,15 @@ int main(int argc, char** argv) {
            << result.value().l1_expert_cache.resident_bytes
            << ",\"peak_l1_expert_cache_resident_bytes\":"
            << result.value().l1_expert_cache.peak_resident_bytes;
+    output << ",\"l2_io_engine\":";
+    write_json_string(output, l2_io_name);
+    output << ",\"l2_cache_mode\":";
+    write_json_string(output, l2_cache_name);
+    output << ",\"l2_queue_depth\":" << reader_options.queue_depth
+           << ",\"l2_direct_memory_alignment\":"
+           << reader.value().direct_memory_alignment()
+           << ",\"l2_direct_offset_alignment\":"
+           << reader.value().direct_offset_alignment();
     output << ",\"kernel_nanoseconds\":" << profile.device_nanoseconds
            << ",\"host_to_device_bytes\":" << profile.host_to_device_bytes
            << ",\"weight_h2d_bytes\":"
@@ -409,6 +460,29 @@ int main(int argc, char** argv) {
            << reader.value().counters().requested_bytes
            << ",\"reader_completed_bytes\":"
            << reader.value().counters().completed_bytes
+           << ",\"reader_batch_submissions\":"
+           << reader.value().counters().batch_submissions
+           << ",\"reader_storage_submitted_bytes\":"
+           << reader.value().counters().storage_submitted_bytes
+           << ",\"reader_storage_completed_bytes\":"
+           << reader.value().counters().storage_completed_bytes
+           << ",\"reader_completions\":"
+           << reader.value().counters().completions
+           << ",\"reader_short_reads\":"
+           << reader.value().counters().short_reads
+           << ",\"reader_failures\":"
+           << reader.value().counters().failures
+           << ",\"reader_storage_nanoseconds\":"
+           << reader.value().counters().storage_nanoseconds
+           << ",\"process_io_available\":"
+           << (process_io.available ? "true" : "false")
+           << ",\"process_rchar_bytes\":";
+    if (process_io.available) output << process_io.rchar;
+    else output << "null";
+    output << ",\"process_read_bytes\":";
+    if (process_io.available) output << process_io.read_bytes;
+    else output << "null";
+    output
            << ",\"per_layer_nanoseconds\":[";
     for (std::size_t index = 0; index < result.value().per_layer_nanoseconds.size(); ++index) {
         if (index) output << ',';

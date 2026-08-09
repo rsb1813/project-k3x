@@ -90,6 +90,21 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["reader_read_calls"] == 0
     assert payload["reader_requested_bytes"] == 0
     assert payload["reader_completed_bytes"] == 0
+    assert payload["l2_io_engine"] == "pread"
+    assert payload["l2_cache_mode"] == "buffered"
+    assert payload["l2_queue_depth"] == 8
+    assert payload["l2_direct_memory_alignment"] == 0
+    assert payload["l2_direct_offset_alignment"] == 0
+    assert payload["reader_batch_submissions"] == 0
+    assert payload["reader_storage_submitted_bytes"] == 0
+    assert payload["reader_storage_completed_bytes"] == 0
+    assert payload["reader_completions"] == 0
+    assert payload["reader_short_reads"] == 0
+    assert payload["reader_failures"] == 0
+    assert payload["reader_storage_nanoseconds"] == 0
+    assert payload["process_io_available"] is False
+    assert payload["process_rchar_bytes"] is None
+    assert payload["process_read_bytes"] is None
     assert isinstance(payload["peak_rss_bytes"], int)
     assert payload["backend"] == "cpu"
     assert payload["device"] == "CPU"
@@ -316,6 +331,27 @@ def test_benchmark_once_collects_cpu_backend_profile(
     assert record.l1_expert_cache_resident_bytes == 0
     assert record.reader_read_calls > 0
     assert record.reader_requested_bytes >= record.reader_completed_bytes > 0
+    assert record.l2_io_engine == "pread"
+    assert record.l2_cache_mode == "buffered"
+    assert record.l2_queue_depth == 8
+    assert record.l2_direct_memory_alignment == 0
+    assert record.l2_direct_offset_alignment == 0
+    assert 0 < record.reader_batch_submissions < record.reader_read_calls
+    assert record.reader_storage_submitted_bytes == record.reader_requested_bytes
+    assert record.reader_storage_completed_bytes == record.reader_completed_bytes
+    assert record.reader_completions == record.reader_read_calls
+    assert record.reader_short_reads == 0
+    assert record.reader_failures == 0
+    assert record.reader_storage_nanoseconds > 0
+    assert record.routed_experts
+    if record.process_io_available:
+        assert record.process_rchar_bytes is not None
+        assert record.process_rchar_bytes >= record.reader_completed_bytes
+        assert record.process_read_bytes is not None
+        assert record.process_read_bytes >= 0
+    else:
+        assert record.process_rchar_bytes is None
+        assert record.process_read_bytes is None
     assert record.kernel_nanoseconds == 0
     assert record.host_to_device_bytes == 0
     assert record.weight_h2d_bytes == 0

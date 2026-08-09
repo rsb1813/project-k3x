@@ -90,6 +90,21 @@ class BenchmarkRecord:
     reader_read_calls: int = 0
     reader_requested_bytes: int = 0
     reader_completed_bytes: int = 0
+    l2_io_engine: str = "pread"
+    l2_cache_mode: str = "buffered"
+    l2_queue_depth: int = 8
+    l2_direct_memory_alignment: int = 0
+    l2_direct_offset_alignment: int = 0
+    reader_batch_submissions: int = 0
+    reader_storage_submitted_bytes: int = 0
+    reader_storage_completed_bytes: int = 0
+    reader_completions: int = 0
+    reader_short_reads: int = 0
+    reader_failures: int = 0
+    reader_storage_nanoseconds: int = 0
+    process_io_available: bool = False
+    process_rchar_bytes: int | None = None
+    process_read_bytes: int | None = None
 
     def __post_init__(self) -> None:
         if self.scope not in {
@@ -139,6 +154,9 @@ def _run_process(
     cuda_pinned_bytes: int,
     l1_expert_cache: str,
     l1_expert_cache_bytes: int,
+    l2_io: str,
+    l2_cache: str,
+    l2_queue_depth: int,
     diagnostics: bool = False,
 ) -> tuple[dict, int, float]:
     command = [
@@ -154,6 +172,9 @@ def _run_process(
         "--cuda-pinned-bytes", str(cuda_pinned_bytes),
         "--l1-expert-cache", l1_expert_cache,
         "--l1-expert-cache-bytes", str(l1_expert_cache_bytes),
+        "--l2-io", l2_io,
+        "--l2-cache", l2_cache,
+        "--l2-queue-depth", str(l2_queue_depth),
     ]
     if diagnostics:
         command.extend(["--diagnostics", "true"])
@@ -238,6 +259,9 @@ def benchmark_once(
     cuda_pinned_bytes: int = 0,
     l1_expert_cache: str = "disabled",
     l1_expert_cache_bytes: int = 0,
+    l2_io: str = "pread",
+    l2_cache: str = "buffered",
+    l2_queue_depth: int = 8,
 ) -> BenchmarkRecord:
     if warmup < 0 or iterations <= 0:
         raise ValueError("warmup must be non-negative and iterations must be positive")
@@ -266,6 +290,9 @@ def benchmark_once(
                 cuda_pinned_bytes=cuda_pinned_bytes,
                 l1_expert_cache=l1_expert_cache,
                 l1_expert_cache_bytes=l1_expert_cache_bytes,
+                l2_io=l2_io,
+                l2_cache=l2_cache,
+                l2_queue_depth=l2_queue_depth,
             )
             _, ttft_peak, ttft = _run_process(
                 artifact,
@@ -283,6 +310,9 @@ def benchmark_once(
                 cuda_pinned_bytes=cuda_pinned_bytes,
                 l1_expert_cache=l1_expert_cache,
                 l1_expert_cache_bytes=l1_expert_cache_bytes,
+                l2_io=l2_io,
+                l2_cache=l2_cache,
+                l2_queue_depth=l2_queue_depth,
             )
             if index >= warmup:
                 samples.append(sample)
@@ -291,6 +321,30 @@ def benchmark_once(
         if backend == "cpu":
             max_absolute_error = 0.0
             max_relative_error = 0.0
+            diagnostic, _, _ = _run_process(
+                artifact,
+                runner,
+                generated_tokens,
+                root / "diagnostic.json",
+                backend="cpu",
+                dense_precision="fp32",
+                cuda_allocation="per-operation",
+                cuda_weights="transient",
+                cuda_batching="scalar",
+                cuda_boundary="operation",
+                cuda_transfer="synchronous",
+                cuda_resident_bytes=0,
+                cuda_pinned_bytes=0,
+                l1_expert_cache="disabled",
+                l1_expert_cache_bytes=0,
+                l2_io=l2_io,
+                l2_cache=l2_cache,
+                l2_queue_depth=l2_queue_depth,
+                diagnostics=True,
+            )
+            if diagnostic["token_ids"] != samples[0]["token_ids"]:
+                raise RuntimeError("CPU diagnostic token sequence diverged")
+            routed_experts = tuple(diagnostic["prefill_routed_experts"])
         else:
             reference, _, _ = _run_process(
                 artifact,
@@ -308,6 +362,9 @@ def benchmark_once(
                 cuda_pinned_bytes=0,
                 l1_expert_cache="disabled",
                 l1_expert_cache_bytes=0,
+                l2_io=l2_io,
+                l2_cache=l2_cache,
+                l2_queue_depth=l2_queue_depth,
                 diagnostics=True,
             )
             candidate, _, _ = _run_process(
@@ -326,6 +383,9 @@ def benchmark_once(
                 cuda_pinned_bytes=cuda_pinned_bytes,
                 l1_expert_cache=l1_expert_cache,
                 l1_expert_cache_bytes=l1_expert_cache_bytes,
+                l2_io=l2_io,
+                l2_cache=l2_cache,
+                l2_queue_depth=l2_queue_depth,
                 diagnostics=True,
             )
             max_absolute_error, max_relative_error = _numerical_errors(
@@ -353,6 +413,18 @@ def benchmark_once(
         "reader_read_calls",
         "reader_requested_bytes",
         "reader_completed_bytes",
+        "l2_io_engine",
+        "l2_cache_mode",
+        "l2_queue_depth",
+        "l2_direct_memory_alignment",
+        "l2_direct_offset_alignment",
+        "reader_batch_submissions",
+        "reader_storage_submitted_bytes",
+        "reader_storage_completed_bytes",
+        "reader_completions",
+        "reader_short_reads",
+        "reader_failures",
+        "process_io_available",
         "device_allocation_count",
         "device_free_count",
         "stream_synchronization_count",
@@ -395,6 +467,9 @@ def benchmark_once(
         cuda_pinned_bytes,
         l1_expert_cache,
         l1_expert_cache_bytes,
+        l2_io,
+        l2_cache,
+        l2_queue_depth,
     )
     option_fields = (
         "backend",
@@ -408,6 +483,9 @@ def benchmark_once(
         "cuda_pinned_bytes",
         "l1_expert_cache_mode",
         "l1_expert_cache_bytes",
+        "l2_io_engine",
+        "l2_cache_mode",
+        "l2_queue_depth",
     )
     observed_options = tuple(samples[0][field] for field in option_fields)
     if observed_options != expected_options:
@@ -523,6 +601,29 @@ def benchmark_once(
         reader_read_calls=samples[0]["reader_read_calls"],
         reader_requested_bytes=samples[0]["reader_requested_bytes"],
         reader_completed_bytes=samples[0]["reader_completed_bytes"],
+        l2_io_engine=samples[0]["l2_io_engine"],
+        l2_cache_mode=samples[0]["l2_cache_mode"],
+        l2_queue_depth=samples[0]["l2_queue_depth"],
+        l2_direct_memory_alignment=samples[0]["l2_direct_memory_alignment"],
+        l2_direct_offset_alignment=samples[0]["l2_direct_offset_alignment"],
+        reader_batch_submissions=samples[0]["reader_batch_submissions"],
+        reader_storage_submitted_bytes=samples[0]["reader_storage_submitted_bytes"],
+        reader_storage_completed_bytes=samples[0]["reader_storage_completed_bytes"],
+        reader_completions=samples[0]["reader_completions"],
+        reader_short_reads=samples[0]["reader_short_reads"],
+        reader_failures=samples[0]["reader_failures"],
+        reader_storage_nanoseconds=int(statistics.median(
+            item["reader_storage_nanoseconds"] for item in samples
+        )),
+        process_io_available=samples[0]["process_io_available"],
+        process_rchar_bytes=(
+            int(statistics.median(item["process_rchar_bytes"] for item in samples))
+            if samples[0]["process_io_available"] else None
+        ),
+        process_read_bytes=(
+            int(statistics.median(item["process_read_bytes"] for item in samples))
+            if samples[0]["process_io_available"] else None
+        ),
     )
 
 
@@ -561,6 +662,9 @@ def main() -> int:
         "--l1-expert-cache", choices=("disabled", "static"), default="disabled"
     )
     parser.add_argument("--l1-expert-cache-bytes", type=int, default=0)
+    parser.add_argument("--l2-io", choices=("pread", "io-uring"), default="pread")
+    parser.add_argument("--l2-cache", choices=("buffered", "direct"), default="buffered")
+    parser.add_argument("--l2-queue-depth", type=int, default=8)
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--csv", type=Path, required=True)
     args = parser.parse_args()
@@ -580,6 +684,9 @@ def main() -> int:
         cuda_pinned_bytes=args.cuda_pinned_bytes,
         l1_expert_cache=args.l1_expert_cache,
         l1_expert_cache_bytes=args.l1_expert_cache_bytes,
+        l2_io=args.l2_io,
+        l2_cache=args.l2_cache,
+        l2_queue_depth=args.l2_queue_depth,
     )
     write_results(result, args.json, args.csv)
     print(json.dumps(asdict(result), sort_keys=True, separators=(",", ":")))

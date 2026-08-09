@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstring>
 #include <fstream>
 #include <limits>
@@ -306,16 +307,32 @@ struct Reader::DataPlane {
                     static_cast<unsigned>(operation.extent.length),
                     operation.extent.offset);
                 io_uring_sqe_set_data64(submission, index);
-                counters.storage_submitted_bytes += operation.extent.length;
             }
-            const auto submitted = io_uring_submit(&ring);
-            if (submitted < 0 ||
-                static_cast<std::size_t>(submitted) != count) {
+            std::size_t submitted_total = 0;
+            bool submission_failed = false;
+            while (submitted_total < count) {
+                const auto submitted = io_uring_submit(&ring);
+                if (submitted == -EINTR) continue;
+                if (submitted <= 0 ||
+                    static_cast<std::size_t>(submitted) >
+                        count - submitted_total) {
+                    submission_failed = true;
+                    break;
+                }
+                for (std::size_t local = 0;
+                     local < static_cast<std::size_t>(submitted); ++local) {
+                    counters.storage_submitted_bytes +=
+                        operations[base + submitted_total + local].extent.length;
+                }
+                submitted_total += static_cast<std::size_t>(submitted);
+            }
+            if (submitted_total == 0) {
                 return Result<std::vector<std::vector<std::byte>>>::failure(
                     ErrorCode::io_error, "io_uring submission failed");
             }
             ErrorCode batch_error = ErrorCode::ok;
-            for (std::size_t completed = 0; completed < count; ++completed) {
+            for (std::size_t completed = 0; completed < submitted_total;
+                 ++completed) {
                 io_uring_cqe* completion = nullptr;
                 const auto waited = io_uring_wait_cqe(&ring, &completion);
                 if (waited < 0 || completion == nullptr) {
@@ -332,6 +349,10 @@ struct Reader::DataPlane {
                     batch_error = completion_error;
                 }
                 io_uring_cqe_seen(&ring, completion);
+            }
+            if (submission_failed || submitted_total != count) {
+                return Result<std::vector<std::vector<std::byte>>>::failure(
+                    ErrorCode::io_error, "io_uring submission failed");
             }
             if (batch_error != ErrorCode::ok) {
                 return Result<std::vector<std::vector<std::byte>>>::failure(
@@ -672,8 +693,12 @@ Result<std::vector<std::vector<std::byte>>> Reader::read_extents(
         ++counters_.calls;
         counters_.requested_bytes += request.length;
     }
+    const auto storage_start = std::chrono::steady_clock::now();
     auto results = data_plane_->read_batch(
         requests, options_.queue_depth, counters_);
+    counters_.storage_nanoseconds += static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - storage_start).count());
     if (!results) {
         if (results.error() == ErrorCode::truncated_file) {
             ++counters_.short_reads;
