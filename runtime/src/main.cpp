@@ -181,6 +181,10 @@ int main(int argc, char** argv) {
                   << profile_prior_strength_text << '\n';
         return 2;
     }
+    runtime_options.profile_observation =
+        runtime_options.l1_expert_cache == k3x::L1ExpertCacheMode::profiled ||
+        !runtime_metadata_text.empty() || !runtime_profile_in.empty() ||
+        !runtime_profile_out.empty();
     if (l2_schedule_name == "blocking") {
         runtime_options.l2_expert_schedule =
             k3x::L2ExpertScheduleMode::blocking;

@@ -587,6 +587,7 @@ def test_runtime_profile_metadata_is_not_prompt_and_round_trips_session(
     baseline = json.loads(baseline_output.read_text(encoding="utf-8"))
     profiled = json.loads(profiled_output.read_text(encoding="utf-8"))
     resumed = json.loads(resumed_output.read_text(encoding="utf-8"))
+    assert baseline["runtime_profile_live_observations"] == 0
     for payload in (profiled, resumed):
         assert payload["token_ids"] == baseline["token_ids"]
         assert payload["prefill_routed_experts"] == baseline["prefill_routed_experts"]

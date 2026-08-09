@@ -25,6 +25,7 @@ struct RuntimeOptions {
     L1ExpertCacheMode l1_expert_cache{L1ExpertCacheMode::disabled};
     std::size_t l1_expert_cache_bytes{};
     std::uint64_t profile_prior_strength{64};
+    bool profile_observation{};
     L2ExpertScheduleMode l2_expert_schedule{L2ExpertScheduleMode::blocking};
 };
 
@@ -36,7 +37,12 @@ public:
     RuntimeSession(RuntimeOptions options, RuntimeProfile profile)
         : options_(options), profile_(std::move(profile)),
           expert_store_(options.l1_expert_cache,
-                        options.l1_expert_cache_bytes, &profile_,
+                        options.l1_expert_cache_bytes,
+                        options.profile_observation ||
+                                options.l1_expert_cache ==
+                                    L1ExpertCacheMode::profiled
+                            ? &profile_
+                            : nullptr,
                         options.profile_prior_strength) {
         if (options.l2_expert_schedule == L2ExpertScheduleMode::deadline) {
             expert_loader_ = std::make_unique<DeadlineExpertLoader>(64);
