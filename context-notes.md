@@ -350,3 +350,4 @@
 - `.gitattributes`에 `results/**/*.json text eol=lf`와 `results/**/*.csv text eol=lf`를 추가한 commit `cf4c8bd`의 새 checkout에서 실패하던 digest 테스트 1/1과 전체 Python 272 passed/47 skipped가 통과했다. 테스트 정규화나 CRLF digest 채택은 byte-exact evidence를 약화시키므로 기각했다.
 - B-0018의 다음 병목은 persistent CPU draft graph 자체다. 첫 GPU 실험은 target CPU·draft FP32 cuda-custom transient만 바꿔 placement 효과를 분리한다. CUDA residency를 동시에 켜면 placement와 cache 효과가 섞이고, BF16부터 시작하면 proposal/acceptance 품질 변화가 섞이므로 각각 후속 축으로 미뤘다.
 - Milestone 18은 `--aurora-draft-backend cpu|cuda-custom`을 추가하되 기본 CPU, replay CPU-only, persistent CUDA opt-in을 유지한다. CUDA draft identity는 reused·transient·grouped·ffn-block·synchronous·fusion-none으로 고정하고 draft profiler/memory/runtime counters를 target과 별도 직렬화한다.
+- M18 구현 계획은 provider의 canonical CUDA 계약, CLI 소유권·preflight, 분리 telemetry/schema, B-0019, 전체 검증·원장·공개의 다섯 review 단위로 고정했다. Provider 내부 계약을 먼저 완성해 중간 commit이 CUDA 선택을 CPU로 오표기하지 않도록 CLI 공개 단계와 분리했다.

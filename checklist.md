@@ -195,7 +195,7 @@
 - [x] Reproduce and fix fresh-Windows-checkout benchmark digest instability without weakening byte-exact evidence.
 - [x] Compare exact transient CUDA draft execution, CUDA residency, and reduced precision as separate experiment axes.
 - [x] Write and self-review the exact CUDA draft design.
-- [ ] Write and self-review the detailed TDD implementation plan.
+- [x] Write and self-review the detailed TDD implementation plan.
 - [ ] Implement draft backend preflight, ownership, and runtime validation through witnessed RED/GREEN cycles.
 - [ ] Add separated draft CUDA telemetry and benchmark schema coverage.
 - [ ] Run B-0019, the full verification matrix, sanitizer coverage, and evidence cross-checks.
