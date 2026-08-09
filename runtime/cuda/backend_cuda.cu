@@ -4,6 +4,7 @@
 
 #include "device_memory.cuh"
 #include "mxfp4.cuh"
+#include "resident_weights.cuh"
 
 #include <cublasLt.h>
 #include <cuda_bf16.h>
@@ -141,7 +142,13 @@ public:
           mxfp4_input_scratch_(&memory_stats_, &runtime_stats_),
           mxfp4_packed_scratch_(&memory_stats_, &runtime_stats_),
           mxfp4_scales_scratch_(&memory_stats_, &runtime_stats_),
-          mxfp4_output_scratch_(&memory_stats_, &runtime_stats_) {}
+          mxfp4_output_scratch_(&memory_stats_, &runtime_stats_) {
+        if (options_.cuda_weights == CudaWeightMode::resident) {
+            resident_weights_ = std::make_unique<cuda::ResidentWeightTable>(
+                options_.cuda_resident_bytes, &memory_stats_, &runtime_stats_,
+                stream_);
+        }
+    }
 
     ~CudaBackend() override {
         if (handle_) cublasLtDestroy(handle_);
@@ -196,6 +203,32 @@ public:
         }
 
         const auto output_bytes = rows * sizeof(float);
+        bool has_resident_weight = false;
+        std::uint64_t weight_transfer_bytes = weight_bytes;
+        const void* resident_weight = nullptr;
+        if (resident_weights_) {
+            const auto representation =
+                options_.dense_precision == DensePrecision::fp32
+                    ? cuda::WeightRepresentation::dense_fp32
+                    : cuda::WeightRepresentation::dense_bf16;
+            const auto host_bytes = std::span(
+                static_cast<const std::byte*>(host_weight), weight_bytes);
+            const auto acquisition = resident_weights_->acquire(
+                {weight_view.tensor_id, representation, rows, cols, 0},
+                host_bytes, {});
+            if (!acquisition) {
+                record(phase, ProfileOperation::dense_matvec, precision, layer,
+                       operation_start, logical_weight_bytes, 0, 0, false);
+                return Result<std::vector<float>>::failure(
+                    acquisition.error(), acquisition.message());
+            }
+            has_resident_weight =
+                acquisition.value().disposition !=
+                cuda::ResidentDisposition::bypass;
+            resident_weight = acquisition.value().primary;
+            weight_transfer_bytes = acquisition.value().uploaded_bytes;
+            if (!has_resident_weight) weight_transfer_bytes = weight_bytes;
+        }
         cuda::DeviceAllocation local_input(&memory_stats_, &runtime_stats_);
         cuda::DeviceAllocation local_weight(&memory_stats_, &runtime_stats_);
         cuda::DeviceAllocation local_output(&memory_stats_, &runtime_stats_);
@@ -204,7 +237,8 @@ public:
         void* device_output = nullptr;
         if (options_.cuda_allocation == CudaAllocationMode::reused) {
             if (dense_input_scratch_.reserve(input_bytes) != cudaSuccess ||
-                dense_weight_scratch_.reserve(weight_bytes) != cudaSuccess ||
+                (!has_resident_weight &&
+                 dense_weight_scratch_.reserve(weight_bytes) != cudaSuccess) ||
                 dense_output_scratch_.reserve(output_bytes) != cudaSuccess) {
                 record(phase, ProfileOperation::dense_matvec, precision, layer,
                        operation_start, logical_weight_bytes, 0, 0, false);
@@ -213,10 +247,13 @@ public:
                     "CUDA reusable device allocation failed");
             }
             device_input = dense_input_scratch_.get();
-            device_weight = dense_weight_scratch_.get();
+            device_weight = has_resident_weight
+                                ? const_cast<void*>(resident_weight)
+                                : dense_weight_scratch_.get();
             device_output = dense_output_scratch_.get();
         } else if (local_input.allocate(input_bytes) != cudaSuccess ||
-                   local_weight.allocate(weight_bytes) != cudaSuccess ||
+                   (!has_resident_weight &&
+                    local_weight.allocate(weight_bytes) != cudaSuccess) ||
                    local_output.allocate(output_bytes) != cudaSuccess) {
             record(phase, ProfileOperation::dense_matvec, precision, layer,
                    operation_start, logical_weight_bytes, 0, 0, false);
@@ -224,24 +261,27 @@ public:
                 ErrorCode::backend_unavailable, "CUDA device allocation failed");
         } else {
             device_input = local_input.get();
-            device_weight = local_weight.get();
+            device_weight = has_resident_weight
+                                ? const_cast<void*>(resident_weight)
+                                : local_weight.get();
             device_output = local_output.get();
         }
 
         const auto h2d_start = std::chrono::steady_clock::now();
         if (cudaMemcpyAsync(device_input, host_input, input_bytes,
                             cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(device_weight, host_weight, weight_bytes,
-                            cudaMemcpyHostToDevice, stream_) != cudaSuccess) {
+            (!has_resident_weight &&
+             cudaMemcpyAsync(device_weight, host_weight, weight_bytes,
+                             cudaMemcpyHostToDevice, stream_) != cudaSuccess)) {
             record(phase, ProfileOperation::host_to_device, precision, layer,
-                   h2d_start, 0, input_bytes + weight_bytes, 0, false);
+                   h2d_start, 0, input_bytes + weight_transfer_bytes, 0, false);
             return Result<std::vector<float>>::failure(
                 ErrorCode::backend_unavailable, "CUDA host-to-device copy failed");
         }
         record(phase, ProfileOperation::host_to_device, precision, layer,
-               h2d_start, 0, input_bytes + weight_bytes, 0, true);
+               h2d_start, 0, input_bytes + weight_transfer_bytes, 0, true);
         runtime_stats_.activation_h2d_bytes += input_bytes;
-        runtime_stats_.weight_h2d_bytes += weight_bytes;
+        runtime_stats_.weight_h2d_bytes += weight_transfer_bytes;
 
         DensePlan local_plan;
         DensePlan* plan = &local_plan;
@@ -662,6 +702,7 @@ private:
     EventOwner mxfp4_event_start_;
     EventOwner mxfp4_event_end_;
     std::map<DensePlanKey, std::unique_ptr<DensePlan>> dense_plans_;
+    std::unique_ptr<cuda::ResidentWeightTable> resident_weights_;
 };
 
 Result<std::unique_ptr<ComputeBackend>> cuda_failure(

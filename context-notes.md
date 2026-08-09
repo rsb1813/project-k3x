@@ -85,3 +85,8 @@
 - Milestone 2 Task 4는 backend 밖의 internal CUDA memory primitive로 `DeviceAllocation`과 `ScratchBuffer`를 추가했다. Scratch growth는 replacement allocation 성공 후 swap하여 실패 시 기존 pointer/capacity/live-byte 상태를 보존하고, 교체 순간의 실제 old+new device memory는 peak VRAM에 포함한다. Fake allocator 실패 테스트와 실제 GPU test가 통과했고 Compute Sanitizer memcheck는 0 errors였다.
 - Milestone 2 Task 5는 reference `per-operation` 경로를 tracked local allocation으로 유지하고 `reused`에서 dense 3개, native MXFP4 4개의 grow-only scratch slot을 backend 수명 동안 보존한다. Reused 경로는 timing event와 dense shape/precision별 cuBLASLt descriptor·zero-workspace heuristic도 재사용한다. 동일 shape 두 번째 호출의 allocation 증가는 0이었고, larger dense/MXFP4 shape는 각각 실제로 커진 2개/3개 slot만 교체했다.
 - Task 5 검증은 CUDA CTest 8/8, CUDA benchmark schema 4 passed/4 deselected, dense와 MXFP4 Compute Sanitizer 각각 0 errors이다. Reference runtime counter는 allocation/free 균형과 scratch 0을, reused counter는 live scratch와 synchronization 횟수를 실제 기록한다.
+
+## 2026-08-09 Milestone 2
+
+- Task 6 bounded dense residency는 stable tensor ID, representation, rows, cols, group size 전체를 key로 사용한다. 동일 tensor의 FP32/BF16 표현은 별도 entry로 허용하지만 shape/group 충돌은 `invalid_extent`로 거부한다. Hard capacity에 맞지 않는 entry는 miss와 bypass를 기록하고 기존 exact transient path로 실행한다.
+- Dense residency 검증은 `cuda_residency`와 `cuda_dense` CTest 통과, `test_cuda_residency` Compute Sanitizer 0 errors이다. 24-byte capacity에서 첫 FP32 weight는 miss/upload, 두 번째 사용은 hit/zero extra weight H2D, 두 번째 24-byte weight는 exact bypass였고 resident bytes는 24를 넘지 않았다.
