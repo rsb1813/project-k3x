@@ -127,10 +127,21 @@ Result<ExpertPayloadHandle> HostExpertStore::get_or_load(
             } else {
                 const auto left_current = left.last_cycle == active_cycle_;
                 const auto right_current = right.last_cycle == active_cycle_;
-                preferred = std::tuple(left_current, candidate->first.layer,
-                                       left.last_access, left.insertion) <
-                            std::tuple(right_current, victim->first.layer,
-                                       right.last_access, right.insertion);
+                const auto spatial_priority = [this](ExpertKey key) {
+                    if (key.layer <= active_layer_) {
+                        return std::pair{false, key.layer};
+                    }
+                    return std::pair{
+                        true, std::numeric_limits<std::size_t>::max() -
+                                  key.layer};
+                };
+                preferred =
+                    std::tuple(left_current,
+                               spatial_priority(candidate->first),
+                               left.last_access, left.insertion) <
+                    std::tuple(right_current,
+                               spatial_priority(victim->first),
+                               right.last_access, right.insertion);
             }
             if (preferred) victim = candidate;
         }

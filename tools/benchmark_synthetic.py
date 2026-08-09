@@ -85,6 +85,8 @@ class BenchmarkRecord:
     l1_expert_cache_hits: int = 0
     l1_expert_cache_misses: int = 0
     l1_expert_cache_bypasses: int = 0
+    l1_expert_cache_evictions: int = 0
+    l1_expert_cache_collision_misses: int = 0
     l1_expert_cache_resident_bytes: int = 0
     peak_l1_expert_cache_resident_bytes: int = 0
     l2_expert_schedule: str = "blocking"
@@ -427,6 +429,8 @@ def benchmark_once(
         "l1_expert_cache_hits",
         "l1_expert_cache_misses",
         "l1_expert_cache_bypasses",
+        "l1_expert_cache_evictions",
+        "l1_expert_cache_collision_misses",
         "l1_expert_cache_resident_bytes",
         "peak_l1_expert_cache_resident_bytes",
         "l2_expert_schedule",
@@ -618,6 +622,10 @@ def benchmark_once(
         l1_expert_cache_hits=samples[0]["l1_expert_cache_hits"],
         l1_expert_cache_misses=samples[0]["l1_expert_cache_misses"],
         l1_expert_cache_bypasses=samples[0]["l1_expert_cache_bypasses"],
+        l1_expert_cache_evictions=samples[0]["l1_expert_cache_evictions"],
+        l1_expert_cache_collision_misses=samples[0][
+            "l1_expert_cache_collision_misses"
+        ],
         l1_expert_cache_resident_bytes=samples[0][
             "l1_expert_cache_resident_bytes"
         ],
@@ -710,7 +718,9 @@ def main() -> int:
     parser.add_argument("--cuda-resident-bytes", type=int, default=0)
     parser.add_argument("--cuda-pinned-bytes", type=int, default=0)
     parser.add_argument(
-        "--l1-expert-cache", choices=("disabled", "static"), default="disabled"
+        "--l1-expert-cache",
+        choices=("disabled", "static", "lru", "lfu", "least-stale"),
+        default="disabled",
     )
     parser.add_argument("--l1-expert-cache-bytes", type=int, default=0)
     parser.add_argument("--l2-io", choices=("pread", "io-uring"), default="pread")

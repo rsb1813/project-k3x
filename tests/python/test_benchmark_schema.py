@@ -87,6 +87,8 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["l1_expert_cache_mode"] == "disabled"
     assert payload["l1_expert_cache_bytes"] == 0
     assert payload["l1_expert_cache_hits"] == 0
+    assert payload["l1_expert_cache_evictions"] == 0
+    assert payload["l1_expert_cache_collision_misses"] == 0
     assert payload["l2_expert_schedule"] == "blocking"
     assert payload["expert_load_submissions"] == 0
     assert payload["expert_load_completions"] == 0
@@ -331,6 +333,8 @@ def test_benchmark_once_collects_cpu_backend_profile(
     assert record.l1_expert_cache_hits == 0
     assert record.l1_expert_cache_misses == 0
     assert record.l1_expert_cache_bypasses == 0
+    assert record.l1_expert_cache_evictions == 0
+    assert record.l1_expert_cache_collision_misses == 0
     assert record.l1_expert_cache_resident_bytes == 0
     assert record.reader_read_calls > 0
     assert record.reader_requested_bytes >= record.reader_completed_bytes > 0
@@ -410,6 +414,8 @@ def test_benchmark_once_reports_static_l1_and_reader_accounting(
     assert record.l1_expert_cache_hits > 0
     assert record.l1_expert_cache_misses > 0
     assert record.l1_expert_cache_bypasses == 0
+    assert record.l1_expert_cache_evictions == 0
+    assert record.l1_expert_cache_collision_misses == 0
     assert 0 < record.l1_expert_cache_resident_bytes <= 65536
     assert record.peak_l1_expert_cache_resident_bytes == (
         record.l1_expert_cache_resident_bytes

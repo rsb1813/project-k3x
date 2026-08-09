@@ -236,5 +236,24 @@ int main() {
     load_key(collision, {1, 0}, 240);
     assert(collision.stats().collision_misses == 1);
 
+    HostExpertStore lru_future(L1ExpertCacheMode::lru, 4896);
+    HostExpertStore least_stale_future(
+        L1ExpertCacheMode::least_stale, 4896);
+    for (auto* target : {&lru_future, &least_stale_future}) {
+        for (std::size_t layer = 1; layer <= 3; ++layer) {
+            const ExpertKey key{layer, 0};
+            target->begin_access_set(0, layer, std::array{key});
+            load_key(*target, key, 260 + layer * 10);
+        }
+        target->begin_access_set(1, 0, std::array{ExpertKey{0, 0}});
+        load_key(*target, {0, 0}, 300);
+        target->begin_access_set(1, 1, std::array{ExpertKey{1, 0}});
+        load_key(*target, {1, 0}, 270);
+    }
+    assert(lru_future.stats().collision_misses == 1);
+    assert(least_stale_future.stats().collision_misses == 0);
+    assert(least_stale_future.contains({1, 0}));
+    assert(!least_stale_future.contains({3, 0}));
+
     return 0;
 }

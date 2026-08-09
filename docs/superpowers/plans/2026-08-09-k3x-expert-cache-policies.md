@@ -18,8 +18,8 @@ Reproduce SpecMD Least-Stale and compare it fairly with exact LRU/LFU policies w
 
 ## Task 3 — Telemetry and B-0010
 
-- [ ] Export evictions and collision misses through C++ JSON and Python benchmark schema.
-- [ ] Add a capacity/policy ablation with exact parity and capability-independent failures.
+- [x] Export evictions and collision misses through C++ JSON and Python benchmark schema.
+- [x] Add a capacity/policy ablation with exact parity and capability-independent failures.
 - [ ] Record raw JSON/CSV and avoid native/full-model claims.
 
 ## Task 4 — Verification and publication

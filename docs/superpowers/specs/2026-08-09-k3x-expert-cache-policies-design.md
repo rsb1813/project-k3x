@@ -17,7 +17,7 @@ Each cache access supplies `(forward_cycle, layer, access_sequence)`. A cycle is
 - `static` admits only when unused capacity is sufficient and otherwise bypasses exactly.
 - `lru` evicts the least recently accessed entry, with stable insertion sequence as the tie-break.
 - `lfu` evicts the lowest lifetime access count, then least recent access, then stable insertion sequence.
-- `least-stale` evicts prior-cycle entries before current-cycle entries. Within a staleness class, earlier layer position is the first victim, followed by stable access sequence. Current-cycle eviction is permitted only when exact admission otherwise cannot satisfy the hard capacity.
+- `least-stale` evicts prior-cycle entries before current-cycle entries. Within a staleness class, already-processed left layers are victims before upcoming layers. Left layers use forward FIFO order; if no left victim exists and exact admission still requires space, the farthest future layer is evicted before a nearer upcoming layer. Stable access and insertion sequences break remaining ties. Current-cycle eviction is permitted only when exact admission otherwise cannot satisfy the hard capacity.
 
 The selected Top-K set is marked current before any miss admission. This prevents sequential loading of one selected expert from evicting another expert needed later in the same layer. Evicted map entries may remain alive through outstanding shared handles; cache residency counters describe policy-owned entries, not total allocator lifetime.
 
@@ -29,4 +29,4 @@ Add evictions, collision misses, and policy identity. A collision miss occurs wh
 
 First use a deterministic trace simulator with configurable capacity and expert sizes. It must contain a layer-sequential trace where LRU collides and Least-Stale protects upcoming-layer entries. Then integrate the same policies into the synthetic runtime and require exact token, routing, and Reader-byte accounting.
 
-B-0010 will compare `disabled`, `static`, `lru`, `lfu`, and `least-stale` at multiple capacities. It will report hit rate, misses, evictions, collision misses, logical Reader bytes, decode/prefill/TTFT, and exact output parity. No policy becomes default from WSL2 synthetic evidence.
+B-0010 will compare `disabled`, `static`, `lru`, `lfu`, and `least-stale` at 2-, 8-, and 16-expert synthetic capacities. It will report hit rate, misses, evictions, collision misses, logical Reader bytes, decode/prefill/TTFT, and exact output parity. No policy becomes default from WSL2 synthetic evidence.

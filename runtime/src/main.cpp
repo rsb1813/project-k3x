@@ -409,6 +409,10 @@ int main(int argc, char** argv) {
            << result.value().l1_expert_cache.misses
            << ",\"l1_expert_cache_bypasses\":"
            << result.value().l1_expert_cache.bypasses
+           << ",\"l1_expert_cache_evictions\":"
+           << result.value().l1_expert_cache.evictions
+           << ",\"l1_expert_cache_collision_misses\":"
+           << result.value().l1_expert_cache.collision_misses
            << ",\"l1_expert_cache_resident_bytes\":"
            << result.value().l1_expert_cache.resident_bytes
            << ",\"peak_l1_expert_cache_resident_bytes\":"
