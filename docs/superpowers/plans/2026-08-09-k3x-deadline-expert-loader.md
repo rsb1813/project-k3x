@@ -18,10 +18,10 @@ Implement and measure an opt-in, exact current-layer deadline-aware L2 expert lo
 
 ## Task 3 — Exact runtime integration
 
-- [ ] Add `blocking|deadline` runtime configuration with blocking as default.
-- [ ] Submit only the exact current-layer natural Top-K set after routing.
-- [ ] Overlap worker loads with independent routed/shared work and wait before expert use.
-- [ ] Preserve exact tokens, routing traces, Reader bytes, and reference-mode counters.
+- [x] Add `blocking|deadline` runtime configuration with blocking as default.
+- [x] Submit only the exact current-layer natural Top-K set after routing.
+- [x] Overlap worker loads with independent routed/shared work and wait before expert use.
+- [x] Preserve exact tokens, routing traces, Reader bytes, and reference-mode counters.
 
 ## Task 4 — CLI and telemetry
 

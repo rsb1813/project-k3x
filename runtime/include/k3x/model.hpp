@@ -2,6 +2,7 @@
 #pragma once
 
 #include "k3x/backend.hpp"
+#include "k3x/expert_scheduler.hpp"
 #include "k3x/host_expert_store.hpp"
 #include "k3x/reader.hpp"
 #include "k3x/status.hpp"
@@ -12,28 +13,43 @@
 #include <vector>
 
 namespace k3x {
+enum class L2ExpertScheduleMode { blocking, deadline };
+
 struct RuntimeOptions {
     bool incremental{true};
     bool diagnostics{};
     L1ExpertCacheMode l1_expert_cache{L1ExpertCacheMode::disabled};
     std::size_t l1_expert_cache_bytes{};
+    L2ExpertScheduleMode l2_expert_schedule{L2ExpertScheduleMode::blocking};
 };
 
 class RuntimeSession {
 public:
     explicit RuntimeSession(RuntimeOptions options)
         : options_(options), expert_store_(options.l1_expert_cache,
-                                           options.l1_expert_cache_bytes) {}
+                                           options.l1_expert_cache_bytes) {
+        if (options.l2_expert_schedule == L2ExpertScheduleMode::deadline) {
+            expert_loader_ = std::make_unique<DeadlineExpertLoader>(64);
+        }
+    }
 
     const RuntimeOptions& options() const noexcept { return options_; }
     HostExpertStore& expert_store() noexcept { return expert_store_; }
     const L1ExpertCacheStats& l1_expert_cache_stats() const noexcept {
         return expert_store_.stats();
     }
+    DeadlineExpertLoader* expert_loader() noexcept {
+        return expert_loader_.get();
+    }
+    ExpertLoadSchedulerStats expert_load_scheduler_stats() const {
+        return expert_loader_ ? expert_loader_->stats()
+                              : ExpertLoadSchedulerStats{};
+    }
 
 private:
     RuntimeOptions options_;
     HostExpertStore expert_store_;
+    std::unique_ptr<DeadlineExpertLoader> expert_loader_;
 };
 
 struct GenerationResult {
@@ -46,6 +62,7 @@ struct GenerationResult {
     std::uint64_t prefill_nanoseconds{};
     std::uint64_t decode_nanoseconds{};
     L1ExpertCacheStats l1_expert_cache;
+    ExpertLoadSchedulerStats expert_load_scheduler;
 };
 
 Result<GenerationResult> generate_greedy(Reader& reader,

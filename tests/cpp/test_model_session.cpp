@@ -46,6 +46,7 @@ int main(int argc, char** argv) {
     require(static_cast<bool>(first));
     const auto first_reads = reader.value().counters();
     const auto first_cache = first.value().l1_expert_cache;
+    require(first.value().expert_load_scheduler.submissions == 0);
     require(first_cache.hits == 36);
     require(first_cache.misses == 18);
     require(first_reads.calls - first_reads.batch_submissions ==
@@ -71,5 +72,34 @@ int main(int argc, char** argv) {
             first_reads.completed_bytes);
     require(second_reads.calls - first_reads.calls ==
             second_reads.batch_submissions - first_reads.batch_submissions);
+
+    auto deadline_reader = k3x::Reader::open(
+        std::filesystem::path(argv[1]), reader_options);
+    require(static_cast<bool>(deadline_reader));
+    auto deadline_backend = k3x::make_cpu_backend();
+    auto deadline_options = options;
+    deadline_options.l2_expert_schedule =
+        k3x::L2ExpertScheduleMode::deadline;
+    k3x::RuntimeSession deadline_session(deadline_options);
+    auto deadline = k3x::generate_greedy(
+        deadline_reader.value(), *deadline_backend, prompt, 6,
+        deadline_session);
+    require(static_cast<bool>(deadline));
+    require(deadline.value().token_ids == first.value().token_ids);
+    require(deadline.value().prefill_routed_experts ==
+            first.value().prefill_routed_experts);
+    require(deadline.value().l1_expert_cache.hits == first_cache.hits);
+    require(deadline.value().l1_expert_cache.misses == first_cache.misses);
+    const auto scheduled = deadline.value().expert_load_scheduler;
+    require(scheduled.submissions ==
+            scheduled.inline_resident_hits + first_cache.misses);
+    require(scheduled.inline_resident_hits == first_cache.hits);
+    require(scheduled.completions == scheduled.submissions);
+    require(scheduled.ready_before_use + scheduled.late_at_use ==
+            scheduled.submissions);
+    const auto deadline_reads = deadline_reader.value().counters();
+    require(deadline_reads.calls == first_reads.calls);
+    require(deadline_reads.requested_bytes == first_reads.requested_bytes);
+    require(deadline_reads.completed_bytes == first_reads.completed_bytes);
     return 0;
 }

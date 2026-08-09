@@ -97,4 +97,9 @@ Result<ExpertPayloadHandle> HostExpertStore::get_or_load(
         std::max(stats_.peak_resident_bytes, stats_.resident_bytes);
     return Result<ExpertPayloadHandle>::success(std::move(handle));
 }
+
+bool HostExpertStore::contains(ExpertKey key) const {
+    std::lock_guard lock(mutex_);
+    return entries_.contains(key);
+}
 }
