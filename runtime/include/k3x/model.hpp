@@ -7,6 +7,7 @@
 #include "k3x/reader.hpp"
 #include "k3x/status.hpp"
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -38,6 +39,9 @@ public:
     L1ExpertCacheStats l1_expert_cache_stats() const {
         return expert_store_.stats();
     }
+    std::uint64_t acquire_forward_cycle() noexcept {
+        return next_forward_cycle_.fetch_add(1, std::memory_order_relaxed);
+    }
     DeadlineExpertLoader* expert_loader() noexcept {
         return expert_loader_.get();
     }
@@ -50,6 +54,7 @@ private:
     RuntimeOptions options_;
     HostExpertStore expert_store_;
     std::unique_ptr<DeadlineExpertLoader> expert_loader_;
+    std::atomic<std::uint64_t> next_forward_cycle_{};
 };
 
 struct GenerationResult {

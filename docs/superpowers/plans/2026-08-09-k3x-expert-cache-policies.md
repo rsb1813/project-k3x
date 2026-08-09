@@ -12,9 +12,9 @@ Reproduce SpecMD Least-Stale and compare it fairly with exact LRU/LFU policies w
 
 ## Task 2 — Runtime integration
 
-- [ ] Add stable CLI/runtime identities without changing the disabled default.
-- [ ] Assign forward cycles and mark the natural Top-K set before admission.
-- [ ] Preserve exact handles, routing, tokens, and Reader error behavior.
+- [x] Add stable CLI/runtime identities without changing the disabled default.
+- [x] Assign forward cycles and mark the natural Top-K set before admission.
+- [x] Preserve exact handles, routing, tokens, and Reader error behavior.
 
 ## Task 3 — Telemetry and B-0010
 

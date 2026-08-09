@@ -101,5 +101,23 @@ int main(int argc, char** argv) {
     require(deadline_reads.calls == first_reads.calls);
     require(deadline_reads.requested_bytes == first_reads.requested_bytes);
     require(deadline_reads.completed_bytes == first_reads.completed_bytes);
+
+    auto protected_reader = k3x::Reader::open(
+        std::filesystem::path(argv[1]), reader_options);
+    require(static_cast<bool>(protected_reader));
+    auto protected_backend = k3x::make_cpu_backend();
+    auto protected_options = options;
+    protected_options.l1_expert_cache =
+        k3x::L1ExpertCacheMode::least_stale;
+    protected_options.l1_expert_cache_bytes = 1632;
+    k3x::RuntimeSession protected_session(protected_options);
+    auto protected_result = k3x::generate_greedy(
+        protected_reader.value(), *protected_backend,
+        std::vector<std::uint32_t>{1}, 0, protected_session);
+    require(static_cast<bool>(protected_result));
+    const auto& routed = protected_result.value().prefill_routed_experts;
+    require(routed.size() >= 2);
+    require(protected_session.expert_store().contains({3, routed[routed.size() - 2]}));
+    require(!protected_session.expert_store().contains({3, routed.back()}));
     return 0;
 }

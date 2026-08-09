@@ -74,6 +74,7 @@ public:
         : reader_(reader), backend_(backend),
           config_(decode_config(reader.model_config())),
           trace_routing_(session.options().diagnostics),
+          session_(session),
           expert_store_(session.expert_store()),
           expert_loader_(session.expert_loader()) {
         state_template_.kda.resize(3);
@@ -97,6 +98,7 @@ public:
 
     Vector forward(std::uint32_t token, ModelState& state, ProfilePhase phase,
                    std::vector<Vector>* layer_outputs = nullptr) {
+        active_forward_cycle_ = session_.acquire_forward_cycle();
         const auto& embedding = tensor("model.embeddings");
         if (token >= config_.vocab) throw std::runtime_error("token out of range");
         Vector hidden(embedding.begin() + token * config_.hidden,
@@ -594,6 +596,12 @@ private:
         Vector mixed(config_.latent, 0.0F);
         float denominator = 0.0F;
         for (std::size_t slot = 0; slot < config_.top_k; ++slot) denominator += scores[order[slot]];
+        std::vector<ExpertKey> selected;
+        selected.reserve(config_.top_k);
+        for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
+            selected.push_back({layer, order[slot]});
+        }
+        expert_store_.begin_access_set(active_forward_cycle_, layer, selected);
         if (trace_routing_) {
             for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
                 routed_experts_.push_back(
@@ -715,12 +723,14 @@ private:
     ComputeBackend& backend_;
     Config config_;
     bool trace_routing_{};
+    RuntimeSession& session_;
     HostExpertStore& expert_store_;
     DeadlineExpertLoader* expert_loader_{};
     ModelState state_template_;
     std::unordered_map<std::uint64_t, Vector> tensors_;
     std::vector<std::uint64_t> layer_nanoseconds_ = std::vector<std::uint64_t>(config_.layers);
     std::vector<std::uint32_t> routed_experts_;
+    std::uint64_t active_forward_cycle_{};
     std::uint64_t next_prefetch_sequence_{1};
 };
 

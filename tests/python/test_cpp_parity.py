@@ -114,6 +114,10 @@ def test_cpp_runner_rejects_invalid_cuda_execution_options(
             "static L1 expert cache requires a positive byte capacity",
         ),
         (
+            ["--l1-expert-cache", "least-stale"],
+            "least-stale L1 expert cache requires a positive byte capacity",
+        ),
+        (
             ["--l1-expert-cache-bytes", "1"],
             "disabled L1 expert cache requires a zero byte capacity",
         ),
@@ -131,12 +135,13 @@ def test_cpp_runner_rejects_invalid_l1_expert_cache_options(
     assert result.stderr.strip() == message
 
 
-def test_cpp_runner_accepts_static_l1_expert_cache_for_cpu() -> None:
+@pytest.mark.parametrize("cache_mode", ["static", "lru", "lfu", "least-stale"])
+def test_cpp_runner_accepts_l1_expert_cache_for_cpu(cache_mode: str) -> None:
     result = subprocess.run(
         [
             str(cpp_binary("k3x_run")),
             "--l1-expert-cache",
-            "static",
+            cache_mode,
             "--l1-expert-cache-bytes",
             "65536",
         ],
@@ -405,6 +410,9 @@ def test_static_l1_cache_preserves_cpu_graph_and_avoids_reader_calls(
         ("disabled", "disabled", 0),
         ("static", "static", 65536),
         ("static-tiny", "static", 1),
+        ("lru", "lru", 3264),
+        ("lfu", "lfu", 3264),
+        ("least-stale", "least-stale", 3264),
     )
     for name, cache_mode, capacity in cases:
         output = tmp_path / f"cpu-{name}.json"
@@ -427,6 +435,7 @@ def test_static_l1_cache_preserves_cpu_graph_and_avoids_reader_calls(
     disabled = results["disabled"]
     static = results["static"]
     tiny = results["static-tiny"]
+    policies = [results[name] for name in ("lru", "lfu", "least-stale")]
     assert static["token_ids"] == disabled["token_ids"] == [43, 32, 28, 49, 9, 28]
     assert static["prefill_routed_experts"] == disabled["prefill_routed_experts"]
     np.testing.assert_allclose(static["prefill_logits"], disabled["prefill_logits"])
@@ -450,6 +459,13 @@ def test_static_l1_cache_preserves_cpu_graph_and_avoids_reader_calls(
     assert tiny["l1_expert_cache_resident_bytes"] == 0
     assert tiny["read_calls"] == disabled["read_calls"]
     assert tiny["read_bytes"] == disabled["read_bytes"]
+    for policy in policies:
+        assert policy["token_ids"] == disabled["token_ids"]
+        assert policy["prefill_routed_experts"] == disabled["prefill_routed_experts"]
+        np.testing.assert_allclose(policy["prefill_logits"], disabled["prefill_logits"])
+        assert policy["l1_expert_cache_misses"] > 0
+        assert policy["l1_expert_cache_bypasses"] == 0
+        assert policy["l1_expert_cache_resident_bytes"] <= 3264
 
 
 def test_runtime_session_reuses_l1_experts_across_generations(
@@ -463,14 +479,18 @@ def test_runtime_session_reuses_l1_experts_across_generations(
     )
 
 
+@pytest.mark.parametrize(
+    ("cache_mode", "capacity"),
+    [("static", 65536), ("lru", 3264), ("lfu", 3264), ("least-stale", 3264)],
+)
 def test_deadline_expert_schedule_preserves_exact_runtime_contract(
-    synthetic_source: Path, tmp_path: Path
+    synthetic_source: Path, tmp_path: Path, cache_mode: str, capacity: int
 ) -> None:
     artifact = tmp_path / "synthetic.k3x"
     convert(synthetic_source, artifact, chunk_bytes=257)
     records: dict[str, dict] = {}
     for schedule in ("blocking", "deadline"):
-        output = tmp_path / f"{schedule}.json"
+        output = tmp_path / f"{cache_mode}-{schedule}.json"
         subprocess.run(
             [
                 str(cpp_binary("k3x_run")),
@@ -479,8 +499,8 @@ def test_deadline_expert_schedule_preserves_exact_runtime_contract(
                 "--generate", "6",
                 "--mode", "incremental",
                 "--diagnostics", "true",
-                "--l1-expert-cache", "static",
-                "--l1-expert-cache-bytes", "65536",
+                "--l1-expert-cache", cache_mode,
+                "--l1-expert-cache-bytes", str(capacity),
                 "--l2-schedule", schedule,
                 "--json", str(output),
             ],
@@ -505,7 +525,9 @@ def test_deadline_expert_schedule_preserves_exact_runtime_contract(
     assert blocking["expert_load_completions"] == 0
     assert deadline["l2_expert_schedule"] == "deadline"
     assert deadline["expert_load_submissions"] > 0
-    assert deadline["expert_load_inline_resident_hits"] > 0
+    assert deadline["expert_load_inline_resident_hits"] == deadline[
+        "l1_expert_cache_hits"
+    ]
     assert deadline["expert_load_completions"] == deadline["expert_load_submissions"]
     assert (
         deadline["expert_load_ready_before_use"]

@@ -126,6 +126,12 @@ int main(int argc, char** argv) {
         runtime_options.l1_expert_cache = k3x::L1ExpertCacheMode::disabled;
     } else if (l1_expert_cache_name == "static") {
         runtime_options.l1_expert_cache = k3x::L1ExpertCacheMode::static_admission;
+    } else if (l1_expert_cache_name == "lru") {
+        runtime_options.l1_expert_cache = k3x::L1ExpertCacheMode::lru;
+    } else if (l1_expert_cache_name == "lfu") {
+        runtime_options.l1_expert_cache = k3x::L1ExpertCacheMode::lfu;
+    } else if (l1_expert_cache_name == "least-stale") {
+        runtime_options.l1_expert_cache = k3x::L1ExpertCacheMode::least_stale;
     } else {
         std::cerr << "unknown L1 expert cache mode: " << l1_expert_cache_name << '\n';
         return 2;
@@ -140,9 +146,10 @@ int main(int argc, char** argv) {
                   << l1_expert_cache_bytes_text << '\n';
         return 2;
     }
-    if (runtime_options.l1_expert_cache == k3x::L1ExpertCacheMode::static_admission &&
+    if (runtime_options.l1_expert_cache != k3x::L1ExpertCacheMode::disabled &&
         runtime_options.l1_expert_cache_bytes == 0) {
-        std::cerr << "static L1 expert cache requires a positive byte capacity\n";
+        std::cerr << l1_expert_cache_name
+                  << " L1 expert cache requires a positive byte capacity\n";
         return 2;
     }
     if (runtime_options.l1_expert_cache == k3x::L1ExpertCacheMode::disabled &&
