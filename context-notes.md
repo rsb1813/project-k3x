@@ -333,3 +333,4 @@
 - 사용자의 기존 지침은 Cloud Run 이전의 단순 승인 단계를 중단 없이 진행하도록 허용한다. 따라서 비용·외부 자원·공개 API 기본값을 바꾸지 않는 이 설계 검토는 자율 승인으로 처리하되, replay oracle과 non-default 경계는 유지한다.
 - M17 구현 계획은 cursor 초기 prefill/proposal, transaction crop/commit, persistent provider, CLI/schema, B-0018, 전체 검증·원장·공개의 여섯 의미 단위로 고정했다. 각 production 단계는 artifact-backed RED를 먼저 목격하고 focused GREEN과 semantic commit을 남긴다.
 - 구현 실행은 사용자의 자율 진행 지침과 subagent 비사용 제약에 따라 이 세션의 inline `executing-plans` 경로를 선택한다.
+- Task 1 RED는 `k3x/incremental_cursor.hpp` 부재로 정확히 실패했다. 최소 GREEN은 context 5 token을 한 번 prefill하고 첫 candidate 한 번만 forward해 fixed-K4 oracle과 같은 2-token proposal을 만들었다. Proposal 전 MLA length 5, proposal 후 speculative working length 6, incremental forward 1을 직접 확인했고 focused pytest 1/1과 CPU CTest 14/14가 통과했다.

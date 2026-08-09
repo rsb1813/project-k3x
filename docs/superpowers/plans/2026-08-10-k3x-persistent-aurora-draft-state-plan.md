@@ -34,7 +34,7 @@
 - Consumes: `Reader`, `ComputeBackend`, `RuntimeSession`, internal `Engine`, internal `ModelState`, `Result<T>`.
 - Produces: `IncrementalDraftCursor::create`, `propose`, `stats`, and `diagnostics` with the exact signatures in the design.
 
-- [ ] **Step 1: Add the artifact-backed failing cursor test**
+- [x] **Step 1: Add the artifact-backed failing cursor test**
 
 Create `tests/cpp/test_incremental_cursor.cpp` with the Korean role header. Open the fixture path from `argv[1]`, create a CPU backend and fixed-K4 incremental diagnostic session, and require the following wished-for API.
 
@@ -43,17 +43,18 @@ const std::vector<std::uint32_t> context{1, 7, 3, 9, 43};
 auto cursor = k3x::IncrementalDraftCursor::create(
     reader.value(), *backend, context, session);
 require(static_cast<bool>(cursor));
+require(cursor.value()->diagnostics().mla_length == context.size());
 auto proposal = cursor.value()->propose(2);
 require(static_cast<bool>(proposal));
 require(proposal.value().size() == 2);
 require(cursor.value()->stats().context_prefill_tokens == context.size());
 require(cursor.value()->stats().incremental_forward_calls == 1);
-require(cursor.value()->diagnostics().mla_length == context.size());
+require(cursor.value()->diagnostics().mla_length == context.size() + 1);
 ```
 
 Create `tests/python/test_persistent_aurora_runtime.py` using the existing synthetic Top-16 fixture pattern from `test_aurora_runtime.py`. Build and invoke `test_incremental_cursor` with the generated artifact.
 
-- [ ] **Step 2: Register the executable and verify RED**
+- [x] **Step 2: Register the executable and verify RED**
 
 Add the executable without a no-argument CTest registration because it requires an artifact.
 
@@ -72,7 +73,7 @@ K3X_BUILD_DIR=build python -m pytest \
 
 Expected: compilation fails because `k3x/incremental_cursor.hpp` and `IncrementalDraftCursor` do not exist.
 
-- [ ] **Step 3: Add the minimal opaque cursor API**
+- [x] **Step 3: Add the minimal opaque cursor API**
 
 Create `runtime/include/k3x/incremental_cursor.hpp` with an explicit destructor and move-disabled ownership so the incomplete `Impl` type is safe.
 
@@ -118,7 +119,7 @@ private:
 
 Implement `Impl` in `model.cpp` after `Engine`. `create` must acquire the draft session generation guard, reject storage fixtures, empty context, and nonincremental sessions, run the context exactly once with `ProfilePhase::prefill`, and retain state plus logits. `propose(2)` returns `argmax(logits)`, forwards the first candidate once with decode phase, and returns the second argmax. It latches one outstanding proposal.
 
-- [ ] **Step 4: Verify initial proposal GREEN**
+- [x] **Step 4: Verify initial proposal GREEN**
 
 Run:
 
@@ -131,7 +132,7 @@ ctest --test-dir build --output-on-failure
 
 Expected: focused artifact test passes and CPU CTest remains 14/14.
 
-- [ ] **Step 5: Commit the cursor foundation**
+- [x] **Step 5: Commit the cursor foundation**
 
 ```bash
 git add runtime/include/k3x/incremental_cursor.hpp runtime/src/model.cpp \
