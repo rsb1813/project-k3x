@@ -294,6 +294,8 @@ The pure scheduler explores proposal lengths 1, 2, and 4 one rung at a time. It 
 
 B-0017 measures seven Top-16 synthetic rows. All preserve natural target tokens, final KDA/MLA state, and committed routing. Every replay row is 46.35% to 62.52% slower than natural greedy because complete-prefix CPU replay adds 1,454,112 to 2,181,168 logical draft Reader bytes. The reference therefore remains an explicit non-default experiment and correctness oracle. Persistent draft state, reduced precision, resident-only drafting, trained DSpark, EcoSpec path selection, MoE-Spec budgets, and AcceptMoE verifier selection remain unimplemented. The normative design is in [`docs/superpowers/specs/2026-08-10-k3x-aurora-replay-adaptive-scheduling-design.md`](docs/superpowers/specs/2026-08-10-k3x-aurora-replay-adaptive-scheduling-design.md).
 
+Milestone 17 accepts, but has not yet implemented, a transactional persistent draft cursor. The proposed cursor snapshots bounded KDA convolution/recurrent state, records MLA logical sizes, crops rejected suffix positions, and teacher-forces the target bonus token. Complete-prefix replay remains the oracle until B-0018 proves identical candidates and state. The normative design is in [`docs/superpowers/specs/2026-08-10-k3x-persistent-aurora-draft-state-design.md`](docs/superpowers/specs/2026-08-10-k3x-persistent-aurora-draft-state-design.md).
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 16 AURORA replay and adaptive block scheduling is implemented, measured, and publicly integrated. The separate CPU reduced-Top-K replay provider, strict lifecycle contract, draft telemetry surface, pure `{1,2,4}` adaptive scheduler, target physical feedback, CLI/schema surface, and B-0017 evidence are complete. The natural strict target verifier remains authoritative. AURORA replay is an experimental non-default reference because every measured replay row is slower than natural greedy.
+Milestone 17 persistent AURORA draft state is in design. D-041 accepts a transactional cursor with bounded KDA snapshots, MLA logical crop, and target-bonus teacher forcing; no persistent cursor code or B-0018 result exists yet. Milestone 16 replay remains the exact non-default oracle and the natural strict target verifier remains authoritative.
 
-State audited on 2026-08-10 against public Milestone 16 integration head `df5c07d`, public documentation head `0eb0966`, runtime head `bc45538`, and evidence head `51ff8e7`. PR #20 implementation and PR #21 documentation branch/pull-request correctness plus both post-merge `main` runs passed. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 against public ledger head `44aa049` and isolated branch `codex/milestone-seventeen-persistent-aurora`. The fresh CPU baseline passes CTest 14/14 and Python 268 passed/47 skipped. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
@@ -78,6 +78,8 @@ State audited on 2026-08-10 against public Milestone 16 integration head `df5c07
 
 ## Work in progress
 
+- Milestone 17 design selects a one-time reduced-K context prefill, transactional incremental proposal state, bounded KDA checkpoints, MLA logical suffix crop, and target-bonus teacher forcing. Implementation and B-0018 remain pending.
+- Complete-prefix `aurora-replay` remains executable and is the required candidate/state oracle. No default, draft precision, residency, scheduler threshold, or target verifier changes are accepted in Milestone 17.
 - Milestone 16 implementation, B-0017, full verification, evidence cross-checks, final self-review, public integration, and documentation reconciliation are complete.
 - The scheduler explores `{1,2,4}` one rung at a time, uses Laplace-smoothed observed prefix survival and actual expert-major payload-load/assignment ratio, immediately backs off after rejection, and retries the smallest rung after one zero-draft step. These thresholds are an experimental B-0017 identity, not a runtime default.
 - Complete-prefix replay intentionally remains the candidate oracle for persistent KDA/MLA draft-state work. Reduced precision, resident-only drafting, confidence prediction, and learned DSpark integration remain unimplemented.
@@ -108,9 +110,9 @@ State audited on 2026-08-10 against public Milestone 16 integration head `df5c07
 
 ## Next concrete tasks
 
-1. Design an exact persistent AURORA draft-state contract that advances or crops KDA/MLA state while reproducing the replay oracle's candidates.
-2. Implement persistent-state parity through a small synthetic RED/GREEN boundary without combining reduced precision or residency changes.
-3. Measure persistent-state drafting against B-0017 before considering reduced precision, resident-only drafting, or scheduler retuning.
+1. Self-review and commit the Milestone 17 design, then write the detailed TDD implementation plan.
+2. Implement cursor proposal/commit/rollback and replay-oracle parity through witnessed RED/GREEN cycles.
+3. Integrate `aurora-persistent`, run B-0018 and the full verification matrix, then update the TITAN Ledger with measured evidence.
 
 ## Hardware assumptions
 
