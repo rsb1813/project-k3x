@@ -69,12 +69,11 @@ struct ModelState { std::vector<KdaState> kda; MlaState mla; };
 
 class Engine {
 public:
-    Engine(Reader& reader, ComputeBackend& backend, RuntimeOptions options)
+    Engine(Reader& reader, ComputeBackend& backend, RuntimeSession& session)
         : reader_(reader), backend_(backend),
           config_(decode_config(reader.model_config())),
-          trace_routing_(options.diagnostics),
-          expert_store_(options.l1_expert_cache,
-                        options.l1_expert_cache_bytes) {
+          trace_routing_(session.options().diagnostics),
+          expert_store_(session.expert_store()) {
         state_template_.kda.resize(3);
         for (auto& state : state_template_.kda) {
             const auto history = (config_.conv_kernel - 1) * config_.hidden;
@@ -616,7 +615,7 @@ private:
     ComputeBackend& backend_;
     Config config_;
     bool trace_routing_{};
-    HostExpertStore expert_store_;
+    HostExpertStore& expert_store_;
     ModelState state_template_;
     std::unordered_map<std::uint64_t, Vector> tensors_;
     std::vector<std::uint64_t> layer_nanoseconds_ = std::vector<std::uint64_t>(config_.layers);
@@ -633,10 +632,11 @@ Result<GenerationResult> generate_greedy(Reader& reader,
                                          ComputeBackend& backend,
                                          std::span<const std::uint32_t> prompt,
                                          std::size_t count,
-                                         RuntimeOptions options) {
+                                         RuntimeSession& session) {
+    const auto& options = session.options();
     if (prompt.empty()) return Result<GenerationResult>::failure(ErrorCode::invalid_extent, "empty prompt");
     try {
-        Engine engine(reader, backend, options);
+        Engine engine(reader, backend, session);
         GenerationResult result;
         if (options.incremental) {
             auto state = engine.empty_state();
@@ -700,6 +700,15 @@ Result<GenerationResult> generate_greedy(Reader& reader,
     } catch (const std::exception& error) {
         return Result<GenerationResult>::failure(ErrorCode::invalid_extent, error.what());
     }
+}
+
+Result<GenerationResult> generate_greedy(Reader& reader,
+                                         ComputeBackend& backend,
+                                         std::span<const std::uint32_t> prompt,
+                                         std::size_t count,
+                                         RuntimeOptions options) {
+    RuntimeSession session(options);
+    return generate_greedy(reader, backend, prompt, count, session);
 }
 
 Result<GenerationResult> generate_greedy(Reader& reader,

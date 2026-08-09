@@ -261,8 +261,9 @@ int main(int argc, char** argv) {
                                                : reader.message()) << '\n';
         return 3;
     }
+    k3x::RuntimeSession session(runtime_options);
     auto result = k3x::generate_greedy(
-        reader.value(), *backend, prompt, count, runtime_options);
+        reader.value(), *backend, prompt, count, session);
     if (!result) {
         std::cerr << (result.message().empty() ? k3x::error_code_name(result.error())
                                                : result.message()) << '\n';

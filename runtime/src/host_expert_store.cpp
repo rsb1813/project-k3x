@@ -6,18 +6,32 @@
 
 namespace k3x {
 namespace {
+constexpr std::size_t native_mxfp4_group_size = 32;
+
 bool valid_projection(const ExpertProjection& projection) {
     if (projection.rows == 0 || projection.cols == 0 ||
-        projection.packed.empty() || projection.scales.empty()) {
+        projection.cols % 2 != 0 ||
+        projection.cols % native_mxfp4_group_size != 0 ||
+        projection.rows >
+            std::numeric_limits<std::size_t>::max() / projection.cols) {
         return false;
     }
-    return projection.rows <=
-           std::numeric_limits<std::size_t>::max() / projection.cols;
+    const auto elements = projection.rows * projection.cols;
+    return projection.packed.size() == elements / 2 &&
+           projection.scales.size() ==
+               elements / native_mxfp4_group_size &&
+           std::none_of(
+               projection.scales.begin(), projection.scales.end(),
+               [](std::byte scale) { return scale == std::byte{0xff}; });
 }
 
 Result<std::size_t> charged_bytes(const ExpertMlpPayload& payload) {
     if (!valid_projection(payload.gate) || !valid_projection(payload.up) ||
-        !valid_projection(payload.down)) {
+        !valid_projection(payload.down) ||
+        payload.gate.rows != payload.up.rows ||
+        payload.gate.cols != payload.up.cols ||
+        payload.down.cols != payload.gate.rows ||
+        payload.down.rows != payload.gate.cols) {
         return Result<std::size_t>::failure(
             ErrorCode::invalid_mxfp4, "invalid expert payload");
     }

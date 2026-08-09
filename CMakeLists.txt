@@ -130,3 +130,6 @@ target_link_libraries(test_reader PRIVATE k3x_runtime)
 
 add_executable(k3x_run runtime/src/main.cpp runtime/src/model.cpp)
 target_link_libraries(k3x_run PRIVATE k3x_runtime)
+
+add_executable(test_model_session tests/cpp/test_model_session.cpp runtime/src/model.cpp)
+target_link_libraries(test_model_session PRIVATE k3x_runtime)

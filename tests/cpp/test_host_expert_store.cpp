@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 #ifdef assert
@@ -16,14 +17,13 @@
     } while (false)
 
 namespace {
-k3x::ExpertProjection projection(std::uint64_t id, std::size_t bytes) {
-    return {id, std::vector<std::byte>(bytes, std::byte{0x2a}),
-            std::vector<std::byte>(bytes, std::byte{0x7f}), 2, bytes};
+k3x::ExpertProjection projection(std::uint64_t id) {
+    return {id, std::vector<std::byte>(512, std::byte{0x2a}),
+            std::vector<std::byte>(32, std::byte{0x7f}), 32, 32};
 }
 
-k3x::ExpertMlpPayload payload(std::uint64_t base, std::size_t bytes = 2) {
-    return {projection(base, bytes), projection(base + 1, bytes),
-            projection(base + 2, bytes)};
+k3x::ExpertMlpPayload payload(std::uint64_t base) {
+    return {projection(base), projection(base + 1), projection(base + 2)};
 }
 }
 
@@ -34,7 +34,7 @@ int main() {
     using k3x::L1ExpertCacheMode;
     using k3x::Result;
 
-    HostExpertStore store(L1ExpertCacheMode::static_admission, 24);
+    HostExpertStore store(L1ExpertCacheMode::static_admission, 3264);
     std::size_t loads = 0;
     const auto loader = [&]() {
         ++loads;
@@ -45,8 +45,8 @@ int main() {
     assert(loads == 1);
     assert(store.stats().hits == 0);
     assert(store.stats().misses == 1);
-    assert(store.stats().resident_bytes == 12);
-    assert(store.stats().peak_resident_bytes == 12);
+    assert(store.stats().resident_bytes == 1632);
+    assert(store.stats().peak_resident_bytes == 1632);
 
     auto hit = store.get_or_load({0, 3}, loader);
     assert(hit);
@@ -59,7 +59,7 @@ int main() {
         return Result<k3x::ExpertMlpPayload>::success(payload(20));
     });
     assert(exact_fit);
-    assert(store.stats().resident_bytes == 24);
+    assert(store.stats().resident_bytes == 3264);
 
     auto no_room = store.get_or_load({0, 5}, [&]() {
         return Result<k3x::ExpertMlpPayload>::success(payload(30));
@@ -67,10 +67,10 @@ int main() {
     assert(no_room);
     assert(store.stats().misses == 3);
     assert(store.stats().bypasses == 1);
-    assert(store.stats().resident_bytes == 24);
+    assert(store.stats().resident_bytes == 3264);
     assert(no_room.value().get() != first.value().get());
 
-    HostExpertStore oversized(L1ExpertCacheMode::static_admission, 11);
+    HostExpertStore oversized(L1ExpertCacheMode::static_admission, 1631);
     auto bypass = oversized.get_or_load({1, 0}, [&]() {
         return Result<k3x::ExpertMlpPayload>::success(payload(40));
     });
@@ -89,12 +89,34 @@ int main() {
     assert(disabled.stats().bypasses == 0);
     assert(disabled.stats().resident_bytes == 0);
 
-    HostExpertStore failure_atomic(L1ExpertCacheMode::static_admission, 24);
+    HostExpertStore failure_atomic(L1ExpertCacheMode::static_admission, 3264);
     auto failed = failure_atomic.get_or_load({3, 0}, []() {
         return Result<k3x::ExpertMlpPayload>::failure(ErrorCode::io_error);
     });
     assert(!failed);
     assert(failure_atomic.stats().hits == 0);
+    assert(failure_atomic.stats().misses == 0);
+    assert(failure_atomic.stats().resident_bytes == 0);
+
+    auto malformed_payload = payload(50);
+    malformed_payload.gate.packed.pop_back();
+    auto malformed = failure_atomic.get_or_load(
+        {3, 2}, [value = std::move(malformed_payload)]() mutable {
+            return Result<k3x::ExpertMlpPayload>::success(std::move(value));
+        });
+    assert(!malformed);
+    assert(malformed.error() == ErrorCode::invalid_mxfp4);
+    assert(failure_atomic.stats().misses == 0);
+    assert(failure_atomic.stats().resident_bytes == 0);
+
+    auto reserved_payload = payload(60);
+    reserved_payload.up.scales[0] = std::byte{0xff};
+    auto reserved = failure_atomic.get_or_load(
+        {3, 3}, [value = std::move(reserved_payload)]() mutable {
+            return Result<k3x::ExpertMlpPayload>::success(std::move(value));
+        });
+    assert(!reserved);
+    assert(reserved.error() == ErrorCode::invalid_mxfp4);
     assert(failure_atomic.stats().misses == 0);
     assert(failure_atomic.stats().resident_bytes == 0);
 

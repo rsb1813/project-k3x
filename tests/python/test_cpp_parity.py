@@ -377,6 +377,17 @@ def test_static_l1_cache_preserves_cpu_graph_and_avoids_reader_calls(
     assert tiny["read_bytes"] == disabled["read_bytes"]
 
 
+def test_runtime_session_reuses_l1_experts_across_generations(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    artifact = tmp_path / "synthetic.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    subprocess.run(
+        [str(cpp_binary("test_model_session")), str(artifact)],
+        check=True,
+    )
+
+
 def test_cpp_prefill_layers_logits_and_state_match_python(
     synthetic_source: Path, tmp_path: Path
 ) -> None:

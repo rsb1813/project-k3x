@@ -19,6 +19,23 @@ struct RuntimeOptions {
     std::size_t l1_expert_cache_bytes{};
 };
 
+class RuntimeSession {
+public:
+    explicit RuntimeSession(RuntimeOptions options)
+        : options_(options), expert_store_(options.l1_expert_cache,
+                                           options.l1_expert_cache_bytes) {}
+
+    const RuntimeOptions& options() const noexcept { return options_; }
+    HostExpertStore& expert_store() noexcept { return expert_store_; }
+    const L1ExpertCacheStats& l1_expert_cache_stats() const noexcept {
+        return expert_store_.stats();
+    }
+
+private:
+    RuntimeOptions options_;
+    HostExpertStore expert_store_;
+};
+
 struct GenerationResult {
     std::vector<std::uint32_t> token_ids;
     std::vector<std::uint64_t> per_layer_nanoseconds;
@@ -36,6 +53,12 @@ Result<GenerationResult> generate_greedy(Reader& reader,
                                          std::span<const std::uint32_t> prompt,
                                          std::size_t count,
                                          RuntimeOptions options);
+
+Result<GenerationResult> generate_greedy(Reader& reader,
+                                         ComputeBackend& backend,
+                                         std::span<const std::uint32_t> prompt,
+                                         std::size_t count,
+                                         RuntimeSession& session);
 
 Result<GenerationResult> generate_greedy(Reader& reader,
                                          ComputeBackend& backend,
