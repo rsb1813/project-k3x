@@ -151,7 +151,7 @@
 - [x] Compare full CUDA, route replay, and exact CPU layer-major approaches.
 - [x] Write the exact CPU expert-major design with state, routing, traffic, and failure invariants.
 - [x] Self-review and commit the design specification.
-- [ ] Write and commit the detailed TDD implementation plan.
+- [x] Write and commit the detailed TDD implementation plan.
 - [ ] Implement the pure expert-major plan and block verifier through RED→GREEN.
 - [ ] Integrate exact block execution, CLI identity, telemetry, and failure atomicity.
 - [ ] Run B-0015, full verification, ledger update, review, and public integration.
