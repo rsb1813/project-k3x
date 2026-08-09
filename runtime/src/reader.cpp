@@ -2,6 +2,7 @@
 #include "k3x/reader.hpp"
 
 #include "k3x/checksums.hpp"
+#include "io_completion.hpp"
 
 #include <algorithm>
 #include <array>
@@ -16,6 +17,10 @@
 #include <cerrno>
 #include <fcntl.h>
 #include <unistd.h>
+#endif
+
+#ifdef K3X_ENABLE_IO_URING
+#include <liburing.h>
 #endif
 
 namespace k3x {
@@ -91,9 +96,10 @@ TensorRecord decode_tensor(std::span<const std::byte> value) {
 }
 
 struct Reader::DataPlane {
-    static Result<std::unique_ptr<DataPlane>> open_buffered(
-        const std::filesystem::path& path) {
+    static Result<std::unique_ptr<DataPlane>> open_source(
+        const std::filesystem::path& path, const ReaderOptions& options) {
         auto result = std::unique_ptr<DataPlane>(new DataPlane);
+        result->engine = options.io_engine;
 #ifdef _WIN32
         result->path = path;
 #else
@@ -102,6 +108,28 @@ struct Reader::DataPlane {
             return Result<std::unique_ptr<DataPlane>>::failure(
                 ErrorCode::io_error);
         }
+#ifdef K3X_ENABLE_IO_URING
+        if (options.io_engine == L2IoEngine::io_uring) {
+            const auto initialized = io_uring_queue_init(
+                static_cast<unsigned>(options.queue_depth),
+                &result->ring, 0);
+            if (initialized < 0) {
+                return Result<std::unique_ptr<DataPlane>>::failure(
+                    ErrorCode::storage_unavailable,
+                    "io_uring queue initialization failed");
+            }
+            result->ring_initialized = true;
+            auto* probe = io_uring_get_probe_ring(&result->ring);
+            const bool read_supported = probe != nullptr &&
+                io_uring_opcode_supported(probe, IORING_OP_READ);
+            io_uring_free_probe(probe);
+            if (!read_supported) {
+                return Result<std::unique_ptr<DataPlane>>::failure(
+                    ErrorCode::storage_unavailable,
+                    "io_uring read opcode is unavailable");
+            }
+        }
+#endif
 #endif
         return Result<std::unique_ptr<DataPlane>>::success(
             std::move(result));
@@ -109,38 +137,78 @@ struct Reader::DataPlane {
 
     ~DataPlane() {
 #ifndef _WIN32
+#ifdef K3X_ENABLE_IO_URING
+        if (ring_initialized) io_uring_queue_exit(&ring);
+#endif
         if (descriptor >= 0) ::close(descriptor);
 #endif
     }
 
-    Result<std::vector<std::byte>> read(
-        std::uint64_t offset, std::uint64_t length,
-        ReadCounters& counters) const {
+    Result<std::vector<std::vector<std::byte>>> read_batch(
+        std::span<const ExtentRequest> requests, std::size_t queue_depth,
+        ReadCounters& counters) {
 #ifdef _WIN32
-        counters.storage_submitted_bytes += length;
-        auto result = read_raw(path, offset, length);
-        if (result) {
-            counters.storage_completed_bytes += result.value().size();
+        std::vector<std::vector<std::byte>> values;
+        values.reserve(requests.size());
+        for (const auto& request : requests) {
+            counters.storage_submitted_bytes += request.length;
+            auto value = read_raw(path, request.offset, request.length);
+            if (!value) {
+                return Result<std::vector<std::vector<std::byte>>>::failure(
+                    value.error(), value.message());
+            }
+            counters.storage_completed_bytes += value.value().size();
+            values.push_back(std::move(value.value()));
         }
-        return result;
+        return Result<std::vector<std::vector<std::byte>>>::success(
+            std::move(values));
 #else
-        if (offset > static_cast<std::uint64_t>(
-                         std::numeric_limits<off_t>::max())) {
+        if (engine == L2IoEngine::io_uring) {
+#ifdef K3X_ENABLE_IO_URING
+            return read_io_uring(requests, queue_depth, counters);
+#else
+            return Result<std::vector<std::vector<std::byte>>>::failure(
+                ErrorCode::storage_unavailable);
+#endif
+        }
+        std::vector<std::vector<std::byte>> values;
+        values.reserve(requests.size());
+        for (const auto& request : requests) {
+            auto value = read_pread(request, counters);
+            if (!value) {
+                return Result<std::vector<std::vector<std::byte>>>::failure(
+                    value.error(), value.message());
+            }
+            values.push_back(std::move(value.value()));
+        }
+        return Result<std::vector<std::vector<std::byte>>>::success(
+            std::move(values));
+#endif
+    }
+
+    L2IoEngine engine{L2IoEngine::pread};
+#ifdef _WIN32
+    std::filesystem::path path;
+#else
+    Result<std::vector<std::byte>> read_pread(
+        const ExtentRequest& request, ReadCounters& counters) const {
+        if (request.offset > static_cast<std::uint64_t>(
+                                 std::numeric_limits<off_t>::max())) {
             return Result<std::vector<std::byte>>::failure(
                 ErrorCode::invalid_extent);
         }
-        std::vector<std::byte> data(static_cast<std::size_t>(length));
+        std::vector<std::byte> data(
+            static_cast<std::size_t>(request.length));
         std::size_t completed = 0;
         while (completed < data.size()) {
             const auto remaining = data.size() - completed;
             const auto requested = std::min<std::size_t>(
-                remaining,
-                static_cast<std::size_t>(
-                    std::numeric_limits<ssize_t>::max()));
+                remaining, static_cast<std::size_t>(
+                               std::numeric_limits<ssize_t>::max()));
             counters.storage_submitted_bytes += requested;
             const auto result = ::pread(
                 descriptor, data.data() + completed, requested,
-                static_cast<off_t>(offset + completed));
+                static_cast<off_t>(request.offset + completed));
             if (result < 0) {
                 if (errno == EINTR) continue;
                 return Result<std::vector<std::byte>>::failure(
@@ -155,12 +223,96 @@ struct Reader::DataPlane {
                 static_cast<std::uint64_t>(result);
         }
         return Result<std::vector<std::byte>>::success(std::move(data));
-#endif
     }
 
-#ifdef _WIN32
-    std::filesystem::path path;
-#else
+#ifdef K3X_ENABLE_IO_URING
+    Result<std::vector<std::vector<std::byte>>> read_io_uring(
+        std::span<const ExtentRequest> requests, std::size_t queue_depth,
+        ReadCounters& counters) {
+        struct Operation {
+            std::size_t request_index;
+            std::size_t buffer_offset;
+            ExtentRequest extent;
+        };
+        constexpr std::uint64_t maximum_read_bytes = 0x7ffff000ULL;
+        std::vector<std::vector<std::byte>> values;
+        values.reserve(requests.size());
+        std::vector<Operation> operations;
+        std::vector<ExtentRequest> operation_extents;
+        for (std::size_t index = 0; index < requests.size(); ++index) {
+            const auto& request = requests[index];
+            values.emplace_back(static_cast<std::size_t>(request.length));
+            std::uint64_t position = 0;
+            while (position < request.length) {
+                const auto length = std::min(
+                    maximum_read_bytes, request.length - position);
+                operations.push_back({
+                    index, static_cast<std::size_t>(position),
+                    {request.offset + position, length}});
+                operation_extents.push_back(
+                    {request.offset + position, length});
+                position += length;
+            }
+        }
+        for (std::size_t base = 0; base < operations.size();
+             base += queue_depth) {
+            const auto count = std::min(
+                queue_depth, operations.size() - base);
+            for (std::size_t local = 0; local < count; ++local) {
+                auto* submission = io_uring_get_sqe(&ring);
+                if (submission == nullptr) {
+                    return Result<std::vector<std::vector<std::byte>>>::failure(
+                        ErrorCode::io_error,
+                        "io_uring submission queue exhausted");
+                }
+                const auto index = base + local;
+                const auto& operation = operations[index];
+                io_uring_prep_read(
+                    submission, descriptor,
+                    values[operation.request_index].data() +
+                        operation.buffer_offset,
+                    static_cast<unsigned>(operation.extent.length),
+                    operation.extent.offset);
+                io_uring_sqe_set_data64(submission, index);
+                counters.storage_submitted_bytes += operation.extent.length;
+            }
+            const auto submitted = io_uring_submit(&ring);
+            if (submitted < 0 ||
+                static_cast<std::size_t>(submitted) != count) {
+                return Result<std::vector<std::vector<std::byte>>>::failure(
+                    ErrorCode::io_error, "io_uring submission failed");
+            }
+            ErrorCode batch_error = ErrorCode::ok;
+            for (std::size_t completed = 0; completed < count; ++completed) {
+                io_uring_cqe* completion = nullptr;
+                const auto waited = io_uring_wait_cqe(&ring, &completion);
+                if (waited < 0 || completion == nullptr) {
+                    return Result<std::vector<std::vector<std::byte>>>::failure(
+                        ErrorCode::io_error, "io_uring completion failed");
+                }
+                const auto index = static_cast<std::size_t>(
+                    io_uring_cqe_get_data64(completion));
+                const auto result = completion->res;
+                const auto completion_error = detail::record_io_completion(
+                    operation_extents, index, result, counters);
+                if (batch_error == ErrorCode::ok &&
+                    completion_error != ErrorCode::ok) {
+                    batch_error = completion_error;
+                }
+                io_uring_cqe_seen(&ring, completion);
+            }
+            if (batch_error != ErrorCode::ok) {
+                return Result<std::vector<std::vector<std::byte>>>::failure(
+                    batch_error);
+            }
+        }
+        return Result<std::vector<std::vector<std::byte>>>::success(
+            std::move(values));
+    }
+
+    io_uring ring{};
+    bool ring_initialized{};
+#endif
     int descriptor{-1};
 #endif
 };
@@ -187,15 +339,21 @@ Result<Reader> Reader::open(const std::filesystem::path& path, VerifyMode mode) 
 
 Result<Reader> Reader::open(const std::filesystem::path& path,
                             ReaderOptions options) {
-    if (options.queue_depth == 0) {
+    if (options.queue_depth == 0 ||
+        options.queue_depth > maximum_l2_queue_depth) {
         return Result<Reader>::failure(ErrorCode::invalid_state,
-                                       "L2 queue depth must be positive");
+                                       "L2 queue depth is out of range");
     }
-    if (options.io_engine != L2IoEngine::pread ||
-        options.cache_mode != L2CacheMode::buffered) {
+    if (options.cache_mode != L2CacheMode::buffered) {
         return Result<Reader>::failure(ErrorCode::storage_unavailable,
                                        "requested L2 mode is not built");
     }
+#ifndef K3X_ENABLE_IO_URING
+    if (options.io_engine == L2IoEngine::io_uring) {
+        return Result<Reader>::failure(ErrorCode::storage_unavailable,
+                                       "requested L2 mode is not built");
+    }
+#endif
     std::error_code filesystem_error;
     const auto file_length = std::filesystem::file_size(path, filesystem_error);
     if (filesystem_error || file_length < superblock_bytes) {
@@ -444,27 +602,13 @@ Result<Reader> Reader::open(const std::filesystem::path& path,
             return Result<Reader>::failure(ErrorCode::root_sha256_mismatch);
         }
     }
-    auto data_plane = DataPlane::open_buffered(path);
+    auto data_plane = DataPlane::open_source(path, options);
     if (!data_plane) {
         return Result<Reader>::failure(data_plane.error(),
                                        data_plane.message());
     }
     reader.data_plane_ = std::move(data_plane.value());
     return Result<Reader>::success(std::move(reader));
-}
-
-Result<std::vector<std::byte>> Reader::read_extent(std::uint64_t offset, std::uint64_t length) const {
-    ++counters_.calls;
-    counters_.requested_bytes += length;
-    auto result = data_plane_->read(offset, length, counters_);
-    if (result) {
-        counters_.completed_bytes += result.value().size();
-        ++counters_.completions;
-    } else {
-        if (result.error() == ErrorCode::truncated_file) ++counters_.short_reads;
-        ++counters_.failures;
-    }
-    return result;
 }
 
 Result<std::vector<std::vector<std::byte>>> Reader::read_extents(
@@ -482,18 +626,24 @@ Result<std::vector<std::vector<std::byte>>> Reader::read_extents(
         }
     }
     ++counters_.batch_submissions;
-    std::vector<std::vector<std::byte>> results;
-    results.reserve(requests.size());
     for (const auto& request : requests) {
-        auto result = read_extent(request.offset, request.length);
-        if (!result) {
-            return Result<std::vector<std::vector<std::byte>>>::failure(
-                result.error(), result.message());
-        }
-        results.push_back(std::move(result.value()));
+        ++counters_.calls;
+        counters_.requested_bytes += request.length;
     }
-    return Result<std::vector<std::vector<std::byte>>>::success(
-        std::move(results));
+    auto results = data_plane_->read_batch(
+        requests, options_.queue_depth, counters_);
+    if (!results) {
+        if (results.error() == ErrorCode::truncated_file) {
+            ++counters_.short_reads;
+        }
+        ++counters_.failures;
+        return results;
+    }
+    for (const auto& result : results.value()) {
+        counters_.completed_bytes += result.size();
+        ++counters_.completions;
+    }
+    return results;
 }
 
 Result<std::vector<std::byte>> Reader::read_tensor(std::uint64_t tensor_id) const {

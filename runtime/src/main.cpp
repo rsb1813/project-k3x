@@ -136,6 +136,11 @@ int main(int argc, char** argv) {
         std::cerr << "L2 queue depth must be positive\n";
         return 2;
     }
+    if (reader_options.queue_depth > k3x::maximum_l2_queue_depth) {
+        std::cerr << "L2 queue depth exceeds maximum: "
+                  << reader_options.queue_depth << '\n';
+        return 2;
+    }
     if (backend_name == "cpu") {
         backend_options.kind = k3x::BackendKind::cpu;
     } else if (backend_name == "cuda-dense") {

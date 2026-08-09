@@ -9,6 +9,24 @@
 int main(int argc, char** argv) {
     if (argc != 2 && argc != 3) return 2;
     const auto path = std::filesystem::path(argv[1]);
+    if (argc == 3 && std::string_view(argv[2]) == "io-uring") {
+        k3x::ReaderOptions options;
+        options.io_engine = k3x::L2IoEngine::io_uring;
+        options.queue_depth = 8;
+        const auto uring_reader = k3x::Reader::open(path, options);
+        if (!uring_reader) {
+            std::cerr << k3x::error_code_name(uring_reader.error()) << '\n';
+            return 12;
+        }
+        const auto uring_payload = uring_reader.value().read_tensor(
+            uring_reader.value().tensors().front().tensor_id);
+        if (!uring_payload || uring_payload.value().empty() ||
+            uring_reader.value().options().io_engine !=
+                k3x::L2IoEngine::io_uring) {
+            return 13;
+        }
+        return 0;
+    }
     const auto reader = k3x::Reader::open(path);
     if (!reader) {
         std::cerr << k3x::error_code_name(reader.error()) << '\n';

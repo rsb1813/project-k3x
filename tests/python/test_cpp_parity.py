@@ -123,6 +123,10 @@ def test_cpp_runner_accepts_static_l1_expert_cache_for_cpu() -> None:
         (["--l2-cache", "mmap"], "unknown L2 cache mode: mmap"),
         (["--l2-queue-depth", "0"], "L2 queue depth must be positive"),
         (["--l2-queue-depth", "-1"], "invalid L2 queue depth: -1"),
+        (
+            ["--l2-queue-depth", "1025"],
+            "L2 queue depth exceeds maximum: 1025",
+        ),
     ],
 )
 def test_cpp_runner_rejects_invalid_l2_reader_options(
@@ -422,6 +426,25 @@ def test_runtime_session_reuses_l1_experts_across_generations(
     convert(synthetic_source, artifact, chunk_bytes=257)
     subprocess.run(
         [str(cpp_binary("test_model_session")), str(artifact)],
+        check=True,
+    )
+
+
+@pytest.mark.skipif(
+    os.environ.get("K3X_TEST_IO_URING") != "1",
+    reason="requires the optional liburing build",
+)
+def test_io_uring_batches_exact_experts_and_reuses_session_cache(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    artifact = tmp_path / "io-uring-session.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    subprocess.run(
+        [
+            str(cpp_binary("test_model_session")),
+            str(artifact),
+            "io-uring",
+        ],
         check=True,
     )
 

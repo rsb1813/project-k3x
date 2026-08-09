@@ -34,6 +34,41 @@ def test_cpp_reader_keeps_one_linux_data_plane_descriptor(
     assert artifact.is_file()
 
 
+@pytest.mark.skipif(
+    os.environ.get("K3X_TEST_IO_URING") != "1",
+    reason="requires the optional liburing build",
+)
+def test_cpp_reader_uses_real_io_uring_for_exact_tensor_reads(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    artifact = tmp_path / "io-uring.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    result = subprocess.run(
+        [str(cpp_binary("test_reader")), str(artifact), "io-uring"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(
+    os.environ.get("K3X_TEST_IO_URING") == "1",
+    reason="exercises a build without liburing support",
+)
+def test_cpp_reader_reports_unbuilt_io_uring_mode(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    artifact = tmp_path / "unbuilt-io-uring.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    result = subprocess.run(
+        [str(cpp_binary("test_reader")), str(artifact), "io-uring"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 12
+    assert result.stderr.strip() == "STORAGE_UNAVAILABLE"
+
+
 def test_cpp_binary_uses_configured_build_directory(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

@@ -23,6 +23,8 @@ struct ReaderOptions {
     std::size_t queue_depth{8};
 };
 
+inline constexpr std::size_t maximum_l2_queue_depth = 1024;
+
 struct ExtentRequest {
     std::uint64_t offset{};
     std::uint64_t length{};
@@ -64,7 +66,6 @@ public:
 private:
     Reader();
     struct DataPlane;
-    Result<std::vector<std::byte>> read_extent(std::uint64_t offset, std::uint64_t length) const;
     std::filesystem::path path_;
     std::unique_ptr<DataPlane> data_plane_;
     ReaderOptions options_{};

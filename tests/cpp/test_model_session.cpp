@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <stdexcept>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -13,9 +14,14 @@ void require(bool condition) {
 }
 
 int main(int argc, char** argv) {
-    if (argc != 2) return 2;
+    if (argc != 2 && argc != 3) return 2;
+    k3x::ReaderOptions reader_options;
+    if (argc == 3) {
+        if (std::string_view(argv[2]) != "io-uring") return 2;
+        reader_options.io_engine = k3x::L2IoEngine::io_uring;
+    }
     auto reader = k3x::Reader::open(
-        std::filesystem::path(argv[1]), k3x::VerifyMode::checksums);
+        std::filesystem::path(argv[1]), reader_options);
     if (!reader) return 3;
     auto backend = k3x::make_cpu_backend();
     k3x::RuntimeOptions options;

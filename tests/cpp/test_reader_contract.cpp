@@ -13,7 +13,7 @@ int main() {
     if (defaults.verify != k3x::VerifyMode::checksums ||
         defaults.io_engine != k3x::L2IoEngine::pread ||
         defaults.cache_mode != k3x::L2CacheMode::buffered ||
-        defaults.queue_depth != 8) {
+        defaults.queue_depth != 8 || k3x::maximum_l2_queue_depth != 1024) {
         return 1;
     }
 
