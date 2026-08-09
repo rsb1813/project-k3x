@@ -39,6 +39,8 @@ one expert    = 17,547,264 bytes = 16.734375 MiB
 
 With natural Top-16 and no reuse, one MoE layer requests 280,756,224 bytes. Across 92 MoE layers, routed experts alone request 25,829,572,608 bytes/token, or 25.83 GB/token. All 896 experts for one layer occupy about 14.64 GiB; all routed expert instances across 92 layers occupy about 1.446 TB decimal. These values exclude alignment and directory overhead.
 
+Milestone 7 physically materialized one expert and confirmed the 17,547,264-byte native payload exactly: 16,515,072 packed bytes plus 1,032,192 scale bytes. Its six released-dimension extents are each divisible by the WSL2 ext4 direct-I/O offset alignment of 512 bytes, so B-0008 measured zero direct byte amplification for this one-expert slice. This confirms serialization size and alignment for the bounded artifact only; the 25.83 GB/token figure remains a derived uncached full-model total.
+
 ## Trunk estimate
 
 The following BF16 estimate includes embeddings/LM head, attention, norms, residual projections, latent projections, shared experts, and the dense first layer. It excludes routed experts and MoonViT-V2. Exact tensor tying and implementation details can move the total, so the converter must replace this estimate with a checkpoint-derived manifest before full-scale planning.

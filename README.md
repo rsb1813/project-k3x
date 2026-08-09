@@ -116,6 +116,12 @@ The Linux data plane now keeps one descriptor and exposes independent `--l2-io p
 
 The default remains `pread + buffered`. B-0007 preserves exact tokens, routing, and logical bytes across all four modes on WSL2 ext4, but it is a non-authoritative capability benchmark. The batch API still waits for completion; deadline-aware multi-layer prefetch and GPU overlap remain future work.
 
+## Milestone 7 — full-dimension bounded expert slice
+
+A streaming source generator now materializes one actual-size K3 routed expert: 16,515,072 packed E2M1 bytes plus 1,032,192 E8M0 scale bytes. K3X optional feature bit 0 marks the artifact as a non-executable storage fixture, so Readers can benchmark it while model generation fails closed. The converter packs gate/up/down in execution order and never holds a full matrix in RAM.
+
+`k3x_storage_bench` and B-0008 measure one exact six-extent expert load without token fields. All four Reader modes preserve the same 17,547,264-byte payload and ordered SHA-256 on WSL2 ext4. This does not implement a full-dimension graph, establish P44 Pro traffic, or change the `pread + buffered` default.
+
 ## Quick start
 
 ### 1. Create an environment
@@ -330,6 +336,15 @@ Milestone 6 crosses the L2 engine and cache axes with L1 disabled.
 
 All four B-0007 rows preserve `[43, 32, 28, 49, 9, 28]` and the same 24-entry routing trace. These CPU figures come from a tiny 3×20 WSL2 ext4 capability benchmark, not the P44 Pro and not a full-model workload. They keep `pread + buffered` as the default but cannot choose the eventual native-Linux storage path.
 
+Milestone 7 replaces tiny expert extents with one physically materialized released-dimension expert.
+
+| Cache mode | `pread` median / Reader ms | `io_uring` median / Reader ms | Bytes per load |
+|---|---:|---:|---:|
+| Buffered | **50.685 / 4.661** | 51.592 / **4.579** | 17,547,264 |
+| Direct | 60.402 / 14.832 | **56.426 / 11.633** | 17,547,264 |
+
+B-0008 uses 3 warmups and 20 loads per row. Wall latency includes payload allocation and ordered SHA-256; Reader time isolates the storage-call boundary. Every row has zero short reads and failures, and actual expert dimensions produce zero 512-byte direct-I/O amplification. These WSL2 ext4 results are expert loads per second, not tokens per second, and do not select a native-Linux default.
+
 ## K3X checkpoint format
 
 K3X v1 trades general tensor-container flexibility for K3 execution order.
@@ -383,6 +398,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [ ] Wider layer/block GPU execution and fused K3-specific kernels.
 - [x] Bounded no-eviction persistent L1 expert cache with exact transient bypass.
 - [x] Independent exact `pread|io_uring` and `buffered|direct` L2 reader with ordered expert batches.
+- [x] Physically materialized full-dimension expert storage slice and exact four-mode B-0008 ablation.
 - [ ] Asynchronous L2 NVMe reads and deadline scheduler.
 - [ ] Least-Stale, task/session, and transition-aware expert caches.
 - [ ] Adaptive Top-K with exact cold-expert rescue.

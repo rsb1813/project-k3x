@@ -198,6 +198,14 @@ Milestone 6 implements independent Linux I/O-engine (`pread|io_uring`) and page-
 
 Runtime and benchmark records distinguish logical requested/completed bytes, aligned storage submitted/completed bytes, Reader storage elapsed time, and Linux process `rchar/read_bytes` deltas. B-0007 preserved exact tokens and the 24-entry routing trace across all four modes on WSL2 ext4. That measurement is a capability smoke, not native P44 Pro evidence and not physical NVMe traffic. The normative design is in [`docs/superpowers/specs/2026-08-09-k3x-l2-reader-design.md`](docs/superpowers/specs/2026-08-09-k3x-l2-reader-design.md).
 
+## Milestone 7 implemented full-dimension bounded expert slice
+
+Milestone 7 materializes one released-dimension routed expert without a full checkpoint. A deterministic source writer emits gate/up/down packed E2M1 values and E8M0/32 scales as six bounded safetensors extents. The existing converter validates the released 3,072 x 3,584 and 3,584 x 3,072 shapes, streams those extents into physical gate/up/down execution order, and records optional K3X feature bit 0.
+
+The bit identifies a non-executable `STORAGE_FIXTURE`. Python and C++ Readers may inspect it, while every model-generation overload rejects it with `NON_EXECUTABLE_ARTIFACT` before graph tensor lookup. This keeps storage evidence separate from the tiny executable graph and prevents a partial checkpoint from being presented as a runnable model.
+
+`k3x_storage_bench` resolves the exact matrix IDs, validates native MXFP4 shapes and lengths, and submits one six-extent ordered batch. It reports expert-load latency, ordered SHA-256, logical/submitted/completed bytes, Reader storage time, alignments, and Linux process-I/O deltas, but no token fields. B-0008 measures all four Reader combinations on WSL2 ext4 with exact 17,547,264-byte and digest parity. This is an implemented and measured storage boundary, not a full-dimension graph runtime or native P44 Pro result. The normative design is in [`docs/superpowers/specs/2026-08-09-k3x-bounded-expert-slice-design.md`](docs/superpowers/specs/2026-08-09-k3x-bounded-expert-slice-design.md).
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

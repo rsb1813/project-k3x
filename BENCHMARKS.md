@@ -281,6 +281,40 @@ Final read-only review found an io_uring error-path lifetime gap but no successf
 
 Post-review verification passed CPU CTest 8/8 and pytest 136 passed/40 skipped, liburing/direct CTest 9/9 and pytest 137 passed/39 skipped, CUDA CTest 17/17 and pytest 169 passed/7 skipped. All ten CUDA Compute Sanitizer targets from the measurement commit reported zero errors; the review fix does not compile into the non-liburing CUDA build.
 
+## B-0008 — Milestone 7 full-dimension bounded expert storage
+
+| Field | Value |
+|---|---|
+| Evidence | measured WSL2 expert-load benchmark; non-authoritative for the target NVMe and not token throughput |
+| Date | 2026-08-09 |
+| Measurement commit | `9198ed2` |
+| Hardware | AMD Ryzen 7 9800X3D host; GPU not used by this storage-boundary benchmark |
+| Environment | WSL2 Ubuntu 24.04.4, Linux 6.18.33.2; artifact on WSL ext4 `/tmp`; liburing 2.5 |
+| Model/checkpoint | one non-executable released-dimension routed expert; source SHA-256 `1e310ebdcdd7a8a7ec124fac1e59ca44bbdf5da1ef279502c81a8b70f06379f5`; K3X SHA-256 `b14610fd2b405dd97c09004fb29157f5b318522591546337bce89e7e8a6a2b65` |
+| Payload | gate/up 3,072 x 3,584 and down 3,584 x 3,072; 16,515,072 packed E2M1 bytes plus 1,032,192 E8M0 scale bytes |
+| Mode | metadata-only Reader open followed by exact six-extent expert loads; `pread|io_uring` crossed with `buffered|direct`; queue depth 8 |
+| Warmup / samples | 3 / 20 loads per row in one process |
+| Ordered payload digest | `e5fb7939474a57ab9263a791999d76ba078bd767cc3f155f3522b1bec576c7e4` in every row |
+| Tokens / context / Top-K / quality | not applicable; the artifact is explicitly non-executable |
+| NVMe GB/token | not applicable and not measured; no token inference occurs and WSL2 storage is not attributed to the P44 Pro |
+| GPU utilization / bandwidth / VRAM / H2D | not applicable; GPU is not used |
+| Speculation / cold rescue | not applicable; neither path executes |
+
+| Engine / cache | Median ms | p05 / p95 ms | Expert loads/s | Reader storage ms/load | Calls / batches / completions | Logical / submitted bytes per load | Process rchar / read bytes total | Direct mem / offset align |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `pread` / buffered | **50.685** | 48.714 / 52.969 | **19.7434** | 4.661 | 120 / 20 / 120 | 17,547,264 / 17,547,264 | 350,945,381 / 0 | 0 / 0 |
+| `io_uring` / buffered | 51.592 | 48.491 / 54.708 | 19.3532 | **4.579** | 120 / 20 / 120 | 17,547,264 / 17,547,264 | 98 / 0 | 0 / 0 |
+| `pread` / direct | 60.402 | 57.490 / 65.184 | 16.3861 | 14.832 | 120 / 20 / 120 | 17,547,264 / 17,547,264 | 350,945,385 / 350,945,280 | 4 / 512 |
+| `io_uring` / direct | **56.426** | 54.752 / 58.736 | **17.6500** | **11.633** | 120 / 20 / 120 | 17,547,264 / 17,547,264 | 102 / 350,945,280 | 4 / 512 |
+
+Every row reports zero short reads and failures and preserves the same six-extent digest. Each released-dimension data and scale extent is already divisible by the filesystem's 512-byte direct-I/O offset alignment, so direct mode submits exactly the logical 17,547,264 bytes per load. This replaces B-0007's tiny-extent 13.69% amplification observation for this bounded expert shape only; arbitrary trunk or future quantized extents may still amplify.
+
+Wall latency includes allocation of six output vectors and ordered SHA-256 over 17.5 MB. `Reader storage ms/load` is the Reader's timed storage-call portion and excludes hashing. Buffered rows are warm after three explicit loads, while direct rows bypass the page cache. No privileged cache drop was used, so this is not a controlled cold-cache comparison.
+
+Buffered pread has the best wall median in this WSL2 run, while buffered io_uring has a slightly lower Reader-only time. Direct io_uring is faster than direct pread but remains slower than buffered modes. WSL2, hashing/allocation overhead, one expert, and one synchronous batch prevent these results from selecting a native-Linux P44 Pro default. `pread + buffered` remains unchanged.
+
+Raw JSON/CSV and the cross-checked manifest are under `results/b0008-bounded-slice-wsl/`. The compact/raw cross-check succeeded for all four rows. Verification at the measurement code includes CPU CTest 8/8 and pytest 152 passed/40 skipped, liburing/direct CTest 9/9 and pytest 157 passed/35 skipped, CUDA CTest 17/17 and pytest 185 passed/7 skipped, plus ASan/UBSan liburing CTest 9/9 and four storage-path targeted pytest passes.
+
 ## Derived bottleneck model — not a benchmark
 
 The released dimensions imply 17,547,264 bytes per native MXFP4 routed expert. With no cache reuse, natural Top-16 across 92 MoE layers implies 25,829,572,608 expert bytes/token. Applying the P44 Pro published 7.0 GB/s sequential figure gives a derived expert-only ceiling of about 0.271 tok/s and implies roughly 94.6% expert NVMe-byte avoidance for a 5 tok/s target.
@@ -291,5 +325,6 @@ These values are capacity and traffic estimates. They are not inserted into B-00
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
 - Native-Linux repetition of B-0004/B-0005/B-0006 and a larger KDA/MLA or decoder subgraph boundary.
-- Full-dimension bounded-slice runtime before any full-model throughput claim.
+- Native-Linux repetition of B-0008 with disclosed warm/cold preparation before selecting an L2 default.
+- Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.

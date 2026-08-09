@@ -297,3 +297,14 @@
 - Revisit: after B-0007 native-Linux warm/cold measurements and again when deadline-aware multi-layer prefetch introduces cross-expert request ordering.
 
 Post-review note: final read-only review found that partial-submit or completion-wait errors could return while kernel requests or stale SQEs still referenced batch-owned buffers. The error path now closes the ring before those buffers leave scope and marks it unavailable, while `EINTR` waits retry. A real-ring lifetime-order regression plus the full ASan/UBSan liburing CTest suite validates the fail-closed boundary. The successful B-0007 execution path and measurements are unchanged.
+
+## D-027 — Represent full expert storage with an explicit non-executable slice
+
+- Date: 2026-08-09.
+- Status: accepted, implemented, and measured.
+- Decision: materialize exactly one released-dimension routed expert as a `STORAGE_FIXTURE`, pack its gate/up/down MXFP4 extents in execution order, expose it to Readers, and reject model execution through K3X optional feature bit 0.
+- Alternatives considered: use sparse-file holes to imitate extent lengths; scale the complete executable synthetic graph to released widths; materialize one exact expert and mark it non-executable.
+- Evidence: sparse holes would distort checksum, page-cache, and block-I/O behavior. A full-dimension executable graph would require unrelated trunk and recurrent-state storage. The bounded writer and converter instead materialize and read back all 17,547,264 expert bytes with at most a configured 1 MiB source chunk.
+- Benchmark result: B-0008 at `9198ed2` ran 3 warmups and 20 measured expert loads for all four Reader combinations on WSL2 ext4. Every row preserved the ordered digest, 120 completions, 350,945,280 logical and submitted bytes, zero failures, and zero direct-I/O byte amplification. Median wall latency was 50.685 ms for buffered pread, 51.592 ms for buffered io_uring, 60.402 ms for direct pread, and 56.426 ms for direct io_uring.
+- Reason: the artifact is large enough to expose representative per-expert request sizes while remaining deterministic, streamable, cheap, and incapable of being mistaken for a complete checkpoint. Separate optional identity preserves the executable-model correctness boundary.
+- Revisit: when a bounded multi-expert or full layer slice is needed for cache pressure, deadline scheduling, or physical locality experiments, and again on native Linux with the target P44 Pro.

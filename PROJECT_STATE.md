@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 6 independent exact L2 reader implementation, local verification, non-authoritative WSL2 B-0007 measurement, final review, and public integration are complete.
+Milestone 6 public integration is complete. Milestone 7 full-dimension bounded expert slice implementation, local verification, self-review, and non-authoritative WSL2 B-0008 measurement are complete; public integration is pending.
 
-State recorded on 2026-08-09 at verified Milestone 6 implementation head `1f2853e`. Public PR #6 is merged by fast-forward, and post-merge main correctness run `31305351800` succeeded. The preserved active branch is `codex/milestone-six-l2-reader`.
+State recorded on 2026-08-09 at verified Milestone 7 measurement-code commit `9198ed2`. Public `main` remains at Milestone 6 publication record `11e1d9a`; active branch is `codex/milestone-seven-bounded-slice`.
 
 ## Completed work
 
@@ -38,21 +38,26 @@ State recorded on 2026-08-09 at verified Milestone 6 implementation head `1f2853
 - Explicit `O_DIRECT` path gated by `STATX_DIOALIGN`, owned aligned bounce buffers, exact logical slice reconstruction, and separate logical versus aligned-storage accounting.
 - Runtime/benchmark L2 identity, alignment, batch/completion/error, Reader storage time, and Linux process-I/O fields plus a capability-aware four-case B-0007 runner.
 - B-0007 WSL2 ext4 measurement with three warmups and 20 samples per row, raw JSON/CSV, exact token/routing/logical-byte parity, and an explicit non-authoritative environment label.
+- Deterministic streaming `k3-storage-slice-v1` source writer that physically materializes one released-dimension expert in bounded chunks without sparse holes.
+- K3X optional `STORAGE_FIXTURE` identity, strict source kind/config/shape/length validation, resumable conversion, and gate/up/down physical execution order.
+- Python/C++ Reader support for storage-fixture identity plus an explicit `NON_EXECUTABLE_ARTIFACT` generation guard before graph tensor lookup.
+- Dedicated exact six-extent `k3x_storage_bench` with ordered digest, latency percentiles, logical/storage/process-I/O accounting, and no token schema.
+- Four-case B-0008 runner with capability-only skips, compact/raw cross-checks, and WSL2 ext4 3-warmup/20-sample measurements.
 
 ## Work in progress
 
-- Milestone 7 full-dimension bounded checkpoint-slice design has not started.
+- Milestone 7 results and TITAN Ledger await public PR/CI integration.
 - Final Terra high review found two Important issues: io_uring failure-path buffer lifetime and a premature multi-megabyte-fixture claim. Commit `5160205` closes and invalidates a failed ring before buffers leave scope, adds a pending-read lifetime regression, and marks the fixture proposed. No Critical or Important finding remains unaddressed.
 - Static L1 admission and all non-default L2 modes remain experimental and opt-in. LRU, LFU, Least-Stale, eviction, task/session priors, prediction, and cross-layer asynchronous L2 scheduling remain unimplemented.
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
-- `pread + buffered` remains the default because B-0007 is WSL2 ext4 evidence, not native P44 Pro evidence.
+- `pread + buffered` remains the default because B-0007/B-0008 are WSL2 ext4 evidence, not native P44 Pro evidence.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; builds: `build-cpu`, `build-uring`, and `build-cuda`.
 
 ## Known failures and blockers
 
 - Windows Smart App Control still blocks unsigned `k3x_run.exe`; WSL2 is the verified local CUDA path and native Linux remains the final performance authority.
-- The executable checkpoint is synthetic and tiny. No full Kimi K3 weights have been downloaded, and B-0007 is not a full-model throughput claim.
+- The executable checkpoint is synthetic and tiny. The full-dimension artifact contains only one non-executable expert. No full Kimi K3 weights have been downloaded, and B-0008 is neither token throughput nor a full-model claim.
 - The graph remains CPU-driven outside FFN blocks. KDA, MLA, routing, score mixing, residual work, state management, and non-FFN boundaries remain on the host.
 - L1 misses use ordered Reader batches into pageable host vectors and wait at the batch boundary. There is no cross-layer asynchronous L2 pipeline, eviction policy, predictor, or deadline scheduler.
 - Exact prefetch is single-flight and limited to `cuda-custom + ffn-block + reused + transient`; it is not combined with static residency.
@@ -63,10 +68,10 @@ State recorded on 2026-08-09 at verified Milestone 6 implementation head `1f2853
 
 ## Next concrete tasks
 
-1. Design and add a full-dimension bounded checkpoint slice so storage request sizes and alignment amplification become representative without downloading the full model.
-2. Re-measure Reader traffic and alignment amplification on that bounded slice while preserving exact reference parity.
-3. Implement deadline-aware cross-layer L2-to-L1 scheduling while preserving the exact blocking Reader mode.
-4. Run native-Linux P44 Pro warm/cold storage benchmarks only when that environment exists.
+1. Publish Milestone 7 through a public PR, require Linux CI, ancestry-check the merge, and confirm post-merge CI.
+2. Design deadline-aware cross-layer L2-to-L1 scheduling while preserving the exact blocking Reader mode.
+3. Add a bounded multi-expert or full-layer slice when cache-pressure and physical-locality experiments require it.
+4. Run native-Linux P44 Pro warm/cold B-0008 only when that environment exists.
 5. Continue with Least-Stale, task/session profiles, adaptive Top-K, and exact rescue in charter order.
 
 ## Hardware assumptions
@@ -78,32 +83,31 @@ State recorded on 2026-08-09 at verified Milestone 6 implementation head `1f2853
 | Driver | 591.86 |
 | CUDA | Toolkit 13.3.1, nvcc 13.3.73, native `sm_120` |
 | RAM | 96 GB DDR5-4200 target; WSL2 exposed 49,251,213,312 bytes during earlier validation |
-| NVMe | Solidigm P44 Pro 2 TB target; not measured by B-0007 |
+| NVMe | Solidigm P44 Pro 2 TB target; not measured by B-0007 or B-0008 |
 | Final runtime OS | Linux native |
 | Current development OS | WSL2 Ubuntu 24.04.4 on Windows 11 |
 
 ## Latest measured bottleneck
 
-B-0007 preserves exact tokens, the 24-entry routing trace, 428 logical calls, 158 batches, and 665,616 logical bytes across all four L2 combinations. Buffered `pread`/`io_uring` measure 5,870.8082/5,616.1034 decode tok/s. Direct `pread`/`io_uring` measure 163.3491/428.8471 and submit 756,736 aligned bytes, 13.69% above logical bytes.
+B-0008 physically confirms 17,547,264 bytes per released-dimension native MXFP4 expert. All four L2 combinations preserve the same ordered digest, 120 completions, and 350,945,280 logical/submitted bytes across 20 loads with zero failures. Median wall/Reader latency is 50.685/4.661 ms for buffered pread, 51.592/4.579 ms for buffered io_uring, 60.402/14.832 ms for direct pread, and 56.426/11.633 ms for direct io_uring.
 
-The direct rows expose the current tiny-read problem: hundreds of small aligned reads dominate the synthetic CPU graph. io_uring reduces that direct-mode cost relative to serial pread, but buffered pread remains fastest in this warm WSL2 ext4 measurement. The measurement cannot select a P44 Pro native-Linux default, so `pread + buffered` remains unchanged.
+Actual expert data and scale lengths are divisible by the WSL2 ext4 512-byte direct alignment, eliminating B-0007's tiny-extent byte amplification for this shape. Buffered pread has the best wall median, while buffered io_uring has the lowest Reader-only time and direct io_uring beats direct pread. Allocation and SHA-256 dominate wall latency, and no controlled cold-cache preparation was used. The measurement cannot select a P44 Pro native-Linux default, so `pread + buffered` remains unchanged.
 
-The next bottleneck boundary is a full-dimension bounded slice plus deadline-aware cross-layer overlap. Native-Linux physical NVMe traffic, cold/warm behavior, realistic expert sizes, and cache pressure remain unknown. CPU-driven KDA/MLA, routing, residual/state, and non-FFN orchestration also remain visible bottlenecks.
+The next bottleneck boundary is deadline-aware cross-layer overlap plus representative multi-expert cache pressure. Native-Linux physical NVMe traffic, controlled cold/warm behavior, locality, and eviction remain unknown. CPU-driven KDA/MLA, routing, residual/state, and non-FFN orchestration also remain visible bottlenecks.
 
 The derived uncached full-model expert traffic remains 25.83 GB/token, but it is not a measured full-model value. Native-Linux NVMe traffic, cache reuse, and full Kimi K3 throughput remain unknown.
 
 ## Last known-good state
 
-- Public `main` Milestone 6 implementation head: `1f2853ef1c62751923d7a6990f5855af4fbc1a8c`; PR #6 push/PR runs `31305244311` and `31305256170` succeeded, and post-merge main run `31305351800` succeeded.
-- Latest verified Milestone 6 review-fix commit: `5160205` (`fix: close failed io_uring batches safely`); final review-ledger commit: `1f2853e` (`docs: close Milestone 6 review`).
-- B-0007 successful-path measurement commit: `5049f26` (`feat: measure and ablate L2 reader modes`); raw ledger commit: `2e656ae`.
-- CPU verification: CTest 8/8; pytest 136 passed and 40 skipped.
-- Liburing/direct verification: CTest 9/9; pytest 137 passed and 39 skipped; ASan/UBSan CTest 9/9.
-- CUDA verification: CTest 17/17; pytest 169 passed and 7 skipped.
+- Public `main`: Milestone 6 publication record `11e1d9acdfe701f28111c278803c395adba79740`; correctness run `31305487562` succeeded.
+- Latest verified Milestone 7 measurement-code commit: `9198ed2` (`feat: ablate bounded expert storage reads`).
+- B-0008 artifact SHA-256: `b14610fd2b405dd97c09004fb29157f5b318522591546337bce89e7e8a6a2b65`; ordered payload digest: `e5fb7939474a57ab9263a791999d76ba078bd767cc3f155f3522b1bec576c7e4`.
+- CPU verification: CTest 8/8; pytest 152 passed and 40 skipped.
+- Liburing/direct verification: CTest 9/9; pytest 157 passed and 35 skipped; ASan/UBSan CTest 9/9 plus four storage-path targeted pytest passes.
+- CUDA verification: CTest 17/17; pytest 185 passed and 7 skipped.
 - Compute Sanitizer: `test_cuda_device`, `test_cuda_dense`, `test_cuda_mxfp4`, `test_cuda_memory`, `test_cuda_pinned_memory`, `test_cuda_async_pipeline`, `test_cuda_residency`, `test_cuda_situ`, `test_cuda_ffn`, and `test_cuda_async_ffn` each report `ERROR SUMMARY: 0 errors`.
-- Exact generated tokens: `[43, 32, 28, 49, 9, 28]` and the same 24-entry routing trace across all B-0007 rows.
-- B-0007 artifact SHA-256: `039d61ee9c2e13e27c9a2514bb476f8b122b8b37be0b7f85baf26c1a6611a2e9`.
-- B-0007 raw JSON/CSV and cross-checked manifest: `results/b0007-l2-reader-wsl/`.
+- Existing executable-model exact generated tokens remain `[43, 32, 28, 49, 9, 28]`; B-0008 executes no tokens.
+- B-0008 raw JSON/CSV and cross-checked manifest: `results/b0008-bounded-slice-wsl/`.
 
 ## Proposed component status
 

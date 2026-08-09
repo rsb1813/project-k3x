@@ -235,19 +235,19 @@ Commit as `feat: ablate bounded expert storage reads`.
 - Produces: B-0008 with actual commit, environment, filesystem, artifact SHA-256, warmups/samples, exact expert-load latency, Reader/storage counters, and explicit evidence limitations.
 - Produces: one accepted/rejected decision for the bounded artifact identity and any Reader default decision supported by measurement.
 
-- [ ] **Step 1: Measure without fabricating cold-cache or NVMe claims.**
+- [x] **Step 1: Measure without fabricating cold-cache or NVMe claims.**
 
 Run three warmups and 20 samples per supported case on the WSL2 ext4 artifact. Preserve raw outputs and independently cross-check the summary. If resource pressure makes this unsafe, reduce only after recording the reason; never substitute estimates.
 
-- [ ] **Step 2: Run final verification.**
+- [x] **Step 2: Run final verification.**
 
 Run CPU, liburing, CUDA, sanitizer, and source/converter targeted suites. Capture exact pass/skip counts and the artifact SHA-256.
 
-- [ ] **Step 3: Update the ledgers in protocol order.**
+- [x] **Step 3: Update the ledgers in protocol order.**
 
 Update architecture and decisions, append B-0008, update README/checklist/context, and update `PROJECT_STATE.md` last. Keep proposed deadline scheduling, Least-Stale, and all named addenda labeled proposed.
 
-- [ ] **Step 4: Self-review the diff and commit results.**
+- [x] **Step 4: Self-review the diff and commit results.**
 
 Run `git diff --check`, search for accidental tok/s or P44 Pro claims, inspect every changed file, and commit the result/ledger unit separately.
 
