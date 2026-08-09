@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2015-passing-20a46b?style=flat-square)](#milestone-15--exact-cuda-expert-major-execution)
+[![Milestone](https://img.shields.io/badge/milestone%2017-passing-20a46b?style=flat-square)](#milestone-17--persistent-aurora-draft-state)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -20,7 +20,7 @@
 
 Kimi K3 is a 2.8T-parameter sparse MoE model whose local inference problem is dominated by moving the right expert bytes at the right time. K3X starts from that constraint. It is not a fork of llama.cpp or vLLM, and it does not assume that the checkpoint fits in RAM or VRAM.
 
-The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Implemented milestones now cover the exact synthetic graph and format, explicit RTX 5080 CUDA baselines, bounded L0/L1 primitives, independent L2 Reader modes, a released-size expert storage slice, an opt-in exact current-layer deadline worker, runtime-switchable exact eviction, persistent runtime-only task/session routing profiles, experimental fixed/adaptive Top-K with exact selected-expert rescue, opt-in routed expert accumulation on CUDA, strict token-major speculative verification, an exact CPU expert-major block reference, and an exact CUDA single-expert multi-token batch path used by expert-major verification. Cross-layer prediction and the full three-tier pipeline remain future work.
+The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Implemented milestones now cover the exact synthetic graph and format, explicit RTX 5080 CUDA baselines, bounded L0/L1 primitives, independent L2 Reader modes, a released-size expert storage slice, an opt-in exact current-layer deadline worker, runtime-switchable exact eviction, persistent runtime-only task/session routing profiles, experimental fixed/adaptive Top-K with exact selected-expert rescue, opt-in routed expert accumulation on CUDA, strict token-major plus CPU/CUDA expert-major verification, and a transactional persistent AURORA draft cursor. Cross-layer prediction and the full three-tier pipeline remain future work.
 
 ```mermaid
 flowchart LR
@@ -44,6 +44,7 @@ flowchart LR
 | Milestone 14 | [PR #15 merged](https://github.com/rsb1813/project-k3x/pull/15) | B-0015 exact CPU expert-major verification |
 | Milestone 15 | [PR #17 merged](https://github.com/rsb1813/project-k3x/pull/17) at `c18df33` | B-0016 exact CUDA expert-major execution |
 | Milestone 16 | [PR #20 merged](https://github.com/rsb1813/project-k3x/pull/20) at `df5c07d` | B-0017 measured AURORA replay reference; exact and non-default |
+| Milestone 17 | Locally verified; publication pending | B-0018 persistent AURORA state; exact and non-default |
 
 PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 16 integration head `df5c07d`; its branch and pull-request correctness runs `31337234073` and `31337240722` passed, followed by successful post-merge `main` run `31337365175`.
 
@@ -213,6 +214,22 @@ Reproduce the seven-row CPU experiment with the already-built runtime.
 python tools/ablate_aurora_replay.py \
   --runner build/k3x_run \
   --output build-results/b0017-aurora-replay \
+  --warmups 3 \
+  --samples 20
+```
+
+## Milestone 17 — persistent AURORA draft state
+
+`--speculative-mode aurora-persistent` replaces complete-prefix draft replay with one transactional cursor. It prefills the prompt plus first verified target token once, snapshots fixed-size KDA convolution/recurrent state, records append-only MLA logical sizes, crops a rejected suffix, and teacher-forces the target bonus token after every verification. Replay remains available as the exact oracle. Reduced precision, resident-only drafting, and learned drafting are not part of this milestone.
+
+B-0018 compares four matched replay/persistent pairs on the same Top-16 synthetic fixture. Proposal counts, acceptance, natural target tokens, final KDA/MLA state, and committed routes match exactly. Persistent fixed block-2 reduces logical draft Reader bytes by 45.96% and measures 14.97% higher token-major decode and 14.55% higher expert-major decode than replay. Persistent adaptive scheduling reduces draft bytes by 63.08% and measures 41.75%/27.08% higher token/expert-major decode. The persistent rows prefill five draft-context tokens once and replay zero prefix positions.
+
+These are tiny CPU measurements under WSL2. Reader bytes are logical runtime bytes, not physical NVMe traffic, and the result does not establish full Kimi K3 throughput, coding quality, or a production default.
+
+```bash
+python tools/ablate_persistent_aurora.py \
+  --runner build/k3x_run \
+  --output build-results/b0018-persistent-aurora \
   --warmups 3 \
   --samples 20
 ```
@@ -504,6 +521,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Exact token-major speculative block verification library/runtime reference with a DSpark-lifecycle-compatible external draft interface.
 - [x] Scripted CLI telemetry and B-0014 speculative correctness/overhead measurement.
 - [x] Exact CPU/CUDA expert-major speculative verification with stable expert grouping, one-payload-per-group H2D reuse, and B-0015/B-0016 evidence.
+- [x] Exact replay-oracle-matched persistent AURORA draft state with bounded KDA checkpoints, MLA crop, and B-0018 evidence.
 - [ ] Learned drafting, acceptance-aware block sizing, and cost-aware verification experiments.
 - [ ] Sensitivity-calibrated mixed trunk quantization.
 - [ ] SKYFORGE shard compiler for explicitly provisioned cloud jobs.
@@ -532,7 +550,7 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - Reusable scratch, bounded static weight residency, and same-input grouping are implemented, but activations and results still cross the host/device boundary and asynchronous overlap is not implemented.
 - Static residency has no eviction and is not the future three-tier expert cache.
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
-- Exact token-major plus CPU/CUDA expert-major verification, scripted CLI telemetry, and B-0014 through B-0016 are implemented. The CUDA boundary is synchronous, transient, single-expert grouped execution; there is no learned DSpark drafter, confidence scheduler, dynamic block sizing, multi-expert persistent kernel, or full-model speculative speedup claim.
+- Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0018 are implemented. Persistent AURORA is CPU fixed-reduced-Top-K and non-default; there is no learned DSpark drafter, reduced-precision or resident-only draft path, multi-expert persistent CUDA kernel, or full-model speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
 - The converter has not processed the full Kimi K3 checkpoint.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.

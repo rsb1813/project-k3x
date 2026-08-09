@@ -440,7 +440,7 @@ git commit -m "bench: measure persistent AURORA state"
 - Consumes: all implementation commits and canonical B-0018 evidence.
 - Produces: verified Milestone 17 ledger, public PR integration, and the next measured bottleneck.
 
-- [ ] **Step 1: Run the complete verification matrix**
+- [x] **Step 1: Run the complete verification matrix**
 
 Configure missing variants from the current source, then run:
 
@@ -458,11 +458,11 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 python -m pytest -q
 
 Run Compute Sanitizer on one CUDA expert-major `aurora-persistent` CLI case. State explicitly that the CPU cursor itself is covered by ASan/UBSan, not CUDA instrumentation.
 
-- [ ] **Step 2: Synchronize measured documents**
+- [x] **Step 2: Synchronize measured documents**
 
 Update README milestone status and reproduction command, ARCHITECTURE implementation status, D-041 result, PERFORMANCE_MODEL traffic comparison, complete B-0018 BENCHMARKS fields and caveats, checklist, and context notes. Update `PROJECT_STATE.md` last with exact commits, tests, hashes, public state, bottleneck, and next task. Never replace B-0017 or theoretical values with B-0018 measurements.
 
-- [ ] **Step 3: Verify documents and commit**
+- [x] **Step 3: Verify documents and commit**
 
 ```bash
 git diff --check
