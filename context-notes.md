@@ -305,3 +305,4 @@
 - 새 canonical aggregate는 `09a2537337df1fd2b8b39439f92ba7306cb09a6ed5e3f8bdc8db7d9d787029aa`다. 전체 검증은 CPU CTest 13/13·pytest 262/47, liburing/direct CTest 14/14·pytest 264/45, ASan/UBSan CTest 14/14, CUDA CTest 22/22·pytest 301/8이다. GPU utilization, memory bandwidth, physical NVMe와 full-model quality는 측정하지 않았다.
 - Compute Sanitizer는 native MXFP4, CUDA FFN, released batch-2, perfect/mixed expert-major CLI에서 모두 0 errors였다. Perfect/mixed 첫 직접 호출은 PowerShell/WSL 이중 파싱이 semicolon script를 잘라 유효 실행이 아니었고, 인자 배열을 전달하는 임시 Python helper로 교정 실행한 뒤 helper를 제거했다.
 - Milestone 15 branch/PR correctness run `31332732339`/`31332745907`이 통과했고 PR #17이 공개 integration head `c18df33`으로 rebase merge되었다. 병합 후 `main` correctness run `31332852551`도 통과해 B-0016 코드, 측정 증거, LF-stable digest 교정, 최종 리뷰가 공개 기준선에 포함되었다.
+- 문서 정합화 PR #18의 push/PR correctness run `31333096506`/`31333098541`이 통과했고 공개 문서 head `4052221`로 rebase merge되었다. 병합 후 `main` correctness run `31333233834`도 통과했다.

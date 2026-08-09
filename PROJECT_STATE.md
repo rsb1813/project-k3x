@@ -4,7 +4,7 @@
 
 Milestone 15 exact CUDA expert-major execution is implemented, measured, fully verified, independently reviewed, and publicly integrated. The accepted boundary batches multiple token latents for one native MXFP4 expert while preserving the Milestone 14 state, routing, and commit semantics. Token-major remains the default and CPU expert-major remains the portable exact oracle because the measured mixed-acceptance row regressed.
 
-State audited on 2026-08-10 against public Milestone 15 integration head `c18df33`. PR #11 through PR #17 are merged, including Milestone 15 PR #17. Its branch and pull-request correctness runs `31332732339` and `31332745907` passed, followed by successful post-merge `main` run `31332852551`. The active branch `codex/milestone-fifteen-publication` only reconciles this public state in the ledger and README.
+State audited on 2026-08-10 against public Milestone 15 integration head `c18df33` and documentation reconciliation head `4052221`. PR #11 through PR #18 are merged, including Milestone 15 PR #17 and its publication-ledger PR #18. The implementation branch/PR runs `31332732339`/`31332745907`, implementation post-merge run `31332852551`, documentation branch/PR runs `31333096506`/`31333098541`, and documentation post-merge run `31333233834` all passed. No feature branch is currently designated active; the next feature boundary remains in design preparation.
 
 ## Completed work
 
@@ -133,6 +133,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 ## Last known-good state
 
 - Public Milestone 15 integration head `c18df33` includes the synchronized Milestone 11–15 implementation lineage, B-0016 evidence, LF-stable artifact digests, and final-review fix. Branch/PR correctness runs `31332732339`/`31332745907` and post-merge `main` run `31332852551` succeeded.
+- Public documentation reconciliation head `4052221` records PR #17 publication across README, BENCHMARKS, checklist, context notes, and project state. Its branch/PR correctness runs `31333096506`/`31333098541` and post-merge `main` run `31333233834` succeeded.
 - M15 design/plan heads are `b54e4b5`/`f574a36`; portable batch, native launcher, CUDA FFN, and runtime heads are `b9b10dc`, `459303e`, `b0c1a96`, and `e99bbc0`; B-0016 tooling, direct CLI fix, and LF-stable digest fix are `7899603`, `884a74e`, and `5b7b73b`.
 - Current full verification passes CPU CTest 13/13 and pytest 262 passed/47 skipped, liburing/direct CTest 14/14 and pytest 264 passed/45 skipped, ASan/UBSan CTest 14/14, and CUDA CTest 22/22 with pytest 301 passed/8 skipped. Native MXFP4, CUDA FFN, released batch-2, perfect expert-major CLI, and mixed expert-major CLI Compute Sanitizer runs each report zero errors.
 - B-0016 executable artifact SHA-256 is `039d61ee9c2e13e27c9a2514bb476f8b122b8b37be0b7f85baf26c1a6611a2e9`; released artifact SHA-256 is `aab7aea48b03bdcd8e0b4d98c4780128ab689d2bba005089a49970eb0e326890`; canonical aggregate SHA-256 is `09a2537337df1fd2b8b39439f92ba7306cb09a6ed5e3f8bdc8db7d9d787029aa`.
