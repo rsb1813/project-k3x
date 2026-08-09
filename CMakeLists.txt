@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
 project(k3x LANGUAGES CXX)
 
+find_package(Threads REQUIRED)
+
 option(K3X_ENABLE_CUDA "Build the CUDA backend" OFF)
 option(K3X_ENABLE_IO_URING "Build the optional Linux io_uring reader" OFF)
 
@@ -18,6 +20,7 @@ add_library(k3x_runtime
     runtime/src/ops.cpp
     runtime/src/profile.cpp
     runtime/src/backend_cpu.cpp
+    runtime/src/expert_scheduler.cpp
     runtime/src/host_expert_store.cpp
     runtime/src/storage_slice.cpp
 )
@@ -43,6 +46,7 @@ else()
     target_sources(k3x_runtime PRIVATE runtime/src/backend_cuda_stub.cpp)
 endif()
 target_include_directories(k3x_runtime PUBLIC runtime/include)
+target_link_libraries(k3x_runtime PUBLIC Threads::Threads)
 if(K3X_ENABLE_IO_URING)
     if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
         message(FATAL_ERROR "K3X_ENABLE_IO_URING requires Linux")
@@ -76,6 +80,10 @@ add_test(NAME backend COMMAND test_backend)
 add_executable(test_host_expert_store tests/cpp/test_host_expert_store.cpp)
 target_link_libraries(test_host_expert_store PRIVATE k3x_runtime)
 add_test(NAME host_expert_store COMMAND test_host_expert_store)
+
+add_executable(test_expert_scheduler tests/cpp/test_expert_scheduler.cpp)
+target_link_libraries(test_expert_scheduler PRIVATE k3x_runtime)
+add_test(NAME expert_scheduler COMMAND test_expert_scheduler)
 
 if(NOT K3X_ENABLE_CUDA)
     add_executable(test_backend_unavailable tests/cpp/test_backend_unavailable.cpp)

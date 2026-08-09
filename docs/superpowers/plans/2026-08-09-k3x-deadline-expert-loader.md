@@ -6,9 +6,9 @@ Implement and measure an opt-in, exact current-layer deadline-aware L2 expert lo
 
 ## Task 1 — Scheduler contract and deterministic tests
 
-- [ ] Add failing unit tests for deadline ordering, stable ties, failure propagation, single ticket consumption, bounded queue counters, and destructor drain.
-- [ ] Implement the minimum single-worker deadline queue and metrics.
-- [ ] Run the scheduler unit tests and commit the logical unit.
+- [x] Add failing unit tests for deadline ordering, stable ties, failure propagation, single ticket consumption, bounded queue counters, and destructor drain.
+- [x] Implement the minimum single-worker deadline queue and metrics.
+- [x] Run the scheduler unit tests and commit the logical unit.
 
 ## Task 2 — Reader and L1 concurrency safety
 
