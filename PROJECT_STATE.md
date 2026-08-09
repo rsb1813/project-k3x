@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 10 is published and verified. Milestone 11 Tasks 1–3 standalone routing policy, configurable 16-of-24 reference model, C++ Engine/CLI integration, quality escalation, telemetry, and exact selected-expert rescue are implemented and verified; B-0012 measurement and final verification remain.
+Milestone 10 is published and verified. Milestone 11 adaptive Top-K and exact selected-expert rescue are implemented, measured by B-0012, and fully verified. Final review and public integration remain.
 
-State recorded on 2026-08-09 at verified Milestone 10 publication head `a82d733`. Publication-record correctness runs `31316068815` and `31316069868` succeeded, and the active branch is `codex/milestone-eleven-adaptive-topk-rescue`.
+State recorded on 2026-08-09 at verified Milestone 11 code head `5c0164d`; result head is `d58fad7`. Public `main` remains at verified Milestone 10 publication head `a82d733`, and the active branch is `codex/milestone-eleven-adaptive-topk-rescue`.
 
 ## Completed work
 
@@ -61,14 +61,14 @@ State recorded on 2026-08-09 at verified Milestone 10 publication head `a82d733`
 
 ## Work in progress
 
-- Milestone 11 natural/fixed/adaptive policy and PyTorch/C++ 16-of-24 execution are complete. Fixed K16 equals natural Top-16 exactly, reduced K matches the Python oracle, and agent failure/critical signals raise the executed K floor. Selected cold experts use the exact MXFP4 load path and residency does not substitute routing IDs. Natural remains the default; reduced K remains explicitly lossy and unmeasured on the full model.
+- Milestone 11 natural/fixed/adaptive policy and PyTorch/C++ 16-of-24 execution are complete. Fixed K16 equals natural Top-16 exactly, reduced K matches the Python oracle, and agent failure/critical signals raise the executed K floor. Selected cold experts use the exact MXFP4 load path and residency does not substitute routing IDs. B-0012 measures the speed/traffic/quality tradeoff; natural remains the default and reduced K remains explicitly lossy and unmeasured on the full model.
 - Milestone 9 Terra high final review found one valid Important shared-session policy-context issue. Commit `fd05d95` serializes complete generation calls; re-review found no remaining Critical or Important issue and withdrew an initial collision interpretation concern after deterministic future-layer trace review.
 - Static, LRU, LFU, Least-Stale, profiled eviction, and all non-default L2 modes remain experimental and opt-in. Transition prediction and cross-layer asynchronous L2 scheduling remain unimplemented.
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
-- `pread + buffered`, blocking scheduling, and disabled L1 remain defaults because B-0007 through B-0011 are WSL2 ext4 evidence, not native P44 Pro or full-model evidence.
+- Natural routing, `pread + buffered`, blocking scheduling, and disabled L1 remain defaults because B-0007 through B-0012 are WSL2 ext4 evidence, not native P44 Pro or full-model evidence.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
-- Linux Python environment: `/home/jolib/.venvs/k3x-m1`; builds: `build-cpu`, `build-uring`, and `build-cuda`.
+- Linux Python environment: `/home/jolib/.venvs/k3x-m1`; builds: `build-cpu`, `build-uring`, `build-cuda`, and `build-uring-asan`.
 
 ## Known failures and blockers
 
@@ -85,11 +85,11 @@ State recorded on 2026-08-09 at verified Milestone 10 publication head `a82d733`
 
 ## Next concrete tasks
 
-1. Add C++ Engine RED parity for natural Top-2 and the 16-of-24 natural/fixed modes.
-2. Connect one immutable routing decision to Engine denominator, selected-set, loader, CUDA group, and CPU mixing bounds.
-3. Add CLI validation, variable-K diagnostics, policy telemetry, and exact selected cold-rescue counting.
-4. Add a bounded multi-expert or full-layer slice for representative cache pressure and locality evidence.
-5. Run native-Linux P44 Pro warm/cold B-0008 through B-0011 only when that environment exists.
+1. Complete Milestone 11 final review, public PR, CI, main integration, and post-merge verification.
+2. Begin the next charter checkpoint with a focused fused CUDA-kernel design and measured baseline; do not assume fusion wins.
+3. Add a bounded multi-expert or full-layer slice for representative cache pressure and locality evidence when needed by that kernel work.
+4. Add a future-layer predictor with recall-first exact-prefetch evaluation after the fused-kernel checkpoint.
+5. Run native-Linux P44 Pro warm/cold B-0008 through B-0012 only when that environment exists.
 
 ## Hardware assumptions
 
@@ -106,28 +106,27 @@ State recorded on 2026-08-09 at verified Milestone 10 publication head `a82d733`
 
 ## Latest measured bottleneck
 
-B-0011 shows that a matching task/session prior can equal Least-Stale traffic at the 8-expert synthetic capacity but does not improve timing. Matching prior and Least-Stale both record 23 hits, 31 misses, and 628,080 logical Reader bytes, while matching-prior decode is 5,006.701 tok/s versus 5,900.245 tok/s. The minimum-overlap alternate prior records 22/32/629,712 and 4,868.597 tok/s.
+B-0012 shows the central quality/traffic constraint. Fixed K4/K8/K12 reduce logical Reader bytes by 40.8%/27.2%/13.6% and increase tiny CPU decode by 3.24x/1.92x/1.34x versus natural K16, but every reduced row changes tokens, logits, and recurrent state. Fixed K16 and critical escalation are exact. All adaptive rows select K16 on the nearly uniform synthetic router, so this fixture yields no adaptive traffic reduction.
 
-The measured bottleneck remains expert miss traffic under constrained residency, with profile bookkeeping and load/save overhead visible on the tiny graph. Helpful prior information did not reduce traffic below Least-Stale, and stale or mismatched priors can regress it. Separate-process WSL2 timing, uncontrolled cold-cache state, and logical Reader bytes cannot establish a native default.
+The 6,528-byte exact-rescue row records 108 cold loads, zero hits, and the same 766,224 logical Reader bytes as cache-disabled K4. It proves routing/residency separation but also shows that rescue without reuse does not remove traffic. Separate-process WSL2 timing, uncontrolled physical cold-cache state, synthetic router entropy, and logical Reader bytes cannot establish native or full-model defaults.
 
-The immediate result is to retain `disabled + blocking + pread + buffered` as defaults and keep `profiled` opt-in. The next implementation gap is adaptive Top-K with exact rescue, followed by representative full-size multi-expert pressure and a future-layer predictor with high recall. Native-Linux physical NVMe traffic, controlled cold/warm behavior, and full-model locality remain unknown. CPU-driven KDA/MLA, routing, residual/state, and non-FFN orchestration also remain visible bottlenecks.
+The immediate result is to retain natural routing with `disabled + blocking + pread + buffered` as defaults and keep reduced/adaptive K, profiled eviction, and rescue experiments opt-in. Native-Linux physical NVMe traffic, controlled warm/cold behavior, full-model locality, coding quality, and a useful adaptive calibration distribution remain unknown. CPU-driven KDA/MLA, routing, residual/state, and non-FFN orchestration also remain visible bottlenecks.
 
 The derived uncached full-model expert traffic remains 25.83 GB/token, but it is not a measured full-model value. Native-Linux NVMe traffic, cache reuse, and full Kimi K3 throughput remain unknown.
 
 ## Last known-good state
 
 - Public Milestone 10 publication head: `a82d733102a9e719271af53f64228aed9837925e`; publication branch/main correctness runs `31316068815` and `31316069868` succeeded. PR #10 integration head remains `3d8c042`.
-- Latest verified Milestone 10 code head: `5430074` (`fix: preserve bounded profile evidence`).
-- Latest verified B-0011 result head: `308b0db`; measurement code is `5430074`.
-- B-0011 synthetic K3X artifact SHA-256: `0dfe0fe7c64b364fc745fff5b6c9a1f06d1faf1dc140630a9240591540dd684d`; summary SHA-256: `029004e02a8484f281a332c09d49e7adc8eb1ed343ec692b030760288adbd94f`.
-- CPU verification: CTest 10/10; pytest 211 passed and 41 skipped.
-- Liburing/direct verification: CTest 11/11; pytest 213 passed and 39 skipped.
-- ASan/UBSan liburing verification: CTest 11/11; targeted pytest 82 passed and 33 skipped.
-- CUDA verification: CTest 19/19; pytest 244 passed and 8 skipped.
+- Latest verified Milestone 11 code head: `5c0164d`; result head is `d58fad7` and measurement code is `bf81beb`.
+- B-0012 synthetic K3X artifact SHA-256: `89ef0b18f1adb55a305d111c6bb67eb8469e6dacc6eeac3363ad74a64ab0e861`; summary SHA-256: `72de06f6fe7ff18a82e67b87cb38c0cc7b1c2ee2819ac62fe2a828e69307cac9`.
+- CPU verification: CTest 11/11; pytest 227 passed and 41 skipped.
+- Liburing/direct verification: CTest 12/12; pytest 233 passed and 35 skipped.
+- ASan/UBSan liburing verification: CTest 12/12; targeted pytest 101 passed and 34 skipped.
+- CUDA verification: CTest 20/20; pytest 260 passed and 8 skipped.
 - Compute Sanitizer: `test_cuda_device`, `test_cuda_dense`, `test_cuda_mxfp4`, `test_cuda_memory`, `test_cuda_pinned_memory`, `test_cuda_async_pipeline`, `test_cuda_residency`, `test_cuda_situ`, `test_cuda_ffn`, and `test_cuda_async_ffn` each report `ERROR SUMMARY: 0 errors`.
-- Existing executable-model exact generated tokens remain `[43, 32, 28, 49, 9, 28]` in all B-0011 rows.
-- B-0011 raw JSON/CSV, profiles, and cross-checked summary: `results/b0011-task-session-profiles-wsl/`.
-- Pre-publication ledger check: `git diff --check` passed, the dedicated B-0011 Python regression passed 10/10 with `K3X_BUILD_DIR=build-cpu`, and the recorded summary SHA-256 was reproduced.
+- Natural and fixed-K16 generated tokens remain `[43, 32, 28, 49, 9, 28]`; reduced-K B-0012 rows are explicitly divergent.
+- B-0012 raw JSON/CSV, diagnostics, and cross-checked summary: `results/b0012-adaptive-routing-wsl/`.
+- Pre-publication ledger check: the result-schema/routing/benchmark targeted suite passed 18/5 with `K3X_BUILD_DIR=build-cpu`, and the recorded summary SHA-256 was reproduced.
 
 ## Proposed component status
 

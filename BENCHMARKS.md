@@ -444,6 +444,53 @@ The materialized full-generation output profiles are exactly 1,439, 1,439, and 1
 
 Post-review verification passed CPU CTest 10/10 and pytest 211/41, liburing/direct CTest 11/11 and pytest 213/39, CUDA CTest 19/19 and pytest 244/8, plus ASan/UBSan liburing CTest 11/11 and targeted pytest 82/33. All ten CUDA Compute Sanitizer targets reported zero errors. TSan was not rerun for this serialized host-only change; the prior WSL2 runtime limitation remains recorded in B-0010.
 
+## B-0012 — Milestone 11 adaptive Top-K and exact cold rescue
+
+| Field | Value |
+|---|---|
+| Evidence | measured WSL2 warm synthetic ablation; non-authoritative for native storage, full-model quality, coding quality, or defaults |
+| Date | 2026-08-09 |
+| Measurement code commit | `bf81beb` |
+| Result commit | `d58fad7` |
+| Hardware | AMD Ryzen 7 9800X3D host; CPU execution; RTX 5080 unused by the measured rows |
+| Environment | WSL2 Ubuntu 24.04.4, Linux 6.18.33.2; executable artifact on WSL2 ext4 `/tmp`; buffered blocking `pread` |
+| Model/checkpoint | deterministic 24-expert, natural Top-16 `synthetic-milestone-one`; K3X SHA-256 `89ef0b18f1adb55a305d111c6bb67eb8469e6dacc6eeac3363ad74a64ab0e861`; no full Kimi K3 weights |
+| Mode | exact natural/fixed K16 references; lossy fixed K4/K8/K12; adaptive mass/boundary/failure variants; fixed-K escalation; fixed K4 plus bounded exact LRU rescue |
+| Context / generated tokens | prompt `[1, 7, 3, 9]`; six generated tokens per row; natural tokens `[43, 32, 28, 49, 9, 28]` |
+| Warmup / samples | 3 / 20 separate process runs per row |
+| Peak system RSS | 5,488,640 to 5,943,296 bytes across rows |
+| NVMe GB/token | not measured; logical Reader bytes are not physical NVMe attribution |
+| H2D / VRAM / GPU utilization / memory bandwidth / kernel time | 0 or not applicable; CPU backend used |
+| Expert-cache hit rate | rescue row 0/108 hits/selected misses; disabled rows do not instantiate L1 caching |
+| Speculative acceptance / unique verification experts | not applicable; speculation is not implemented |
+| Enabled optimizations | selected routing policy; exact LRU rescue only in the rescue row; no proxy, pruning, prediction, quantization, or speculation |
+
+| Case | Avg K | Decode tok/s | Prefill tok/s | TTFT ms | Logical Reader bytes | Token parity | Prefix rate | Logit / state max abs. error | Cold rescues |
+|---|---:|---:|---:|---:|---:|---|---:|---:|---:|
+| Natural K16 | 16 | 1,132.006 | 991.844 | 21.218 | 1,294,992 | exact | 1.000 | 0 / 0 | 0 |
+| Fixed K4 | 4 | 3,663.871 | 2,484.597 | 18.646 | 766,224 | diverged | 0.917 | 0.050723 / 0.020566 | 0 |
+| Fixed K8 | 8 | 2,172.559 | 1,648.859 | 19.802 | 942,480 | diverged | 0.917 | 0.028294 / 0.010886 | 0 |
+| Fixed K12 | 12 | 1,512.418 | 1,201.711 | 21.036 | 1,118,736 | diverged | 0.750 | 0.018955 / 0.008148 | 0 |
+| Fixed K16 | 16 | 1,169.821 | 981.178 | 20.885 | 1,294,992 | exact | 1.000 | 0 / 0 | 0 |
+| Adaptive balanced | 16 | 1,073.366 | 971.098 | 22.111 | 1,294,992 | exact | 1.000 | 0 / 0 | 0 |
+| Adaptive mass 0.98 | 16 | 1,137.009 | 994.334 | 21.416 | 1,294,992 | exact | 1.000 | 0 / 0 | 0 |
+| Adaptive boundary 0.02 | 16 | 1,147.920 | 999.484 | 20.977 | 1,294,992 | exact | 1.000 | 0 / 0 | 0 |
+| Adaptive failure 1 | 16 | 1,156.740 | 998.297 | 21.133 | 1,294,992 | exact | 1.000 | 0 / 0 | 0 |
+| Adaptive failure 2 | 16 | 1,167.919 | 1,002.486 | 21.285 | 1,294,992 | exact | 1.000 | 0 / 0 | 0 |
+| Adaptive critical | 16 | 1,149.501 | 1,015.294 | 21.093 | 1,294,992 | exact | 1.000 | 0 / 0 | 0 |
+| Fixed K4 + failure 1 | 8 | 2,100.988 | 1,670.519 | 19.854 | 942,480 | diverged | 0.917 | 0.028294 / 0.010886 | 0 |
+| Fixed K4 + failure 2 | 12 | 1,508.239 | 1,265.230 | 20.284 | 1,118,736 | diverged | 0.750 | 0.018955 / 0.008148 | 0 |
+| Fixed K4 + critical | 16 | 1,185.808 | 1,016.261 | 20.909 | 1,294,992 | exact | 1.000 | 0 / 0 | 0 |
+| Fixed K4 + LRU rescue | 4 | 3,499.800 | 2,411.754 | 18.752 | 766,224 | diverged | 0.917 | 0.050723 / 0.020566 | 108 |
+
+Fixed K4/K8/K12 reduce logical Reader bytes by 40.8%/27.2%/13.6% and show 3.24x/1.92x/1.34x decode ratios against natural K16 on this tiny CPU graph. They also change greedy tokens, prefill logits, recurrent state, and later routing order, so the throughput ratios are not quality-equivalent speedups. Fixed K16 and fixed K4 plus critical escalation are exact.
+
+The synthetic router has normalized entropy near one, so every tested adaptive threshold conservatively selects K16. This is a measured limitation of the fixture, not evidence that adaptive selection will or will not reduce K on Kimi K3. The 6,528-byte rescue cache performs 108 exact cold loads and preserves the cache-disabled fixed-K4 tokens, route, logits, and state, but records zero hits and identical logical Reader traffic. Residency therefore changes neither routing nor quality, while this capacity provides no reuse benefit.
+
+Raw JSON/CSV, diagnostic JSON, and the programmatically cross-checked summary are under `results/b0012-adaptive-routing-wsl/`. The summary SHA-256 is `72de06f6fe7ff18a82e67b87cb38c0cc7b1c2ee2819ac62fe2a828e69307cac9`.
+
+Verification passed CPU CTest 11/11 and pytest 227/41, liburing/direct CTest 12/12 and pytest 233/35, CUDA CTest 20/20 and pytest 260/8, plus ASan/UBSan liburing CTest 12/12 and targeted pytest 101/34. All ten CUDA Compute Sanitizer targets reported zero errors. A final self-review fix made natural mode ignore an otherwise out-of-range external quality floor; B-0012 uses natural Top-16 and its measured rows are unchanged.
+
 ## Derived bottleneck model — not a benchmark
 
 The released dimensions imply 17,547,264 bytes per native MXFP4 routed expert. With no cache reuse, natural Top-16 across 92 MoE layers implies 25,829,572,608 expert bytes/token. Applying the P44 Pro published 7.0 GB/s sequential figure gives a derived expert-only ceiling of about 0.271 tok/s and implies roughly 94.6% expert NVMe-byte avoidance for a 5 tok/s target.

@@ -25,13 +25,13 @@ Add a deterministic runtime routing-policy boundary with natural Top-K reference
 
 ## Task 4 — B-0012 and quality evidence
 
-- [ ] Build an ablation across natural K16, fixed K4/8/12/16, adaptive thresholds, escalated adaptive, and bounded-cache rescue.
-- [ ] Record natural divergence, tokens, logits/state error, average K, cold rescues, cache/Reader traffic, timing, and memory.
-- [ ] Keep natural as default unless measured quality and end-to-end evidence justify a later decision.
+- [x] Build an ablation across natural K16, fixed K4/8/12/16, adaptive thresholds, escalated adaptive, and bounded-cache rescue.
+- [x] Record natural divergence, tokens, logits/state error, average K, cold rescues, cache/Reader traffic, timing, and memory.
+- [x] Keep natural as default unless measured quality and end-to-end evidence justify a later decision.
 
 ## Task 5 — Verification, ledger, and publication
 
-- [ ] Run CPU, liburing/direct, CUDA, ASan/UBSan, and applicable Compute Sanitizer suites.
-- [ ] Self-review all callers and serialization consumers; close every Critical/Important issue.
-- [ ] Update ARCHITECTURE, DECISIONS, BENCHMARKS, and PROJECT_STATE last.
+- [x] Run CPU, liburing/direct, CUDA, ASan/UBSan, and applicable Compute Sanitizer suites.
+- [x] Self-review all callers and serialization consumers; close every Critical/Important issue.
+- [x] Update ARCHITECTURE, DECISIONS, BENCHMARKS, and PROJECT_STATE last.
 - [ ] Publish through a public PR and verify branch/PR/main CI.

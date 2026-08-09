@@ -152,7 +152,7 @@
 - [x] Implement and verify the pure routing policy.
 - [x] Add the 16-of-24 reference fixture and end-to-end parity.
 - [x] Integrate CLI, telemetry, escalation, and exact rescue.
-- [ ] Run B-0012, full verification, ledger, review, and public integration.
+- [ ] Run B-0012, full verification, ledger, review, and public integration. B-0012, verification, and ledger are complete; final review/public integration remain.
 
 ## Milestone 6 independent L2 reader
 

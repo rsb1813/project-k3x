@@ -236,6 +236,16 @@ The opt-in `profiled` eviction policy removes the lowest normalized prior/live u
 
 B-0011 compares LFU, Least-Stale, profiled without a prior, a matching prompt prior, and the minimum-overlap alternate prompt prior at an eight-expert synthetic capacity. All rows preserve exact tokens, routing, and numerical parity. The matching prior reaches the same 23 hits, 31 misses, and 628,080 logical Reader bytes as Least-Stale, while its tiny-graph decode timing is lower and the alternate prior is worse. No policy default changes. The normative design is in [`docs/superpowers/specs/2026-08-09-k3x-task-session-profiles-design.md`](docs/superpowers/specs/2026-08-09-k3x-task-session-profiles-design.md).
 
+## Milestone 11 experimental adaptive Top-K and exact rescue
+
+Milestone 11 preserves the checkpoint natural Top-K as immutable reference metadata and computes the full correction-biased stable expert order before selecting an execution prefix. `natural` executes the checkpoint K, `fixed` exposes K4/K6/K8/K12/K16, and `adaptive` chooses from that ladder using cumulative unbiased router mass, entropy effective support, boundary confidence, and an external quality floor. Contribution weights are renormalized over the selected prefix. Natural remains the default; every reduced-K path is explicitly lossy.
+
+Agent failure and critical signals map to K8, K12, and K16 floors for fixed/adaptive execution. Natural mode ignores the floor and always executes the checkpoint K, including on the default Top-2 correctness fixture. This is a low-level tested signal boundary, not an implementation claim for PHOENIX, SHADOW, AUTO, or repeated-agent-failure detection. The caller remains responsible for producing those signals.
+
+Residency never substitutes an expert. When an expert in the selected prefix is absent from an enabled L1 cache, the runtime fetches its exact native MXFP4 gate/up/down payload through the existing L2-to-L1 path and counts one cold rescue. An expert can be omitted only by the selected K policy, not because it is cold. Proxy and permanent pruning remain unimplemented.
+
+B-0012 uses a deterministic 24-expert, natural Top-16 executable fixture. Fixed K16 and critical escalation are exact against natural execution. K4/K8/K12 reduce logical Reader bytes by 40.8%/27.2%/13.6% and increase tiny CPU decode throughput by 3.24x/1.92x/1.34x, but all three change tokens, logits, and recurrent state. The tested adaptive thresholds all conservatively select K16 because the fixture router distribution is nearly uniform. A 6,528-byte LRU rescue case performs 108 exact cold loads, preserves the cache-disabled K4 execution exactly, and records zero hits or traffic savings. No reduced or adaptive mode becomes a default. The normative design is in [`docs/superpowers/specs/2026-08-09-k3x-adaptive-topk-exact-rescue-design.md`](docs/superpowers/specs/2026-08-09-k3x-adaptive-topk-exact-rescue-design.md).
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

@@ -374,3 +374,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: B-0011 full-generation materialized profile sizes exactly match raw telemetry at 1,439, 1,439, and 1,645 bytes. A review fix prevents the final TTFT sample from overwriting those artifacts and prevents record-cap saturation from producing a self-rejected profile.
 - Reason: default-path observation would add unrequested maps and transition work to every token. Explicit paths avoid hidden filesystem state and keep evidence attributable.
 - Revisit: add file and parent-directory fsync plus an explicit multi-writer ownership protocol before claiming power-loss durability or concurrent profile writers.
+
+## D-034 — Preserve natural Top-K as default and expose reduced K only as a lossy policy
+
+- Date: 2026-08-09.
+- Status: accepted, implemented, measured, and retained as experimental.
+- Decision: keep checkpoint natural Top-K immutable and default. Compute the full stable router order, then let fixed or adaptive policy select only an order prefix. Renormalize unbiased scores over that prefix, never substitute resident experts, and exact-load every selected cold expert. External failure/critical signals may raise a fixed/adaptive K floor but never lower it; natural mode ignores the floor.
+- Alternatives considered: mutate checkpoint Top-K; permanently prune cold experts; replace selected cold experts with lower-ranked resident experts; preserve the full order and expose a reversible execution prefix.
+- Evidence: natural and fixed K16 are exact in PyTorch and C++. The 16-of-24 runtime tests prove fixed K4 matches the Python oracle, cache residency does not change selected IDs, failure count 2 raises fixed K4 to K12, and critical raises it to K16.
+- Benchmark result: B-0012 records K4/K8/K12 logical Reader reductions of 40.8%/27.2%/13.6% and tiny CPU decode ratios of 3.24x/1.92x/1.34x against natural K16, but all three diverge in tokens, logits, and recurrent state. Fixed K16 and critical escalation are exact. All adaptive rows choose K16 on the nearly uniform synthetic router, while the bounded rescue row performs 108 exact loads with zero hits and no traffic reduction.
+- Reason: routing identity and residency must remain separate for correctness. The measured speed/traffic gains do not justify a default because quality diverges and no full-model coding evaluation exists.
+- Revisit: after calibrated full-model routing traces, coding/agentic quality suites, native-Linux physical NVMe and H2D attribution, and SHADOW/PHOENIX signal producers are implemented and jointly measured.
