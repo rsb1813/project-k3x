@@ -84,7 +84,7 @@ B-0007 crosses the two axes when the filesystem supports them.
 | pread-direct | pread | direct |
 | io-uring-direct | io_uring | direct |
 
-The first correctness artifact remains the seeded synthetic K3X model. A second bounded I/O fixture contains aligned multi-megabyte expert-like extents so queue depth and direct-I/O amplification are measurable without downloading Kimi K3.
+The first correctness artifact remains the seeded synthetic K3X model. A second bounded I/O fixture with aligned multi-megabyte expert-like extents is proposed so queue depth and direct-I/O amplification can become representative without downloading Kimi K3; it is not implemented in Milestone 6.
 
 Every row records model tokens/routing, logical Reader calls/bytes, submitted/completed storage bytes, batch count, completion count, queue depth, direct alignment, `/proc/self/io` `rchar` and `read_bytes` deltas when available, elapsed read time, and end-to-end timing. Cache state and filesystem/mount identity must be recorded. Dropping system caches is not automated because it is privileged and globally disruptive.
 
@@ -96,7 +96,7 @@ The default cannot change from `pread + buffered` on WSL2 evidence. Native Linux
 - `K3X_ENABLE_IO_URING=ON` requires a discovered liburing package and Linux.
 - Direct mode reports alignment and filesystem capability failures explicitly.
 - Queue depth must be positive and bounded before allocating request state.
-- Reader destruction waits for or cancels no work because the first API is batch-scoped and returns only after all submitted requests are reaped.
+- Successful batches return only after all submitted requests are reaped. A submit or completion failure closes the ring while batch buffers are still alive, causing kernel shutdown cancellation, and marks that Reader's io_uring path unavailable for later calls.
 - No paid resource, full checkpoint, privileged cache drop, or Cloud Run action belongs to this milestone.
 
 ## Acceptance
@@ -109,4 +109,5 @@ Milestone 6 is accepted only when exact single and batch reads, out-of-order com
 - Linux `statx(2)` defines `stx_dio_mem_align`, `stx_dio_offset_align`, and the filesystem-dependent support boundary: <https://man7.org/linux/man-pages/man2/statx.2.html>.
 - Upstream liburing documents explicit offsets and negative error results in CQEs for `io_uring_prep_read`: <https://man7.org/linux/man-pages/man3/io_uring_prep_read.3.html>.
 - Upstream liburing describes registered buffers as a separate optimization, especially with direct I/O, which is why they are excluded from the first engine comparison: <https://man7.org/linux/man-pages/man3/io_uring_register_buffers.3.html>.
+- Linux's io_uring cancellation documentation states that closing a ring cancels all pending requests, which defines the fail-closed buffer-lifetime recovery path: <https://man7.org/linux/man-pages/man7/io_uring_cancelation.7.html>.
 - The upstream liburing repository states that library and kernel versions are not locked together and newer operations require runtime/kernel capability handling: <https://github.com/axboe/liburing>.

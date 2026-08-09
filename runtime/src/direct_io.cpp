@@ -1,6 +1,10 @@
 // O_DIRECT 요청을 정렬된 bounce buffer로 실행하고 논리 extent를 복원합니다.
 #include "direct_io.hpp"
 
+#ifdef K3X_ENABLE_IO_URING
+#include "io_ring_guard.hpp"
+#endif
+
 #ifndef _WIN32
 
 #include <algorithm>
@@ -204,8 +208,9 @@ Result<std::vector<std::vector<std::byte>>> read_direct_pread(
 
 #ifdef K3X_ENABLE_IO_URING
 Result<std::vector<std::vector<std::byte>>> read_direct_io_uring(
-    int descriptor, io_uring& ring, std::span<const ExtentRequest> requests,
-    std::size_t queue_depth, DirectIoAlignment alignment,
+    int descriptor, io_uring& ring, bool& ring_initialized,
+    std::span<const ExtentRequest> requests, std::size_t queue_depth,
+    DirectIoAlignment alignment,
     ReadCounters& counters) {
     auto plan = make_plan(requests, alignment);
     if (!plan) {
@@ -216,6 +221,7 @@ Result<std::vector<std::vector<std::byte>>> read_direct_io_uring(
          base += queue_depth) {
         const auto count = std::min(
             queue_depth, plan.value().operations.size() - base);
+        IoRingBatchGuard ring_guard(ring, ring_initialized);
         for (std::size_t local = 0; local < count; ++local) {
             const auto index = base + local;
             const auto& operation = plan.value().operations[index];
@@ -256,8 +262,11 @@ Result<std::vector<std::vector<std::byte>>> read_direct_io_uring(
         ErrorCode batch_error = ErrorCode::ok;
         for (std::size_t completed = 0; completed < submitted_total; ++completed) {
             io_uring_cqe* completion = nullptr;
-            if (io_uring_wait_cqe(&ring, &completion) < 0 ||
-                completion == nullptr) {
+            int waited = 0;
+            do {
+                waited = io_uring_wait_cqe(&ring, &completion);
+            } while (waited == -EINTR);
+            if (waited < 0 || completion == nullptr) {
                 return Result<std::vector<std::vector<std::byte>>>::failure(
                     ErrorCode::io_error);
             }
@@ -278,6 +287,7 @@ Result<std::vector<std::vector<std::byte>>> read_direct_io_uring(
             return Result<std::vector<std::vector<std::byte>>>::failure(
                 ErrorCode::io_error);
         }
+        ring_guard.release();
         if (batch_error != ErrorCode::ok) {
             return Result<std::vector<std::vector<std::byte>>>::failure(
                 batch_error);

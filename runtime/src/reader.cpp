@@ -4,6 +4,9 @@
 #include "k3x/checksums.hpp"
 #include "direct_io.hpp"
 #include "io_completion.hpp"
+#ifdef K3X_ENABLE_IO_URING
+#include "io_ring_guard.hpp"
+#endif
 
 #include <algorithm>
 #include <array>
@@ -180,6 +183,15 @@ struct Reader::DataPlane {
         return Result<std::vector<std::vector<std::byte>>>::success(
             std::move(values));
 #else
+        if (engine == L2IoEngine::io_uring) {
+#ifdef K3X_ENABLE_IO_URING
+            if (!ring_initialized) {
+                return Result<std::vector<std::vector<std::byte>>>::failure(
+                    ErrorCode::storage_unavailable,
+                    "io_uring reader is unavailable after an I/O failure");
+            }
+#endif
+        }
         if (cache_mode == L2CacheMode::direct) {
             if (engine == L2IoEngine::pread) {
                 return detail::read_direct_pread(
@@ -187,7 +199,7 @@ struct Reader::DataPlane {
             }
 #ifdef K3X_ENABLE_IO_URING
             return detail::read_direct_io_uring(
-                descriptor, ring, requests, queue_depth,
+                descriptor, ring, ring_initialized, requests, queue_depth,
                 direct_alignment, counters);
 #else
             return Result<std::vector<std::vector<std::byte>>>::failure(
@@ -291,6 +303,7 @@ struct Reader::DataPlane {
              base += queue_depth) {
             const auto count = std::min(
                 queue_depth, operations.size() - base);
+            detail::IoRingBatchGuard ring_guard(ring, ring_initialized);
             for (std::size_t local = 0; local < count; ++local) {
                 auto* submission = io_uring_get_sqe(&ring);
                 if (submission == nullptr) {
@@ -334,7 +347,10 @@ struct Reader::DataPlane {
             for (std::size_t completed = 0; completed < submitted_total;
                  ++completed) {
                 io_uring_cqe* completion = nullptr;
-                const auto waited = io_uring_wait_cqe(&ring, &completion);
+                int waited = 0;
+                do {
+                    waited = io_uring_wait_cqe(&ring, &completion);
+                } while (waited == -EINTR);
                 if (waited < 0 || completion == nullptr) {
                     return Result<std::vector<std::vector<std::byte>>>::failure(
                         ErrorCode::io_error, "io_uring completion failed");
@@ -354,6 +370,7 @@ struct Reader::DataPlane {
                 return Result<std::vector<std::vector<std::byte>>>::failure(
                     ErrorCode::io_error, "io_uring submission failed");
             }
+            ring_guard.release();
             if (batch_error != ErrorCode::ok) {
                 return Result<std::vector<std::vector<std::byte>>>::failure(
                     batch_error);

@@ -27,8 +27,9 @@ Result<std::vector<std::vector<std::byte>>> read_direct_pread(
 
 #ifdef K3X_ENABLE_IO_URING
 Result<std::vector<std::vector<std::byte>>> read_direct_io_uring(
-    int descriptor, io_uring& ring, std::span<const ExtentRequest> requests,
-    std::size_t queue_depth, DirectIoAlignment alignment,
+    int descriptor, io_uring& ring, bool& ring_initialized,
+    std::span<const ExtentRequest> requests, std::size_t queue_depth,
+    DirectIoAlignment alignment,
     ReadCounters& counters);
 #endif
 }

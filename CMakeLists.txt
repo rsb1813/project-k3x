@@ -149,6 +149,15 @@ target_include_directories(test_io_completion PRIVATE runtime/src)
 target_link_libraries(test_io_completion PRIVATE k3x_runtime)
 add_test(NAME io_completion COMMAND test_io_completion)
 
+if(K3X_ENABLE_IO_URING)
+    add_executable(test_io_ring_guard tests/cpp/test_io_ring_guard.cpp)
+    target_compile_definitions(test_io_ring_guard PRIVATE K3X_ENABLE_IO_URING=1)
+    target_include_directories(test_io_ring_guard PRIVATE
+        runtime/src ${LIBURING_INCLUDE_DIR})
+    target_link_libraries(test_io_ring_guard PRIVATE ${LIBURING_LIBRARY})
+    add_test(NAME io_ring_guard COMMAND test_io_ring_guard)
+endif()
+
 add_executable(k3x_run runtime/src/main.cpp runtime/src/model.cpp)
 target_link_libraries(k3x_run PRIVATE k3x_runtime)
 

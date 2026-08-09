@@ -277,7 +277,9 @@ All four cases report zero Reader failures and short reads and preserve exact to
 
 The tiny warm buffered case favors `pread`; direct mode is dominated by hundreds of small aligned reads, although batching makes io_uring materially less slow than direct `pread` in this environment. These figures neither select a native-Linux default nor project full-model throughput. `pread + buffered` remains the default until a full-dimension bounded slice is measured on native Linux with the P44 Pro. Raw JSON/CSV and the cross-checked manifest are under `results/b0007-l2-reader-wsl/`.
 
-Post-measurement verification passed CPU CTest 8/8 and pytest 135 passed/40 skipped, liburing/direct CTest 8/8 and pytest 136 passed/39 skipped, CUDA CTest 17/17 and pytest 168 passed/7 skipped. All ten CUDA Compute Sanitizer targets reported zero errors.
+Final read-only review found an io_uring error-path lifetime gap but no successful-path result defect. The fix closes and invalidates the ring before batch buffers are destroyed on any submit/wait early return and retries `EINTR`; a real-ring guard regression and ASan/UBSan liburing CTest 9/9 pass. The unimplemented multi-megabyte fixture is now explicitly proposed rather than claimed. Because the successful execution order is unchanged, B-0007 raw measurements remain valid; a post-fix four-case smoke preserved exact tokens, routing, bytes, and counters.
+
+Post-review verification passed CPU CTest 8/8 and pytest 136 passed/40 skipped, liburing/direct CTest 9/9 and pytest 137 passed/39 skipped, CUDA CTest 17/17 and pytest 169 passed/7 skipped. All ten CUDA Compute Sanitizer targets from the measurement commit reported zero errors; the review fix does not compile into the non-liburing CUDA build.
 
 ## Derived bottleneck model — not a benchmark
 
