@@ -120,7 +120,9 @@
 - [x] Deadline scheduler contract와 deterministic unit tests.
 - [x] Reader 및 L1 store concurrency safety.
 - [x] Blocking reference를 보존하는 exact current-layer runtime integration.
-- [ ] CLI, telemetry, B-0009 ablation.
+- [x] CLI와 deadline scheduler telemetry.
+- [x] B-0009 8-case ablation runner와 correctness 계약.
+- [ ] B-0009 실제 측정.
 - [ ] 전체 verification, final review, TITAN Ledger, public integration.
 
 ## Milestone 6 independent L2 reader

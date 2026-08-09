@@ -31,8 +31,8 @@ Implement and measure an opt-in, exact current-layer deadline-aware L2 expert lo
 
 ## Task 5 — B-0009 ablation
 
-- [ ] Add a blocking/deadline ablation crossed with supported Reader modes.
-- [ ] Require exact tokens, routing, logical bytes, and successful-load parity.
+- [x] Add a blocking/deadline ablation crossed with supported Reader modes.
+- [x] Require exact tokens, routing, logical bytes, and successful-load parity.
 - [ ] Run warm synthetic measurements and preserve raw JSON/CSV.
 - [ ] Do not claim native P44 Pro, cold-cache, or full-model performance.
 
