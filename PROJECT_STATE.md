@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 4 exact asynchronous L1-to-L0 transfer is complete and public. Milestone 5 persistent bounded L1 expert-cache design and TDD planning are complete; implementation is in progress.
+Milestone 4 is complete and public. Milestone 5 bounded persistent L1 expert-cache implementation, verification, and B-0006 measurement are complete; final read-only review and public integration are in progress.
 
-State recorded on 2026-08-09 from public closure `04e9cbc` after correctness run `31299092196` succeeded and branch `codex/milestone-five-l1-cache` was created. No Milestone 5 code or benchmark claim exists yet.
+State recorded on 2026-08-09 at local branch commit `526e31a` after the measured B-0006 code state `616c857`, result commit `273a93b`, and compact-manifest cross-check. Public `main` remains at Milestone 4 closure `04e9cbc` until review and CI complete.
 
 ## Completed work
 
@@ -27,11 +27,17 @@ State recorded on 2026-08-09 from public closure `04e9cbc` after correctness run
 - Two-phase routed MoE scheduling that overlaps exact expert H2D with the routed-down projection while preserving natural routing, CPU score mixing, recurrent state, and greedy tokens.
 - Runtime and benchmark accounting for pinned memory, prefetch calls/bytes, ready/late use, stream waits, staging/device/stall time, async-engine count, and device-overlap capability.
 - B-0005 FP32/BF16 measurement with three warmups and 20 samples across synchronous/prefetch and scalar/grouped paths, including raw JSON/CSV and a cross-checked compact manifest.
+- Runtime `disabled|static` L1 expert-cache identity, hard capacity pairing, explicit hit/miss/bypass/current/peak counters, and backward-compatible disabled default.
+- Immutable whole-expert native MXFP4 handles keyed by layer/expert, complete-expert atomic admission, stable zero-copy hits, overflow guards, loader failure atomicity, no-eviction capacity, and exact transient bypass.
+- Shared payload lifetime across CPU/operation, synchronous CUDA FFN-block, and asynchronous prepared-transfer execution without changing router selection or device payloads.
+- Reader calls/requested/completed byte accounting in runtime and benchmark JSON/CSV, explicitly labeled as logical file reads rather than physical NVMe traffic.
+- Four-case B-0006 runner crossing disabled/static L1 with synchronous/prefetch transfer, including strict option/provenance, token/routing, traffic, capacity, cache-counter, and raw-artifact checks.
+- B-0006 FP32/BF16 measurement with three warmups and 20 samples per row, raw JSON/CSV, compact manifest, and programmatic compact/raw cross-check.
 
 ## Work in progress
 
-- Milestone 5 has an accepted model-adjacent immutable whole-expert L1 design and an eight-task TDD plan. Runtime implementation has not started.
-- The first implementation supports disabled/static no-eviction admission and exact transient bypass only. It deliberately defers LRU, LFU, Least-Stale, eviction, task/session priors, prediction, and L2 async I/O.
+- Milestone 5 code and durable measurement documents await one final Terra high read-only review, affected verification if findings require changes, and public branch/PR/CI integration.
+- Static L1 admission is experimental and opt-in. LRU, LFU, Least-Stale, eviction, task/session priors, prediction, and L2 async I/O remain unimplemented.
 - The TITAN Ledger, README, checklist, context notes, and compact/raw B-0005 artifacts are synchronized with the measured Milestone 4 implementation.
 - Final Terra high review found three Important contract/test gaps. Commit `190459b` enforces use-sequence identity before side effects, strengthens failure-atomicity coverage, and requires matched H2D/synchronization equality. No Critical or Important finding remains unaddressed.
 - Public PR #4 merged by ancestry-verified fast-forward at `c961026`; post-merge correctness run `31298966035` succeeded.
@@ -51,11 +57,10 @@ State recorded on 2026-08-09 from public closure `04e9cbc` after correctness run
 
 ## Next concrete tasks
 
-1. Implement runtime options and the hard-capacity immutable host expert store with unit-tested atomic admission and exact bypass.
-2. Integrate stable payload handles into operation, FFN-block, and prepared-transfer paths while preserving exact routing/tokens and Reader accounting.
-3. Add L1/Reader benchmark fields, the four-case B-0006 runner, full verification, and FP32/BF16 measurement.
-4. After B-0006, add an independently switchable L2 NVMe reader and benchmark buffered I/O, `io_uring`, and `O_DIRECT` on native Linux before choosing a default.
-5. Add full-dimension bounded checkpoint slices, then continue with policy/Least-Stale, task/session profiles, adaptive Top-K, and exact rescue in charter order.
+1. Complete the final Critical/Important read-only review, address evidence-backed findings once, and rerun affected verification.
+2. Push `codex/milestone-five-l1-cache`, open the public PR, wait for Linux CI, fast-forward public `main` only after ancestry verification, and confirm post-merge CI.
+3. Design an independently switchable L2 reader and native-Linux benchmark for buffered I/O, `io_uring`, and `O_DIRECT` before choosing a default.
+4. Add full-dimension bounded checkpoint slices, then continue with policy/Least-Stale, task/session profiles, adaptive Top-K, and exact rescue in charter order.
 
 ## Hardware assumptions
 
@@ -72,27 +77,26 @@ State recorded on 2026-08-09 from public closure `04e9cbc` after correctness run
 
 ## Latest measured bottleneck
 
-B-0005 measures FP32 synchronous/prefetch scalar at 16.9701/16.7947 decode tok/s and grouped at 16.7055/16.7914. BF16 scalar measures 16.6366/16.5735 and grouped 16.5529/16.7021. Matched prefetch changes range from -1.03% to +0.90%, so synchronous transfer remains the default.
+B-0006 measures FP32 disabled/static synchronous at 16.6714/50.5246 decode tok/s and prefetch at 16.9078/49.4904. BF16 disabled/static synchronous measures 16.5688/47.2476 and prefetch 16.7753/50.9757. Static admission remains opt-in because this roughly 2.85–3.04x difference is a tiny repeated-route WSL2 graph result, not a full-model projection.
 
-Every prefetch row performs 27 exact prepares and waits, with all 27 transfers ready before use, unchanged H2D bytes, and no additional host synchronization. The fixed pipeline adds 1 MiB of pinned host staging and 1,048,032 bytes of peak device staging, while exposed transfer stall is 0.198--0.312 ms per run. The narrow overlap mechanism is working, but the synthetic graph does not provide enough expert transfer work for a stable end-to-end gain.
+Static rows admit 18 complete experts into 29,376 bytes, record 36 hits and zero bypasses, and reduce logical Reader calls/bytes from 428/665,616 to 212/606,864. Exact tokens, routing, H2D, D2H, FFN work, and synchronization remain unchanged. These counters do not measure physical NVMe traffic.
 
-The latest measured bottleneck is now the boundary before prefetch: synchronous K3X file-to-pageable-host materialization and the lack of persistent L1 residency, together with the still CPU-driven KDA/MLA, routing, residual/state, and non-FFN orchestration. Native-Linux L2 NVMe traffic and storage I/O stall remain unknown.
+The next measured boundary is representative L2 behavior and admission under real capacity pressure. The synthetic cache fits every observed expert, so it cannot select eviction or Least-Stale policy. Native-Linux physical NVMe traffic, storage I/O stall, buffered versus `io_uring`/`O_DIRECT`, and full-dimension expert sizes remain unknown. CPU-driven KDA/MLA, routing, residual/state, and non-FFN orchestration also remain visible bottlenecks.
 
 The derived uncached full-model expert traffic remains 25.83 GB/token, but it is not a measured full-model value. Native-Linux NVMe traffic, cache reuse, and full Kimi K3 throughput remain unknown.
 
 ## Last known-good state
 
 - Public Milestone 4 closure `main`: `04e9cbc327520586c7e593447c6724703c874210`; correctness run `31299092196` succeeded.
-- B-0005 measurement commit: `99cf1e4164510824ee67755c410b74887793fa8a` (`feat: add asynchronous transfer ablation`).
-- Latest validated code commit: `190459b` (`fix: enforce async transfer identity invariants`); the valid B-0005 execution path and ordering are unchanged.
-- CI portability fix: `c961026` (`test: detect CPU-only builds by capability`); it changes test environment detection only.
-- CPU verification: CTest 5/5; pytest 98 passed and 27 CUDA-only skipped.
-- CUDA verification: CTest 14/14; pytest 124 passed and one CPU-build-only skipped.
+- B-0006 measurement code commit: `616c857` (`feat: add persistent L1 cache ablation`).
+- B-0006 raw/compact result commit: `273a93b` (`bench: record persistent L1 cache ablation`).
+- Latest local validation commit: `526e31a` (`test: cross-check B-0006 compact manifest`).
+- CPU verification: CTest 6/6; pytest 106 passed and 34 CUDA-only skipped.
+- CUDA verification: CTest 15/15; pytest 139 passed and one CPU-build-only skipped.
 - Compute Sanitizer: `test_cuda_device`, `test_cuda_dense`, `test_cuda_mxfp4`, `test_cuda_memory`, `test_cuda_pinned_memory`, `test_cuda_async_pipeline`, `test_cuda_residency`, `test_cuda_situ`, `test_cuda_ffn`, and `test_cuda_async_ffn` each report `ERROR SUMMARY: 0 errors`.
-- Post-review Compute Sanitizer repetition: affected `test_cuda_async_pipeline` and `test_cuda_async_ffn` each report `ERROR SUMMARY: 0 errors`.
-- Exact generated tokens: `[43, 32, 28, 49, 9, 28]` and the same 24-entry routing trace across all B-0005 rows.
-- B-0005 artifact SHA-256: `e245c52759dffcfaccfe182bbba56fa069288d99f0d70a1cd779169bb51e6993`; converter maximum source read: 257 bytes.
-- B-0005 compact manifest: `results/b0005-async-transfer.json`; raw JSON/CSV: `results/b0005-async-transfer-fp32/` and `results/b0005-async-transfer-bf16/`.
+- Exact generated tokens: `[43, 32, 28, 49, 9, 28]` and the same 24-entry routing trace across all B-0006 rows.
+- B-0006 artifact SHA-256: `077e10a3ba478e83ac8dfd2509ea51a6ea2bfdfe670b60fcadc7f74b97ff810c`; converter maximum source read: 257 bytes.
+- B-0006 compact manifest: `results/b0006-l1-cache.json`; raw JSON/CSV: `results/b0006-l1-cache-fp32/` and `results/b0006-l1-cache-bf16/`.
 
 ## Proposed component status
 

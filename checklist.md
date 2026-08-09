@@ -108,7 +108,8 @@
 - [x] model-adjacent immutable whole-expert store 선택과 대안 기록.
 - [x] bounded no-eviction exact-bypass 설계 명세 작성과 self-review.
 - [x] 상세 TDD 구현 계획과 B-0006 acceptance matrix 작성.
-- [ ] runtime options와 hard-capacity host expert store 구현.
-- [ ] operation/FFN-block/prefetch graph 연결과 exact parity 검증.
-- [ ] L1/Reader profiler schema와 B-0006 ablation runner 구현.
-- [ ] 전체 correctness, sanitizer, B-0006, TITAN Ledger 갱신.
+- [x] runtime options와 hard-capacity host expert store 구현.
+- [x] operation/FFN-block/prefetch graph 연결과 exact parity 검증.
+- [x] L1/Reader profiler schema와 B-0006 ablation runner 구현.
+- [x] 전체 correctness, sanitizer, B-0006 측정.
+- [ ] TITAN Ledger 최종 검토와 public GitHub 반영.

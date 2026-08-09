@@ -21,11 +21,11 @@
 - Modify `tests/cpp/test_backend.cpp` only if shared defaults belong there; otherwise create `tests/cpp/test_model_options.cpp` and add its CMake target.
 - Modify `tests/python/test_cpp_parity.py`.
 
-- [ ] Write RED tests for `disabled|static`, zero/positive capacity pairing, unknown mode, CPU acceptance, and backward-compatible disabled defaults.
-- [ ] Add `L1ExpertCacheMode`, `RuntimeOptions`, `L1ExpertCacheStats`, result fields, and an options-based generation overload.
-- [ ] Parse and serialize `--l1-expert-cache` and `--l1-expert-cache-bytes` without coupling them to CUDA switches.
-- [ ] Run CPU and CUDA targeted tests.
-- [ ] Commit as `feat: define bounded L1 expert cache contract`.
+- [x] Write RED tests for `disabled|static`, zero/positive capacity pairing, unknown mode, CPU acceptance, and backward-compatible disabled defaults.
+- [x] Add `L1ExpertCacheMode`, `RuntimeOptions`, `L1ExpertCacheStats`, result fields, and an options-based generation overload.
+- [x] Parse and serialize `--l1-expert-cache` and `--l1-expert-cache-bytes` without coupling them to CUDA switches.
+- [x] Run CPU and CUDA targeted tests.
+- [x] Commit as `feat: define bounded L1 expert cache contract`.
 
 ## Task 2: Implement the immutable bounded host expert store
 
@@ -35,12 +35,12 @@
 - Create `tests/cpp/test_host_expert_store.cpp`.
 - Modify `CMakeLists.txt`.
 
-- [ ] Write RED tests for first admission, stable hit identity, exact capacity, oversized bypass, no-room bypass, duplicate key, disabled behavior if represented by the class, and loader failure atomicity.
-- [ ] Define exact projection/payload/key types and immutable shared handles.
-- [ ] Implement loader-on-miss, whole-expert charged-byte calculation with overflow guards, hard capacity, no eviction, and zero-copy hits.
-- [ ] Ensure a failed loader and invalid payload cannot change success counters or residency.
-- [ ] Run the native CPU test in Debug/Release-compatible assertions.
-- [ ] Commit as `feat: add immutable bounded host expert store`.
+- [x] Write RED tests for first admission, stable hit identity, exact capacity, oversized bypass, no-room bypass, duplicate key, disabled behavior if represented by the class, and loader failure atomicity.
+- [x] Define exact projection/payload/key types and immutable shared handles.
+- [x] Implement loader-on-miss, whole-expert charged-byte calculation with overflow guards, hard capacity, no eviction, and zero-copy hits.
+- [x] Ensure a failed loader and invalid payload cannot change success counters or residency.
+- [x] Run the native CPU test in Debug/Release-compatible assertions.
+- [x] Commit as `feat: add immutable bounded host expert store`.
 
 ## Task 3: Integrate the store into every expert execution path
 
@@ -48,12 +48,12 @@
 - Modify `runtime/src/model.cpp`.
 - Modify `tests/python/test_cpp_parity.py`.
 
-- [ ] Write RED graph tests for disabled/static parity across operation and FFN-block paths and verify the same token/routing trace.
-- [ ] Replace transient value payloads with shared handles whose lifetime covers view construction and backend execution.
-- [ ] Keep disabled behavior byte/read identical and make static hits skip all six reader calls.
-- [ ] Verify static capacity bypass returns the exact transient result and never changes routing.
-- [ ] Run CPU full-prefix/incremental and CUDA synchronous graph parity.
-- [ ] Commit as `feat: cache exact expert payloads in system RAM`.
+- [x] Write RED graph tests for disabled/static parity across operation and FFN-block paths and verify the same token/routing trace.
+- [x] Replace transient value payloads with shared handles whose lifetime covers view construction and backend execution.
+- [x] Keep disabled behavior byte/read identical and make static hits skip all six reader calls.
+- [x] Verify static capacity bypass returns the exact transient result and never changes routing.
+- [x] Run CPU full-prefix/incremental and CUDA synchronous graph parity.
+- [x] Commit as `feat: cache exact expert payloads in system RAM`.
 
 ## Task 4: Feed Milestone 4 prepared transfer from L1 safely
 
@@ -62,11 +62,11 @@
 - Modify `tests/python/test_cpp_parity.py`.
 - Modify `tests/cuda/test_cuda_async_ffn.cu` only if a lower-level lifetime regression is required.
 
-- [ ] Write RED tests requiring static-cache hits with prefetch while preserving exact tokens, routing, H2D, prepared-call counts, and single-use identity.
-- [ ] Hold cache handles through prepare and consume; do not expose device pointers or weaken the owned pinned-copy contract.
-- [ ] Test no-room exact bypass and admitted-hit paths under FP32/BF16 and scalar/grouped where applicable.
-- [ ] Run CUDA graph parity and affected Compute Sanitizer targets.
-- [ ] Commit as `feat: feed exact prefetch from persistent L1`.
+- [x] Write tests requiring static-cache hits with prefetch while preserving exact tokens, routing, H2D, prepared-call counts, and single-use identity.
+- [x] Hold cache handles through prepare and consume; do not expose device pointers or weaken the owned pinned-copy contract.
+- [x] Test no-room exact bypass and admitted-hit paths under FP32/BF16 and scalar/grouped where applicable.
+- [x] Run CUDA graph parity and affected Compute Sanitizer targets.
+- [x] Commit as `test: verify persistent L1 prefetch lifetime` because Task 3 handle ownership already satisfied the implementation.
 
 ## Task 5: Expose L1 and reader accounting in benchmark records
 
@@ -75,35 +75,35 @@
 - Modify `tools/benchmark_synthetic.py`.
 - Modify `tests/python/test_benchmark_schema.py`.
 
-- [ ] Write RED schema tests for configured mode/capacity, hits, misses, bypasses, current/peak resident bytes, reader calls, requested bytes, and completed bytes.
-- [ ] Serialize runtime JSON and preserve literal integer fields in JSON/CSV.
-- [ ] Require deterministic cache counters across measured samples; continue using medians only for timing/RSS fields.
-- [ ] Verify disabled zero counters and static positive bounded counters on CPU and CUDA.
-- [ ] Commit as `feat: report persistent L1 cache accounting`.
+- [x] Write RED schema tests for configured mode/capacity, hits, misses, bypasses, current/peak resident bytes, reader calls, requested bytes, and completed bytes.
+- [x] Serialize runtime JSON and preserve literal integer fields in JSON/CSV.
+- [x] Require deterministic cache counters across measured samples; continue using medians only for timing/RSS fields.
+- [x] Verify disabled zero counters and static positive bounded counters on CPU and CUDA.
+- [x] Commit as `feat: report persistent L1 cache accounting`.
 
 ## Task 6: Add the B-0006 matched ablation runner
 
 **Files:**
 - Create `tools/ablate_l1_expert_cache.py`.
-- Create `tests/python/test_l1_expert_cache_ablation.py`.
+- Create `tests/python/test_l1_cache_ablation.py`.
 
-- [ ] Write RED fake-record tests for the exact four-case order from the design.
-- [ ] Reject token/routing/provenance mismatch, nonzero disabled counters, zero static hits/misses, capacity overflow, unexpected bypass, unchanged-or-higher static reader traffic, matched transfer-counter changes, and missing raw files.
-- [ ] Write one JSON/CSV per row and one measured-delta-only summary.
-- [ ] Run unit tests and FP32/BF16 one-sample real smokes.
-- [ ] Commit as `feat: add persistent L1 cache ablation`.
+- [x] Write RED matrix tests and fake-record validation for the exact four-case order from the design.
+- [x] Reject token/routing/provenance mismatch, nonzero disabled counters, zero static hits/misses, capacity overflow, unexpected bypass, unchanged-or-higher static reader traffic, matched transfer-counter changes, and missing raw files.
+- [x] Write one JSON/CSV per row and one measured-delta-only summary.
+- [x] Run unit tests and FP32/BF16 one-sample real smokes.
+- [x] Commit as `feat: add persistent L1 cache ablation`.
 
 ## Task 7: Full verification and B-0006 measurement
 
 **Files:**
-- Create `results/b0006-l1-expert-cache.json`.
+- Create `results/b0006-l1-cache.json`.
 - Create raw FP32/BF16 result directories.
 
-- [ ] Run complete CPU/CUDA builds, CTest, and pytest suites.
-- [ ] Run every CUDA Compute Sanitizer target.
-- [ ] Regenerate the seeded synthetic source and a chunk-257 K3X artifact; record maximum source read and artifact SHA-256.
-- [ ] Run FP32 and BF16 B-0006 with three warmups and 20 samples per row.
-- [ ] Programmatically cross-check compact values, exact tokens/routing, provenance, reader traffic, cache capacity, and transfer accounting against all raw records.
+- [x] Run complete CPU/CUDA builds, CTest, and pytest suites.
+- [x] Run every CUDA Compute Sanitizer target.
+- [x] Regenerate the seeded synthetic source and a chunk-257 K3X artifact; record maximum source read and artifact SHA-256.
+- [x] Run FP32 and BF16 B-0006 with three warmups and 20 samples per row.
+- [x] Programmatically cross-check compact values, exact tokens/routing, provenance, reader traffic, cache capacity, and transfer accounting against all raw records.
 
 ## Task 8: Update TITAN Ledger, review, and publish
 
@@ -111,8 +111,8 @@
 - Modify `ARCHITECTURE.md`, `DECISIONS.md`, `BENCHMARKS.md`, `README.md`, `checklist.md`, `context-notes.md`.
 - Modify `PROJECT_STATE.md` last.
 
-- [ ] Decide the default only from B-0006 correctness, reader traffic, memory cost, and end-to-end timing; never call logical reads physical NVMe traffic.
-- [ ] Update durable documents in TITAN protocol order and keep eviction/policies/L2 explicitly unimplemented.
+- [x] Decide the default only from B-0006 correctness, reader traffic, memory cost, and end-to-end timing; never call logical reads physical NVMe traffic.
+- [x] Update durable documents in TITAN protocol order and keep eviction/policies/L2 explicitly unimplemented.
 - [ ] Request one final Terra high read-only review limited to Critical/Important correctness, lifetime, capacity, accounting, and documentation issues.
 - [ ] Apply evidence-backed findings once and rerun affected verification.
 - [ ] Commit results/ledger, push `codex/milestone-five-l1-cache`, create a draft PR, wait for Linux CI, mark ready, ancestry-check, fast-forward public `main`, and confirm post-merge CI.

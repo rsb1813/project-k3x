@@ -205,6 +205,47 @@ Raw JSON/CSV records are stored under `results/b0005-async-transfer-fp32/` and `
 
 Post-measurement validation note: final read-only review found that the prepared token stored but did not enforce its exact use sequence, and that the ablation runner allowed matched-pair H2D or synchronization counters to differ. Commit `190459b` adds sequence identity to the token, rejects mismatches before allocation/H2D/event side effects while preserving the valid pending request, and requires exact matched total/weight/activation H2D plus synchronization. The valid B-0005 execution order is unchanged. Post-fix CPU CTest 5/5 and pytest 98 passed/27 skipped, CUDA CTest 14/14 and pytest 124 passed/1 skipped, both affected CUDA memcheck targets with zero errors, and FP32/BF16 one-sample four-case smokes passed. The smokes are validation evidence, not replacement performance measurements.
 
+## B-0006 — Milestone 5 bounded persistent L1 expert cache
+
+| Field | Value |
+|---|---|
+| Evidence | measured |
+| Date | 2026-08-09 |
+| Measurement commit | `616c857` |
+| Hardware | AMD Ryzen 7 9800X3D host; NVIDIA GeForce RTX 5080, 16,303 MiB |
+| Environment | WSL2 Ubuntu 24.04.4, Linux 6.18.33.2, CUDA Toolkit 13.3.1, native `sm_120` |
+| Model/checkpoint | regenerated seeded 4-layer, 24-expert, 178-tensor synthetic K3X; artifact SHA-256 `077e10a3ba478e83ac8dfd2509ea51a6ea2bfdfe670b60fcadc7f74b97ff810c`; converter maximum source read 257 bytes |
+| Mode | `cuda-custom`, `ffn-block`, reused allocation, transient GPU weights, scalar scheduling; disabled/static L1 crossed with synchronous/prefetch L1-to-L0 transfer |
+| Context length | 4 prompt tokens, IDs `[1, 7, 3, 9]` |
+| Generated tokens | 6, IDs `[43, 32, 28, 49, 9, 28]` in every row |
+| Routing | exact 24-entry prefill trace identical in every row; fixed synthetic Top-2, average Top-K 2 |
+| Warmup / samples | 3 / 20 separate process runs per row |
+| L1 capacity | 0 for disabled; 65,536 bytes for static |
+| Pinned capacity | 0 for synchronous; 1,048,576 bytes for prefetch |
+| NVMe GB/token | not measured; Reader requested/completed bytes are logical file reads, not OS or block-device counters |
+| GPU utilization / memory bandwidth | not measured |
+| Speculative acceptance / unique experts per verification block | not applicable; speculation is disabled |
+| Cold rescue | not implemented |
+
+| Precision / L1 / transfer | Decode tok/s | Prefill tok/s | TTFT ms | RSS bytes | Logical bytes/token | Reader calls / bytes | Hits / misses / bypass | L1 bytes | H2D / D2H bytes | Peak backend VRAM | Kernel ms | Prefetch calls / stall ms | Max abs. error |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| FP32 disabled synchronous | 16.6714 | 8.7220 | 1,154.061 | 507,142,144 | 110,936 | 428 / 665,616 | 0 / 0 / 0 | 0 | 5,074,560 / 83,952 | 43,680 | 22.866 | 0 / 0 | 1.790e-7 |
+| FP32 static synchronous | **50.5246** | 11.0671 | 1,053.051 | 507,355,136 | 101,144 | 212 / 606,864 | 36 / 18 / 0 | 29,376 | 5,074,560 / 83,952 | 43,680 | 23.679 | 0 / 0 | 1.790e-7 |
+| FP32 disabled prefetch | 16.9078 | 8.7492 | 1,158.391 | 507,400,192 | 110,936 | 428 / 665,616 | 0 / 0 / 0 | 0 | 5,074,560 / 83,952 | 1,091,712 | 19.380 | 27 / 0.270 | 1.790e-7 |
+| FP32 static prefetch | **49.4904** | 11.2901 | 1,058.068 | 507,355,136 | 101,144 | 212 / 606,864 | 36 / 18 / 0 | 29,376 | 5,074,560 / 83,952 | 1,091,712 | 24.854 | 27 / 0.341 | 1.790e-7 |
+| BF16 disabled synchronous | 16.5688 | 8.9036 | 1,142.626 | 481,792,000 | 110,936 | 428 / 665,616 | 0 / 0 / 0 | 0 | 2,583,072 / 83,952 | 22,752 | 23.189 | 0 / 0 | 0.00402409 |
+| BF16 static synchronous | **47.2476** | 11.4669 | 1,044.680 | 481,914,880 | 101,144 | 212 / 606,864 | 36 / 18 / 0 | 29,376 | 2,583,072 / 83,952 | 22,752 | 25.558 | 0 / 0 | 0.00402409 |
+| BF16 disabled prefetch | 16.7753 | 9.0852 | 1,145.899 | 481,988,608 | 110,936 | 428 / 665,616 | 0 / 0 / 0 | 0 | 2,583,072 / 83,952 | 1,070,784 | 20.094 | 27 / 0.281 | 0.00402409 |
+| BF16 static prefetch | **50.9757** | 11.5606 | 1,039.233 | 482,004,992 | 101,144 | 212 / 606,864 | 36 / 18 / 0 | 29,376 | 2,583,072 / 83,952 | 1,070,784 | 23.201 | 27 / 0.246 | 0.00402409 |
+
+Static admission reduces matched logical Reader calls by 216 and completed bytes by 58,752 per run. It preserves exact tokens, routing, total/weight/activation H2D, D2H, FFN calls/experts, and synchronization counts. The cache admits 18 complete experts, then serves 36 hits without a Reader call; no selected expert exceeds the 65,536-byte synthetic capacity.
+
+The derived matched decode improvements are +203.1% for FP32 synchronous, +192.7% for FP32 prefetch, +185.2% for BF16 synchronous, and +203.9% for BF16 prefetch. These unusually large synthetic gains isolate repeated WSL2 file-to-pageable-host materialization in a tiny graph with only 24 experts and repeated routes. They are not a full-model speed projection and do not justify enabling first-observation no-eviction admission by default.
+
+Raw JSON/CSV records are stored under `results/b0006-l1-cache-fp32/` and `results/b0006-l1-cache-bf16/`; the compact manifest is `results/b0006-l1-cache.json`. Full verification at the measured code state passed CPU CTest 6/6 and pytest 106 passed/34 skipped, CUDA CTest 15/15 and pytest 139 passed/1 skipped, and all ten CUDA Compute Sanitizer targets with zero errors.
+
+The next bottleneck boundary is representative expert sizing and real L2 behavior. A native-Linux full-dimension bounded slice must measure buffered reads, `io_uring`, and `O_DIRECT`, physical block traffic, and deadlines before selecting an L2 path. Policy work such as Least-Stale also needs representative reuse traces and eviction pressure rather than the current all-fitting synthetic cache.
+
 ## Derived bottleneck model — not a benchmark
 
 The released dimensions imply 17,547,264 bytes per native MXFP4 routed expert. With no cache reuse, natural Top-16 across 92 MoE layers implies 25,829,572,608 expert bytes/token. Applying the P44 Pro published 7.0 GB/s sequential figure gives a derived expert-only ceiling of about 0.271 tok/s and implies roughly 94.6% expert NVMe-byte avoidance for a 5 tok/s target.
@@ -214,6 +255,6 @@ These values are capacity and traffic estimates. They are not inserted into B-00
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
-- Native-Linux repetition of B-0004/B-0005 and a larger KDA/MLA or decoder subgraph boundary.
+- Native-Linux repetition of B-0004/B-0005/B-0006 and a larger KDA/MLA or decoder subgraph boundary.
 - Full-dimension bounded-slice runtime before any full-model throughput claim.
-- Persistent L1 and L2 runtime NVMe, cache-hit, utilization, memory-bandwidth, and storage I/O-stall counters.
+- L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.

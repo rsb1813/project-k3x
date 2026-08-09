@@ -180,13 +180,15 @@ B-0005 preserved exact tokens and routing in all FP32/BF16 scalar/grouped rows. 
 
 The normative design is in [`docs/superpowers/specs/2026-08-09-k3x-async-l0-l1-transfer-design.md`](docs/superpowers/specs/2026-08-09-k3x-async-l0-l1-transfer-design.md).
 
-## Milestone 5 accepted persistent L1 design
+## Milestone 5 experimental persistent L1 expert cache
 
-Milestone 5 is designed but not yet implemented. It places a bounded immutable whole-expert store between `Model` and `Reader`, before both synchronous execution and the Milestone 4 prepared-transfer boundary. Entries are keyed by layer and expert and own exact native MXFP4 gate/up/down packed and E8M0/32 scale bytes through stable shared handles.
+Milestone 5 implements a bounded immutable whole-expert store between `Model` and `Reader`, before both synchronous execution and the Milestone 4 prepared-transfer boundary. Entries are keyed by layer and expert and own exact native MXFP4 gate/up/down packed and E8M0/32 scale bytes through stable shared handles. The operation, synchronous FFN-block, and asynchronous prepared-transfer paths consume the same representation.
 
-The first modes are `disabled` and experimental no-eviction `static` admission. Static admission charges the six payload extents, admits only a complete expert when it fits the remaining hard capacity, and otherwise returns an exact transient payload. It does not implement LRU, LFU, Least-Stale, task/session priors, eviction, prediction, asynchronous L2 reads, or cold rescue.
+The runtime exposes `--l1-expert-cache disabled|static` and `--l1-expert-cache-bytes`. Disabled remains the default. Experimental static admission charges the six payload extents, admits only a complete expert when it fits the remaining hard capacity, never evicts, and otherwise returns an exact transient handle. Invalid or failed loads cannot alter successful cache counters or residency.
 
-Reader logical call/byte counters will prove avoided K3X reads, while explicit L1 hit/miss/bypass/current/peak counters will prove capacity behavior. These counters are not physical NVMe traffic. The accepted design and B-0006 matrix are in [`docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md`](docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md).
+B-0006 admitted 18 synthetic experts into 29,376 bytes, recorded 36 hits and zero bypasses, and reduced logical Reader calls from 428 to 212 and completed bytes from 665,616 to 606,864. All FP32/BF16 synchronous/prefetch rows preserved exact tokens, routing, H2D, D2H, FFN counts, and synchronization. These logical read counters are not physical NVMe traffic, and the synthetic throughput gain is not a full-model projection.
+
+LRU, LFU, Least-Stale, task/session priors, eviction, prediction, asynchronous L2 reads, and cold rescue remain unimplemented. The accepted design and B-0006 matrix are in [`docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md`](docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md).
 
 ## TITAN component registry
 
@@ -231,14 +233,14 @@ flowchart LR
 
 The runtime opens only the superblock and bounded directories first. Tensor and expert records map logical execution requests to aligned extents. A strict reader rejects unsupported required features, overflow, overlap, bad alignment, truncation, and checksum failure before execution.
 
-## Planned three-tier runtime
+## Three-tier runtime target
 
 The production target is an asynchronous three-tier weight system.
 
-| Tier | Role | Planned behavior |
+| Tier | Role | Current and planned behavior |
 |---|---|---|
 | L0: RTX 5080 VRAM | Active trunk tiles and immediately needed experts | Native CUDA compute and pinned asynchronous copies |
-| L1: 96 GB system RAM | Quantized trunk working set and warm expert bank | Session/task-aware admission and eviction |
+| L1: 96 GB system RAM | Quantized trunk working set and warm expert bank | Experimental exact static expert admission implemented; session/task-aware policies and eviction planned |
 | L2: P44 Pro NVMe | Complete cold storage | Large aligned reads and per-expert random access |
 
 The scheduler will assign every requested extent an estimated use deadline and fetch latency. While layer `N` computes, L1-to-L0 transfer for `N+1` and L2-to-L1 transfer for `N+2` can proceed concurrently. `io_uring`, `O_DIRECT`, CUDA Graphs, and persistent kernels are experiments, not assumptions; default paths will be selected by measured end-to-end results.

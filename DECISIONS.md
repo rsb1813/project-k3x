@@ -200,7 +200,7 @@
 ## D-018 — Stage CUDA residency before a whole-layer GPU executor
 
 - Date: 2026-08-08.
-- Status: accepted design; implementation pending.
+- Status: implemented and measured as an experimental opt-in primitive.
 - Decision: implement independently switchable reusable scratch allocation, bounded tensor-ID-keyed immutable-weight residency, and same-input projection grouping before moving the complete KDA/MLA/MoE layer graph to CUDA.
 - Alternatives considered: scratch reuse only; the selected staged design; immediate whole-layer GPU execution.
 - Evidence: B-0002 shows only 11.56--14.52 ms of CUDA-event kernel time per run while every matrix call allocates, uploads immutable weights, downloads output, synchronizes, and frees resources. The current `ComputeBackend` also lacks stable tensor identity and grouped operations.
@@ -259,6 +259,17 @@
 - Decision: implement the first persistent L1 store between `Model` and `Reader`, keyed by `(layer, expert)` and owning immutable complete gate/up/down native MXFP4 payloads. Support disabled and bounded no-eviction static admission with exact transient bypass; keep eviction and policy scoring out of this milestone.
 - Alternatives considered: caching individual extents inside `Reader`; owning host residency inside the CUDA backend; a model-adjacent whole-expert store.
 - Evidence: current `Model::load_expert` issues six synchronous Reader calls and constructs temporary vectors on every selection before either synchronous compute or Milestone 4 pinned preparation. Reader-level caching loses expert atomicity and mixes trunk/expert decisions. CUDA ownership cannot serve the CPU reference and couples storage to compute.
-- Benchmark result: none yet. B-0006 will cross disabled/static L1 with synchronous/prefetch L1-to-L0 transfer and measure exactness, Reader calls/bytes, cache counters, memory, traffic, and end-to-end timing.
+- Benchmark result: B-0006 admitted 18 synthetic experts into 29,376 bytes, produced 36 hits with zero bypasses, and reduced logical Reader calls from 428 to 212 and completed bytes from 665,616 to 606,864. All FP32/BF16 synchronous/prefetch rows preserved exact tokens, routing, H2D, D2H, FFN counts, and synchronization.
 - Reason: whole-expert immutable handles provide the lifetime and accounting unit required by future prediction and policy work without prematurely selecting LRU, LFU, or Least-Stale. Hard-capacity bypass preserves correctness under insufficient RAM.
 - Revisit: after B-0006 and full-dimension bounded expert slices establish representative entry sizes; then introduce runtime-switchable admission/eviction policies and reproduce Least-Stale from the original SpecMD work.
+
+## D-024 — Keep static L1 admission opt-in after B-0006
+
+- Date: 2026-08-09.
+- Status: accepted.
+- Decision: retain `disabled` as the public default and expose no-eviction first-observation `static` admission only through explicit runtime options.
+- Alternatives considered: enable static admission by default after the synthetic speedup; remove static until a policy exists; retain it as an exact experimental primitive.
+- Evidence: B-0006 measured roughly 2.85–3.04x matched synthetic decode throughput and lower logical Reader traffic with only 29,376 resident bytes. The fixture has only 24 experts, repeated routes, pageable reads, and WSL2 filesystem behavior; it does not represent the 896-expert released model or native-Linux NVMe.
+- Benchmark result: FP32 synchronous disabled/static measured 16.6714/50.5246 tok/s and prefetch measured 16.9078/49.4904. BF16 synchronous measured 16.5688/47.2476 and prefetch measured 16.7753/50.9757. Every row retained exact generated tokens and routing.
+- Reason: the mechanism and exactness are validated, but first-observation no-eviction is not a production cache policy and the measured gain cannot justify a full-model default.
+- Revisit: after native-Linux full-dimension bounded slices establish representative expert sizes, physical L2 traffic, reuse distributions, and policy behavior.

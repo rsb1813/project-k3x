@@ -104,6 +104,12 @@ The block boundary is `cuda-custom` only and remains opt-in. The default `operat
 
 This first boundary is deliberately limited to `cuda-custom + ffn-block + reused + transient` and requires `--cuda-pinned-bytes`. It does not implement persistent L1 caching or asynchronous NVMe reads. B-0005 found matched decode changes between -1.03% and +0.90% on the tiny WSL2 graph, so synchronous transfer remains the default.
 
+## Milestone 5 — bounded persistent L1 expert cache
+
+`--l1-expert-cache static --l1-expert-cache-bytes N` enables an exact, no-eviction whole-expert store in system RAM. One entry owns the native MXFP4 gate/up/down packed bytes and scales, admits atomically under a hard capacity, and returns an exact transient handle when it cannot fit. `disabled` remains the default.
+
+B-0006 validates the same handles across CPU operation execution, synchronous CUDA FFN blocks, and asynchronous prepared CUDA transfers. It does not implement LRU, LFU, Least-Stale, task/session profiles, prediction, asynchronous NVMe reads, or physical NVMe counters.
+
 ## Quick start
 
 ### 1. Create an environment
@@ -229,6 +235,20 @@ python tools/ablate_cuda_transfer.py \
   --output-dir build-results/b0005-async-transfer-fp32
 ```
 
+Run the matched persistent-L1 ablation with disabled/static cache and synchronous/prefetch transfers.
+
+```bash
+python tools/ablate_l1_expert_cache.py \
+  --artifact build-fixtures/synthetic.k3x \
+  --runner build-cuda/k3x_run \
+  --dense-precision fp32 \
+  --l1-expert-cache-bytes 65536 \
+  --cuda-pinned-bytes 1048576 \
+  --warmup 3 \
+  --iterations 20 \
+  --output-dir build-results/b0006-l1-cache-fp32
+```
+
 ## Measured results
 
 The checked Milestone 0 run used Windows 11 AMD64, an MSVC Debug build, three warmups, and 20 measured child processes.
@@ -281,6 +301,17 @@ Milestone 4 compares matched exact transient-weight transfers at the FFN-block b
 | BF16 grouped | 16.5529 | **16.7021** | +0.90% |
 
 All B-0005 rows preserve the same tokens and routing. Prefetch performs 27 exact preparations and waits with no additional host synchronization, but uses 1 MiB each of pinned host and device staging and exposes 0.198--0.312 ms transfer stall per run. It remains opt-in until persistent L1 caching and representative expert sizes make the overlap boundary meaningful.
+
+Milestone 5 crosses disabled/static L1 admission with synchronous/prefetch transfer at the same scalar FFN-block boundary.
+
+| Precision / transfer | Disabled | Static L1 | Decode change |
+|---|---:|---:|---:|
+| FP32 synchronous | 16.6714 | **50.5246** | +203.1% |
+| FP32 prefetch | 16.9078 | **49.4904** | +192.7% |
+| BF16 synchronous | 16.5688 | **47.2476** | +185.2% |
+| BF16 prefetch | 16.7753 | **50.9757** | +203.9% |
+
+Each static row records 36 hits, 18 misses, zero bypasses, and 29,376 resident bytes. Logical Reader calls fall from 428 to 212 while GPU traffic and execution counts remain unchanged. These are measurements on the tiny synthetic WSL2 graph, not physical NVMe results or projected full-Kimi throughput, so static admission remains opt-in.
 
 ## K3X checkpoint format
 
