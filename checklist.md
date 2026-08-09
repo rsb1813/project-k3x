@@ -120,8 +120,8 @@
 - [x] 기존 Reader hot path와 Linux I/O capability 경계 조사.
 - [x] Independent engine/cache axes와 B-0007 설계 명세 작성.
 - [x] 상세 TDD 구현 계획 작성.
-- [ ] Ordered batch contract와 buffered pread 기준선 구현.
-- [ ] Six-extent expert batch 연결.
+- [x] Ordered batch contract와 buffered pread 기준선 구현.
+- [x] Six-extent expert batch 연결.
 - [ ] Optional io_uring engine과 explicit O_DIRECT mode 구현.
 - [ ] Runtime/profiler/B-0007 runner 연결.
 - [ ] 전체 correctness, sanitizer, 측정, TITAN Ledger, public GitHub 반영.

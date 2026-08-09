@@ -33,6 +33,8 @@ int main(int argc, char** argv) {
     const auto first_cache = first.value().l1_expert_cache;
     require(first_cache.hits == 36);
     require(first_cache.misses == 18);
+    require(first_reads.calls - first_reads.batch_submissions ==
+            first_cache.misses * 5);
 
     auto second = k3x::generate_greedy(
         reader.value(), *backend, prompt, 6, session);
@@ -48,5 +50,7 @@ int main(int argc, char** argv) {
     require(second_reads.calls - first_reads.calls < first_reads.calls);
     require(second_reads.completed_bytes - first_reads.completed_bytes <
             first_reads.completed_bytes);
+    require(second_reads.calls - first_reads.calls ==
+            second_reads.batch_submissions - first_reads.batch_submissions);
     return 0;
 }

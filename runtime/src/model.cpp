@@ -187,49 +187,43 @@ private:
                 const auto base = layer_name(
                     layer, "feed_forward.experts." +
                                std::to_string(expert_id));
-                const auto load = [&](const std::string& suffix)
-                    -> Result<ExpertProjection> {
-                    const auto id = fnv1a64((base + "." + suffix).c_str());
-                    auto packed = reader_.read_tensor(id);
-                    if (!packed) {
-                        return Result<ExpertProjection>::failure(
-                            packed.error(), packed.message());
-                    }
-                    auto scales = reader_.read_auxiliary(id);
-                    if (!scales) {
-                        return Result<ExpertProjection>::failure(
-                            scales.error(), scales.message());
-                    }
+                constexpr std::array suffixes{"gate", "up", "down"};
+                std::array<std::uint64_t, suffixes.size()> ids{};
+                std::array<const TensorRecord*, suffixes.size()> records{};
+                std::array<ExtentRequest, suffixes.size() * 2> requests{};
+                for (std::size_t index = 0; index < suffixes.size(); ++index) {
+                    ids[index] = fnv1a64(
+                        (base + "." + suffixes[index]).c_str());
                     const auto record = std::find_if(
                         reader_.tensors().begin(), reader_.tensors().end(),
-                        [id](const auto& item) { return item.tensor_id == id; });
+                        [id = ids[index]](const auto& item) {
+                            return item.tensor_id == id;
+                        });
                     if (record == reader_.tensors().end()) {
-                        return Result<ExpertProjection>::failure(
+                        return Result<ExpertMlpPayload>::failure(
                             ErrorCode::tensor_not_found, "missing expert");
                     }
-                    return Result<ExpertProjection>::success({
-                        id, std::move(packed.value()),
-                        std::move(scales.value()), record->dimensions[0],
-                        record->dimensions[1]});
+                    records[index] = &*record;
+                    requests[index * 2] = {
+                        record->data_offset, record->data_length};
+                    requests[index * 2 + 1] = {
+                        record->auxiliary_offset, record->auxiliary_length};
+                }
+                auto payloads = reader_.read_extents(requests);
+                if (!payloads) {
+                    return Result<ExpertMlpPayload>::failure(
+                        payloads.error(), payloads.message());
+                }
+                const auto projection = [&](std::size_t index) {
+                    return ExpertProjection{
+                        ids[index],
+                        std::move(payloads.value()[index * 2]),
+                        std::move(payloads.value()[index * 2 + 1]),
+                        records[index]->dimensions[0],
+                        records[index]->dimensions[1]};
                 };
-                auto gate = load("gate");
-                if (!gate) {
-                    return Result<ExpertMlpPayload>::failure(
-                        gate.error(), gate.message());
-                }
-                auto up = load("up");
-                if (!up) {
-                    return Result<ExpertMlpPayload>::failure(
-                        up.error(), up.message());
-                }
-                auto down = load("down");
-                if (!down) {
-                    return Result<ExpertMlpPayload>::failure(
-                        down.error(), down.message());
-                }
-                return Result<ExpertMlpPayload>::success(
-                    {std::move(gate.value()), std::move(up.value()),
-                     std::move(down.value())});
+                return Result<ExpertMlpPayload>::success({
+                    projection(0), projection(1), projection(2)});
             });
         if (!result) throw std::runtime_error("missing expert");
         return std::move(result.value());
