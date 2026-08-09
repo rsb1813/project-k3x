@@ -128,6 +128,7 @@ int main(int argc, char** argv) {
     std::string routing_agent_failures_text = "0";
     std::string routing_critical_text = "false";
     std::string speculative_mode_name = "none";
+    std::string speculative_verification_name = "token-major";
     std::string speculative_block_size_text = "0";
     std::string speculative_script_text;
     bool diagnostics = false;
@@ -168,6 +169,7 @@ int main(int argc, char** argv) {
         else if (key == "--routing-agent-failures") routing_agent_failures_text = value;
         else if (key == "--routing-critical") routing_critical_text = value;
         else if (key == "--speculative-mode") speculative_mode_name = value;
+        else if (key == "--speculative-verification") speculative_verification_name = value;
         else if (key == "--speculative-block-size") speculative_block_size_text = value;
         else if (key == "--speculative-script") speculative_script_text = value;
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
@@ -212,6 +214,23 @@ int main(int argc, char** argv) {
         speculative_mode_name != "scripted-reference") {
         std::cerr << "unknown speculative mode: " << speculative_mode_name
                   << '\n';
+        return 2;
+    }
+    if (speculative_verification_name == "token-major") {
+        runtime_options.speculative_verification =
+            k3x::SpeculativeVerificationMode::token_major;
+    } else if (speculative_verification_name == "expert-major") {
+        runtime_options.speculative_verification =
+            k3x::SpeculativeVerificationMode::expert_major;
+    } else {
+        std::cerr << "unknown speculative verification mode: "
+                  << speculative_verification_name << '\n';
+        return 2;
+    }
+    if (runtime_options.speculative_verification ==
+            k3x::SpeculativeVerificationMode::expert_major &&
+        speculative_mode_name != "scripted-reference") {
+        std::cerr << "expert-major verification requires scripted-reference speculation\n";
         return 2;
     }
     if (speculative_mode_name == "none" &&
@@ -601,6 +620,31 @@ int main(int argc, char** argv) {
         std::cerr << "transient CUDA weights require a zero resident byte capacity\n";
         return 2;
     }
+    if (runtime_options.speculative_verification ==
+        k3x::SpeculativeVerificationMode::expert_major) {
+        if (backend_options.kind != k3x::BackendKind::cpu) {
+            std::cerr << "expert-major verification requires the CPU backend\n";
+            return 2;
+        }
+        if (runtime_options.l1_expert_cache !=
+            k3x::L1ExpertCacheMode::disabled) {
+            std::cerr << "expert-major verification requires disabled L1 expert cache\n";
+            return 2;
+        }
+        if (runtime_options.l2_expert_schedule !=
+            k3x::L2ExpertScheduleMode::blocking) {
+            std::cerr << "expert-major verification requires blocking L2 scheduling\n";
+            return 2;
+        }
+        if (runtime_options.routing_policy.mode != k3x::RoutingMode::natural) {
+            std::cerr << "expert-major verification requires natural routing\n";
+            return 2;
+        }
+        if (runtime_options.profile_observation) {
+            std::cerr << "expert-major verification does not support runtime profiles\n";
+            return 2;
+        }
+    }
 
     k3x::Profiler profiler;
     std::unique_ptr<k3x::ComputeBackend> backend;
@@ -769,6 +813,8 @@ int main(int argc, char** argv) {
     write_json_string(output, routing_mode_name);
     output << ",\"speculative_mode\":";
     write_json_string(output, speculative_mode_name);
+    output << ",\"speculative_verification\":";
+    write_json_string(output, speculative_verification_name);
     output << ",\"speculative_block_size\":" << speculative_block_size
            << ",\"speculative_verification_blocks\":"
            << result.value().speculative_verification_blocks
@@ -782,6 +828,22 @@ int main(int argc, char** argv) {
            << result.value().speculative_max_proposal_tokens
            << ",\"target_decode_forward_calls\":"
            << result.value().target_decode_forward_calls
+           << ",\"target_block_forward_calls\":"
+           << result.value().target_block_forward_calls
+           << ",\"target_positions_evaluated\":"
+           << result.value().target_positions_evaluated
+           << ",\"target_positions_discarded\":"
+           << result.value().target_positions_discarded
+           << ",\"expert_major_unique_experts_sum\":"
+           << result.value().expert_major_unique_experts_sum
+           << ",\"expert_major_unique_experts_max\":"
+           << result.value().expert_major_unique_experts_max
+           << ",\"expert_major_assignments\":"
+           << result.value().expert_major_assignments
+           << ",\"expert_major_reused_assignments\":"
+           << result.value().expert_major_reused_assignments
+           << ",\"expert_major_payload_loads\":"
+           << result.value().expert_major_payload_loads
            << ",\"speculative_acceptance_rate\":";
     if (result.value().speculative_proposed_draft_tokens == 0) {
         output << "null";
@@ -1008,6 +1070,18 @@ int main(int argc, char** argv) {
          ++index) {
         if (index) output << ',';
         output << result.value().routed_k[index];
+    }
+    output << "],\"evaluated_routed_experts\":[";
+    for (std::size_t index = 0;
+         index < result.value().evaluated_routed_experts.size(); ++index) {
+        if (index) output << ',';
+        output << result.value().evaluated_routed_experts[index];
+    }
+    output << "],\"evaluated_routed_k\":[";
+    for (std::size_t index = 0;
+         index < result.value().evaluated_routed_k.size(); ++index) {
+        if (index) output << ',';
+        output << result.value().evaluated_routed_k[index];
     }
     output << "],\"token_ids\":[";
     for (std::size_t index = 0; index < result.value().token_ids.size(); ++index) {

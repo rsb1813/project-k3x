@@ -89,9 +89,20 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["routing_average_top_k"] == 0.0
     assert payload["cold_rescue_count"] == 0
     assert payload["speculative_mode"] == "none"
+    assert payload["speculative_verification"] == "token-major"
     assert payload["speculative_block_size"] == 0
     assert payload["speculative_verification_blocks"] == 0
     assert payload["target_decode_forward_calls"] == 0
+    assert payload["target_block_forward_calls"] == 0
+    assert payload["target_positions_evaluated"] == 0
+    assert payload["target_positions_discarded"] == 0
+    assert payload["expert_major_unique_experts_sum"] == 0
+    assert payload["expert_major_unique_experts_max"] == 0
+    assert payload["expert_major_assignments"] == 0
+    assert payload["expert_major_reused_assignments"] == 0
+    assert payload["expert_major_payload_loads"] == 0
+    assert payload["evaluated_routed_experts"] == []
+    assert payload["evaluated_routed_k"] == []
     assert payload["speculative_acceptance_rate"] is None
     assert payload["l1_expert_cache_bytes"] == 0
     assert payload["l1_expert_cache_hits"] == 0
@@ -160,7 +171,13 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert row["routed_experts"] == ""
     assert row["routed_k"] == ""
     assert row["speculative_mode"] == "none"
+    assert row["speculative_verification"] == "token-major"
     assert row["speculative_verification_blocks"] == "0"
+    assert row["target_block_forward_calls"] == "0"
+    assert row["target_positions_evaluated"] == "0"
+    assert row["expert_major_payload_loads"] == "0"
+    assert row["evaluated_routed_experts"] == ""
+    assert row["evaluated_routed_k"] == ""
     assert row["speculative_acceptance_rate"] == ""
 
 

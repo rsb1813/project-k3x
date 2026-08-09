@@ -548,6 +548,83 @@ def test_cpp_scripted_speculation_preserves_greedy_execution(
     assert baseline["speculative_acceptance_rate"] is None
     assert baseline["target_decode_forward_calls"] == 5
 
+
+def test_cpp_expert_major_speculation_preserves_exact_state_and_reuses_payloads(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    runner = cpp_binary("k3x_run")
+    artifact = tmp_path / "synthetic.k3x"
+    baseline_output = tmp_path / "baseline.json"
+    token_major_output = tmp_path / "token-major.json"
+    expert_major_output = tmp_path / "expert-major.json"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    common = [
+        str(runner),
+        "--model",
+        str(artifact),
+        "--prompt-ids",
+        "1,7,3,9",
+        "--generate",
+        "6",
+        "--mode",
+        "incremental",
+        "--diagnostics",
+        "true",
+    ]
+    subprocess.run([*common, "--json", str(baseline_output)], check=True)
+    baseline = json.loads(baseline_output.read_text(encoding="utf-8"))
+    tokens = baseline["token_ids"]
+    script = f"{tokens[0]}:{tokens[1]},{tokens[2]};{tokens[3]}:{tokens[4]}"
+    speculative = [
+        "--speculative-mode",
+        "scripted-reference",
+        "--speculative-block-size",
+        "2",
+        "--speculative-script",
+        script,
+    ]
+    subprocess.run(
+        [*common, *speculative, "--json", str(token_major_output)],
+        check=True,
+    )
+    subprocess.run(
+        [
+            *common,
+            *speculative,
+            "--speculative-verification",
+            "expert-major",
+            "--json",
+            str(expert_major_output),
+        ],
+        check=True,
+    )
+    token_major = json.loads(token_major_output.read_text(encoding="utf-8"))
+    expert_major = json.loads(expert_major_output.read_text(encoding="utf-8"))
+    assert expert_major["token_ids"] == baseline["token_ids"]
+    assert expert_major["final_state"] == baseline["final_state"]
+    assert expert_major["routed_experts"] == baseline["routed_experts"]
+    assert expert_major["routed_k"] == baseline["routed_k"]
+    assert expert_major["speculative_verification"] == "expert-major"
+    assert token_major["speculative_verification"] == "token-major"
+    assert expert_major["target_block_forward_calls"] == 2
+    assert expert_major["target_positions_evaluated"] == 5
+    assert expert_major["target_positions_discarded"] == 0
+    assert expert_major["expert_major_payload_loads"] == expert_major[
+        "expert_major_unique_experts_sum"
+    ]
+    assert expert_major["expert_major_assignments"] > expert_major[
+        "expert_major_payload_loads"
+    ]
+    assert expert_major["expert_major_reused_assignments"] == (
+        expert_major["expert_major_assignments"]
+        - expert_major["expert_major_payload_loads"]
+    )
+    assert expert_major["reader_requested_bytes"] < token_major[
+        "reader_requested_bytes"
+    ]
+    assert expert_major["evaluated_routed_experts"]
+    assert expert_major["evaluated_routed_k"]
+
     unused_output = tmp_path / "unused.json"
     unused = subprocess.run(
         [
@@ -557,7 +634,7 @@ def test_cpp_scripted_speculation_preserves_greedy_execution(
             "--speculative-block-size",
             "2",
             "--speculative-script",
-            f"{perfect_script};{tokens[5]}:",
+            f"{script};{tokens[5]}:",
             "--json",
             str(unused_output),
         ],
@@ -606,6 +683,83 @@ def test_cpp_scripted_speculation_preserves_greedy_execution(
                 "1",
             ],
             "invalid speculative script record: 1",
+        ),
+        (
+            ["--speculative-verification", "warp"],
+            "unknown speculative verification mode: warp",
+        ),
+        (
+            ["--speculative-verification", "expert-major"],
+            "expert-major verification requires scripted-reference speculation",
+        ),
+        (
+            [
+                "--speculative-mode",
+                "scripted-reference",
+                "--speculative-block-size",
+                "2",
+                "--speculative-verification",
+                "expert-major",
+                "--backend",
+                "cuda-dense",
+            ],
+            "expert-major verification requires the CPU backend",
+        ),
+        (
+            [
+                "--speculative-mode",
+                "scripted-reference",
+                "--speculative-block-size",
+                "2",
+                "--speculative-verification",
+                "expert-major",
+                "--l1-expert-cache",
+                "static",
+                "--l1-expert-cache-bytes",
+                "65536",
+            ],
+            "expert-major verification requires disabled L1 expert cache",
+        ),
+        (
+            [
+                "--speculative-mode",
+                "scripted-reference",
+                "--speculative-block-size",
+                "2",
+                "--speculative-verification",
+                "expert-major",
+                "--l2-schedule",
+                "deadline",
+            ],
+            "expert-major verification requires blocking L2 scheduling",
+        ),
+        (
+            [
+                "--speculative-mode",
+                "scripted-reference",
+                "--speculative-block-size",
+                "2",
+                "--speculative-verification",
+                "expert-major",
+                "--routing-mode",
+                "fixed",
+                "--routing-fixed-k",
+                "4",
+            ],
+            "expert-major verification requires natural routing",
+        ),
+        (
+            [
+                "--speculative-mode",
+                "scripted-reference",
+                "--speculative-block-size",
+                "2",
+                "--speculative-verification",
+                "expert-major",
+                "--runtime-metadata",
+                "TASK=coding",
+            ],
+            "expert-major verification does not support runtime profiles",
         ),
     ],
 )

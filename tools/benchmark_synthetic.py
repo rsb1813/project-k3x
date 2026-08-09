@@ -152,6 +152,7 @@ class BenchmarkRecord:
     natural_prefill_logits_max_abs_error: float | None = None
     natural_prefill_state_max_abs_error: float | None = None
     speculative_mode: str = "none"
+    speculative_verification: str = "token-major"
     speculative_block_size: int = 0
     speculative_verification_blocks: int = 0
     speculative_proposed_draft_tokens: int = 0
@@ -159,6 +160,16 @@ class BenchmarkRecord:
     speculative_committed_tokens: int = 0
     speculative_max_proposal_tokens: int = 0
     target_decode_forward_calls: int = 0
+    target_block_forward_calls: int = 0
+    target_positions_evaluated: int = 0
+    target_positions_discarded: int = 0
+    expert_major_unique_experts_sum: int = 0
+    expert_major_unique_experts_max: int = 0
+    expert_major_assignments: int = 0
+    expert_major_reused_assignments: int = 0
+    expert_major_payload_loads: int = 0
+    evaluated_routed_experts: tuple[int, ...] = ()
+    evaluated_routed_k: tuple[int, ...] = ()
     speculative_acceptance_rate: float | None = None
 
     def __post_init__(self) -> None:
@@ -187,6 +198,12 @@ def write_results(record: BenchmarkRecord, json_path: Path, csv_path: Path) -> N
         str(value) for value in record.routed_experts
     )
     csv_payload["routed_k"] = ";".join(str(value) for value in record.routed_k)
+    csv_payload["evaluated_routed_experts"] = ";".join(
+        str(value) for value in record.evaluated_routed_experts
+    )
+    csv_payload["evaluated_routed_k"] = ";".join(
+        str(value) for value in record.evaluated_routed_k
+    )
     with csv_path.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=csv_payload.keys())
         writer.writeheader()
@@ -226,6 +243,7 @@ def _run_process(
     routing_agent_failures: int = 0,
     routing_critical: bool = False,
     speculative_mode: str = "none",
+    speculative_verification: str = "token-major",
     speculative_block_size: int = 0,
     speculative_script: str = "",
     diagnostics: bool = False,
@@ -256,6 +274,7 @@ def _run_process(
         "--routing-agent-failures", str(routing_agent_failures),
         "--routing-critical", str(routing_critical).lower(),
         "--speculative-mode", speculative_mode,
+        "--speculative-verification", speculative_verification,
         "--speculative-block-size", str(speculative_block_size),
         "--speculative-script", speculative_script,
     ]
@@ -364,6 +383,7 @@ def benchmark_once(
     routing_agent_failures: int = 0,
     routing_critical: bool = False,
     speculative_mode: str = "none",
+    speculative_verification: str = "token-major",
     speculative_block_size: int = 0,
     speculative_script: str = "",
 ) -> BenchmarkRecord:
@@ -376,6 +396,8 @@ def benchmark_once(
     ttft_samples: list[float] = []
     routed_experts: tuple[int, ...] = ()
     routed_k: tuple[int, ...] = ()
+    evaluated_routed_experts: tuple[int, ...] = ()
+    evaluated_routed_k: tuple[int, ...] = ()
     with tempfile.TemporaryDirectory(prefix="k3x-benchmark-") as temporary:
         root = Path(temporary)
         for index in range(warmup + iterations):
@@ -414,6 +436,7 @@ def benchmark_once(
                 routing_agent_failures=routing_agent_failures,
                 routing_critical=routing_critical,
                 speculative_mode=speculative_mode,
+                speculative_verification=speculative_verification,
                 speculative_block_size=speculative_block_size,
                 speculative_script=speculative_script,
             )
@@ -452,6 +475,7 @@ def benchmark_once(
                 routing_agent_failures=routing_agent_failures,
                 routing_critical=routing_critical,
                 speculative_mode=speculative_mode,
+                speculative_verification=speculative_verification,
                 speculative_block_size=speculative_block_size,
                 speculative_script="",
             )
@@ -490,6 +514,7 @@ def benchmark_once(
                 routing_agent_failures=routing_agent_failures,
                 routing_critical=routing_critical,
                 speculative_mode=speculative_mode,
+                speculative_verification=speculative_verification,
                 speculative_block_size=speculative_block_size,
                 speculative_script=speculative_script,
                 diagnostics=True,
@@ -498,6 +523,10 @@ def benchmark_once(
                 raise RuntimeError("CPU diagnostic token sequence diverged")
             routed_experts = tuple(diagnostic["prefill_routed_experts"])
             routed_k = tuple(diagnostic["prefill_routed_k"])
+            evaluated_routed_experts = tuple(
+                diagnostic["evaluated_routed_experts"]
+            )
+            evaluated_routed_k = tuple(diagnostic["evaluated_routed_k"])
         else:
             reference, _, _ = _run_process(
                 artifact,
@@ -527,6 +556,7 @@ def benchmark_once(
                 routing_agent_failures=routing_agent_failures,
                 routing_critical=routing_critical,
                 speculative_mode=speculative_mode,
+                speculative_verification=speculative_verification,
                 speculative_block_size=speculative_block_size,
                 speculative_script=speculative_script,
                 diagnostics=True,
@@ -559,6 +589,7 @@ def benchmark_once(
                 routing_agent_failures=routing_agent_failures,
                 routing_critical=routing_critical,
                 speculative_mode=speculative_mode,
+                speculative_verification=speculative_verification,
                 speculative_block_size=speculative_block_size,
                 speculative_script=speculative_script,
                 diagnostics=True,
@@ -568,6 +599,10 @@ def benchmark_once(
             )
             routed_experts = tuple(candidate["prefill_routed_experts"])
             routed_k = tuple(candidate["prefill_routed_k"])
+            evaluated_routed_experts = tuple(
+                candidate["evaluated_routed_experts"]
+            )
+            evaluated_routed_k = tuple(candidate["evaluated_routed_k"])
         if runtime_profile_out is not None:
             materialized, _, _ = _run_process(
                 artifact,
@@ -601,6 +636,7 @@ def benchmark_once(
                 routing_agent_failures=routing_agent_failures,
                 routing_critical=routing_critical,
                 speculative_mode=speculative_mode,
+                speculative_verification=speculative_verification,
                 speculative_block_size=speculative_block_size,
                 speculative_script=speculative_script,
             )
@@ -700,6 +736,7 @@ def benchmark_once(
         "async_engine_count",
         "device_overlap",
         "speculative_mode",
+        "speculative_verification",
         "speculative_block_size",
         "speculative_verification_blocks",
         "speculative_proposed_draft_tokens",
@@ -707,6 +744,14 @@ def benchmark_once(
         "speculative_committed_tokens",
         "speculative_max_proposal_tokens",
         "target_decode_forward_calls",
+        "target_block_forward_calls",
+        "target_positions_evaluated",
+        "target_positions_discarded",
+        "expert_major_unique_experts_sum",
+        "expert_major_unique_experts_max",
+        "expert_major_assignments",
+        "expert_major_reused_assignments",
+        "expert_major_payload_loads",
         "speculative_acceptance_rate",
         "token_ids",
     )
@@ -739,6 +784,7 @@ def benchmark_once(
         routing_agent_failures,
         routing_critical,
         speculative_mode,
+        speculative_verification,
         speculative_block_size,
     )
     option_fields = (
@@ -765,6 +811,7 @@ def benchmark_once(
         "routing_agent_failures",
         "routing_critical",
         "speculative_mode",
+        "speculative_verification",
         "speculative_block_size",
     )
     observed_options = tuple(samples[0][field] for field in option_fields)
@@ -880,6 +927,8 @@ def benchmark_once(
         token_ids=tuple(samples[0]["token_ids"]),
         routed_experts=routed_experts,
         routed_k=routed_k,
+        evaluated_routed_experts=evaluated_routed_experts,
+        evaluated_routed_k=evaluated_routed_k,
         l1_expert_cache_mode=samples[0]["l1_expert_cache_mode"],
         l1_expert_cache_bytes=samples[0]["l1_expert_cache_bytes"],
         l1_expert_cache_hits=samples[0]["l1_expert_cache_hits"],
@@ -988,6 +1037,7 @@ def benchmark_once(
         ],
         cold_rescue_count=samples[0]["cold_rescue_count"],
         speculative_mode=samples[0]["speculative_mode"],
+        speculative_verification=samples[0]["speculative_verification"],
         speculative_block_size=samples[0]["speculative_block_size"],
         speculative_verification_blocks=samples[0][
             "speculative_verification_blocks"
@@ -1007,6 +1057,20 @@ def benchmark_once(
         target_decode_forward_calls=samples[0][
             "target_decode_forward_calls"
         ],
+        target_block_forward_calls=samples[0]["target_block_forward_calls"],
+        target_positions_evaluated=samples[0]["target_positions_evaluated"],
+        target_positions_discarded=samples[0]["target_positions_discarded"],
+        expert_major_unique_experts_sum=samples[0][
+            "expert_major_unique_experts_sum"
+        ],
+        expert_major_unique_experts_max=samples[0][
+            "expert_major_unique_experts_max"
+        ],
+        expert_major_assignments=samples[0]["expert_major_assignments"],
+        expert_major_reused_assignments=samples[0][
+            "expert_major_reused_assignments"
+        ],
+        expert_major_payload_loads=samples[0]["expert_major_payload_loads"],
         speculative_acceptance_rate=samples[0][
             "speculative_acceptance_rate"
         ],
@@ -1075,6 +1139,11 @@ def main() -> int:
         choices=("none", "scripted-reference"),
         default="none",
     )
+    parser.add_argument(
+        "--speculative-verification",
+        choices=("token-major", "expert-major"),
+        default="token-major",
+    )
     parser.add_argument("--speculative-block-size", type=int, default=0)
     parser.add_argument("--speculative-script", default="")
     parser.add_argument("--json", type=Path, required=True)
@@ -1108,6 +1177,7 @@ def main() -> int:
         routing_agent_failures=args.routing_agent_failures,
         routing_critical=args.routing_critical,
         speculative_mode=args.speculative_mode,
+        speculative_verification=args.speculative_verification,
         speculative_block_size=args.speculative_block_size,
         speculative_script=args.speculative_script,
     )
