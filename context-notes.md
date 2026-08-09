@@ -124,3 +124,11 @@
 - FP32 FFN block scalar는 합성 실험 추천 경로로만 채택하고 reference default는 `operation`으로 유지한다. block 경계가 activation traffic과 synchronization을 줄였지만 kernel time은 증가했고 decode 향상은 4.36%에 그쳐 다음 병목은 CPU 중심 KDA/MLA, routing, residual 및 비-FFN 경계와 launch orchestration이다.
 - 최종 Terra high 읽기 전용 리뷰는 FFN-block preflight가 kernel의 고정 E8M0/32 계약과 달리 임의 group size metadata를 허용하는 Important 문제를 발견했다. 64-column fixture의 group size 16/64가 payload 길이 검증을 통과하도록 만든 RED 테스트가 기존 코드에서 실패했고, gate/up/down 모두 `group_size == 32`를 side effect 전에 요구하는 최소 수정으로 GREEN이 됐다. 수정 commit은 `3df8d3f`다.
 - 수정 후 CPU CTest 5/5와 pytest 70 passed/26 skipped, CUDA CTest 11/11과 pytest 95 passed/1 skipped, `test_cuda_ffn` Compute Sanitizer 0 errors를 확인했다. FP32/BF16 각 1-sample four-case smoke도 exact token과 traffic/counter 계약을 통과했다. valid group-32 실행부는 바뀌지 않아 B-0004 측정 commit과 수치는 보존하며 smoke 수치를 새 성능 측정으로 사용하지 않는다.
+
+## 2026-08-09 Milestone 4 설계
+
+- 공개 `main`의 Milestone 3 완료 상태에서 `codex/milestone-four-async-l0-l1` 격리 브랜치를 만들었다. baseline은 CPU CTest 5/5와 pytest 70 passed/26 skipped, CUDA CTest 11/11과 pytest 95 passed/1 skipped다.
+- 현재 `Reader`는 선택 expert extent를 매번 pageable vector로 동기 읽고, resident admission과 transient H2D는 compute stream에 enqueue된다. 따라서 기존 `cudaMemcpyAsync` 표기만으로 L1→L0 copy/compute overlap을 증명할 수 없다.
+- CUDA 13.3 공식 문서에 따라 bounded reusable page-locked slab, 별도 non-default transfer stream, readiness event와 compute-stream wait를 필수 계약으로 선택했다. 무제한 pinning, per-request `cudaHostRegister`, default-stream copy는 배제한다.
+- 세 대안 중 router 이후 exact payload를 prepare하고 routed-down projection과 H2D를 겹친 뒤 single-use token으로 consume하는 two-phase 경계를 선택했다. Expert 내부 pipeline은 첫 transfer를 숨기지 못하고, 범용 worker scheduler는 L2/cache/predictor를 성급히 결합하므로 연기했다.
+- 첫 async 조합은 `cuda-custom + ffn-block + reused + transient`로 제한하고 synchronous를 기본값으로 보존한다. Static residency와 async admission 결합, L1 persistent cache, L2 NVMe async read, eviction, predictor는 다음 독립 milestone이다.
