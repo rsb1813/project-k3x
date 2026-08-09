@@ -1325,6 +1325,12 @@ Result<GenerationResult> generate_speculative(
                 }
                 auto verification = Result<DraftVerification>::failure(
                     ErrorCode::invalid_state);
+                std::size_t feedback_positions_evaluated = 0;
+                std::size_t feedback_positions_discarded = 0;
+                std::size_t feedback_payload_loads = 0;
+                std::size_t feedback_assignments = 0;
+                const auto target_calls_before =
+                    result.target_decode_forward_calls;
                 if (expert_major) {
                     if (proposal.value().candidate_tokens.size() >
                         max_draft_tokens) {
@@ -1388,6 +1394,11 @@ Result<GenerationResult> generate_speculative(
                             block.payload_loads;
                         result.expert_major_reused_assignments +=
                             block.assignments - block.payload_loads;
+                        feedback_positions_evaluated = block_inputs.size();
+                        feedback_positions_discarded =
+                            block_inputs.size() - committed_positions;
+                        feedback_payload_loads = block.payload_loads;
+                        feedback_assignments = block.assignments;
                         if (options.diagnostics) {
                             for (std::size_t position = 0;
                                  position <
@@ -1427,6 +1438,19 @@ Result<GenerationResult> generate_speculative(
                     return Result<GenerationResult>::failure(
                         verification.error(), verification.message());
                 }
+                if (!expert_major) {
+                    feedback_positions_evaluated =
+                        result.target_decode_forward_calls -
+                        target_calls_before;
+                }
+                verification.value().target_positions_evaluated =
+                    feedback_positions_evaluated;
+                verification.value().target_positions_discarded =
+                    feedback_positions_discarded;
+                verification.value().expert_major_payload_loads =
+                    feedback_payload_loads;
+                verification.value().expert_major_assignments =
+                    feedback_assignments;
                 draft_provider.update(verification.value());
                 ++result.speculative_verification_blocks;
                 result.speculative_proposed_draft_tokens +=
@@ -1459,6 +1483,23 @@ Result<GenerationResult> generate_speculative(
         result.expert_load_scheduler =
             session.expert_load_scheduler_stats();
         engine.export_routing_stats(result);
+        const auto draft_stats = draft_provider.stats();
+        result.draft_proposal_calls = draft_stats.proposal_calls;
+        result.draft_candidate_tokens = draft_stats.candidate_tokens;
+        result.draft_replayed_context_tokens =
+            draft_stats.replayed_context_tokens;
+        result.draft_generation_nanoseconds =
+            draft_stats.generation_nanoseconds;
+        result.draft_reader_calls = draft_stats.reader_calls;
+        result.draft_reader_bytes = draft_stats.reader_bytes;
+        result.draft_routing_decisions = draft_stats.routing_decisions;
+        result.draft_routing_selected_experts =
+            draft_stats.routing_selected_experts;
+        result.draft_selected_length_1 = draft_stats.selected_length_1;
+        result.draft_selected_length_2 = draft_stats.selected_length_2;
+        result.draft_selected_length_4 = draft_stats.selected_length_4;
+        result.draft_scheduler_growths = draft_stats.scheduler_growths;
+        result.draft_scheduler_backoffs = draft_stats.scheduler_backoffs;
         return Result<GenerationResult>::success(std::move(result));
     } catch (const std::exception& error) {
         if (auto* loader = session.expert_loader()) loader->wait_idle();
