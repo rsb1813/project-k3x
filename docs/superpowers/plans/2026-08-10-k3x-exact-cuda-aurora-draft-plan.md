@@ -494,7 +494,7 @@ git add README.md ARCHITECTURE.md PERFORMANCE_MODEL.md DECISIONS.md \
 git commit -m "docs: publish exact CUDA AURORA evidence"
 ```
 
-- [ ] **Step 6: Perform final self-review**
+- [x] **Step 6: Perform final self-review**
 
 Review `origin/main...HEAD` for CPU default compatibility, replay CPU-only behavior, canonical CUDA identity, target/draft counter separation, CUDA failure propagation, proposal/target parity, raw-summary digests, measured-versus-proposed language, and accidental full-checkpoint/cloud work. Apply at most one focused correction batch and rerun affected tests.
 
