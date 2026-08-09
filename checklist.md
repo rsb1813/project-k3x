@@ -113,4 +113,4 @@
 - [x] L1/Reader profiler schema와 B-0006 ablation runner 구현.
 - [x] 전체 correctness, sanitizer, B-0006 측정.
 - [x] TITAN Ledger 최종 검토와 검토 수정 후 전체 검증.
-- [ ] Public GitHub PR, CI, main 반영과 post-merge CI 확인.
+- [x] Public GitHub PR, CI, main 반영과 post-merge CI 확인.

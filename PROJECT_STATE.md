@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 4 is complete and public. Milestone 5 bounded persistent L1 expert-cache implementation, final review fixes, full verification, and replacement B-0006 measurement are complete; public integration is in progress.
+Milestone 5 bounded persistent L1 expert-cache implementation, final review fixes, full verification, replacement B-0006 measurement, and public integration are complete.
 
-State recorded on 2026-08-09 after measured code commit `2a0cb27` and replacement result commit `fe328e4`. Public `main` remains at Milestone 4 closure `04e9cbc` until PR and CI complete.
+State recorded on 2026-08-09 after public Milestone 5 closure `dac4ed0`. PR #5 merged by ancestry-verified fast-forward; push/PR correctness runs `31301870446` and `31301880423` passed, and post-merge `main` correctness run `31301960103` passed.
 
 ## Completed work
 
@@ -36,11 +36,12 @@ State recorded on 2026-08-09 after measured code commit `2a0cb27` and replacemen
 
 ## Work in progress
 
-- Milestone 5 code and durable measurement documents await public branch/PR/CI integration only.
+- Milestone 5 code and durable measurement documents are public on `main`.
 - Static L1 admission is experimental and opt-in. LRU, LFU, Least-Stale, eviction, task/session priors, prediction, and L2 async I/O remain unimplemented.
 - The TITAN Ledger, README, checklist, context notes, and compact/raw B-0005 artifacts are synchronized with the measured Milestone 4 implementation.
 - Final Terra high review found two Important Milestone 5 gaps: generation-local cache lifetime and insufficient native payload admission validation. Commit `2a0cb27` adds explicit `RuntimeSession` ownership and strict native group-32/triplet validation. No Critical or Important finding remains unaddressed.
 - Public PR #4 merged by ancestry-verified fast-forward at `c961026`; post-merge correctness run `31298966035` succeeded.
+- Public PR #5 merged by ancestry-verified fast-forward at `dac4ed0`; both pre-merge correctness runs and post-merge correctness run `31301960103` succeeded.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; builds: `build-cpu` and `build-cuda`.
 
@@ -57,9 +58,8 @@ State recorded on 2026-08-09 after measured code commit `2a0cb27` and replacemen
 
 ## Next concrete tasks
 
-1. Push `codex/milestone-five-l1-cache`, open the public PR, wait for Linux CI, fast-forward public `main` only after ancestry verification, and confirm post-merge CI.
-2. Design an independently switchable L2 reader and native-Linux benchmark for buffered I/O, `io_uring`, and `O_DIRECT` before choosing a default.
-3. Add full-dimension bounded checkpoint slices, then continue with policy/Least-Stale, task/session profiles, adaptive Top-K, and exact rescue in charter order.
+1. Design an independently switchable L2 reader and native-Linux benchmark for buffered I/O, `io_uring`, and `O_DIRECT` before choosing a default.
+2. Add full-dimension bounded checkpoint slices, then continue with policy/Least-Stale, task/session profiles, adaptive Top-K, and exact rescue in charter order.
 
 ## Hardware assumptions
 
@@ -86,7 +86,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Public Milestone 4 closure `main`: `04e9cbc327520586c7e593447c6724703c874210`; correctness run `31299092196` succeeded.
+- Public Milestone 5 closure `main`: `dac4ed0dab17b64f44ae07a4965e71d7d57d2640`; correctness run `31301960103` succeeded.
 - B-0006 measurement code commit: `2a0cb27` (`fix: persist and validate L1 experts`).
 - B-0006 raw/compact result commit: `fe328e4` (`bench: refresh B-0006 after review fixes`).
 - Latest local validation commit: `fe328e4`.

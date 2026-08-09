@@ -115,5 +115,5 @@
 - [x] Update durable documents in TITAN protocol order and keep eviction/policies/L2 explicitly unimplemented.
 - [x] Request one final Terra high read-only review limited to Critical/Important correctness, lifetime, capacity, accounting, and documentation issues.
 - [x] Apply evidence-backed findings once and rerun affected verification.
-- [ ] Commit results/ledger, push `codex/milestone-five-l1-cache`, create a draft PR, wait for Linux CI, mark ready, ancestry-check, fast-forward public `main`, and confirm post-merge CI.
-- [ ] Preserve the worktree for the next milestone.
+- [x] Commit results/ledger, push `codex/milestone-five-l1-cache`, create a draft PR, wait for Linux CI, mark ready, ancestry-check, fast-forward public `main`, and confirm post-merge CI.
+- [x] Preserve the worktree for the next milestone.
