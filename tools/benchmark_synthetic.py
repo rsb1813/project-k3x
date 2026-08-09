@@ -84,6 +84,8 @@ class BenchmarkRecord:
     cuda_moe_fusion: str = "none"
     fused_moe_calls: int = 0
     fused_moe_experts: int = 0
+    batched_expert_ffn_calls: int = 0
+    batched_expert_ffn_tokens: int = 0
     l1_expert_cache_mode: str = "disabled"
     l1_expert_cache_bytes: int = 0
     l1_expert_cache_hits: int = 0
@@ -728,6 +730,8 @@ def benchmark_once(
         "cuda_moe_fusion",
         "fused_moe_calls",
         "fused_moe_experts",
+        "batched_expert_ffn_calls",
+        "batched_expert_ffn_tokens",
         "pinned_host_bytes",
         "peak_pinned_host_bytes",
         "async_prefetch_calls",
@@ -894,6 +898,8 @@ def benchmark_once(
         ffn_block_experts=samples[0]["ffn_block_experts"],
         fused_moe_calls=samples[0]["fused_moe_calls"],
         fused_moe_experts=samples[0]["fused_moe_experts"],
+        batched_expert_ffn_calls=samples[0]["batched_expert_ffn_calls"],
+        batched_expert_ffn_tokens=samples[0]["batched_expert_ffn_tokens"],
         pinned_host_bytes=samples[0]["pinned_host_bytes"],
         peak_pinned_host_bytes=samples[0]["peak_pinned_host_bytes"],
         async_prefetch_calls=samples[0]["async_prefetch_calls"],
