@@ -44,7 +44,7 @@ flowchart LR
 | Milestone 14 | [PR #15 merged](https://github.com/rsb1813/project-k3x/pull/15) | B-0015 exact CPU expert-major verification |
 | Milestone 15 | [PR #17 merged](https://github.com/rsb1813/project-k3x/pull/17) at `c18df33` | B-0016 exact CUDA expert-major execution |
 | Milestone 16 | [PR #20 merged](https://github.com/rsb1813/project-k3x/pull/20) at `df5c07d` | B-0017 measured AURORA replay reference; exact and non-default |
-| Milestone 17 | Locally verified; publication pending | B-0018 persistent AURORA state; exact and non-default |
+| Milestone 17 | [PR #23 ready](https://github.com/rsb1813/project-k3x/pull/23) | B-0018 persistent AURORA state; exact and non-default |
 
 PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 16 integration head `df5c07d`; its branch and pull-request correctness runs `31337234073` and `31337240722` passed, followed by successful post-merge `main` run `31337365175`.
 
