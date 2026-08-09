@@ -493,6 +493,52 @@ Verification passed CPU CTest 11/11 and pytest 227/41, liburing/direct CTest 12/
 
 Public branch and PR correctness runs `31318880063` and `31318890885` succeeded at integration head `edc6d60`. PR #11 merged by fast-forward, and post-merge `main` correctness run `31318993688` also succeeded at that head.
 
+## B-0013 — Milestone 12 routed accumulation CUDA fusion
+
+| Field | Value |
+|---|---|
+| Evidence | measured WSL2 synthetic end-to-end and bounded released-dimension kernel/D2H ablation; non-authoritative for full-model throughput or native-Linux defaults |
+| Date | 2026-08-10 |
+| Measurement code commit | `58c36dd` |
+| Result commit | `0632a0f` |
+| Hardware | AMD Ryzen 7 9800X3D; NVIDIA GeForce RTX 5080 16,303 MiB, native `sm_120` |
+| Environment | WSL2 Ubuntu 24.04.4; CUDA Toolkit 13.3.1; Linux 6.18.33.2 |
+| Model/checkpoint | deterministic natural Top-16 synthetic graph, SHA-256 `edeaa4802b4bfac0624fa4d0e73917318076258d95e74e880c97a8b2709dd2d2`; released expert storage SHA-256 `aab7aea48b03bdcd8e0b4d98c4780128ab689d2bba005089a49970eb0e326890`; no full Kimi K3 weights |
+| Mode | `cuda-custom`, FP32, reused allocation, transient weights, scalar FFN block; synchronous/prefetch crossed with `none|routed-accumulate` |
+| Context / generated tokens | prompt `[1, 7, 3, 9]`; 6 generated tokens `[56, 55, 18, 11, 11, 13]` in every synthetic row |
+| Warmup / samples | 3 / 20 per row |
+| Quality result | exact token and routing identity; maximum absolute error `2.4e-7` in every synthetic row; released fixture maximum absolute error 0 |
+| Average Top-K | 16, natural synthetic routing |
+| VRAM | synthetic peak scratch/VRAM 43,680 bytes synchronous and 1,091,712 bytes prefetch; released fixture peak 23,461,888 bytes |
+| System RAM | synthetic peak RSS 507,482,112 to 507,785,216 bytes |
+| NVMe GB/token | not measured; synthetic logical Reader bytes are 215,832 bytes/token and are not physical NVMe attribution |
+| H2D | synthetic 5,802,048 bytes per run in every row; released fixture timed weight H2D is 0 because the immutable expert is preloaded |
+| GPU utilization / memory bandwidth | not measured |
+| Cache hit rate | not applicable; L1 disabled and CUDA weights transient |
+| Speculative acceptance / unique verification experts | not applicable; speculation is not implemented |
+| Cold rescue count | 0 |
+| Enabled optimization | routed down-projection contribution scaling and ordered device accumulation only in `routed-accumulate`; all other row identities held fixed |
+
+| Synthetic mode | Decode tok/s | Prefill tok/s | TTFT ms | Kernel ns | D2H bytes | Fused calls / experts |
+|---|---:|---:|---:|---:|---:|---:|
+| synchronous / none | 13.6984 | 10.6493 | 1,465.538 | 74,281,408 | 134,064 | 0 / 0 |
+| synchronous / routed-accumulate | 15.2499 | 11.5772 | 1,431.302 | 68,041,632 | 82,224 | 27 / 432 |
+| prefetch / none | 14.7718 | 11.1078 | 1,430.722 | 82,948,992 | 134,064 | 0 / 0 |
+| prefetch / routed-accumulate | 16.0877 | 11.9526 | 1,408.182 | 72,680,128 | 82,224 | 27 / 432 |
+
+Synthetic fusion improves decode by 1.5516 tok/s, or 11.33%, with synchronous transfer and by 1.3159 tok/s, or 8.91%, with prefetch. It reduces D2H by 51,840 bytes per complete run and reduces aggregate CUDA-event kernel time in both rows. These are tiny synthetic end-to-end results, not full-model projections.
+
+| Released-dimension mode | Median latency ns | Kernel ns / 20 | D2H bytes / 20 | Peak VRAM bytes | Fused calls / experts |
+|---|---:|---:|---:|---:|---:|
+| none | 7,867,604 | 76,422,336 | 4,587,520 | 23,461,888 | 0 / 0 |
+| routed-accumulate | 8,497,998 | 80,913,440 | 286,720 | 23,461,888 | 20 / 320 |
+
+The released fixture repeats one immutable 17,547,264-byte, 3,584-by-3,072 expert view across 16 slots. It deliberately has `routing_semantics=false`; it isolates kernel and D2H behavior and is neither token throughput nor a full-layer/full-model claim. Fusion reduces D2H by 4,300,800 bytes, or 93.75%, but increases median latency by 630,394 ns, or 8.01%, and aggregate kernel time by 4,491,104 ns, or 5.88%. This representative-dimension regression rejects a default change.
+
+Raw JSON/CSV and checksummed summaries are under `results/b0013-fused-routed-accumulation/`. Synthetic summary SHA-256 is `996dad640c78ea356b1b9d13fb7879e07511cba42e7257a6c43fa95b7f274da7`; released summary SHA-256 is `d6f186fb991c67e2c4a1cd4929816ca1cf5567b187a905dd447db99258fd1799`. The synthetic host command reached its 300-second timeout only after all four raw records and the summary were published; independent raw-summary, schema, and CSV validation passed afterward.
+
+Verification passed CPU CTest 11/11 and pytest 235/44, liburing/direct CTest 12/12 and pytest 237/42, CUDA CTest 20/20 and pytest 271/8, plus ASan/UBSan liburing CTest 12/12 and targeted pytest 49/5 with 57 deselected. Eleven CUDA Compute Sanitizer invocations, including the released-dimension fused benchmark, each reported zero errors. The first liburing pytest invocation omitted the required capability environment and produced one expected-selection failure; the corrected capability-enabled run passed. An initial malformed sanitizer loop ran no valid target; the corrected explicit invocations produced the reported results.
+
 ## Derived bottleneck model — not a benchmark
 
 The released dimensions imply 17,547,264 bytes per native MXFP4 routed expert. With no cache reuse, natural Top-16 across 92 MoE layers implies 25,829,572,608 expert bytes/token. Applying the P44 Pro published 7.0 GB/s sequential figure gives a derived expert-only ceiling of about 0.271 tok/s and implies roughly 94.6% expert NVMe-byte avoidance for a 5 tok/s target.

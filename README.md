@@ -19,7 +19,7 @@
 
 Kimi K3 is a 2.8T-parameter sparse MoE model whose local inference problem is dominated by moving the right expert bytes at the right time. K3X starts from that constraint. It is not a fork of llama.cpp or vLLM, and it does not assume that the checkpoint fits in RAM or VRAM.
 
-The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Implemented milestones now cover the exact synthetic graph and format, explicit RTX 5080 CUDA baselines, bounded L0/L1 primitives, independent L2 Reader modes, a released-size expert storage slice, an opt-in exact current-layer deadline worker, runtime-switchable exact eviction, persistent runtime-only task/session routing profiles, and experimental fixed/adaptive Top-K with exact selected-expert rescue. Cross-layer prediction and the full three-tier pipeline remain future work.
+The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Implemented milestones now cover the exact synthetic graph and format, explicit RTX 5080 CUDA baselines, bounded L0/L1 primitives, independent L2 Reader modes, a released-size expert storage slice, an opt-in exact current-layer deadline worker, runtime-switchable exact eviction, persistent runtime-only task/session routing profiles, experimental fixed/adaptive Top-K with exact selected-expert rescue, and opt-in routed expert accumulation on CUDA. Cross-layer prediction and the full three-tier pipeline remain future work.
 
 ```mermaid
 flowchart LR
@@ -413,7 +413,8 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.
 - [x] Bounded exact L1-to-L0 expert prefetch with pinned staging, transfer-stream events, accounting, and matched ablation.
 - [ ] Exact full-dimension CPU/GPU runtime over bounded checkpoint slices.
-- [ ] Wider layer/block GPU execution and fused K3-specific kernels.
+- [x] Opt-in routed down-projection scaling/accumulation fusion with synthetic and released-dimension B-0013 ablation.
+- [ ] Wider layer/block GPU execution and additional K3-specific kernels.
 - [x] Bounded no-eviction persistent L1 expert cache with exact transient bypass.
 - [x] Independent exact `pread|io_uring` and `buffered|direct` L2 reader with ordered expert batches.
 - [x] Physically materialized full-dimension expert storage slice and exact four-mode B-0008 ablation.

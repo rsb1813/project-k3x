@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 11 adaptive Top-K and exact selected-expert rescue are implemented, measured by B-0012, fully verified, and published through PR #11.
+Milestone 12 routed down-projection scaling and accumulation fusion is implemented, measured by B-0013, and fully verified. Public integration is pending.
 
-State recorded on 2026-08-09 at verified Milestone 11 public integration head `edc6d60`; result head is `d58fad7`. Branch, PR, and post-merge correctness runs `31318880063`, `31318890885`, and `31318993688` succeeded. The active branch is `codex/milestone-eleven-adaptive-topk-rescue`.
+State recorded on 2026-08-10 at verified Milestone 12 result head `0632a0f`; measurement code is `58c36dd`. The active branch is `codex/milestone-twelve-fused-cuda`, based on public Milestone 11 integration head `dd80e53`.
 
 ## Completed work
 
@@ -58,15 +58,20 @@ State recorded on 2026-08-09 at verified Milestone 11 public integration head `e
 - Opt-in exact `profiled` eviction with explicit prior strength and live-observation crossover; runtime metadata remains outside prompt IDs and default sessions do not observe profile state.
 - CLI profile load/save and metadata controls plus bytes/time/prior telemetry, exact resume parity, malformed-input rejection, bounded record behavior, and full-generation artifact-size evidence.
 - Five-case B-0011 runner comparing LFU, Least-Stale, cold profile, matching prior, and minimum-overlap alternate prior with exact token/routing/logit/state identity and WSL2 ext4 3-warmup/20-sample measurements.
+- Natural/fixed/adaptive Top-K execution with exact selected cold-expert rescue, external quality floors, 16-of-24 Python/C++ parity, and B-0012 quality/traffic ablation.
+- Opt-in `none|routed-accumulate` CUDA MoE identity for `cuda-custom + ffn-block`, with ordered down-projection contribution scaling and device accumulation for synchronous and prepared-prefetch paths.
+- Fused-call/expert telemetry, strict contribution and prepared-token validation, FP32/BF16 scalar/grouped graph parity, and a CPU oracle for the routed expert-group contract.
+- B-0013 four-case synthetic natural Top-16 end-to-end ablation plus a bounded released-dimension repeated-view kernel/D2H ablation. Synthetic fusion improves decode, while the representative dimension regresses latency and therefore remains non-default.
 
 ## Work in progress
 
-- Milestone 11 natural/fixed/adaptive policy and PyTorch/C++ 16-of-24 execution are complete. Fixed K16 equals natural Top-16 exactly, reduced K matches the Python oracle, and agent failure/critical signals raise the executed K floor. Selected cold experts use the exact MXFP4 load path and residency does not substitute routing IDs. B-0012 measures the speed/traffic/quality tradeoff; natural remains the default and reduced K remains explicitly lossy and unmeasured on the full model.
+- Milestone 12 implementation and B-0013 measurement are complete. `routed-accumulate` reduces intermediate D2H and improves the tiny synthetic graph, but the released 3,584-by-3,072 repeated-expert fixture is 8.01% slower in median latency. The mode remains experimental and `none` remains the default.
+- Milestone 12 TITAN Ledger update, final self-review, public PR, CI, and merge remain in progress.
 - Milestone 9 Terra high final review found one valid Important shared-session policy-context issue. Commit `fd05d95` serializes complete generation calls; re-review found no remaining Critical or Important issue and withdrew an initial collision interpretation concern after deterministic future-layer trace review.
 - Static, LRU, LFU, Least-Stale, profiled eviction, and all non-default L2 modes remain experimental and opt-in. Transition prediction and cross-layer asynchronous L2 scheduling remain unimplemented.
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
-- Natural routing, `pread + buffered`, blocking scheduling, and disabled L1 remain defaults because B-0007 through B-0012 are WSL2 ext4 evidence, not native P44 Pro or full-model evidence.
+- Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; builds: `build-cpu`, `build-uring`, `build-cuda`, and `build-uring-asan`.
 
@@ -85,10 +90,11 @@ State recorded on 2026-08-09 at verified Milestone 11 public integration head `e
 
 ## Next concrete tasks
 
-1. Begin the next charter checkpoint with a focused fused CUDA-kernel design and measured baseline; do not assume fusion wins.
-2. Add a bounded multi-expert or full-layer slice for representative cache pressure and locality evidence when needed by that kernel work.
-3. Add a future-layer predictor with recall-first exact-prefetch evaluation after the fused-kernel checkpoint.
-4. Run native-Linux P44 Pro warm/cold B-0008 through B-0012 only when that environment exists.
+1. Complete Milestone 12 self-review, public PR, CI, fast-forward merge, and post-merge verification.
+2. Begin exact speculative block verification with the draft/target interface separated and token-major execution retained as the reference.
+3. Add expert-major scheduling only after exact block verification passes, measuring unique expert union and fetch amortization without changing target routing.
+4. Add a future-layer predictor with recall-first exact-prefetch evaluation after the speculative correctness boundary.
+5. Run native-Linux P44 Pro warm/cold B-0008 through B-0013 only when that environment exists.
 
 ## Hardware assumptions
 
@@ -105,27 +111,27 @@ State recorded on 2026-08-09 at verified Milestone 11 public integration head `e
 
 ## Latest measured bottleneck
 
-B-0012 shows the central quality/traffic constraint. Fixed K4/K8/K12 reduce logical Reader bytes by 40.8%/27.2%/13.6% and increase tiny CPU decode by 3.24x/1.92x/1.34x versus natural K16, but every reduced row changes tokens, logits, and recurrent state. Fixed K16 and critical escalation are exact. All adaptive rows select K16 on the nearly uniform synthetic router, so this fixture yields no adaptive traffic reduction.
+B-0013 shows that eliminating intermediate expert-result D2H is not sufficient to improve representative CUDA latency. On the natural Top-16 synthetic graph, routed accumulation improves decode by 11.33% with synchronous transfer and 8.91% with prefetch while reducing D2H by 51,840 bytes per run. On the released 3,584-by-3,072 expert repeated across 16 immutable slots, it reduces D2H by 93.75% but increases median latency by 8.01% and aggregate kernel time by 5.88%.
 
-The 6,528-byte exact-rescue row records 108 cold loads, zero hits, and the same 766,224 logical Reader bytes as cache-disabled K4. It proves routing/residency separation but also shows that rescue without reuse does not remove traffic. Separate-process WSL2 timing, uncontrolled physical cold-cache state, synthetic router entropy, and logical Reader bytes cannot establish native or full-model defaults.
+The immediate CUDA bottleneck is sequential per-expert gate/up/down launch and ordered accumulation dependency at released dimensions, while KDA, MLA, routing, residual/state, and non-FFN orchestration remain CPU-driven. Gate/up launch fusion and expert-major multi-token reuse are possible future experiments, but neither is implemented or projected as a speedup.
 
-The immediate result is to retain natural routing with `disabled + blocking + pread + buffered` as defaults and keep reduced/adaptive K, profiled eviction, and rescue experiments opt-in. Native-Linux physical NVMe traffic, controlled warm/cold behavior, full-model locality, coding quality, and a useful adaptive calibration distribution remain unknown. CPU-driven KDA/MLA, routing, residual/state, and non-FFN orchestration also remain visible bottlenecks.
+The immediate result is to retain CUDA MoE fusion `none` alongside natural routing with `disabled + blocking + pread + buffered` as defaults. Native-Linux physical NVMe traffic, controlled warm/cold behavior, full-model locality, coding quality, GPU utilization, and memory bandwidth remain unknown.
 
 The derived uncached full-model expert traffic remains 25.83 GB/token, but it is not a measured full-model value. Native-Linux NVMe traffic, cache reuse, and full Kimi K3 throughput remain unknown.
 
 ## Last known-good state
 
-- Public Milestone 11 integration head: `edc6d605a8c17277e66fcedd1540ed8c4b31f367`; branch/PR/main correctness runs `31318880063`, `31318890885`, and `31318993688` succeeded. PR #11 is merged.
-- Latest verified Milestone 11 code head: `5c0164d`; result head is `d58fad7` and measurement code is `bf81beb`.
-- B-0012 synthetic K3X artifact SHA-256: `89ef0b18f1adb55a305d111c6bb67eb8469e6dacc6eeac3363ad74a64ab0e861`; summary SHA-256: `72de06f6fe7ff18a82e67b87cb38c0cc7b1c2ee2819ac62fe2a828e69307cac9`.
-- CPU verification: CTest 11/11; pytest 227 passed and 41 skipped.
-- Liburing/direct verification: CTest 12/12; pytest 233 passed and 35 skipped.
-- ASan/UBSan liburing verification: CTest 12/12; targeted pytest 101 passed and 34 skipped.
-- CUDA verification: CTest 20/20; pytest 260 passed and 8 skipped.
-- Compute Sanitizer: `test_cuda_device`, `test_cuda_dense`, `test_cuda_mxfp4`, `test_cuda_memory`, `test_cuda_pinned_memory`, `test_cuda_async_pipeline`, `test_cuda_residency`, `test_cuda_situ`, `test_cuda_ffn`, and `test_cuda_async_ffn` each report `ERROR SUMMARY: 0 errors`.
-- Natural and fixed-K16 generated tokens remain `[43, 32, 28, 49, 9, 28]`; reduced-K B-0012 rows are explicitly divergent.
-- B-0012 raw JSON/CSV, diagnostics, and cross-checked summary: `results/b0012-adaptive-routing-wsl/`.
-- Pre-publication ledger check: the result-schema/routing/benchmark targeted suite passed 18/5 with `K3X_BUILD_DIR=build-cpu`, and the recorded summary SHA-256 was reproduced.
+- Public Milestone 11 integration head: `dd80e53`; PR #11 and its post-merge correctness run succeeded.
+- Latest verified Milestone 12 result head: `0632a0f`; measurement code is `58c36dd`.
+- B-0013 synthetic artifact SHA-256: `edeaa4802b4bfac0624fa4d0e73917318076258d95e74e880c97a8b2709dd2d2`; released storage SHA-256: `aab7aea48b03bdcd8e0b4d98c4780128ab689d2bba005089a49970eb0e326890`.
+- B-0013 synthetic summary SHA-256: `996dad640c78ea356b1b9d13fb7879e07511cba42e7257a6c43fa95b7f274da7`; released summary SHA-256: `d6f186fb991c67e2c4a1cd4929816ca1cf5567b187a905dd447db99258fd1799`.
+- CPU verification: CTest 11/11; pytest 235 passed and 44 skipped.
+- Liburing/direct verification: CTest 12/12; pytest 237 passed and 42 skipped.
+- ASan/UBSan liburing verification: CTest 12/12; targeted pytest 49 passed and 5 skipped with 57 deselected.
+- CUDA verification: CTest 20/20; pytest 271 passed and 8 skipped.
+- Compute Sanitizer: ten CUDA test binaries plus the `k3x_cuda_expert_bench` released-dimension routed-accumulate invocation each report `ERROR SUMMARY: 0 errors`.
+- Every B-0013 synthetic row generated `[56, 55, 18, 11, 11, 13]` with exact routing/K identity and maximum absolute error `2.4e-7`.
+- B-0013 raw JSON/CSV, checksummed manifest, and independently cross-checked summaries: `results/b0013-fused-routed-accumulation/`.
 
 ## Proposed component status
 

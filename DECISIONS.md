@@ -385,3 +385,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: B-0012 records K4/K8/K12 logical Reader reductions of 40.8%/27.2%/13.6% and tiny CPU decode ratios of 3.24x/1.92x/1.34x against natural K16, but all three diverge in tokens, logits, and recurrent state. Fixed K16 and critical escalation are exact. All adaptive rows choose K16 on the nearly uniform synthetic router, while the bounded rescue row performs 108 exact loads with zero hits and no traffic reduction.
 - Reason: routing identity and residency must remain separate for correctness. The measured speed/traffic gains do not justify a default because quality diverges and no full-model coding evaluation exists.
 - Revisit: after calibrated full-model routing traces, coding/agentic quality suites, native-Linux physical NVMe and H2D attribution, and SHADOW/PHOENIX signal producers are implemented and jointly measured.
+
+## D-035 — Keep routed accumulation fusion opt-in after representative-dimension regression
+
+- Date: 2026-08-10.
+- Status: accepted, implemented, measured, and retained as experimental.
+- Decision: expose `none|routed-accumulate` only for `cuda-custom + ffn-block`, keep `none` as the default, preserve router order, and fuse only down-projection contribution scaling plus ordered device accumulation before one final D2H.
+- Alternatives considered: fuse gate/up into one launch; recompute SiTU-GLU inside every down-output row; fuse down scaling and accumulation without changing the existing gate/up/SiTU kernels.
+- Evidence: gate/up launch fusion needs a distinct dual-output kernel and ownership contract. Naive SiTU/down fusion with the current one-block-per-output-row kernel would recompute the hidden activation for every output row. The selected boundary reuses exact native-MXFP4 inputs and reduces expert-result D2H without changing routing or prepared-token semantics.
+- Benchmark result: B-0013 synthetic natural Top-16 improved decode by 11.33% synchronous and 8.91% prefetch and reduced D2H by 51,840 bytes per run. The released 3,584-by-3,072 expert repeated over 16 slots reduced D2H by 4,300,800 bytes, or 93.75%, but increased median latency by 630,394 ns, or 8.01%, and aggregate kernel time by 5.88%. All correctness gates passed; the released fixture is kernel/D2H evidence without routing semantics, not full-model TPS.
+- Reason: the narrow fusion proves exact ordered accumulation and removes intermediate host traffic, but representative dimensions show that the current sequential expert launches and accumulation dependency cost more than the saved transfer. Measurement therefore rejects a default change.
+- Revisit: after native-Linux profiling identifies the accumulation serialization cost, and when expert-major multi-token verification or a kernel shape that shares hidden activations across output work can amortize it.
