@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 4 exact asynchronous L1-to-L0 transfer implementation, B-0005 measurement, final read-only review, public merge, and post-merge CI are complete.
+Milestone 4 exact asynchronous L1-to-L0 transfer is complete and public. Milestone 5 persistent bounded L1 expert-cache design and TDD planning are complete; implementation is in progress.
 
-State recorded on 2026-08-09 after PR #4 fast-forwarded public `main` to `c961026` and post-merge correctness run `31298966035` succeeded. B-0005 remains the 3-warmup/20-sample measurement at `99cf1e4` because review and CI fixes do not change the valid execution order.
+State recorded on 2026-08-09 from public closure `04e9cbc` after correctness run `31299092196` succeeded and branch `codex/milestone-five-l1-cache` was created. No Milestone 5 code or benchmark claim exists yet.
 
 ## Completed work
 
@@ -30,7 +30,8 @@ State recorded on 2026-08-09 after PR #4 fast-forwarded public `main` to `c96102
 
 ## Work in progress
 
-- No Milestone 4 work remains in progress. The next milestone is a bounded persistent L1 expert cache feeding the tested prepared-transfer boundary.
+- Milestone 5 has an accepted model-adjacent immutable whole-expert L1 design and an eight-task TDD plan. Runtime implementation has not started.
+- The first implementation supports disabled/static no-eviction admission and exact transient bypass only. It deliberately defers LRU, LFU, Least-Stale, eviction, task/session priors, prediction, and L2 async I/O.
 - The TITAN Ledger, README, checklist, context notes, and compact/raw B-0005 artifacts are synchronized with the measured Milestone 4 implementation.
 - Final Terra high review found three Important contract/test gaps. Commit `190459b` enforces use-sequence identity before side effects, strengthens failure-atomicity coverage, and requires matched H2D/synchronization equality. No Critical or Important finding remains unaddressed.
 - Public PR #4 merged by ancestry-verified fast-forward at `c961026`; post-merge correctness run `31298966035` succeeded.
@@ -50,10 +51,11 @@ State recorded on 2026-08-09 after PR #4 fast-forwarded public `main` to `c96102
 
 ## Next concrete tasks
 
-1. Design a bounded persistent L1 expert cache that owns exact source bytes independently of the current temporary reader vectors and can feed the existing prepared-transfer boundary.
-2. Add an independently switchable L2 NVMe reader and benchmark buffered I/O, `io_uring`, and `O_DIRECT` on native Linux before choosing a default.
-3. Add full-dimension bounded checkpoint slices before any full Kimi K3 throughput claim, then implement deadline-aware L2-to-L1-to-L0 scheduling.
-4. Continue with Least-Stale/cache policies, task/session profiles, adaptive Top-K, and exact rescue in charter order.
+1. Implement runtime options and the hard-capacity immutable host expert store with unit-tested atomic admission and exact bypass.
+2. Integrate stable payload handles into operation, FFN-block, and prepared-transfer paths while preserving exact routing/tokens and Reader accounting.
+3. Add L1/Reader benchmark fields, the four-case B-0006 runner, full verification, and FP32/BF16 measurement.
+4. After B-0006, add an independently switchable L2 NVMe reader and benchmark buffered I/O, `io_uring`, and `O_DIRECT` on native Linux before choosing a default.
+5. Add full-dimension bounded checkpoint slices, then continue with policy/Least-Stale, task/session profiles, adaptive Top-K, and exact rescue in charter order.
 
 ## Hardware assumptions
 
@@ -80,7 +82,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Public Milestone 4 implementation `main`: `c961026b2603da1bc45c973894aaba908b2b2371`; PR #4 and post-merge correctness run `31298966035` succeeded.
+- Public Milestone 4 closure `main`: `04e9cbc327520586c7e593447c6724703c874210`; correctness run `31299092196` succeeded.
 - B-0005 measurement commit: `99cf1e4164510824ee67755c410b74887793fa8a` (`feat: add asynchronous transfer ablation`).
 - Latest validated code commit: `190459b` (`fix: enforce async transfer identity invariants`); the valid B-0005 execution path and ordering are unchanged.
 - CI portability fix: `c961026` (`test: detect CPU-only builds by capability`); it changes test environment detection only.

@@ -180,6 +180,14 @@ B-0005 preserved exact tokens and routing in all FP32/BF16 scalar/grouped rows. 
 
 The normative design is in [`docs/superpowers/specs/2026-08-09-k3x-async-l0-l1-transfer-design.md`](docs/superpowers/specs/2026-08-09-k3x-async-l0-l1-transfer-design.md).
 
+## Milestone 5 accepted persistent L1 design
+
+Milestone 5 is designed but not yet implemented. It places a bounded immutable whole-expert store between `Model` and `Reader`, before both synchronous execution and the Milestone 4 prepared-transfer boundary. Entries are keyed by layer and expert and own exact native MXFP4 gate/up/down packed and E8M0/32 scale bytes through stable shared handles.
+
+The first modes are `disabled` and experimental no-eviction `static` admission. Static admission charges the six payload extents, admits only a complete expert when it fits the remaining hard capacity, and otherwise returns an exact transient payload. It does not implement LRU, LFU, Least-Stale, task/session priors, eviction, prediction, asynchronous L2 reads, or cold rescue.
+
+Reader logical call/byte counters will prove avoided K3X reads, while explicit L1 hit/miss/bypass/current/peak counters will prove capacity behavior. These counters are not physical NVMe traffic. The accepted design and B-0006 matrix are in [`docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md`](docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md).
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

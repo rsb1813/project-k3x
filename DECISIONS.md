@@ -251,3 +251,14 @@
 - Benchmark result: no new performance measurement. The valid transfer and compute order measured in B-0005 is unchanged; FP32/BF16 post-fix one-sample smokes preserve exact tokens, routing, matched H2D, and synchronization.
 - Reason: sequence identity closes the stated token contract, while duplicate backend prevalidation provides failure atomicity without sacrificing the intended activation/expert-copy overlap.
 - Revisit: when the runtime supports multiple outstanding requests or deadline-aware scheduling; the token may then need a scheduler-owned generation and request identity in addition to use sequence.
+
+## D-023 — Make persistent L1 residency an expert-atomic model boundary
+
+- Date: 2026-08-09.
+- Status: accepted design; implementation pending.
+- Decision: implement the first persistent L1 store between `Model` and `Reader`, keyed by `(layer, expert)` and owning immutable complete gate/up/down native MXFP4 payloads. Support disabled and bounded no-eviction static admission with exact transient bypass; keep eviction and policy scoring out of this milestone.
+- Alternatives considered: caching individual extents inside `Reader`; owning host residency inside the CUDA backend; a model-adjacent whole-expert store.
+- Evidence: current `Model::load_expert` issues six synchronous Reader calls and constructs temporary vectors on every selection before either synchronous compute or Milestone 4 pinned preparation. Reader-level caching loses expert atomicity and mixes trunk/expert decisions. CUDA ownership cannot serve the CPU reference and couples storage to compute.
+- Benchmark result: none yet. B-0006 will cross disabled/static L1 with synchronous/prefetch L1-to-L0 transfer and measure exactness, Reader calls/bytes, cache counters, memory, traffic, and end-to-end timing.
+- Reason: whole-expert immutable handles provide the lifetime and accounting unit required by future prediction and policy work without prematurely selecting LRU, LFU, or Least-Stale. Hard-capacity bypass preserves correctness under insufficient RAM.
+- Revisit: after B-0006 and full-dimension bounded expert slices establish representative entry sizes; then introduce runtime-switchable admission/eviction policies and reproduce Least-Stale from the original SpecMD work.
