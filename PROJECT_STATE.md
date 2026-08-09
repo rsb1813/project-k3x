@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 18 exact transient CUDA AURORA drafting is implemented, measured, and fully verified on `codex/milestone-eighteen-cuda-aurora-draft`; public review and integration are in progress. The path is opt-in, persistent-only, fail-closed, and exactly matches the CPU draft proposal/acceptance contract while keeping target and draft telemetry separate. B-0019 rejects this transient synchronous CUDA identity as a default because all four CPU/CUDA pairs regress decode by 96.22% to 97.00%. CPU drafting remains the default, replay remains CPU-only, and the natural strict target verifier remains authoritative.
+Milestone 18 exact transient CUDA AURORA drafting is implemented, measured, and fully verified on public PR #25 from `codex/milestone-eighteen-cuda-aurora-draft`; public integration is in progress. The path is opt-in, persistent-only, fail-closed, and exactly matches the CPU draft proposal/acceptance contract while keeping target and draft telemetry separate. B-0019 rejects this transient synchronous CUDA identity as a default because all four CPU/CUDA pairs regress decode by 96.22% to 97.00%. CPU drafting remains the default, replay remains CPU-only, and the natural strict target verifier remains authoritative.
 
 State audited on 2026-08-10 against local verified head `5058369`, based on public `main` documentation head `808b64d3`. The current matrices pass CPU CTest 14/14 with Python 278/50, liburing/direct CTest 15/15 with Python 284/44, ASan/UBSan CTest 15/15, and CUDA CTest 23/23 with Python 319/9. Compute Sanitizer reports zero errors. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
