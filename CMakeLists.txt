@@ -22,6 +22,8 @@ add_library(k3x_runtime
     runtime/src/routing_policy.cpp
     runtime/src/speculative.cpp
     runtime/src/aurora_scheduler.cpp
+    runtime/src/aurora.cpp
+    runtime/src/model.cpp
     runtime/src/runtime_profile.cpp
     runtime/src/backend_cpu.cpp
     runtime/src/expert_major.cpp
@@ -101,6 +103,9 @@ add_test(NAME speculative COMMAND test_speculative)
 add_executable(test_aurora_scheduler tests/cpp/test_aurora_scheduler.cpp)
 target_link_libraries(test_aurora_scheduler PRIVATE k3x_runtime)
 add_test(NAME aurora_scheduler COMMAND test_aurora_scheduler)
+
+add_executable(test_aurora tests/cpp/test_aurora.cpp)
+target_link_libraries(test_aurora PRIVATE k3x_runtime)
 
 add_executable(test_expert_major tests/cpp/test_expert_major.cpp)
 target_link_libraries(test_expert_major PRIVATE k3x_runtime)
@@ -196,7 +201,7 @@ if(K3X_ENABLE_IO_URING)
     add_test(NAME io_ring_guard COMMAND test_io_ring_guard)
 endif()
 
-add_executable(k3x_run runtime/src/main.cpp runtime/src/model.cpp)
+add_executable(k3x_run runtime/src/main.cpp)
 target_link_libraries(k3x_run PRIVATE k3x_runtime)
 
 add_executable(k3x_storage_bench runtime/src/storage_bench.cpp)
@@ -213,5 +218,5 @@ if(K3X_ENABLE_CUDA)
     target_link_libraries(k3x_cuda_expert_batch_bench PRIVATE k3x_runtime)
 endif()
 
-add_executable(test_model_session tests/cpp/test_model_session.cpp runtime/src/model.cpp)
+add_executable(test_model_session tests/cpp/test_model_session.cpp)
 target_link_libraries(test_model_session PRIVATE k3x_runtime)

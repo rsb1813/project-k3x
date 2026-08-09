@@ -258,7 +258,7 @@ git commit -m "feat: schedule adaptive AURORA blocks"
 - Produces: `AuroraReplayConfig` and `AuroraReplayDraftProvider::create`.
 - Guarantees: one outstanding proposal, exact committed-history replay, separate draft telemetry, and latched lifecycle errors.
 
-- [ ] **Step 1: Write the failing integration test**
+- [x] **Step 1: Write the failing integration test**
 
 Create `tests/cpp/test_aurora.cpp` with a Korean first-line comment. Accept the synthetic artifact path as `argv[1]`, open a dedicated Reader and CPU backend, and construct this provider.
 
@@ -292,7 +292,7 @@ Add cases for a second `propose` before `update`, wrong position, wrong anchor, 
 
 Create `tests/python/test_aurora_runtime.py` with a Korean first-line comment. Its fixture builds the 24-expert Top-16 artifact with `SyntheticK3Config.default().replace(num_experts=24, top_k=16)` and invokes `test_aurora <artifact>` through `cpp_binary("test_aurora")`. Register the executable in CMake without adding it to CTest because it requires a generated artifact.
 
-- [ ] **Step 2: Run and verify RED**
+- [x] **Step 2: Run and verify RED**
 
 Run:
 
@@ -304,9 +304,9 @@ python -m pytest -q tests/python/test_aurora_runtime.py
 
 Expected: compilation fails because `k3x/aurora.hpp` and `AuroraReplayDraftProvider` do not exist, so the Python wrapper cannot run.
 
-- [ ] **Step 3: Implement the provider**
+- [x] **Step 3: Implement the provider**
 
-Create `runtime/include/k3x/aurora.hpp` with a Korean first-line comment and this public surface.
+Create `runtime/include/k3x/aurora.hpp` with a Korean first-line comment and this public surface. Move `runtime/src/model.cpp` into `k3x_runtime` and remove its duplicate direct compilation from `k3x_run` and `test_model_session`; the provider must call the public `generate_greedy` implementation through the library rather than copying model execution.
 
 ```cpp
 struct AuroraReplayConfig {
@@ -347,7 +347,7 @@ private:
 
 `update` accepts only a pending proposal with matching anchor, proposed count, accepted count, nonempty committed tokens, and scheduler-valid feedback. On inconsistency it sets `lifecycle_error_` and clears pending state. On success it appends committed tokens to `expected_generated_` and clears pending state.
 
-- [ ] **Step 4: Run focused GREEN**
+- [x] **Step 4: Run focused GREEN**
 
 Run:
 
@@ -358,7 +358,7 @@ python -m pytest -q tests/python/test_aurora_runtime.py
 
 Expected: AURORA provider tests pass with real reduced-Top-K draft bytes and no target Reader dependency.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add CMakeLists.txt runtime/include/k3x/aurora.hpp runtime/src/aurora.cpp tests/cpp/test_aurora.cpp tests/python/test_aurora_runtime.py
