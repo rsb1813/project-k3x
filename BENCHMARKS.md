@@ -317,6 +317,45 @@ Raw JSON/CSV and the cross-checked manifest are under `results/b0008-bounded-sli
 
 Final review subsequently strengthened source-manifest and resume-ledger integrity without changing payload order, Reader code, or benchmark code, so B-0008 was not relabeled or remeasured. Post-fix correctness passed CPU CTest 8/8 and pytest 161/40, liburing/direct CTest 9/9 and pytest 162/39, and CUDA CTest 17/17 and pytest 194/7.
 
+## B-0009 — Milestone 8 exact current-layer deadline loading
+
+| Field | Value |
+|---|---|
+| Evidence | measured WSL2 warm synthetic ablation; non-authoritative for native storage or a full model |
+| Date | 2026-08-09 |
+| Measurement code commit | `68b3e54` |
+| Hardware | AMD Ryzen 7 9800X3D host; CPU execution; RTX 5080 unused |
+| Environment | WSL2 Ubuntu 24.04.4, Linux 6.18.33.2; artifact on WSL ext4 `/tmp`; liburing 2.5 |
+| Model/checkpoint | deterministic executable `synthetic-milestone-one`; K3X SHA-256 `392b9237274e5580b665cf95afbda9a09e8d01ba7484bed00cf83a4ae99eb4fa`; no full Kimi K3 weights |
+| Mode | exact incremental CPU generation; static 65,536-byte L1; `blocking|deadline × pread|io_uring × buffered|direct`; queue depth 8 |
+| Context / generated tokens | prompt `[1, 7, 3, 9]`; 6 generated tokens `[43, 32, 28, 49, 9, 28]` |
+| Warmup / samples | 3 / 20 separate process runs per row |
+| Quality result | exact tokens and 24-entry routing trace in every row; CPU diagnostic maximum absolute and relative error 0 |
+| Average Top-K | 2, fixed synthetic natural routing |
+| L1 cache | 36 hits, 18 misses, zero bypasses, 29,376 resident bytes in every row; 66.67% hit rate over hit+miss events |
+| Logical Reader traffic | 606,864 bytes/run and 212 successful completions in every row; zero failure and short-read counters |
+| NVMe GB/token | not measured; logical Reader and aligned submitted bytes are not physical NVMe attribution |
+| H2D / VRAM / GPU utilization / memory bandwidth / kernel time | 0 or not applicable; CPU backend used |
+| Speculative acceptance / unique verification experts / cold rescue | not applicable; these features are not implemented |
+| Enabled optimizations | static exact L1 admission; selected Reader mode; deadline worker only in deadline rows; no adaptive Top-K, proxy, pruning, or speculation |
+
+| Schedule / Reader | Decode tok/s | Prefill tok/s | TTFT ms | Peak RSS MiB | Submitted bytes | Ready / late | Worker / exposed-wait ms |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| blocking / pread buffered | **6,508.251** | **4,342.914** | 12.936 | 5.055 | 606,864 | 0 / 0 | 0 / 0 |
+| deadline / pread buffered | 5,112.555 | 2,882.631 | **12.881** | 5.266 | 606,864 | 48 / 6 | 0.179 / 0.234 |
+| blocking / io_uring buffered | **6,234.853** | **3,884.325** | **12.914** | 5.133 | 606,864 | 0 / 0 | 0 / 0 |
+| deadline / io_uring buffered | 4,971.308 | 2,698.926 | 12.989 | 5.437 | 606,864 | 47 / 7 | 0.219 / 0.253 |
+| blocking / pread direct | **808.171** | **146.302** | 38.791 | 5.195 | 646,144 | 0 / 0 | 0 / 0 |
+| deadline / pread direct | 768.502 | 140.055 | **38.069** | 5.137 | 646,144 | 36 / 18 | 17.959 / 16.334 |
+| blocking / io_uring direct | **1,966.491** | **206.062** | **31.224** | 5.051 | 646,144 | 0 / 0 | 0 / 0 |
+| deadline / io_uring direct | 1,766.937 | 187.898 | 32.361 | 5.336 | 646,144 | 36 / 18 | 6.697 / 4.888 |
+
+Each deadline row records 54 submissions, 54 completions, 36 inline-resident hits, and 18 estimated deadline misses. Exact outputs and logical traffic show that scheduling does not change routing or fetch semantics. It does not improve throughput in this graph: matched decode changes are -21.45%, -20.27%, -4.91%, and -10.15% in table order. The worker remains opt-in; these numbers do not reject later future-layer prefetch on representative native-Linux workloads.
+
+Raw JSON/CSV and the programmatically cross-checked summary are under `results/b0009-deadline-loader-wsl/`. The first recorded B-0009 was replaced after final review moved latency-estimate capture before worker submission; the table is only the post-fix measurement.
+
+Post-review verification passed CPU CTest 9/9 and pytest 175/41, liburing/direct CTest 10/10 and pytest 177/39, CUDA CTest 18/18 and pytest 208/8, plus ASan/UBSan liburing CTest 10/10 and targeted pytest 69/33. All ten CUDA Compute Sanitizer targets reported zero errors. TSan built but could not execute under WSL2 because its runtime terminated with `unexpected memory mapping`; no TSan result is claimed.
+
 ## Derived bottleneck model — not a benchmark
 
 The released dimensions imply 17,547,264 bytes per native MXFP4 routed expert. With no cache reuse, natural Top-16 across 92 MoE layers implies 25,829,572,608 expert bytes/token. Applying the P44 Pro published 7.0 GB/s sequential figure gives a derived expert-only ceiling of about 0.271 tok/s and implies roughly 94.6% expert NVMe-byte avoidance for a 5 tok/s target.
@@ -328,5 +367,6 @@ These values are capacity and traffic estimates. They are not inserted into B-00
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
 - Native-Linux repetition of B-0004/B-0005/B-0006 and a larger KDA/MLA or decoder subgraph boundary.
 - Native-Linux repetition of B-0008 with disclosed warm/cold preparation before selecting an L2 default.
+- Native-Linux repetition of B-0009 with representative multi-expert pressure and controlled warm/cold preparation before selecting any deadline policy.
 - Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.

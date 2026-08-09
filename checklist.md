@@ -123,7 +123,8 @@
 - [x] CLI와 deadline scheduler telemetry.
 - [x] B-0009 8-case ablation runner와 correctness 계약.
 - [x] B-0009 WSL2 ext4 3-warmup/20-sample 측정과 raw 교차검증.
-- [ ] 전체 verification, final review, TITAN Ledger, public integration.
+- [x] 전체 local verification, final review, review fix, TITAN Ledger 갱신.
+- [ ] Public GitHub PR, CI, main 반영과 post-merge CI 확인.
 
 ## Milestone 6 independent L2 reader
 

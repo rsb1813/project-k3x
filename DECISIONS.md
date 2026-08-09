@@ -319,3 +319,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: no B-0008 remeasurement was performed because the payload order, Reader, and benchmark code did not change. Post-fix correctness passed CPU CTest 8/8 and pytest 161/40, liburing CTest 9/9 and pytest 162/39, and CUDA CTest 17/17 and pytest 194/7.
 - Reason: source metadata and resume metadata are untrusted recovery inputs. A final root hash cannot recover correctness if corrupted bytes were deliberately accepted while assembling the artifact.
 - Revisit: when general checkpoint shard manifests gain signed provenance or when hashing cost becomes measurable on cloud conversion workers.
+
+## D-029 — Keep current-layer deadline loading exact and opt-in
+
+- Date: 2026-08-09.
+- Status: accepted, implemented, measured, and retained as experimental.
+- Decision: add a bounded single-worker `deadline` schedule after current-layer natural Top-K routing, overlap loads with only routed-down and shared-expert work, and keep `blocking` as the default. Return Reader and L1 telemetry as locked value snapshots and drain all submitted work before every generation return.
+- Alternatives considered: replace the blocking Reader API with a general asynchronous API; implement N+1/N+2 prediction and eviction together; use raw telemetry references and rely on ordinary call ordering; introduce the smallest exact current-layer worker boundary first.
+- Evidence: scheduler tests cover latest-start priority, stable ties, capacity, failures, resident inline completion, and idle draining. Session and cross-language tests preserve exact tokens, routing, L1 hit/miss counts, and Reader bytes. Final review found three Important race/lifetime gaps; locked snapshots, pre-submit estimate capture, and success/error idle barriers closed them, and one re-review found no remaining Critical or Important issue.
+- Benchmark result: replacement B-0009 at `68b3e54` measured 3 warmups and 20 samples for eight WSL2 ext4 rows. Deadline reduced decode by 21.45% for buffered pread, 20.27% for buffered io_uring, 4.91% for direct pread, and 10.15% for direct io_uring. Every row retained exact tokens/routing, 606,864 logical Reader bytes, 212 completions, 36 L1 hits, and 18 misses.
+- Reason: the boundary proves exact ownership, scheduling, and telemetry contracts needed by later storage work, but the tiny current-layer overlap cannot amortize thread and synchronization cost. Measured regressions prohibit making it the default.
+- Revisit: with representative multi-expert cache pressure on native Linux, then after ORBIT-style future-layer recall and multiple outstanding L2 requests exist. Any future default still requires simultaneous correctness, traffic, and quality evidence.

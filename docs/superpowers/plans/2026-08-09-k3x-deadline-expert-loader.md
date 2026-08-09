@@ -38,7 +38,7 @@ Implement and measure an opt-in, exact current-layer deadline-aware L2 expert lo
 
 ## Task 6 — Verification, review, ledger, and publication
 
-- [ ] Run CPU, liburing/direct, CUDA, sanitizer, and applicable Compute Sanitizer suites.
-- [ ] Request one Terra high read-only final review and close Critical/Important findings.
-- [ ] Update architecture, decisions, benchmarks, README, checklist, context, and `PROJECT_STATE.md` last.
+- [x] Run CPU, liburing/direct, CUDA, sanitizer, and applicable Compute Sanitizer suites.
+- [x] Request one Terra high read-only final review and close Critical/Important findings.
+- [x] Update architecture, decisions, benchmarks, README, checklist, context, and `PROJECT_STATE.md` last.
 - [ ] Publish through a public PR, require branch/PR/main CI, and preserve the worktree.

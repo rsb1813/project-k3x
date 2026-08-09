@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%201-passing-20a46b?style=flat-square)](#milestone-1--exact-cuda-baselines)
+[![Milestone](https://img.shields.io/badge/milestone%208-passing-20a46b?style=flat-square)](#milestone-8--exact-current-layer-deadline-loading)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
 [![Format](https://img.shields.io/badge/format-K3X%20v1-6f42c1?style=flat-square)](K3X_FORMAT.md)
@@ -19,7 +19,7 @@
 
 Kimi K3 is a 2.8T-parameter sparse MoE model whose local inference problem is dominated by moving the right expert bytes at the right time. K3X starts from that constraint. It is not a fork of llama.cpp or vLLM, and it does not assume that the checkpoint fits in RAM or VRAM.
 
-The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Milestone 0 proved the graph, token sequence, persistent state, binary format, and independent runtime. Milestone 1 adds explicit CPU/CUDA backends, native K3 MXFP4 execution, structured device profiling, and an honest end-to-end comparison on the target RTX 5080.
+The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Implemented milestones now cover the exact synthetic graph and format, explicit RTX 5080 CUDA baselines, bounded L0/L1 primitives, independent L2 Reader modes, a released-size expert storage slice, and an opt-in exact current-layer deadline worker. Cross-layer prediction and the full three-tier pipeline remain future work.
 
 ```mermaid
 flowchart LR
@@ -121,6 +121,12 @@ The default remains `pread + buffered`. B-0007 preserves exact tokens, routing, 
 A streaming source generator now materializes one actual-size K3 routed expert: 16,515,072 packed E2M1 bytes plus 1,032,192 E8M0 scale bytes. It publishes a content-addressed shard before its manifest, and conversion verifies the declared shard and per-tensor SHA-256 values. K3X optional feature bit 0 marks the artifact as a non-executable storage fixture, so Readers can benchmark it while model generation fails closed. The converter packs gate/up/down in execution order and never holds a full matrix in RAM. Resume reuses only a canonical, source-matched extent prefix.
 
 `k3x_storage_bench` and B-0008 measure one exact six-extent expert load without token fields. All four Reader modes preserve the same 17,547,264-byte payload and ordered SHA-256 on WSL2 ext4. This does not implement a full-dimension graph, establish P44 Pro traffic, or change the `pread + buffered` default.
+
+## Milestone 8 — exact current-layer deadline loading
+
+`--l2-schedule deadline` submits the current layer's already-selected natural Top-K experts to one bounded latest-start-priority worker. Exact L1 hits complete inline while non-resident loads can overlap the routed-down and shared-expert computation. `blocking` remains the default, and generation drains outstanding work on both success and failure.
+
+B-0009 preserves exact tokens, routing, L1 counters, and logical Reader bytes across eight schedule/Reader combinations. Deadline decode was 4.91% to 21.45% slower than blocking on the tiny warm WSL2 graph, so the worker remains experimental. Future-layer prediction, ORBIT, eviction, multiple L2 workers, and N/N+1/N+2 triple buffering are not implemented.
 
 ## Quick start
 
@@ -399,7 +405,8 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Bounded no-eviction persistent L1 expert cache with exact transient bypass.
 - [x] Independent exact `pread|io_uring` and `buffered|direct` L2 reader with ordered expert batches.
 - [x] Physically materialized full-dimension expert storage slice and exact four-mode B-0008 ablation.
-- [ ] Asynchronous L2 NVMe reads and deadline scheduler.
+- [x] Opt-in exact current-layer deadline worker with failure-safe draining and B-0009 ablation.
+- [ ] Cross-layer asynchronous L2 prefetch and N/N+1/N+2 scheduling.
 - [ ] Least-Stale, task/session, and transition-aware expert caches.
 - [ ] Adaptive Top-K with exact cold-expert rescue.
 - [ ] Expert-major speculative verification and cost-aware experiments.
@@ -429,7 +436,7 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - The runtime implements synthetic dimensions; the CUDA backend accelerates only dense and MXFP4 matrix operations while the graph remains host-driven.
 - Reusable scratch, bounded static weight residency, and same-input grouping are implemented, but activations and results still cross the host/device boundary and asynchronous overlap is not implemented.
 - Static residency has no eviction and is not the future three-tier expert cache.
-- The bounded io_uring batch reader is implemented, but there is no cross-layer asynchronous storage pipeline, deadline scheduler, cache policy, adaptive Top-K, or speculative decoder yet.
+- The bounded io_uring batch reader and current-layer deadline worker are implemented, but there is no cross-layer asynchronous storage pipeline, future-layer predictor, eviction policy, adaptive Top-K, or speculative decoder yet.
 - The converter has not processed the full Kimi K3 checkpoint.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.
 - No open-source license has been selected yet; public visibility does not itself grant reuse rights.
