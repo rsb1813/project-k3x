@@ -207,7 +207,9 @@ def write_results(record: BenchmarkRecord, json_path: Path, csv_path: Path) -> N
         str(value) for value in record.evaluated_routed_k
     )
     with csv_path.open("w", newline="", encoding="utf-8") as stream:
-        writer = csv.DictWriter(stream, fieldnames=csv_payload.keys())
+        writer = csv.DictWriter(
+            stream, fieldnames=csv_payload.keys(), lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerow(csv_payload)
 

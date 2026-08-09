@@ -153,6 +153,7 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["device_overlap"] is False
     with csv_path.open(newline="", encoding="utf-8") as stream:
         row = next(csv.DictReader(stream))
+    assert b"\r\n" not in csv_path.read_bytes()
     assert row["decode_tokens_per_second"] == "50.0"
     assert row["host_to_device_bytes"] == "0"
     assert row["cuda_allocation"] == "per-operation"
