@@ -4,7 +4,7 @@
 
 Milestone 16 AURORA replay and adaptive block scheduling is implemented, measured, and publicly integrated. The separate CPU reduced-Top-K replay provider, strict lifecycle contract, draft telemetry surface, pure `{1,2,4}` adaptive scheduler, target physical feedback, CLI/schema surface, and B-0017 evidence are complete. The natural strict target verifier remains authoritative. AURORA replay is an experimental non-default reference because every measured replay row is slower than natural greedy.
 
-State audited on 2026-08-10 against public Milestone 16 integration head `df5c07d`, runtime head `bc45538`, and evidence head `51ff8e7`. PR #20 branch/pull-request correctness and post-merge `main` correctness all passed. The active documentation reconciliation branch is `codex/milestone-sixteen-publication`. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 against public Milestone 16 integration head `df5c07d`, public documentation head `0eb0966`, runtime head `bc45538`, and evidence head `51ff8e7`. PR #20 implementation and PR #21 documentation branch/pull-request correctness plus both post-merge `main` runs passed. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
@@ -78,7 +78,7 @@ State audited on 2026-08-10 against public Milestone 16 integration head `df5c07
 
 ## Work in progress
 
-- Milestone 16 implementation, B-0017, full verification, evidence cross-checks, final self-review, and public PR integration are complete. A documentation reconciliation commit is recording the public PR, CI, and integration head.
+- Milestone 16 implementation, B-0017, full verification, evidence cross-checks, final self-review, public integration, and documentation reconciliation are complete.
 - The scheduler explores `{1,2,4}` one rung at a time, uses Laplace-smoothed observed prefix survival and actual expert-major payload-load/assignment ratio, immediately backs off after rejection, and retries the smallest rung after one zero-draft step. These thresholds are an experimental B-0017 identity, not a runtime default.
 - Complete-prefix replay intentionally remains the candidate oracle for persistent KDA/MLA draft-state work. Reduced precision, resident-only drafting, confidence prediction, and learned DSpark integration remain unimplemented.
 - Milestone 15 implementation, B-0016, complete CPU/CUDA verification, Compute Sanitizer, final read-only review, public PR integration, and post-merge CI are complete.
@@ -141,6 +141,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 - Milestone 16 runtime head `bc45538` contains the replay provider, adaptive scheduler, target feedback, runtime integration, CLI, and telemetry. Evidence head `51ff8e7` contains B-0017 tooling, raw artifacts, summaries, cross-checks, and verification records.
 - Public Milestone 16 integration head `df5c07d` includes the complete implementation, B-0017 evidence, README, and synchronized TITAN Ledger. PR #20 branch/PR correctness runs `31337234073`/`31337240722` and post-merge `main` correctness run `31337365175` succeeded.
+- Public Milestone 16 documentation head `0eb0966` records PR #20 and its CI across README, BENCHMARKS, checklist, context notes, plan, and project state. PR #21 push/PR correctness runs `31337548635`/`31337554179` and post-merge `main` correctness run `31337694471` succeeded.
 - Current full verification passes CPU CTest 14/14 and pytest 268 passed/47 skipped, liburing/direct CTest 15/15 and pytest 274 passed/41 skipped, ASan/UBSan liburing CTest 15/15, and CUDA CTest 23/23 with pytest 307 passed/8 skipped. The combined CUDA expert-major AURORA CLI Compute Sanitizer run reports zero errors.
 - B-0017 artifact SHA-256 is `c1110ad2a1fe981f92b01e36aaafa216d0d8ea45a6608270f3cf706816c17a7c`; runner SHA-256 is `a20f708073bd27150d27d8eddf5c926072f1b96020257e625ab3caa895a536f7`; canonical aggregate SHA-256 is `fb7febf52c75281417b77c3f7d40787f738dba8a35490cc86d43ac5072cacd23`; summary JSON/CSV SHA-256 is `fdd94c5696d1505e17e0dbc41d465d8edad38b132896f5a3742277c09b852871` / `865d228fb88b1bc22fe147b04e1ce003559f04534052d8ce0180b753832d9551`.
 - Independent B-0017 evidence validation recomputed all 14 raw JSON/CSV digests, the canonical aggregate, exact token/state/route parity, and LF-stable summary bytes. Results are under `results/b0017-aurora-replay-wsl/`.
