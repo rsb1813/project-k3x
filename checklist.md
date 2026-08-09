@@ -152,7 +152,7 @@
 - [x] Write the exact CPU expert-major design with state, routing, traffic, and failure invariants.
 - [x] Self-review and commit the design specification.
 - [x] Write and commit the detailed TDD implementation plan.
-- [ ] Implement the pure expert-major plan and block verifier through RED→GREEN.
+- [x] Implement the pure expert-major plan and block verifier through RED→GREEN.
 - [ ] Integrate exact block execution, CLI identity, telemetry, and failure atomicity.
 - [ ] Run B-0015, full verification, ledger update, review, and public integration.
 
