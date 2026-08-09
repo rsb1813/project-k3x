@@ -44,9 +44,14 @@ def test_cpp_runner_rejects_unknown_backend_values(
         (["--cuda-weights", "lru"], "unknown CUDA weight mode: lru"),
         (["--cuda-batching", "graph"], "unknown CUDA batching mode: graph"),
         (["--cuda-boundary", "layer"], "unknown CUDA boundary mode: layer"),
+        (["--cuda-transfer", "queue"], "unknown CUDA transfer mode: queue"),
         (
             ["--cuda-resident-bytes", "-1"],
             "invalid CUDA resident byte capacity: -1",
+        ),
+        (
+            ["--cuda-pinned-bytes", "-1"],
+            "invalid CUDA pinned byte capacity: -1",
         ),
     ],
 )
@@ -69,6 +74,8 @@ def test_cpp_runner_rejects_invalid_cuda_execution_options(
         ["--backend", "cpu", "--cuda-weights", "resident", "--cuda-resident-bytes", "1"],
         ["--backend", "cpu", "--cuda-batching", "grouped"],
         ["--backend", "cpu", "--cuda-resident-bytes", "1"],
+        ["--backend", "cpu", "--cuda-transfer", "prefetch"],
+        ["--backend", "cpu", "--cuda-pinned-bytes", "1"],
     ],
 )
 def test_cpp_runner_rejects_cuda_execution_options_for_cpu(
@@ -125,6 +132,82 @@ def test_cpp_runner_rejects_ffn_block_boundary_without_custom_cuda(
     )
     assert result.returncode == 2
     assert result.stderr.strip() == "ffn-block boundary requires cuda-custom"
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (
+            ["--backend", "cuda-custom", "--cuda-pinned-bytes", "1"],
+            "synchronous CUDA transfer requires a zero pinned byte capacity",
+        ),
+        (
+            ["--backend", "cuda-custom", "--cuda-transfer", "prefetch"],
+            "prefetch CUDA transfer requires a positive pinned byte capacity",
+        ),
+        (
+            [
+                "--backend", "cuda-dense", "--cuda-transfer", "prefetch",
+                "--cuda-pinned-bytes", "1",
+            ],
+            "prefetch CUDA transfer requires cuda-custom",
+        ),
+        (
+            [
+                "--backend", "cuda-custom", "--cuda-transfer", "prefetch",
+                "--cuda-pinned-bytes", "1",
+            ],
+            "prefetch CUDA transfer requires ffn-block boundary",
+        ),
+        (
+            [
+                "--backend", "cuda-custom", "--cuda-boundary", "ffn-block",
+                "--cuda-transfer", "prefetch", "--cuda-pinned-bytes", "1",
+            ],
+            "prefetch CUDA transfer requires reused allocation",
+        ),
+        (
+            [
+                "--backend", "cuda-custom", "--cuda-boundary", "ffn-block",
+                "--cuda-allocation", "reused", "--cuda-weights", "resident",
+                "--cuda-resident-bytes", "1", "--cuda-transfer", "prefetch",
+                "--cuda-pinned-bytes", "1",
+            ],
+            "prefetch CUDA transfer requires transient weights",
+        ),
+    ],
+)
+def test_cpp_runner_rejects_invalid_cuda_transfer_combinations(
+    arguments: list[str], message: str
+) -> None:
+    result = subprocess.run(
+        [str(cpp_binary("k3x_run")), *arguments],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == message
+
+
+def test_cpp_runner_accepts_exact_cuda_prefetch_capability_combination() -> None:
+    result = subprocess.run(
+        [
+            str(cpp_binary("k3x_run")),
+            "--backend", "cuda-custom",
+            "--cuda-boundary", "ffn-block",
+            "--cuda-allocation", "reused",
+            "--cuda-weights", "transient",
+            "--cuda-transfer", "prefetch",
+            "--cuda-pinned-bytes", "1048576",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if Path(os.environ.get("K3X_BUILD_DIR", "build")).name == "build-cpu":
+        assert result.returncode == 4
+        assert result.stderr.startswith("BACKEND_UNAVAILABLE")
+    else:
+        assert result.returncode == 3
 
 
 def test_cpu_build_reports_explicit_cuda_request_as_unavailable() -> None:

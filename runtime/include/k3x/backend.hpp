@@ -20,6 +20,7 @@ enum class CudaAllocationMode { per_operation, reused };
 enum class CudaWeightMode { transient, resident };
 enum class CudaBatchingMode { scalar, grouped };
 enum class CudaBoundaryMode { operation, ffn_block };
+enum class CudaTransferMode { synchronous, prefetch };
 
 struct BackendOptions {
     BackendKind kind{BackendKind::cpu};
@@ -28,7 +29,9 @@ struct BackendOptions {
     CudaWeightMode cuda_weights{CudaWeightMode::transient};
     CudaBatchingMode cuda_batching{CudaBatchingMode::scalar};
     CudaBoundaryMode cuda_boundary{CudaBoundaryMode::operation};
+    CudaTransferMode cuda_transfer{CudaTransferMode::synchronous};
     std::uint64_t cuda_resident_bytes{};
+    std::uint64_t cuda_pinned_bytes{};
 };
 
 struct BackendMemoryStats {
@@ -53,6 +56,18 @@ struct BackendRuntimeStats {
     std::uint64_t grouped_projection_members{};
     std::uint64_t ffn_block_calls{};
     std::uint64_t ffn_block_experts{};
+    std::uint64_t pinned_host_bytes{};
+    std::uint64_t peak_pinned_host_bytes{};
+    std::uint64_t async_prefetch_calls{};
+    std::uint64_t async_prefetch_bytes{};
+    std::uint64_t async_prefetch_ready_before_use{};
+    std::uint64_t async_prefetch_late_at_use{};
+    std::uint64_t transfer_stream_wait_count{};
+    std::uint64_t pinned_staging_nanoseconds{};
+    std::uint64_t transfer_device_nanoseconds{};
+    std::uint64_t transfer_stall_nanoseconds{};
+    std::uint64_t async_engine_count{};
+    bool device_overlap{};
 };
 
 struct DenseWeightView {
@@ -83,6 +98,10 @@ struct Mxfp4MlpView {
     Mxfp4WeightView down;
 };
 
+struct Mxfp4PrefetchToken {
+    std::uint64_t value{};
+};
+
 class ComputeBackend {
 public:
     virtual ~ComputeBackend() = default;
@@ -107,6 +126,14 @@ public:
         std::uint32_t layer, ProfilePhase phase) = 0;
     virtual Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_group(
         std::span<const float> input, std::span<const Mxfp4MlpView> experts,
+        float situ_beta, std::optional<float> situ_linear,
+        std::uint32_t layer, ProfilePhase phase) = 0;
+    virtual Result<Mxfp4PrefetchToken> prefetch_mxfp4_situ_mlp_group(
+        std::span<const Mxfp4MlpView> experts, std::uint64_t use_sequence,
+        std::uint32_t layer, ProfilePhase phase) = 0;
+    virtual Result<std::vector<std::vector<float>>>
+    mxfp4_situ_mlp_group_prepared(
+        std::span<const float> input, Mxfp4PrefetchToken token,
         float situ_beta, std::optional<float> situ_linear,
         std::uint32_t layer, ProfilePhase phase) = 0;
     Result<std::vector<float>> dense_matvec(

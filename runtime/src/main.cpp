@@ -38,7 +38,9 @@ int main(int argc, char** argv) {
     std::string cuda_weights_name = "transient";
     std::string cuda_batching_name = "scalar";
     std::string cuda_boundary_name = "operation";
+    std::string cuda_transfer_name = "synchronous";
     std::string cuda_resident_bytes_text = "0";
+    std::string cuda_pinned_bytes_text = "0";
     bool diagnostics = false;
     std::size_t count = 0;
     for (int index = 1; index + 1 < argc; index += 2) {
@@ -56,7 +58,9 @@ int main(int argc, char** argv) {
         else if (key == "--cuda-weights") cuda_weights_name = value;
         else if (key == "--cuda-batching") cuda_batching_name = value;
         else if (key == "--cuda-boundary") cuda_boundary_name = value;
+        else if (key == "--cuda-transfer") cuda_transfer_name = value;
         else if (key == "--cuda-resident-bytes") cuda_resident_bytes_text = value;
+        else if (key == "--cuda-pinned-bytes") cuda_pinned_bytes_text = value;
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
     }
 
@@ -111,6 +115,14 @@ int main(int argc, char** argv) {
         std::cerr << "unknown CUDA boundary mode: " << cuda_boundary_name << '\n';
         return 2;
     }
+    if (cuda_transfer_name == "synchronous") {
+        backend_options.cuda_transfer = k3x::CudaTransferMode::synchronous;
+    } else if (cuda_transfer_name == "prefetch") {
+        backend_options.cuda_transfer = k3x::CudaTransferMode::prefetch;
+    } else {
+        std::cerr << "unknown CUDA transfer mode: " << cuda_transfer_name << '\n';
+        return 2;
+    }
     const auto* resident_begin = cuda_resident_bytes_text.data();
     const auto* resident_end = resident_begin + cuda_resident_bytes_text.size();
     const auto resident_parse = std::from_chars(
@@ -119,6 +131,16 @@ int main(int argc, char** argv) {
         resident_parse.ptr != resident_end) {
         std::cerr << "invalid CUDA resident byte capacity: "
                   << cuda_resident_bytes_text << '\n';
+        return 2;
+    }
+    const auto* pinned_begin = cuda_pinned_bytes_text.data();
+    const auto* pinned_end = pinned_begin + cuda_pinned_bytes_text.size();
+    const auto pinned_parse = std::from_chars(
+        pinned_begin, pinned_end, backend_options.cuda_pinned_bytes);
+    if (cuda_pinned_bytes_text.empty() || pinned_parse.ec != std::errc{} ||
+        pinned_parse.ptr != pinned_end) {
+        std::cerr << "invalid CUDA pinned byte capacity: "
+                  << cuda_pinned_bytes_text << '\n';
         return 2;
     }
     if (backend_options.kind == k3x::BackendKind::cpu &&
@@ -135,9 +157,38 @@ int main(int argc, char** argv) {
         (backend_options.cuda_allocation != k3x::CudaAllocationMode::per_operation ||
          backend_options.cuda_weights != k3x::CudaWeightMode::transient ||
          backend_options.cuda_batching != k3x::CudaBatchingMode::scalar ||
-         backend_options.cuda_resident_bytes != 0)) {
+         backend_options.cuda_transfer != k3x::CudaTransferMode::synchronous ||
+         backend_options.cuda_resident_bytes != 0 ||
+         backend_options.cuda_pinned_bytes != 0)) {
         std::cerr << "CUDA execution options require a CUDA backend\n";
         return 2;
+    }
+    if (backend_options.cuda_transfer == k3x::CudaTransferMode::synchronous &&
+        backend_options.cuda_pinned_bytes != 0) {
+        std::cerr << "synchronous CUDA transfer requires a zero pinned byte capacity\n";
+        return 2;
+    }
+    if (backend_options.cuda_transfer == k3x::CudaTransferMode::prefetch) {
+        if (backend_options.cuda_pinned_bytes == 0) {
+            std::cerr << "prefetch CUDA transfer requires a positive pinned byte capacity\n";
+            return 2;
+        }
+        if (backend_options.kind != k3x::BackendKind::cuda_custom) {
+            std::cerr << "prefetch CUDA transfer requires cuda-custom\n";
+            return 2;
+        }
+        if (backend_options.cuda_boundary != k3x::CudaBoundaryMode::ffn_block) {
+            std::cerr << "prefetch CUDA transfer requires ffn-block boundary\n";
+            return 2;
+        }
+        if (backend_options.cuda_allocation != k3x::CudaAllocationMode::reused) {
+            std::cerr << "prefetch CUDA transfer requires reused allocation\n";
+            return 2;
+        }
+        if (backend_options.cuda_weights != k3x::CudaWeightMode::transient) {
+            std::cerr << "prefetch CUDA transfer requires transient weights\n";
+            return 2;
+        }
     }
     if (backend_options.kind != k3x::BackendKind::cpu &&
         backend_options.cuda_weights == k3x::CudaWeightMode::resident &&
@@ -203,8 +254,12 @@ int main(int argc, char** argv) {
     write_json_string(output, cuda_batching_name);
     output << ",\"cuda_boundary\":";
     write_json_string(output, cuda_boundary_name);
+    output << ",\"cuda_transfer\":";
+    write_json_string(output, cuda_transfer_name);
     output << ",\"cuda_resident_bytes\":"
            << effective_options.cuda_resident_bytes;
+    output << ",\"cuda_pinned_bytes\":"
+           << effective_options.cuda_pinned_bytes;
     output << ",\"kernel_nanoseconds\":" << profile.device_nanoseconds
            << ",\"host_to_device_bytes\":" << profile.host_to_device_bytes
            << ",\"weight_h2d_bytes\":"

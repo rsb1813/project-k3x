@@ -22,6 +22,7 @@ enum class ErrorCode {
     root_sha256_mismatch,
     tensor_not_found,
     invalid_mxfp4,
+    invalid_state,
     backend_unavailable,
     unsupported_architecture,
 };
@@ -43,6 +44,7 @@ inline const char* error_code_name(ErrorCode code) {
         case ErrorCode::root_sha256_mismatch: return "ROOT_SHA256_MISMATCH";
         case ErrorCode::tensor_not_found: return "TENSOR_NOT_FOUND";
         case ErrorCode::invalid_mxfp4: return "INVALID_MXFP4";
+        case ErrorCode::invalid_state: return "INVALID_STATE";
         case ErrorCode::backend_unavailable: return "BACKEND_UNAVAILABLE";
         case ErrorCode::unsupported_architecture: return "UNSUPPORTED_ARCHITECTURE";
     }

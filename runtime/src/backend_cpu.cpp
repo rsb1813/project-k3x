@@ -151,6 +151,21 @@ public:
             std::move(outputs));
     }
 
+    Result<Mxfp4PrefetchToken> prefetch_mxfp4_situ_mlp_group(
+        std::span<const Mxfp4MlpView>, std::uint64_t, std::uint32_t,
+        ProfilePhase) override {
+        return Result<Mxfp4PrefetchToken>::failure(
+            ErrorCode::backend_unavailable);
+    }
+
+    Result<std::vector<std::vector<float>>>
+    mxfp4_situ_mlp_group_prepared(
+        std::span<const float>, Mxfp4PrefetchToken, float,
+        std::optional<float>, std::uint32_t, ProfilePhase) override {
+        return Result<std::vector<std::vector<float>>>::failure(
+            ErrorCode::backend_unavailable);
+    }
+
     BackendMemoryStats memory_stats() const noexcept override { return {}; }
     std::string_view device_name() const noexcept override { return "CPU"; }
 
