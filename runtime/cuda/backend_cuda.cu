@@ -1412,7 +1412,9 @@ public:
                 ErrorCode::invalid_mxfp4);
         }
         for (const auto& expert : experts) {
-            if (!valid_mxfp4_size(input.size(), expert.gate) ||
+            if (expert.gate.group_size != 32 || expert.up.group_size != 32 ||
+                expert.down.group_size != 32 ||
+                !valid_mxfp4_size(input.size(), expert.gate) ||
                 !valid_mxfp4_size(input.size(), expert.up) ||
                 expert.gate.rows != expert.up.rows ||
                 !valid_mxfp4_size(expert.gate.rows, expert.down)) {

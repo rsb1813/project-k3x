@@ -272,6 +272,61 @@ int test_exact_mxfp4_group() {
     return 0;
 }
 
+int test_exact_mxfp4_group_rejects_non_native_group_size() {
+    std::array<float, 64> input{};
+    std::array<std::byte, 2048> gate{};
+    std::array<std::byte, 2048> up{};
+    std::array<std::byte, 32> down{};
+    std::array<std::byte, 256> scales{};
+    std::array<std::byte, 4> down_scales{};
+    scales.fill(std::byte{127});
+    down_scales.fill(std::byte{127});
+
+    k3x::BackendOptions options;
+    options.kind = k3x::BackendKind::cuda_custom;
+    options.cuda_boundary = k3x::CudaBoundaryMode::ffn_block;
+    options.cuda_allocation = k3x::CudaAllocationMode::reused;
+    options.cuda_weights = k3x::CudaWeightMode::resident;
+    options.cuda_resident_bytes = 16384;
+    k3x::Profiler profiler;
+    auto backend = k3x::make_cuda_backend(options, &profiler);
+    if (!backend) return 54;
+
+    for (const std::size_t group_size : {16U, 64U}) {
+        const auto scale_count = 4096 / group_size;
+        const std::array<k3x::Mxfp4MlpView, 1> experts{{{
+            {901, gate, std::span<const std::byte>(scales).first(scale_count),
+             64, 64, group_size},
+            {902, up, std::span<const std::byte>(scales).first(scale_count),
+             64, 64, group_size},
+            {903, down,
+             std::span<const std::byte>(down_scales).first(64 / group_size),
+             1, 64, group_size},
+        }}};
+        const auto before = backend.value()->runtime_stats();
+        const auto before_events = profiler.events().size();
+        const auto rejected = backend.value()->mxfp4_situ_mlp_group(
+            input, experts, 2.0F, 1.5F, 10, k3x::ProfilePhase::decode);
+        if (rejected || rejected.error() != k3x::ErrorCode::invalid_mxfp4) {
+            return 55;
+        }
+        const auto after = backend.value()->runtime_stats();
+        if (after.device_allocation_count != before.device_allocation_count ||
+            after.weight_cache_hits != before.weight_cache_hits ||
+            after.weight_cache_misses != before.weight_cache_misses ||
+            after.weight_h2d_bytes != before.weight_h2d_bytes ||
+            after.activation_h2d_bytes != before.activation_h2d_bytes ||
+            after.stream_synchronization_count !=
+                before.stream_synchronization_count ||
+            after.ffn_block_calls != before.ffn_block_calls ||
+            after.ffn_block_experts != before.ffn_block_experts ||
+            profiler.events().size() != before_events) {
+            return 56;
+        }
+    }
+    return 0;
+}
+
 int test_exact_mxfp4_capacity_bypass() {
     const Mxfp4Fixture fixture;
     const auto experts = fixture.views();
@@ -306,5 +361,8 @@ int main() {
     if (const auto result = test_bf16()) return result;
     if (const auto result = test_validation()) return result;
     if (const auto result = test_exact_mxfp4_group()) return result;
+    if (const auto result = test_exact_mxfp4_group_rejects_non_native_group_size()) {
+        return result;
+    }
     return test_exact_mxfp4_capacity_bypass();
 }
