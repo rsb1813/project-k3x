@@ -197,7 +197,7 @@
 - [x] Write and self-review the exact CUDA draft design.
 - [x] Write and self-review the detailed TDD implementation plan.
 - [x] Implement draft backend preflight, ownership, and runtime validation through witnessed RED/GREEN cycles.
-- [ ] Add separated draft CUDA telemetry and benchmark schema coverage.
+- [x] Add separated draft CUDA telemetry and benchmark schema coverage.
 - [ ] Run B-0019, the full verification matrix, sanitizer coverage, and evidence cross-checks.
 - [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
 

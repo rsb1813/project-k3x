@@ -234,7 +234,7 @@ git commit -m "feat: execute persistent AURORA drafts on CUDA"
 - Consumes: Task 2's independent `aurora_profiler` and `aurora_backend`.
 - Produces: the eighteen draft identity/telemetry fields specified by the design in CLI JSON and `BenchmarkRecord` JSON/CSV.
 
-- [ ] **Step 1: Write schema and runtime RED assertions**
+- [x] **Step 1: Write schema and runtime RED assertions**
 
 Extend `_record()` expectations so ordinary records contain literal defaults.
 
@@ -254,7 +254,7 @@ assert payload["draft_peak_vram_bytes"] == 0
 
 In the CUDA integration test assert draft kernel/H2D/VRAM/allocation/synchronization are positive while target `kernel_nanoseconds`, `host_to_device_bytes`, and `peak_vram_bytes` remain zero for a CPU target.
 
-- [ ] **Step 2: Run and witness RED**
+- [x] **Step 2: Run and witness RED**
 
 Run.
 
@@ -267,15 +267,15 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 python -m pytest \
 
 Expected failure: missing draft identity and telemetry fields.
 
-- [ ] **Step 3: Serialize independent backend snapshots**
+- [x] **Step 3: Serialize independent backend snapshots**
 
 After generation, snapshot `aurora_profiler.summary()`, `aurora_backend->memory_stats()`, and `aurora_backend->runtime_stats()` when AURORA is active. Otherwise use zero structs. Serialize the exact effective draft options and profiler/runtime counters under the design field names. `draft_device` is `CPU` outside CUDA and `aurora_backend->device_name()` for AURORA.
 
-- [ ] **Step 4: Extend `BenchmarkRecord` and all process calls**
+- [x] **Step 4: Extend `BenchmarkRecord` and all process calls**
 
 Add defaulted dataclass fields, add `aurora_draft_backend: str = "cpu"` to `_run_process` and `benchmark_once`, append the CLI option only for AURORA modes, include all new deterministic counters in the consistency gate, and aggregate timing fields by median while keeping byte/count fields exact. Add the argparse choice `cpu|cuda-custom`.
 
-- [ ] **Step 5: Run GREEN and the whole benchmark-schema suite**
+- [x] **Step 5: Run GREEN and the whole benchmark-schema suite**
 
 Run.
 
@@ -291,7 +291,7 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 python -m pytest \
 
 Expected: schema defaults, CPU compatibility, and separated CUDA counters pass.
 
-- [ ] **Step 6: Commit telemetry**
+- [x] **Step 6: Commit telemetry**
 
 ```bash
 git add runtime/src/main.cpp tools/benchmark_synthetic.py \
