@@ -549,6 +549,8 @@ These values are capacity and traffic estimates. They are not inserted into B-00
 
 ## Pending benchmark gates
 
+Milestone 13 implementation evidence is currently test-only. At development head `027b65c`, CPU CTest passes 12/12 and the runtime integration fixtures preserve greedy tokens, final KDA/MLA state, full routing/K traces, Reader calls/bytes, and L1 counters across perfect and mixed proposal blocks. These are correctness results, not B-0014 timing or acceptance measurements.
+
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
 - Native-Linux repetition of B-0004/B-0005/B-0006 and a larger KDA/MLA or decoder subgraph boundary.
 - Native-Linux repetition of B-0008 with disclosed warm/cold preparation before selecting an L2 default.

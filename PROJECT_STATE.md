@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 13 exact speculative block verification is in design and TDD preparation. No speculative runtime implementation or benchmark is claimed yet.
+Milestone 13 exact speculative block verification has a tested pure contract and incremental token-major runtime reference. CLI telemetry and B-0014 measurement are in progress; no speculative performance result is claimed yet.
 
-State recorded on 2026-08-10 from verified public Milestone 12 publication head `dc23020`. The active branch is `codex/milestone-thirteen-speculative-verification`. The DSpark paper and DeepSpec implementation were inspected, and the M13 design, plan, checklist, architecture boundary, performance accounting, decision, reference ledger, README status, and pending benchmark gate are synchronized.
+State recorded on 2026-08-10 from public documentation head `7748ca3` and development head `027b65c`. The active branch is `codex/milestone-thirteen-speculative-verification`. PR #11 and PR #12 are merged, their README sections are public, and the tested M13 contract/runtime implementation remains on the development branch until its measurement and final gate are complete.
 
 ## Completed work
 
@@ -66,7 +66,7 @@ State recorded on 2026-08-10 from verified public Milestone 12 publication head 
 ## Work in progress
 
 - Milestone 12 implementation and B-0013 measurement are complete. `routed-accumulate` reduces intermediate D2H and improves the tiny synthetic graph, but the released 3,584-by-3,072 repeated-expert fixture is 8.01% slower in median latency. The mode remains experimental and `none` remains the default.
-- Milestone 13 design is accepted. The planned external proposal lifecycle uses an accepted anchor plus bounded candidate prefix; strict greedy target verification accepts only successive argmax matches and commits one target bonus token. Pure contract tests are the next implementation step.
+- Milestone 13 design, pure proposal/verification/provider contract, and separate incremental runtime entrypoint are implemented. Strict greedy target verification accepts only successive argmax matches and commits one target bonus token. Perfect and mixed proposal blocks preserve greedy token, state, routing, Reader, and L1 behavior in tests.
 - DSpark learned drafting, confidence scheduling, parallel target execution, expert-major scheduling, EcoSpec, MoE-Spec, and AcceptMoE remain unimplemented. The accepted interface is lifecycle-compatible, not checkpoint- or tensor-ABI compatible with DeepSpec.
 - Milestone 9 Terra high final review found one valid Important shared-session policy-context issue. Commit `fd05d95` serializes complete generation calls; re-review found no remaining Critical or Important issue and withdrew an initial collision interpretation concern after deterministic future-layer trace review.
 - Static, LRU, LFU, Least-Stale, profiled eviction, and all non-default L2 modes remain experimental and opt-in. Transition prediction and cross-layer asynchronous L2 scheduling remain unimplemented.
@@ -91,11 +91,11 @@ State recorded on 2026-08-10 from verified public Milestone 12 publication head 
 
 ## Next concrete tasks
 
-1. Write RED native tests for proposal validation, perfect and mismatching prefixes, empty proposals, bonus tokens, and output-count boundaries.
-2. Implement the minimal proposal/request/verification/provider contract and pure target-step verifier.
-3. Integrate the token-major verifier into incremental runtime with greedy token, KDA/MLA state, routing, Reader, cache, and rescue parity.
-4. Add telemetry and the B-0014 deterministic correctness/overhead runner.
-5. Add expert-major scheduling only after exact block verification passes, without changing target routing or commit semantics.
+1. Expose deterministic scripted proposals and speculative counters through the CLI without changing the default greedy path.
+2. Extend benchmark JSON/CSV schemas and build the B-0014 correctness/overhead runner.
+3. Run full CPU, sanitizer, and applicable CUDA verification; record B-0014 raw artifacts and update the ledger.
+4. Publish Milestone 13 only after final review and green branch/PR checks.
+5. Add expert-major scheduling only after exact block verification passes B-0014, without changing target routing or commit semantics.
 
 ## Hardware assumptions
 
@@ -122,6 +122,8 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
+- Development head `027b65c` implements the pure speculative contract and incremental runtime reference. Focused speculative/runtime tests and CPU CTest 12/12 passed; B-0014 has not been run.
+- Public documentation head `7748ca3` includes dedicated English README sections for merged Milestones 11 and 12. Public `main` correctness run `31322913019` succeeded.
 - Public Milestone 12 publication head: `dc23020706bcca7a68b9a643c055f7627e31698b`; branch/PR/integration-main correctness runs `31322043556`, `31322049903`, and `31322191670` succeeded, and final publication-main run `31322330041` succeeded. PR #12 is merged.
 - Latest verified Milestone 12 result head: `0632a0f`; measurement code is `58c36dd`.
 - B-0013 synthetic artifact SHA-256: `edeaa4802b4bfac0624fa4d0e73917318076258d95e74e880c97a8b2709dd2d2`; released storage SHA-256: `aab7aea48b03bdcd8e0b4d98c4780128ab689d2bba005089a49970eb0e326890`.

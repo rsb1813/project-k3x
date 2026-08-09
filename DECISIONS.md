@@ -400,10 +400,10 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-036 — Establish token-major exact verification before expert-major scheduling
 
 - Date: 2026-08-10.
-- Status: accepted design; implementation and measurement pending.
+- Status: accepted and implemented as an unoptimized library/runtime reference; CLI telemetry and measurement pending.
 - Decision: first expose an external draft lifecycle whose proposal contains the current accepted anchor and a bounded candidate prefix, then implement strict greedy token-major target verification. Accept only successive target-argmax matches, commit one target bonus token, and report the exact commit back to the draft provider.
 - Alternatives considered: implement expert-major unioning immediately; combine a reduced-Top-K AURORA drafter with verification; fix proposal, acceptance, state, and telemetry semantics independently before either optimization.
-- Evidence: DSpark paper arXiv `2607.05147` separates proposal and target verification. DeepSpec commit `005e03b81cec38b7da6399833d609ee89a2587f2` uses an anchor-first proposal, commits accepted prefix plus target token, and crops or updates target and draft caches after verification. K3X's current one-token Engine mutates KDA/MLA state, so expert-major work before a tested commit boundary would combine acceptance and state-scheduling risks.
+- Evidence: DSpark paper arXiv `2607.05147` separates proposal and target verification. DeepSpec commit `005e03b81cec38b7da6399833d609ee89a2587f2` uses an anchor-first proposal, commits accepted prefix plus target token, and crops or updates target and draft caches after verification. K3X native and runtime tests now cover perfect, mismatching, empty, invalid, and exhausted-provider paths; perfect and mixed blocks preserve greedy tokens, final KDA/MLA state, full routing/K traces, Reader calls/bytes, and L1 counters. CPU CTest passes 12/12 at development head `027b65c`.
 - Benchmark result: none. B-0014 is pending and no speculative speedup or acceptance result is claimed.
 - Reason: a deliberately unoptimized exact reference makes later expert-major fetch amortization measurable against stable token, state, routing, and traffic invariants. It also keeps DSpark, AURORA, and cost-aware policies separate from target correctness.
 - Revisit: after the token-major reference passes B-0014; then evaluate expert-major scheduling without changing the accepted proposal or commit semantics.
