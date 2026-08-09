@@ -689,6 +689,35 @@ Verification passed CPU CTest 14/14 and pytest 272/47, liburing/direct CTest 15/
 
 Public branch and pull-request correctness runs `31340338639` and `31340340063` passed. PR #23 was rebase-merged at public integration head `30bbf7a8`, and post-merge `main` correctness run `31340476396` passed. The GitHub Actions run emitted a Node.js 20 deprecation warning for `actions/checkout@v4` and `actions/setup-python@v5`; it did not alter the successful benchmark or correctness evidence and remains a CI maintenance item.
 
+## B-0019 — Milestone 18 exact transient CUDA AURORA drafting
+
+- Date: 2026-08-10.
+- Commit: provider contract `89ca6c6`; runtime ownership `785f73e`; separated telemetry `df72718`; measurement evidence `7257280`.
+- Hardware: AMD Ryzen 7 9800X3D and NVIDIA GeForce RTX 5080 16 GB under WSL2 Ubuntu 24.04.4, CUDA 13.3 native `sm_120`.
+- Model/checkpoint: runner-generated temporary synthetic natural Top-16 K3X artifact, SHA-256 `6604d1ec65f8056f6d4f04d09fa357a442c7c2f7a46faf56899caf31671d2ca7`.
+- Mode: CPU natural Top-16 target; persistent fixed draft Top-4; disabled L1; blocking `pread + buffered`; 4 prompt tokens; 6 generated tokens; 3 warmups and 20 measured samples. CUDA draft identity is FP32, reused, transient, grouped, `ffn-block`, synchronous, fusion `none`, zero resident/pinned capacity.
+- Cases: natural greedy plus matched CPU/CUDA fixed block-2 and adaptive pairs for token-major and CPU expert-major target verification.
+
+| Case | Decode tok/s | Prefill tok/s | TTFT ms | Peak RSS | Acceptance | Target / draft Reader bytes | Draft H2D bytes | Draft kernel ms | Draft peak VRAM | Pair decode delta |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| natural greedy | 1168.1207 | 926.6565 | 82.6596 | 236,892,160 B | n/a | 1,294,992 / 0 | 0 | 0 | 0 | n/a |
+| CPU fixed-2 token | 692.1847 | 910.3109 | 93.8958 | 237,637,632 B | 1.0000 | 1,294,992 / 785,808 | 0 | 0 | 0 | reference |
+| CUDA fixed-2 token | 24.4660 | 911.3571 | 340.4560 | 509,886,464 B | 1.0000 | 1,294,992 / 785,808 | 5,843,840 | 37.4711 | 44,448 B | -96.465% |
+| CPU adaptive token | 671.2625 | 910.9660 | 94.8104 | 237,625,344 B | 0.5000 | 1,294,992 / 805,392 | 0 | 0 | 0 | reference |
+| CUDA adaptive token | 21.4149 | 912.3053 | 339.0534 | 509,935,616 B | 0.5000 | 1,294,992 / 805,392 | 6,428,224 | 54.0608 | 44,448 B | -96.810% |
+| CPU fixed-2 expert | 724.4920 | 922.9024 | 95.2674 | 237,772,800 B | 1.0000 | 1,102,416 / 785,808 | 0 | 0 | 0 | reference |
+| CUDA fixed-2 expert | 21.7318 | 907.7394 | 340.8668 | 510,214,144 B | 1.0000 | 1,102,416 / 785,808 | 5,843,840 | 54.5497 | 44,448 B | -97.000% |
+| CPU adaptive expert | 562.5927 | 924.9426 | 94.5504 | 237,916,160 B | 0.5000 | 1,197,072 / 805,392 | 0 | 0 | 0 | reference |
+| CUDA adaptive expert | 21.2731 | 903.5146 | 338.5157 | 510,361,600 B | 0.5000 | 1,197,072 / 805,392 | 6,428,224 | 52.9858 | 44,448 B | -96.219% |
+
+Every matched CPU/CUDA pair has identical proposed, accepted, and committed draft-token counts; strict target tokens, final KDA/MLA state, committed routes, and acceptance are exact. The target stays on CPU, and its kernel, H2D, and peak-VRAM counters remain zero. CUDA draft rows record 13 allocations, 410 or 451 synchronizations, and predominantly weight H2D: 5,756,160 of 5,843,840 bytes for fixed rows and 6,331,776 of 6,428,224 bytes for adaptive rows. Cache hits/misses/bypasses are zero because this experiment deliberately excludes residency.
+
+The result rejects transient synchronous CUDA drafting as a default. It isolates repeated weight H2D and fine-grained synchronous GPU work as the next measured AURORA bottleneck; it does not reject bounded resident drafting, persistent larger kernels, or later quality-measured reduced precision. GPU utilization, memory bandwidth, physical PCIe GB/token, physical NVMe GB/token, coding quality, and full-model throughput remain unmeasured.
+
+Raw JSON/CSV and independently cross-checked summaries are under `results/b0019-cuda-aurora-draft-wsl/`. Runner SHA-256 is `fb7bded3cb3edd5b2f626801ec38edd246ba0c19a990e6301955e32d0642d52f`; canonical aggregate-record SHA-256 is `ce1a599eb04077f3b0c1b8350254b126a58f4dc311421bfc38fc8f7a78478c59`; summary JSON/CSV SHA-256 is `3750254294385cecf503f2efcd69f8d23953a7e982006fe969c4c9ac9ee2913f` / `1b6234889c8997486e5b268d277af3ca892b2b6c152489b4f85cea81717edd1f`. Independent validation recomputes all 18 raw digests, the summary CSV digest, canonical aggregate, exact pair invariants, and headline deltas from committed bytes.
+
+Verification passes CPU CTest 14/14 and pytest 278/50, liburing/direct CTest 15/15 and pytest 284/44, ASan/UBSan liburing CTest 15/15, and CUDA CTest 23/23 with pytest 319/9. Compute Sanitizer reports `ERROR SUMMARY: 0 errors` for the exact CUDA draft plus CPU expert-major target path.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
@@ -699,5 +728,6 @@ Public branch and pull-request correctness runs `31340338639` and `31340340063` 
 - Native-Linux repetition of B-0011 with repository-duration sessions and controlled helpful, stale, and adversarial priors before selecting any profile policy.
 - Native-Linux repetition of B-0016 with physical NVMe accounting, GPU utilization, memory bandwidth, multi-expert/full-layer groups, and representative acceptance distributions before any speculative default claim.
 - Representative native-Linux persistent AURORA measurement with physical I/O, realistic acceptance, coding quality, and resident-expert pressure before any self-speculative default claim.
+- Bounded exact draft residency and persistent multi-token/multi-expert CUDA execution before reconsidering GPU drafting; keep reduced precision as a separate quality-measured axis.
 - Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.
