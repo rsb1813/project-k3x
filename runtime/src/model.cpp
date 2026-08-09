@@ -3,6 +3,7 @@
 
 #include "k3x/expert_major.hpp"
 #include "k3x/format.hpp"
+#include "k3x/incremental_cursor.hpp"
 #include "k3x/ops.hpp"
 
 #include <algorithm>
@@ -1120,6 +1121,112 @@ private:
 std::uint32_t argmax(const Vector& values) {
     return static_cast<std::uint32_t>(std::distance(values.begin(), std::max_element(values.begin(), values.end())));
 }
+}
+
+struct IncrementalDraftCursor::Impl {
+    Impl(Reader& reader, ComputeBackend& backend, RuntimeSession& session)
+        : engine(reader, backend, session), state(engine.empty_state()),
+          session(session) {}
+
+    Engine engine;
+    ModelState state;
+    Vector logits;
+    RuntimeSession& session;
+    IncrementalDraftCursorStats stats{};
+    std::vector<std::uint32_t> pending_candidates;
+    bool pending{};
+    bool failed{};
+};
+
+IncrementalDraftCursor::IncrementalDraftCursor(std::unique_ptr<Impl> impl)
+    : impl_(std::move(impl)) {}
+
+IncrementalDraftCursor::~IncrementalDraftCursor() = default;
+
+Result<std::unique_ptr<IncrementalDraftCursor>>
+IncrementalDraftCursor::create(
+    Reader& reader, ComputeBackend& backend,
+    std::span<const std::uint32_t> context,
+    RuntimeSession& session) {
+    auto generation_guard = session.acquire_generation_guard();
+    if (reader.superblock().optional_features & optional_storage_fixture) {
+        return Result<std::unique_ptr<IncrementalDraftCursor>>::failure(
+            ErrorCode::non_executable_artifact);
+    }
+    if (!session.options().incremental || context.empty()) {
+        return Result<std::unique_ptr<IncrementalDraftCursor>>::failure(
+            ErrorCode::invalid_state, "invalid incremental draft context");
+    }
+    try {
+        auto impl = std::make_unique<Impl>(reader, backend, session);
+        for (const auto token : context) {
+            impl->logits = impl->engine.forward(
+                token, impl->state, ProfilePhase::prefill);
+        }
+        impl->stats.context_prefill_tokens = context.size();
+        return Result<std::unique_ptr<IncrementalDraftCursor>>::success(
+            std::unique_ptr<IncrementalDraftCursor>(
+                new IncrementalDraftCursor(std::move(impl))));
+    } catch (const std::exception& error) {
+        if (auto* loader = session.expert_loader()) loader->wait_idle();
+        return Result<std::unique_ptr<IncrementalDraftCursor>>::failure(
+            ErrorCode::invalid_extent, error.what());
+    }
+}
+
+Result<std::vector<std::uint32_t>> IncrementalDraftCursor::propose(
+    std::size_t count) {
+    auto generation_guard = impl_->session.acquire_generation_guard();
+    if (impl_->failed || impl_->pending || impl_->logits.empty()) {
+        return Result<std::vector<std::uint32_t>>::failure(
+            ErrorCode::invalid_state, "invalid incremental draft lifecycle");
+    }
+    try {
+        std::vector<std::uint32_t> candidates;
+        candidates.reserve(count);
+        for (std::size_t index = 0; index < count; ++index) {
+            const auto token = argmax(impl_->logits);
+            candidates.push_back(token);
+            if (index + 1 < count) {
+                impl_->logits = impl_->engine.forward(
+                    token, impl_->state, ProfilePhase::decode);
+                ++impl_->stats.incremental_forward_calls;
+            }
+        }
+        impl_->pending_candidates = candidates;
+        impl_->pending = true;
+        return Result<std::vector<std::uint32_t>>::success(
+            std::move(candidates));
+    } catch (const std::exception& error) {
+        impl_->failed = true;
+        if (auto* loader = impl_->session.expert_loader()) {
+            loader->wait_idle();
+        }
+        return Result<std::vector<std::uint32_t>>::failure(
+            ErrorCode::invalid_extent, error.what());
+    }
+}
+
+Result<bool> IncrementalDraftCursor::commit(
+    std::size_t, std::span<const std::uint32_t>) {
+    impl_->failed = true;
+    return Result<bool>::failure(
+        ErrorCode::invalid_state, "incremental draft commit unavailable");
+}
+
+IncrementalDraftCursorStats IncrementalDraftCursor::stats() const noexcept {
+    return impl_->stats;
+}
+
+IncrementalDraftCursorDiagnostics
+IncrementalDraftCursor::diagnostics() const {
+    return {
+        .flattened_state = impl_->engine.flatten_state(impl_->state),
+        .mla_length = impl_->state.mla.length,
+        .mla_key_elements = impl_->state.mla.keys.size(),
+        .mla_value_elements = impl_->state.mla.values.size(),
+        .mla_shared_key_elements = impl_->state.mla.shared_keys.size(),
+    };
 }
 
 Result<GenerationResult> generate_greedy(Reader& reader,

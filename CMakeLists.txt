@@ -107,6 +107,9 @@ add_test(NAME aurora_scheduler COMMAND test_aurora_scheduler)
 add_executable(test_aurora tests/cpp/test_aurora.cpp)
 target_link_libraries(test_aurora PRIVATE k3x_runtime)
 
+add_executable(test_incremental_cursor tests/cpp/test_incremental_cursor.cpp)
+target_link_libraries(test_incremental_cursor PRIVATE k3x_runtime)
+
 add_executable(test_expert_major tests/cpp/test_expert_major.cpp)
 target_link_libraries(test_expert_major PRIVATE k3x_runtime)
 add_test(NAME expert_major COMMAND test_expert_major)
