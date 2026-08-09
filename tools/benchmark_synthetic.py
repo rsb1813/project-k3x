@@ -89,6 +89,13 @@ class BenchmarkRecord:
     l1_expert_cache_collision_misses: int = 0
     l1_expert_cache_resident_bytes: int = 0
     peak_l1_expert_cache_resident_bytes: int = 0
+    runtime_profile_metadata_count: int = 0
+    runtime_profile_prior_weight: float = 0.0
+    runtime_profile_live_observations: int = 0
+    runtime_profile_load_bytes: int = 0
+    runtime_profile_save_bytes: int = 0
+    runtime_profile_load_nanoseconds: int = 0
+    runtime_profile_save_nanoseconds: int = 0
     l2_expert_schedule: str = "blocking"
     expert_load_submissions: int = 0
     expert_load_inline_resident_hits: int = 0
@@ -171,6 +178,10 @@ def _run_process(
     l2_cache: str,
     l2_queue_depth: int,
     l2_expert_schedule: str,
+    profile_prior_strength: int = 64,
+    runtime_metadata: str = "",
+    runtime_profile_in: Path | None = None,
+    runtime_profile_out: Path | None = None,
     diagnostics: bool = False,
 ) -> tuple[dict, int, float]:
     command = [
@@ -186,11 +197,18 @@ def _run_process(
         "--cuda-pinned-bytes", str(cuda_pinned_bytes),
         "--l1-expert-cache", l1_expert_cache,
         "--l1-expert-cache-bytes", str(l1_expert_cache_bytes),
+        "--profile-prior-strength", str(profile_prior_strength),
         "--l2-io", l2_io,
         "--l2-cache", l2_cache,
         "--l2-queue-depth", str(l2_queue_depth),
         "--l2-schedule", l2_expert_schedule,
     ]
+    if runtime_metadata:
+        command.extend(["--runtime-metadata", runtime_metadata])
+    if runtime_profile_in is not None:
+        command.extend(["--runtime-profile-in", str(runtime_profile_in)])
+    if runtime_profile_out is not None:
+        command.extend(["--runtime-profile-out", str(runtime_profile_out)])
     if diagnostics:
         command.extend(["--diagnostics", "true"])
     command.extend(["--json", str(output)])
@@ -278,6 +296,10 @@ def benchmark_once(
     l2_cache: str = "buffered",
     l2_queue_depth: int = 8,
     l2_expert_schedule: str = "blocking",
+    profile_prior_strength: int = 64,
+    runtime_metadata: str = "",
+    runtime_profile_in: Path | None = None,
+    runtime_profile_out: Path | None = None,
 ) -> BenchmarkRecord:
     if warmup < 0 or iterations <= 0:
         raise ValueError("warmup must be non-negative and iterations must be positive")
@@ -310,6 +332,10 @@ def benchmark_once(
                 l2_cache=l2_cache,
                 l2_queue_depth=l2_queue_depth,
                 l2_expert_schedule=l2_expert_schedule,
+                profile_prior_strength=profile_prior_strength,
+                runtime_metadata=runtime_metadata,
+                runtime_profile_in=runtime_profile_in,
+                runtime_profile_out=runtime_profile_out,
             )
             _, ttft_peak, ttft = _run_process(
                 artifact,
@@ -331,6 +357,10 @@ def benchmark_once(
                 l2_cache=l2_cache,
                 l2_queue_depth=l2_queue_depth,
                 l2_expert_schedule=l2_expert_schedule,
+                profile_prior_strength=profile_prior_strength,
+                runtime_metadata=runtime_metadata,
+                runtime_profile_in=runtime_profile_in,
+                runtime_profile_out=runtime_profile_out,
             )
             if index >= warmup:
                 samples.append(sample)
@@ -632,6 +662,23 @@ def benchmark_once(
         peak_l1_expert_cache_resident_bytes=samples[0][
             "peak_l1_expert_cache_resident_bytes"
         ],
+        runtime_profile_metadata_count=samples[0][
+            "runtime_profile_metadata_count"
+        ],
+        runtime_profile_prior_weight=samples[0][
+            "runtime_profile_prior_weight"
+        ],
+        runtime_profile_live_observations=samples[0][
+            "runtime_profile_live_observations"
+        ],
+        runtime_profile_load_bytes=samples[0]["runtime_profile_load_bytes"],
+        runtime_profile_save_bytes=samples[0]["runtime_profile_save_bytes"],
+        runtime_profile_load_nanoseconds=int(statistics.median(
+            item["runtime_profile_load_nanoseconds"] for item in samples
+        )),
+        runtime_profile_save_nanoseconds=int(statistics.median(
+            item["runtime_profile_save_nanoseconds"] for item in samples
+        )),
         l2_expert_schedule=samples[0]["l2_expert_schedule"],
         expert_load_submissions=samples[0]["expert_load_submissions"],
         expert_load_inline_resident_hits=samples[0][
