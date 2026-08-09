@@ -712,6 +712,96 @@ def test_static_l1_cache_preserves_cuda_ffn_block_and_exact_bypass(
     assert tiny["read_bytes"] == disabled["read_bytes"]
 
 
+@pytest.mark.parametrize(
+    ("dense_precision", "cuda_batching", "tolerance"),
+    [
+        ("fp32", "scalar", 1e-4),
+        ("fp32", "grouped", 1e-4),
+        ("bf16", "scalar", 2e-2),
+        ("bf16", "grouped", 2e-2),
+    ],
+)
+def test_static_l1_cache_feeds_exact_cuda_prefetch(
+    synthetic_source: Path,
+    tmp_path: Path,
+    dense_precision: str,
+    cuda_batching: str,
+    tolerance: float,
+) -> None:
+    if Path(os.environ.get("K3X_BUILD_DIR", "build")).name != "build-cuda":
+        pytest.skip("CUDA L1 prefetch parity is exercised only against build-cuda")
+    runner = cpp_binary("k3x_run")
+    artifact = tmp_path / "synthetic.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    results: dict[str, dict] = {}
+    for name, cache_mode, capacity in (
+        ("disabled", "disabled", 0),
+        ("static", "static", 65536),
+        ("static-tiny", "static", 1),
+    ):
+        output = tmp_path / f"prefetch-{dense_precision}-{cuda_batching}-{name}.json"
+        subprocess.run(
+            [
+                str(runner),
+                "--model", str(artifact),
+                "--prompt-ids", "1,7,3,9",
+                "--generate", "6",
+                "--mode", "incremental",
+                "--diagnostics", "true",
+                "--backend", "cuda-custom",
+                "--dense-precision", dense_precision,
+                "--cuda-allocation", "reused",
+                "--cuda-weights", "transient",
+                "--cuda-batching", cuda_batching,
+                "--cuda-boundary", "ffn-block",
+                "--cuda-transfer", "prefetch",
+                "--cuda-pinned-bytes", str(1024 * 1024),
+                "--l1-expert-cache", cache_mode,
+                "--l1-expert-cache-bytes", str(capacity),
+                "--json", str(output),
+            ],
+            check=True,
+        )
+        results[name] = json.loads(output.read_text(encoding="utf-8"))
+
+    disabled = results["disabled"]
+    static = results["static"]
+    tiny = results["static-tiny"]
+    for candidate in (static, tiny):
+        assert candidate["token_ids"] == disabled["token_ids"]
+        assert candidate["prefill_routed_experts"] == disabled[
+            "prefill_routed_experts"
+        ]
+        np.testing.assert_allclose(
+            candidate["prefill_logits"], disabled["prefill_logits"],
+            atol=tolerance, rtol=tolerance,
+        )
+        for field in (
+            "host_to_device_bytes",
+            "weight_h2d_bytes",
+            "activation_h2d_bytes",
+            "async_prefetch_calls",
+            "async_prefetch_bytes",
+            "transfer_stream_wait_count",
+            "ffn_block_calls",
+            "ffn_block_experts",
+        ):
+            assert candidate[field] == disabled[field]
+        assert candidate["async_prefetch_calls"] > 0
+        assert candidate["transfer_stream_wait_count"] == candidate[
+            "async_prefetch_calls"
+        ]
+    assert static["l1_expert_cache_hits"] > 0
+    assert static["l1_expert_cache_misses"] > 0
+    assert static["l1_expert_cache_bypasses"] == 0
+    assert static["read_calls"] < disabled["read_calls"]
+    assert static["read_bytes"] < disabled["read_bytes"]
+    assert tiny["l1_expert_cache_hits"] == 0
+    assert tiny["l1_expert_cache_bypasses"] == tiny["l1_expert_cache_misses"]
+    assert tiny["read_calls"] == disabled["read_calls"]
+    assert tiny["read_bytes"] == disabled["read_bytes"]
+
+
 def test_cpp_runner_rejects_corrupt_model_before_generation(
     synthetic_source: Path, tmp_path: Path
 ) -> None:
