@@ -4,6 +4,7 @@
 #include "k3x/ops.hpp"
 
 #include <chrono>
+#include <cmath>
 #include <limits>
 #include <utility>
 
@@ -149,6 +150,45 @@ public:
         }
         return Result<std::vector<std::vector<float>>>::success(
             std::move(outputs));
+    }
+
+    Result<std::vector<float>> mxfp4_situ_moe(
+        std::span<const float> input, std::span<const Mxfp4MlpView> experts,
+        std::span<const float> contributions, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) override {
+        if (experts.empty() || experts.size() != contributions.size()) {
+            return Result<std::vector<float>>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+        for (const auto contribution : contributions) {
+            if (!std::isfinite(contribution)) {
+                return Result<std::vector<float>>::failure(
+                    ErrorCode::invalid_mxfp4);
+            }
+        }
+        const auto output_rows = experts.front().down.rows;
+        for (const auto& expert : experts) {
+            if (!valid_mxfp4_mlp(input, expert) ||
+                expert.down.rows != output_rows) {
+                return Result<std::vector<float>>::failure(
+                    ErrorCode::invalid_mxfp4);
+            }
+        }
+        auto outputs = mxfp4_situ_mlp_group(
+            input, experts, situ_beta, situ_linear, layer, phase);
+        if (!outputs) {
+            return Result<std::vector<float>>::failure(
+                outputs.error(), outputs.message());
+        }
+        std::vector<float> mixed(output_rows, 0.0F);
+        for (std::size_t expert = 0; expert < outputs.value().size(); ++expert) {
+            for (std::size_t row = 0; row < output_rows; ++row) {
+                mixed[row] += contributions[expert] *
+                              outputs.value()[expert][row];
+            }
+        }
+        return Result<std::vector<float>>::success(std::move(mixed));
     }
 
     Result<Mxfp4PrefetchToken> prefetch_mxfp4_situ_mlp_group(

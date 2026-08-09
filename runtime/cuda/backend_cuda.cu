@@ -1414,23 +1414,58 @@ public:
         std::span<const float> input, std::span<const Mxfp4MlpView> experts,
         float situ_beta, std::optional<float> situ_linear,
         std::uint32_t layer, ProfilePhase phase) override {
+        return mxfp4_situ_mlp_group_impl(
+            input, experts, {}, situ_beta, situ_linear, layer, phase);
+    }
+
+    Result<std::vector<float>> mxfp4_situ_moe(
+        std::span<const float> input, std::span<const Mxfp4MlpView> experts,
+        std::span<const float> contributions, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) override {
+        if (experts.empty() || experts.size() != contributions.size()) {
+            return Result<std::vector<float>>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+        auto result = mxfp4_situ_mlp_group_impl(
+            input, experts, contributions, situ_beta, situ_linear, layer,
+            phase);
+        if (!result) {
+            return Result<std::vector<float>>::failure(
+                result.error(), result.message());
+        }
+        return Result<std::vector<float>>::success(
+            std::move(result.value().front()));
+    }
+
+    Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_group_impl(
+        std::span<const float> input, std::span<const Mxfp4MlpView> experts,
+        std::span<const float> contributions, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) {
         const auto operation_start = std::chrono::steady_clock::now();
         constexpr auto precision = NumericPrecision::mxfp4_e2m1_e8m0;
+        const bool fuse_outputs = !contributions.empty();
         if (options_.kind != BackendKind::cuda_custom ||
             options_.cuda_boundary != CudaBoundaryMode::ffn_block ||
+            (fuse_outputs && contributions.size() != experts.size()) ||
             !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
             (situ_linear &&
              (!std::isfinite(*situ_linear) || *situ_linear <= 0.0F))) {
             return Result<std::vector<std::vector<float>>>::failure(
                 ErrorCode::invalid_mxfp4);
         }
-        for (const auto& expert : experts) {
+        const auto output_rows = experts.empty() ? 0 : experts.front().down.rows;
+        for (std::size_t index = 0; index < experts.size(); ++index) {
+            const auto& expert = experts[index];
             if (expert.gate.group_size != 32 || expert.up.group_size != 32 ||
                 expert.down.group_size != 32 ||
                 !valid_mxfp4_size(input.size(), expert.gate) ||
                 !valid_mxfp4_size(input.size(), expert.up) ||
                 expert.gate.rows != expert.up.rows ||
-                !valid_mxfp4_size(expert.gate.rows, expert.down)) {
+                !valid_mxfp4_size(expert.gate.rows, expert.down) ||
+                (fuse_outputs && expert.down.rows != output_rows) ||
+                (fuse_outputs && !std::isfinite(contributions[index]))) {
                 return Result<std::vector<std::vector<float>>>::failure(
                     ErrorCode::invalid_mxfp4);
             }
@@ -1570,7 +1605,9 @@ public:
         const auto launch_weight = [&](WeightMember& weight,
                                        const float* matvec_input,
                                        float* output, EventOwner& start,
-                                       EventOwner& end) {
+                                       EventOwner& end, bool scaled = false,
+                                       float contribution = 1.0F,
+                                       bool accumulate = false) {
             if (!weight.packed) {
                 weight.packed = transient_packed;
                 weight.scales = transient_scales;
@@ -1583,17 +1620,27 @@ public:
                                     cudaMemcpyHostToDevice, stream_) !=
                         cudaSuccess) return false;
             }
-            return cudaEventRecord(start.get(), stream_) == cudaSuccess &&
-                   cuda::launch_mxfp4_matvec(
-                       matvec_input,
-                       static_cast<const std::uint8_t*>(weight.packed),
-                       static_cast<const std::uint8_t*>(weight.scales), output,
-                       weight.view.rows, weight.view.cols, stream_) ==
-                       cudaSuccess &&
+            if (cudaEventRecord(start.get(), stream_) != cudaSuccess) {
+                return false;
+            }
+            const auto launched = scaled
+                ? cuda::launch_mxfp4_matvec_accumulate(
+                      matvec_input,
+                      static_cast<const std::uint8_t*>(weight.packed),
+                      static_cast<const std::uint8_t*>(weight.scales), output,
+                      weight.view.rows, weight.view.cols, contribution,
+                      accumulate, stream_)
+                : cuda::launch_mxfp4_matvec(
+                      matvec_input,
+                      static_cast<const std::uint8_t*>(weight.packed),
+                      static_cast<const std::uint8_t*>(weight.scales), output,
+                      weight.view.rows, weight.view.cols, stream_);
+            return launched == cudaSuccess &&
                    cudaEventRecord(end.get(), stream_) == cudaSuccess;
         };
 
-        std::vector<std::vector<float>> outputs(experts.size());
+        std::vector<std::vector<float>> outputs(
+            fuse_outputs ? 1 : experts.size());
         std::uint64_t total_output_bytes = 0;
         for (std::size_t index = 0; index < experts.size(); ++index) {
             auto& member = members[index];
@@ -1624,20 +1671,37 @@ public:
             if (!launch_weight(member.weights[2],
                                static_cast<const float*>(device_activation),
                                static_cast<float*>(device_output),
-                               *member.events[6], *member.events[7])) {
+                               *member.events[6], *member.events[7],
+                               fuse_outputs,
+                               fuse_outputs ? contributions[index] : 1.0F,
+                               fuse_outputs && index != 0)) {
                 return Result<std::vector<std::vector<float>>>::failure(
                     ErrorCode::backend_unavailable,
                     "CUDA expert FFN down failed");
             }
-            outputs[index].resize(expert.down.rows);
-            const auto bytes = expert.down.rows * sizeof(float);
-            if (cudaMemcpyAsync(outputs[index].data(), device_output, bytes,
-                                cudaMemcpyDeviceToHost, stream_) != cudaSuccess) {
+            if (!fuse_outputs) {
+                outputs[index].resize(expert.down.rows);
+                const auto bytes = expert.down.rows * sizeof(float);
+                if (cudaMemcpyAsync(outputs[index].data(), device_output, bytes,
+                                    cudaMemcpyDeviceToHost, stream_) !=
+                    cudaSuccess) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        ErrorCode::backend_unavailable,
+                        "CUDA expert FFN output copy failed");
+                }
+                total_output_bytes += bytes;
+            }
+        }
+        if (fuse_outputs) {
+            outputs.front().resize(output_rows);
+            total_output_bytes = output_rows * sizeof(float);
+            if (cudaMemcpyAsync(outputs.front().data(), device_output,
+                                total_output_bytes, cudaMemcpyDeviceToHost,
+                                stream_) != cudaSuccess) {
                 return Result<std::vector<std::vector<float>>>::failure(
                     ErrorCode::backend_unavailable,
-                    "CUDA expert FFN output copy failed");
+                    "CUDA fused expert output copy failed");
             }
-            total_output_bytes += bytes;
         }
         const auto d2h_start = std::chrono::steady_clock::now();
         if (cudaStreamSynchronize(stream_) != cudaSuccess) {

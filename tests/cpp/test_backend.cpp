@@ -221,6 +221,22 @@ int main() {
             1.0e-6F) {
         return 64;
     }
+    const std::array<float, 2> contributions{0.25F, -0.5F};
+    const auto mixed = backend->mxfp4_situ_moe(
+        mxfp4_input, expert_mlps, contributions, 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    if (!mixed || mixed.value().size() != 1 ||
+        std::abs(mixed.value()[0] -
+                 (0.25F * expert_blocks.value()[0][0] -
+                  0.5F * expert_blocks.value()[1][0])) > 1.0e-6F) {
+        return 67;
+    }
+    const std::array<float, 1> wrong_contributions{1.0F};
+    const auto rejected_mix = backend->mxfp4_situ_moe(
+        mxfp4_input, expert_mlps, wrong_contributions, 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    if (rejected_mix ||
+        rejected_mix.error() != k3x::ErrorCode::invalid_mxfp4) return 68;
 
     auto invalid_expert_mlps = expert_mlps;
     invalid_expert_mlps[1].down.scales = {};

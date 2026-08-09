@@ -129,6 +129,11 @@ public:
         std::span<const float> input, std::span<const Mxfp4MlpView> experts,
         float situ_beta, std::optional<float> situ_linear,
         std::uint32_t layer, ProfilePhase phase) = 0;
+    virtual Result<std::vector<float>> mxfp4_situ_moe(
+        std::span<const float> input, std::span<const Mxfp4MlpView> experts,
+        std::span<const float> contributions, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) = 0;
     virtual Result<Mxfp4PrefetchToken> prefetch_mxfp4_situ_mlp_group(
         std::span<const Mxfp4MlpView> experts, std::uint64_t use_sequence,
         std::uint32_t layer, ProfilePhase phase) = 0;
