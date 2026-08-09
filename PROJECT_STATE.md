@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 17 persistent AURORA draft state is implemented, measured, reviewed, and ready for publication. The cursor, provider, `aurora-persistent` CLI, five cursor telemetry fields, canonical B-0018, full CPU/io_uring/CUDA verification, ASan/UBSan coverage, Compute Sanitizer, TITAN Ledger synchronization, and final self-review are complete. Complete-prefix replay remains the exact non-default oracle and the natural strict target verifier remains authoritative. Public PR integration and post-merge CI remain pending.
+Milestone 17 persistent AURORA draft state is implemented, measured, reviewed, and published in ready PR #23. The cursor, provider, `aurora-persistent` CLI, five cursor telemetry fields, canonical B-0018, full CPU/io_uring/CUDA verification, ASan/UBSan coverage, Compute Sanitizer, TITAN Ledger synchronization, and final self-review are complete. Complete-prefix replay remains the exact non-default oracle and the natural strict target verifier remains authoritative. PR merge and post-merge CI remain pending.
 
 State audited on 2026-08-10 against public ledger head `44aa049` and isolated branch `codex/milestone-seventeen-persistent-aurora` through evidence commit `de63023`. The current CPU matrix passes CTest 14/14 and Python 272 passed/47 skipped. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
