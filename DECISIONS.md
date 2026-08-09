@@ -308,3 +308,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: B-0008 at `9198ed2` ran 3 warmups and 20 measured expert loads for all four Reader combinations on WSL2 ext4. Every row preserved the ordered digest, 120 completions, 350,945,280 logical and submitted bytes, zero failures, and zero direct-I/O byte amplification. Median wall latency was 50.685 ms for buffered pread, 51.592 ms for buffered io_uring, 60.402 ms for direct pread, and 56.426 ms for direct io_uring.
 - Reason: the artifact is large enough to expose representative per-expert request sizes while remaining deterministic, streamable, cheap, and incapable of being mistaken for a complete checkpoint. Separate optional identity preserves the executable-model correctness boundary.
 - Revisit: when a bounded multi-expert or full layer slice is needed for cache pressure, deadline scheduling, or physical locality experiments, and again on native Linux with the target P44 Pro.
+
+## D-028 — Bind storage-source and resume identities to verified bytes
+
+- Date: 2026-08-09.
+- Status: accepted and implemented after final review.
+- Decision: publish bounded fixture shards under their SHA-256-derived names before atomically replacing the manifest; verify manifest-declared shard and tensor SHA-256 values; fingerprint only referenced shards; and reuse only a canonical prefix of resume extents whose ID, aligned offset, length, source CRC32C, and partial-file CRC32C all match.
+- Alternatives considered: trust generator-authored hashes without checking; overwrite a stable shard name before publishing the manifest; trust any ledger extent whose partial-file CRC matches.
+- Evidence: regression tests reproduced fresh conversion of a one-byte-mutated shard, tensor-digest mismatch, old-manifest/new-shard mismatch after a simulated publication failure, duplicate/unknown/zero-length/misaligned ledger entries, and a partial extent whose rewritten CRC no longer matched its source tensor.
+- Benchmark result: no B-0008 remeasurement was performed because the payload order, Reader, and benchmark code did not change. Post-fix correctness passed CPU CTest 8/8 and pytest 161/40, liburing CTest 9/9 and pytest 162/39, and CUDA CTest 17/17 and pytest 194/7.
+- Reason: source metadata and resume metadata are untrusted recovery inputs. A final root hash cannot recover correctness if corrupted bytes were deliberately accepted while assembling the artifact.
+- Revisit: when general checkpoint shard manifests gain signed provenance or when hashing cost becomes measurable on cloud conversion workers.

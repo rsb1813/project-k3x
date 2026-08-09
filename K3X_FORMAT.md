@@ -99,6 +99,8 @@ The model config is a fixed 256-byte record containing the synthetic or real gra
 
 ## Conversion transaction
 
-Conversion writes only `<output>.partial` plus an atomic JSON resume ledger until every extent has been flushed, read back, and CRC-verified. A work unit is identified by its canonical tensor hash and `data` or `auxiliary` suffix. Resume requires exact source, converter-version, and configuration fingerprints. Finalization writes directories and the superblock, closes the file, then atomically renames the partial artifact to the requested path.
+Conversion writes only `<output>.partial` plus an atomic JSON resume ledger until every extent has been flushed, read back, and CRC-verified. A work unit is identified by its canonical tensor hash and `data` or `auxiliary` suffix. Resume requires exact source, converter-version, and configuration fingerprints. Completed entries must form a canonical prefix of the conversion plan and match the expected ID, aligned offset, source length, current-source CRC32C, and partial-file CRC32C before reuse. Finalization writes directories and the superblock, closes the file, then atomically renames the partial artifact to the requested path.
+
+The bounded `STORAGE_FIXTURE` source contract additionally requires a content-addressed shard, manifest-last publication, one declared shard SHA-256, and a SHA-256 for each of its six source tensors. Conversion verifies all declared digests with bounded reads before creating or resuming output. Unreferenced files do not participate in source identity.
 
 If termination occurs after the final rename but before ledger deletion, the next invocation verifies the finalized artifact's complete integrity, source fingerprint, and model configuration before deleting the stale ledger. A missing partial file is otherwise an error and never causes an unverified final artifact to be accepted.

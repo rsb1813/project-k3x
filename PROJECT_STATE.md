@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 6 public integration is complete. Milestone 7 full-dimension bounded expert slice implementation, local verification, self-review, and non-authoritative WSL2 B-0008 measurement are complete; public integration is pending.
+Milestone 6 public integration is complete. Milestone 7 full-dimension bounded expert slice implementation, non-authoritative WSL2 B-0008 measurement, final review, and review fixes are complete; public integration is pending.
 
-State recorded on 2026-08-09 at verified Milestone 7 measurement-code commit `9198ed2`. Public `main` remains at Milestone 6 publication record `11e1d9a`; active branch is `codex/milestone-seven-bounded-slice`.
+State recorded on 2026-08-09 at verified Milestone 7 review-fix commit `d929f57`. Public `main` remains at Milestone 6 publication record `11e1d9a`; active branch is `codex/milestone-seven-bounded-slice`.
 
 ## Completed work
 
@@ -43,11 +43,12 @@ State recorded on 2026-08-09 at verified Milestone 7 measurement-code commit `91
 - Python/C++ Reader support for storage-fixture identity plus an explicit `NON_EXECUTABLE_ARTIFACT` generation guard before graph tensor lookup.
 - Dedicated exact six-extent `k3x_storage_bench` with ordered digest, latency percentiles, logical/storage/process-I/O accounting, and no token schema.
 - Four-case B-0008 runner with capability-only skips, compact/raw cross-checks, and WSL2 ext4 3-warmup/20-sample measurements.
+- Content-addressed storage-fixture shard publication, bounded shard/tensor SHA-256 validation, manifest-scoped source identity, and canonical source-matched resume extent validation.
 
 ## Work in progress
 
 - Milestone 7 results and TITAN Ledger await public PR/CI integration.
-- Final Terra high review found two Important issues: io_uring failure-path buffer lifetime and a premature multi-megabyte-fixture claim. Commit `5160205` closes and invalidates a failed ring before buffers leave scope, adds a pending-read lifetime regression, and marks the fixture proposed. No Critical or Important finding remains unaddressed.
+- Milestone 7 Terra high final review found no Critical issue and two Important source/resume integrity gaps. Commit `d929f57` closes both with nine added regressions; no Critical or Important finding remains unaddressed.
 - Static L1 admission and all non-default L2 modes remain experimental and opt-in. LRU, LFU, Least-Stale, eviction, task/session priors, prediction, and cross-layer asynchronous L2 scheduling remain unimplemented.
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - `pread + buffered` remains the default because B-0007/B-0008 are WSL2 ext4 evidence, not native P44 Pro evidence.
@@ -100,11 +101,12 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 ## Last known-good state
 
 - Public `main`: Milestone 6 publication record `11e1d9acdfe701f28111c278803c395adba79740`; correctness run `31305487562` succeeded.
+- Latest verified Milestone 7 review-fix commit: `d929f5711f21b853cbfd8c0cf031e0d2425d085c` (`fix: verify storage source and resume extents`).
 - Latest verified Milestone 7 measurement-code commit: `9198ed2` (`feat: ablate bounded expert storage reads`).
 - B-0008 artifact SHA-256: `b14610fd2b405dd97c09004fb29157f5b318522591546337bce89e7e8a6a2b65`; ordered payload digest: `e5fb7939474a57ab9263a791999d76ba078bd767cc3f155f3522b1bec576c7e4`.
-- CPU verification: CTest 8/8; pytest 152 passed and 40 skipped.
-- Liburing/direct verification: CTest 9/9; pytest 157 passed and 35 skipped; ASan/UBSan CTest 9/9 plus four storage-path targeted pytest passes.
-- CUDA verification: CTest 17/17; pytest 185 passed and 7 skipped.
+- CPU verification: CTest 8/8; pytest 161 passed and 40 skipped.
+- Liburing/direct verification: CTest 9/9; pytest 162 passed and 39 skipped; prior ASan/UBSan CTest 9/9 plus four storage-path targeted pytest passes remain applicable because no C++ path changed.
+- CUDA verification: CTest 17/17; pytest 194 passed and 7 skipped.
 - Compute Sanitizer: `test_cuda_device`, `test_cuda_dense`, `test_cuda_mxfp4`, `test_cuda_memory`, `test_cuda_pinned_memory`, `test_cuda_async_pipeline`, `test_cuda_residency`, `test_cuda_situ`, `test_cuda_ffn`, and `test_cuda_async_ffn` each report `ERROR SUMMARY: 0 errors`.
 - Existing executable-model exact generated tokens remain `[43, 32, 28, 49, 9, 28]`; B-0008 executes no tokens.
 - B-0008 raw JSON/CSV and cross-checked manifest: `results/b0008-bounded-slice-wsl/`.

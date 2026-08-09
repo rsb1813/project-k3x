@@ -249,7 +249,11 @@ Update architecture and decisions, append B-0008, update README/checklist/contex
 
 - [x] **Step 4: Self-review the diff and commit results.**
 
-Run `git diff --check`, search for accidental tok/s or P44 Pro claims, inspect every changed file, and commit the result/ledger unit separately.
+   Run `git diff --check`, search for accidental tok/s or P44 Pro claims, inspect every changed file, and commit the result/ledger unit separately.
+
+- [x] **Step 4a: Close final-review source and resume integrity findings.**
+
+  Add failing regressions for storage-manifest hash validation, crash-safe fixture publication, and canonical source-matched resume extents. Apply the minimum fixes and rerun the affected converter suites before publication.
 
 - [ ] **Step 5: Publish and require public CI.**
 

@@ -200,11 +200,13 @@ Runtime and benchmark records distinguish logical requested/completed bytes, ali
 
 ## Milestone 7 implemented full-dimension bounded expert slice
 
-Milestone 7 materializes one released-dimension routed expert without a full checkpoint. A deterministic source writer emits gate/up/down packed E2M1 values and E8M0/32 scales as six bounded safetensors extents. The existing converter validates the released 3,072 x 3,584 and 3,584 x 3,072 shapes, streams those extents into physical gate/up/down execution order, and records optional K3X feature bit 0.
+Milestone 7 materializes one released-dimension routed expert without a full checkpoint. A deterministic source writer emits gate/up/down packed E2M1 values and E8M0/32 scales as six bounded safetensors extents. It publishes a content-addressed shard before atomically replacing the manifest, so an interrupted regeneration leaves the prior manifest and referenced shard consistent. The converter validates the released 3,072 x 3,584 and 3,584 x 3,072 shapes plus manifest-declared shard and tensor SHA-256 values, streams those extents into physical gate/up/down execution order, and records optional K3X feature bit 0.
 
 The bit identifies a non-executable `STORAGE_FIXTURE`. Python and C++ Readers may inspect it, while every model-generation overload rejects it with `NON_EXECUTABLE_ARTIFACT` before graph tensor lookup. This keeps storage evidence separate from the tiny executable graph and prevents a partial checkpoint from being presented as a runnable model.
 
 `k3x_storage_bench` resolves the exact matrix IDs, validates native MXFP4 shapes and lengths, and submits one six-extent ordered batch. It reports expert-load latency, ordered SHA-256, logical/submitted/completed bytes, Reader storage time, alignments, and Linux process-I/O deltas, but no token fields. B-0008 measures all four Reader combinations on WSL2 ext4 with exact 17,547,264-byte and digest parity. This is an implemented and measured storage boundary, not a full-dimension graph runtime or native P44 Pro result. The normative design is in [`docs/superpowers/specs/2026-08-09-k3x-bounded-expert-slice-design.md`](docs/superpowers/specs/2026-08-09-k3x-bounded-expert-slice-design.md).
+
+Resume accepts only a canonical prefix of the planned extent sequence. Every ledger entry must have the expected ID, exact aligned offset and source length, and a CRC32C matching both the current source tensor and the partial artifact. Unknown, duplicated, reordered, truncated, or source-divergent entries fail closed before reuse.
 
 ## TITAN component registry
 

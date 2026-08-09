@@ -315,6 +315,8 @@ Buffered pread has the best wall median in this WSL2 run, while buffered io_urin
 
 Raw JSON/CSV and the cross-checked manifest are under `results/b0008-bounded-slice-wsl/`. The compact/raw cross-check succeeded for all four rows. Verification at the measurement code includes CPU CTest 8/8 and pytest 152 passed/40 skipped, liburing/direct CTest 9/9 and pytest 157 passed/35 skipped, CUDA CTest 17/17 and pytest 185 passed/7 skipped, plus ASan/UBSan liburing CTest 9/9 and four storage-path targeted pytest passes.
 
+Final review subsequently strengthened source-manifest and resume-ledger integrity without changing payload order, Reader code, or benchmark code, so B-0008 was not relabeled or remeasured. Post-fix correctness passed CPU CTest 8/8 and pytest 161/40, liburing/direct CTest 9/9 and pytest 162/39, and CUDA CTest 17/17 and pytest 194/7.
+
 ## Derived bottleneck model — not a benchmark
 
 The released dimensions imply 17,547,264 bytes per native MXFP4 routed expert. With no cache reuse, natural Top-16 across 92 MoE layers implies 25,829,572,608 expert bytes/token. Applying the P44 Pro published 7.0 GB/s sequential figure gives a derived expert-only ceiling of about 0.271 tok/s and implies roughly 94.6% expert NVMe-byte avoidance for a 5 tok/s target.
