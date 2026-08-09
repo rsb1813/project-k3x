@@ -440,3 +440,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: not applicable; this is artifact integrity. CPU CTest 13/13 and Python 262 passed/47 skipped after the correction.
 - Reason: `.k3xp` includes canonical checksummed content. Checkout-dependent byte rewriting invalidates evidence and is not a supported text-editing behavior.
 - Revisit: only if a future profile format defines a separate normalized textual representation whose checksum explicitly excludes transport line endings.
+
+## D-040 — Establish replay AURORA before persistent self-draft state
+
+- Date: 2026-08-10.
+- Status: accepted design; implementation and measurement pending.
+- Decision: produce real self-speculative candidates by replaying the committed prefix through a separate CPU fixed-reduced-Top-K K3X runtime, preserve the existing natural strict target verifier, and adapt proposal length over `{1,2,4}` using observed prefix survival plus measured expert-union cost.
+- Alternatives considered: treat scripted traces as representative; integrate an unavailable Kimi K3 DSpark checkpoint; implement persistent KDA/MLA draft state and adaptive scheduling simultaneously; first establish a replay oracle and measured feedback contract.
+- Evidence: DeepSpec `005e03b8` truncates DSpark proposals from prefix confidence and updates draft context from verified target state. B-0015/B-0016 show opposite fixed-block outcomes at 1.0 and 0.25 acceptance. K3X has no Kimi K3 DSpark checkpoint or persistent draft-state crop contract.
+- Benchmark result: pending B-0017. No performance direction is assumed.
+- Reason: replay is slow but executes the real reduced-routing graph, produces non-scripted acceptance, isolates draft telemetry, and supplies an oracle for later persistent state without combining two correctness boundaries.
+- Revisit: after B-0017 and persistent draft-state parity prove identical proposals with less replay work; then evaluate reduced precision, resident experts, and confidence prediction separately.
