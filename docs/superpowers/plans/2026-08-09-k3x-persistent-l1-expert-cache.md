@@ -4,7 +4,7 @@
 
 **Goal:** Add a bounded immutable system-RAM expert cache that avoids repeated K3X extent reads, feeds both exact synchronous and prepared CUDA paths, and is measured independently without introducing eviction policy.
 
-**Architecture:** A model-adjacent `HostExpertStore` owns complete native MXFP4 gate/up/down payloads under `(layer, expert)` keys. Disabled mode preserves the current transient loader. Static admission is whole-expert atomic, no-eviction, capacity-bounded, and exact-bypass on no room.
+**Architecture:** A `RuntimeSession` owns a model-adjacent `HostExpertStore` containing complete native MXFP4 gate/up/down payloads under `(layer, expert)` keys. Disabled mode preserves the current transient loader. Static admission is whole-expert atomic, no-eviction, capacity-bounded, and exact-bypass on no room.
 
 **Toolchain:** C++20, CMake/Ninja, Python 3.12/pytest, optional CUDA 13.3 `sm_120`, Compute Sanitizer, JSON/CSV benchmark tooling.
 
@@ -113,7 +113,7 @@
 
 - [x] Decide the default only from B-0006 correctness, reader traffic, memory cost, and end-to-end timing; never call logical reads physical NVMe traffic.
 - [x] Update durable documents in TITAN protocol order and keep eviction/policies/L2 explicitly unimplemented.
-- [ ] Request one final Terra high read-only review limited to Critical/Important correctness, lifetime, capacity, accounting, and documentation issues.
-- [ ] Apply evidence-backed findings once and rerun affected verification.
+- [x] Request one final Terra high read-only review limited to Critical/Important correctness, lifetime, capacity, accounting, and documentation issues.
+- [x] Apply evidence-backed findings once and rerun affected verification.
 - [ ] Commit results/ledger, push `codex/milestone-five-l1-cache`, create a draft PR, wait for Linux CI, mark ready, ancestry-check, fast-forward public `main`, and confirm post-merge CI.
 - [ ] Preserve the worktree for the next milestone.

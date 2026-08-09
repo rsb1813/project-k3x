@@ -252,11 +252,11 @@
 - Reason: sequence identity closes the stated token contract, while duplicate backend prevalidation provides failure atomicity without sacrificing the intended activation/expert-copy overlap.
 - Revisit: when the runtime supports multiple outstanding requests or deadline-aware scheduling; the token may then need a scheduler-owned generation and request identity in addition to use sequence.
 
-## D-023 — Make persistent L1 residency an expert-atomic model boundary
+## D-023 — Make persistent L1 residency an expert-atomic runtime-session boundary
 
 - Date: 2026-08-09.
-- Status: accepted design; implementation pending.
-- Decision: implement the first persistent L1 store between `Model` and `Reader`, keyed by `(layer, expert)` and owning immutable complete gate/up/down native MXFP4 payloads. Support disabled and bounded no-eviction static admission with exact transient bypass; keep eviction and policy scoring out of this milestone.
+- Status: accepted, implemented, and measured.
+- Decision: implement the first persistent L1 store between `Model` and `Reader`, owned by `RuntimeSession`, keyed by `(layer, expert)`, and owning immutable complete gate/up/down native MXFP4 payloads. Support disabled and bounded no-eviction static admission with exact transient bypass; keep eviction and policy scoring out of this milestone.
 - Alternatives considered: caching individual extents inside `Reader`; owning host residency inside the CUDA backend; a model-adjacent whole-expert store.
 - Evidence: current `Model::load_expert` issues six synchronous Reader calls and constructs temporary vectors on every selection before either synchronous compute or Milestone 4 pinned preparation. Reader-level caching loses expert atomicity and mixes trunk/expert decisions. CUDA ownership cannot serve the CPU reference and couples storage to compute.
 - Benchmark result: B-0006 admitted 18 synthetic experts into 29,376 bytes, produced 36 hits with zero bypasses, and reduced logical Reader calls from 428 to 212 and completed bytes from 665,616 to 606,864. All FP32/BF16 synchronous/prefetch rows preserved exact tokens, routing, H2D, D2H, FFN counts, and synchronization.
@@ -269,7 +269,18 @@
 - Status: accepted.
 - Decision: retain `disabled` as the public default and expose no-eviction first-observation `static` admission only through explicit runtime options.
 - Alternatives considered: enable static admission by default after the synthetic speedup; remove static until a policy exists; retain it as an exact experimental primitive.
-- Evidence: B-0006 measured roughly 2.85–3.04x matched synthetic decode throughput and lower logical Reader traffic with only 29,376 resident bytes. The fixture has only 24 experts, repeated routes, pageable reads, and WSL2 filesystem behavior; it does not represent the 896-expert released model or native-Linux NVMe.
-- Benchmark result: FP32 synchronous disabled/static measured 16.6714/50.5246 tok/s and prefetch measured 16.9078/49.4904. BF16 synchronous measured 16.5688/47.2476 and prefetch measured 16.7753/50.9757. Every row retained exact generated tokens and routing.
+- Evidence: B-0006 measured roughly 2.88–3.02x matched synthetic decode throughput and lower logical Reader traffic with only 29,376 resident bytes. The fixture has only 24 experts, repeated routes, pageable reads, and WSL2 filesystem behavior; it does not represent the 896-expert released model or native-Linux NVMe.
+- Benchmark result: FP32 synchronous disabled/static measured 16.5587/47.6845 tok/s and prefetch measured 16.7636/50.6235. BF16 synchronous measured 16.4052/47.7956 and prefetch measured 16.5073/47.6198. Every row retained exact generated tokens and routing.
 - Reason: the mechanism and exactness are validated, but first-observation no-eviction is not a production cache policy and the measured gain cannot justify a full-model default.
 - Revisit: after native-Linux full-dimension bounded slices establish representative expert sizes, physical L2 traffic, reuse distributions, and policy behavior.
+
+## D-025 — Persist L1 residency in an explicit runtime session and reject malformed native experts before admission
+
+- Date: 2026-08-09.
+- Status: accepted and implemented after final review.
+- Decision: make `RuntimeSession` the lifetime owner of `HostExpertStore`, while preserving one-shot overload compatibility, and validate native group-32 packed/scales sizes, reserved E8M0 values, and gate/up/down shapes before cache admission.
+- Alternatives considered: keep an engine-local cache recreated on every generation call; use process-global cache state; add an explicit session owner with compatibility wrappers.
+- Evidence: the engine-local design could not warm across consecutive agent requests. The session regression preserves exact tokens and routing, keeps second-call misses unchanged, increases hits by 54, and reduces second-call Reader traffic. Malformed packed data and reserved scale tests leave misses and residency unchanged.
+- Benchmark result: B-0006 was rerun at commit `2a0cb27` after these changes; all eight rows preserve the same token and routing traces and the same matched cache/traffic invariants.
+- Reason: explicit session ownership matches the chartered session hot-bank lifetime without hidden global state, while pre-admission validation prevents corrupt exact payloads from becoming durable cache entries.
+- Revisit: when VAULT or multi-session serving defines persistence, isolation, and reclamation contracts beyond one in-process runtime session.

@@ -106,7 +106,7 @@ This first boundary is deliberately limited to `cuda-custom + ffn-block + reused
 
 ## Milestone 5 — bounded persistent L1 expert cache
 
-`--l1-expert-cache static --l1-expert-cache-bytes N` enables an exact, no-eviction whole-expert store in system RAM. One entry owns the native MXFP4 gate/up/down packed bytes and scales, admits atomically under a hard capacity, and returns an exact transient handle when it cannot fit. `disabled` remains the default.
+`--l1-expert-cache static --l1-expert-cache-bytes N` enables an exact, no-eviction whole-expert store in system RAM. A `RuntimeSession` retains that store across consecutive generation calls. One entry owns the native MXFP4 gate/up/down packed bytes and scales, validates the native group-32 representation before admission, admits atomically under a hard capacity, and returns an exact transient handle when it cannot fit. `disabled` remains the default.
 
 B-0006 validates the same handles across CPU operation execution, synchronous CUDA FFN blocks, and asynchronous prepared CUDA transfers. It does not implement LRU, LFU, Least-Stale, task/session profiles, prediction, asynchronous NVMe reads, or physical NVMe counters.
 
@@ -306,10 +306,10 @@ Milestone 5 crosses disabled/static L1 admission with synchronous/prefetch trans
 
 | Precision / transfer | Disabled | Static L1 | Decode change |
 |---|---:|---:|---:|
-| FP32 synchronous | 16.6714 | **50.5246** | +203.1% |
-| FP32 prefetch | 16.9078 | **49.4904** | +192.7% |
-| BF16 synchronous | 16.5688 | **47.2476** | +185.2% |
-| BF16 prefetch | 16.7753 | **50.9757** | +203.9% |
+| FP32 synchronous | 16.5587 | **47.6845** | +188.0% |
+| FP32 prefetch | 16.7636 | **50.6235** | +202.0% |
+| BF16 synchronous | 16.4052 | **47.7956** | +191.3% |
+| BF16 prefetch | 16.5073 | **47.6198** | +188.5% |
 
 Each static row records 36 hits, 18 misses, zero bypasses, and 29,376 resident bytes. Logical Reader calls fall from 428 to 212 while GPU traffic and execution counts remain unchanged. These are measurements on the tiny synthetic WSL2 graph, not physical NVMe results or projected full-Kimi throughput, so static admission remains opt-in.
 
@@ -364,7 +364,8 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Bounded exact L1-to-L0 expert prefetch with pinned staging, transfer-stream events, accounting, and matched ablation.
 - [ ] Exact full-dimension CPU/GPU runtime over bounded checkpoint slices.
 - [ ] Wider layer/block GPU execution and fused K3-specific kernels.
-- [ ] Persistent L1 expert cache, asynchronous L2 NVMe reads, and deadline scheduler.
+- [x] Bounded no-eviction persistent L1 expert cache with exact transient bypass.
+- [ ] Asynchronous L2 NVMe reads and deadline scheduler.
 - [ ] Least-Stale, task/session, and transition-aware expert caches.
 - [ ] Adaptive Top-K with exact cold-expert rescue.
 - [ ] Expert-major speculative verification and cost-aware experiments.

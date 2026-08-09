@@ -211,7 +211,7 @@ Post-measurement validation note: final read-only review found that the prepared
 |---|---|
 | Evidence | measured |
 | Date | 2026-08-09 |
-| Measurement commit | `616c857` |
+| Measurement commit | `2a0cb27` |
 | Hardware | AMD Ryzen 7 9800X3D host; NVIDIA GeForce RTX 5080, 16,303 MiB |
 | Environment | WSL2 Ubuntu 24.04.4, Linux 6.18.33.2, CUDA Toolkit 13.3.1, native `sm_120` |
 | Model/checkpoint | regenerated seeded 4-layer, 24-expert, 178-tensor synthetic K3X; artifact SHA-256 `077e10a3ba478e83ac8dfd2509ea51a6ea2bfdfe670b60fcadc7f74b97ff810c`; converter maximum source read 257 bytes |
@@ -229,20 +229,20 @@ Post-measurement validation note: final read-only review found that the prepared
 
 | Precision / L1 / transfer | Decode tok/s | Prefill tok/s | TTFT ms | RSS bytes | Logical bytes/token | Reader calls / bytes | Hits / misses / bypass | L1 bytes | H2D / D2H bytes | Peak backend VRAM | Kernel ms | Prefetch calls / stall ms | Max abs. error |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| FP32 disabled synchronous | 16.6714 | 8.7220 | 1,154.061 | 507,142,144 | 110,936 | 428 / 665,616 | 0 / 0 / 0 | 0 | 5,074,560 / 83,952 | 43,680 | 22.866 | 0 / 0 | 1.790e-7 |
-| FP32 static synchronous | **50.5246** | 11.0671 | 1,053.051 | 507,355,136 | 101,144 | 212 / 606,864 | 36 / 18 / 0 | 29,376 | 5,074,560 / 83,952 | 43,680 | 23.679 | 0 / 0 | 1.790e-7 |
-| FP32 disabled prefetch | 16.9078 | 8.7492 | 1,158.391 | 507,400,192 | 110,936 | 428 / 665,616 | 0 / 0 / 0 | 0 | 5,074,560 / 83,952 | 1,091,712 | 19.380 | 27 / 0.270 | 1.790e-7 |
-| FP32 static prefetch | **49.4904** | 11.2901 | 1,058.068 | 507,355,136 | 101,144 | 212 / 606,864 | 36 / 18 / 0 | 29,376 | 5,074,560 / 83,952 | 1,091,712 | 24.854 | 27 / 0.341 | 1.790e-7 |
-| BF16 disabled synchronous | 16.5688 | 8.9036 | 1,142.626 | 481,792,000 | 110,936 | 428 / 665,616 | 0 / 0 / 0 | 0 | 2,583,072 / 83,952 | 22,752 | 23.189 | 0 / 0 | 0.00402409 |
-| BF16 static synchronous | **47.2476** | 11.4669 | 1,044.680 | 481,914,880 | 101,144 | 212 / 606,864 | 36 / 18 / 0 | 29,376 | 2,583,072 / 83,952 | 22,752 | 25.558 | 0 / 0 | 0.00402409 |
-| BF16 disabled prefetch | 16.7753 | 9.0852 | 1,145.899 | 481,988,608 | 110,936 | 428 / 665,616 | 0 / 0 / 0 | 0 | 2,583,072 / 83,952 | 1,070,784 | 20.094 | 27 / 0.281 | 0.00402409 |
-| BF16 static prefetch | **50.9757** | 11.5606 | 1,039.233 | 482,004,992 | 101,144 | 212 / 606,864 | 36 / 18 / 0 | 29,376 | 2,583,072 / 83,952 | 1,070,784 | 23.201 | 27 / 0.246 | 0.00402409 |
+| FP32 disabled synchronous | 16.5587 | 8.8183 | 1,151.464 | 507,240,448 | 110,936 | 428 / 665,616 | 0 / 0 / 0 | 0 | 5,074,560 / 83,952 | 43,680 | 22.846 | 0 / 0 | 1.790e-7 |
+| FP32 static synchronous | **47.6845** | 11.1885 | 1,047.856 | 507,400,192 | 101,144 | 212 / 606,864 | 36 / 18 / 0 | 29,376 | 5,074,560 / 83,952 | 43,680 | 26.199 | 0 / 0 | 1.790e-7 |
+| FP32 disabled prefetch | 16.7636 | 8.8086 | 1,151.007 | 507,453,440 | 110,936 | 428 / 665,616 | 0 / 0 / 0 | 0 | 5,074,560 / 83,952 | 1,091,712 | 22.509 | 27 / 0.303 | 1.790e-7 |
+| FP32 static prefetch | **50.6235** | 11.1989 | 1,060.459 | 507,269,120 | 101,144 | 212 / 606,864 | 36 / 18 / 0 | 29,376 | 5,074,560 / 83,952 | 1,091,712 | 25.261 | 27 / 0.269 | 1.790e-7 |
+| BF16 disabled synchronous | 16.4052 | 8.9519 | 1,142.860 | 481,837,056 | 110,936 | 428 / 665,616 | 0 / 0 / 0 | 0 | 2,583,072 / 83,952 | 22,752 | 24.114 | 0 / 0 | 0.00402409 |
+| BF16 static synchronous | **47.7956** | 11.4531 | 1,037.164 | 481,951,744 | 101,144 | 212 / 606,864 | 36 / 18 / 0 | 29,376 | 2,583,072 / 83,952 | 22,752 | 25.179 | 0 / 0 | 0.00402409 |
+| BF16 disabled prefetch | 16.5073 | 9.0693 | 1,142.449 | 482,025,472 | 110,936 | 428 / 665,616 | 0 / 0 / 0 | 0 | 2,583,072 / 83,952 | 1,070,784 | 21.963 | 27 / 0.250 | 0.00402409 |
+| BF16 static prefetch | **47.6198** | 11.5895 | 1,049.233 | 481,955,840 | 101,144 | 212 / 606,864 | 36 / 18 / 0 | 29,376 | 2,583,072 / 83,952 | 1,070,784 | 25.183 | 27 / 0.253 | 0.00402409 |
 
 Static admission reduces matched logical Reader calls by 216 and completed bytes by 58,752 per run. It preserves exact tokens, routing, total/weight/activation H2D, D2H, FFN calls/experts, and synchronization counts. The cache admits 18 complete experts, then serves 36 hits without a Reader call; no selected expert exceeds the 65,536-byte synthetic capacity.
 
-The derived matched decode improvements are +203.1% for FP32 synchronous, +192.7% for FP32 prefetch, +185.2% for BF16 synchronous, and +203.9% for BF16 prefetch. These unusually large synthetic gains isolate repeated WSL2 file-to-pageable-host materialization in a tiny graph with only 24 experts and repeated routes. They are not a full-model speed projection and do not justify enabling first-observation no-eviction admission by default.
+The derived matched decode improvements are +188.0% for FP32 synchronous, +202.0% for FP32 prefetch, +191.3% for BF16 synchronous, and +188.5% for BF16 prefetch. These unusually large synthetic gains isolate repeated WSL2 file-to-pageable-host materialization in a tiny graph with only 24 experts and repeated routes. They are not a full-model speed projection and do not justify enabling first-observation no-eviction admission by default.
 
-Raw JSON/CSV records are stored under `results/b0006-l1-cache-fp32/` and `results/b0006-l1-cache-bf16/`; the compact manifest is `results/b0006-l1-cache.json`. Full verification at the measured code state passed CPU CTest 6/6 and pytest 106 passed/34 skipped, CUDA CTest 15/15 and pytest 139 passed/1 skipped, and all ten CUDA Compute Sanitizer targets with zero errors.
+Raw JSON/CSV records are stored under `results/b0006-l1-cache-fp32/` and `results/b0006-l1-cache-bf16/`; the compact manifest is `results/b0006-l1-cache.json`. Review added session-lifetime reuse and stricter native payload validation before this replacement measurement. Full post-review verification passed CPU CTest 6/6 and pytest 117 passed/34 skipped, CUDA CTest 15/15 and pytest 150 passed/1 skipped, and all ten CUDA Compute Sanitizer targets with zero errors.
 
 The next bottleneck boundary is representative expert sizing and real L2 behavior. A native-Linux full-dimension bounded slice must measure buffered reads, `io_uring`, and `O_DIRECT`, physical block traffic, and deadlines before selecting an L2 path. Policy work such as Least-Stale also needs representative reuse traces and eviction pressure rather than the current all-fitting synthetic cache.
 

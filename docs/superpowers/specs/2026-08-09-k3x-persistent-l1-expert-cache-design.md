@@ -2,7 +2,7 @@
 
 ## Outcome and boundary
 
-Milestone 5 implements a bounded, process-lifetime L1 system-RAM store for exact native MXFP4 expert triplets. It removes repeated K3X file reads and temporary pageable-vector construction for admitted experts while preserving natural routing and the existing synchronous and prepared L1-to-L0 paths.
+Milestone 5 implements a bounded, runtime-session-lifetime L1 system-RAM store for exact native MXFP4 expert triplets. It removes repeated K3X file reads and temporary pageable-vector construction for admitted experts while preserving natural routing and the existing synchronous and prepared L1-to-L0 paths.
 
 This milestone is a storage primitive, not the chartered cache-policy milestone. It supports only `disabled` and no-eviction `static` admission. LRU, LFU, Least-Stale, task/session priors, transition prediction, eviction, asynchronous NVMe reads, and cold rescue remain unimplemented.
 

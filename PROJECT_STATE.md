@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 4 is complete and public. Milestone 5 bounded persistent L1 expert-cache implementation, verification, and B-0006 measurement are complete; final read-only review and public integration are in progress.
+Milestone 4 is complete and public. Milestone 5 bounded persistent L1 expert-cache implementation, final review fixes, full verification, and replacement B-0006 measurement are complete; public integration is in progress.
 
-State recorded on 2026-08-09 at local branch commit `526e31a` after the measured B-0006 code state `616c857`, result commit `273a93b`, and compact-manifest cross-check. Public `main` remains at Milestone 4 closure `04e9cbc` until review and CI complete.
+State recorded on 2026-08-09 after measured code commit `2a0cb27` and replacement result commit `fe328e4`. Public `main` remains at Milestone 4 closure `04e9cbc` until PR and CI complete.
 
 ## Completed work
 
@@ -36,10 +36,10 @@ State recorded on 2026-08-09 at local branch commit `526e31a` after the measured
 
 ## Work in progress
 
-- Milestone 5 code and durable measurement documents await one final Terra high read-only review, affected verification if findings require changes, and public branch/PR/CI integration.
+- Milestone 5 code and durable measurement documents await public branch/PR/CI integration only.
 - Static L1 admission is experimental and opt-in. LRU, LFU, Least-Stale, eviction, task/session priors, prediction, and L2 async I/O remain unimplemented.
 - The TITAN Ledger, README, checklist, context notes, and compact/raw B-0005 artifacts are synchronized with the measured Milestone 4 implementation.
-- Final Terra high review found three Important contract/test gaps. Commit `190459b` enforces use-sequence identity before side effects, strengthens failure-atomicity coverage, and requires matched H2D/synchronization equality. No Critical or Important finding remains unaddressed.
+- Final Terra high review found two Important Milestone 5 gaps: generation-local cache lifetime and insufficient native payload admission validation. Commit `2a0cb27` adds explicit `RuntimeSession` ownership and strict native group-32/triplet validation. No Critical or Important finding remains unaddressed.
 - Public PR #4 merged by ancestry-verified fast-forward at `c961026`; post-merge correctness run `31298966035` succeeded.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; builds: `build-cpu` and `build-cuda`.
@@ -49,7 +49,7 @@ State recorded on 2026-08-09 at local branch commit `526e31a` after the measured
 - Windows Smart App Control still blocks unsigned `k3x_run.exe`; WSL2 is the verified local CUDA path and native Linux remains the final performance authority.
 - The executable checkpoint is synthetic and tiny. No full Kimi K3 weights have been downloaded, and B-0005 is not a full-model throughput claim.
 - The graph remains CPU-driven outside FFN blocks. KDA, MLA, routing, score mixing, residual work, state management, and non-FFN boundaries remain on the host.
-- The implemented prefetch starts after synchronous K3X extent reads into pageable host vectors. There is no persistent L1 expert cache, asynchronous L2 NVMe path, eviction policy, predictor, or deadline scheduler.
+- L1 misses still perform synchronous K3X extent reads into pageable host vectors. There is no asynchronous L2 NVMe path, eviction policy, predictor, or deadline scheduler.
 - Exact prefetch is single-flight and limited to `cuda-custom + ffn-block + reused + transient`; it is not combined with static residency.
 - `cuda-dense` intentionally keeps native MXFP4 on the CPU as its documented comparison identity. `cuda-custom` is the exact GPU MXFP4 path.
 - GPU utilization, GPU memory bandwidth, NVMe GB/token, and storage I/O stall time remain unmeasured. L1-to-L0 staging, device-copy, readiness, wait, and exposed-stall counters are measured.
@@ -57,10 +57,9 @@ State recorded on 2026-08-09 at local branch commit `526e31a` after the measured
 
 ## Next concrete tasks
 
-1. Complete the final Critical/Important read-only review, address evidence-backed findings once, and rerun affected verification.
-2. Push `codex/milestone-five-l1-cache`, open the public PR, wait for Linux CI, fast-forward public `main` only after ancestry verification, and confirm post-merge CI.
-3. Design an independently switchable L2 reader and native-Linux benchmark for buffered I/O, `io_uring`, and `O_DIRECT` before choosing a default.
-4. Add full-dimension bounded checkpoint slices, then continue with policy/Least-Stale, task/session profiles, adaptive Top-K, and exact rescue in charter order.
+1. Push `codex/milestone-five-l1-cache`, open the public PR, wait for Linux CI, fast-forward public `main` only after ancestry verification, and confirm post-merge CI.
+2. Design an independently switchable L2 reader and native-Linux benchmark for buffered I/O, `io_uring`, and `O_DIRECT` before choosing a default.
+3. Add full-dimension bounded checkpoint slices, then continue with policy/Least-Stale, task/session profiles, adaptive Top-K, and exact rescue in charter order.
 
 ## Hardware assumptions
 
@@ -77,7 +76,7 @@ State recorded on 2026-08-09 at local branch commit `526e31a` after the measured
 
 ## Latest measured bottleneck
 
-B-0006 measures FP32 disabled/static synchronous at 16.6714/50.5246 decode tok/s and prefetch at 16.9078/49.4904. BF16 disabled/static synchronous measures 16.5688/47.2476 and prefetch 16.7753/50.9757. Static admission remains opt-in because this roughly 2.85–3.04x difference is a tiny repeated-route WSL2 graph result, not a full-model projection.
+B-0006 measures FP32 disabled/static synchronous at 16.5587/47.6845 decode tok/s and prefetch at 16.7636/50.6235. BF16 disabled/static synchronous measures 16.4052/47.7956 and prefetch 16.5073/47.6198. Static admission remains opt-in because this roughly 2.88–3.02x difference is a tiny repeated-route WSL2 graph result, not a full-model projection.
 
 Static rows admit 18 complete experts into 29,376 bytes, record 36 hits and zero bypasses, and reduce logical Reader calls/bytes from 428/665,616 to 212/606,864. Exact tokens, routing, H2D, D2H, FFN work, and synchronization remain unchanged. These counters do not measure physical NVMe traffic.
 
@@ -88,11 +87,11 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 ## Last known-good state
 
 - Public Milestone 4 closure `main`: `04e9cbc327520586c7e593447c6724703c874210`; correctness run `31299092196` succeeded.
-- B-0006 measurement code commit: `616c857` (`feat: add persistent L1 cache ablation`).
-- B-0006 raw/compact result commit: `273a93b` (`bench: record persistent L1 cache ablation`).
-- Latest local validation commit: `526e31a` (`test: cross-check B-0006 compact manifest`).
-- CPU verification: CTest 6/6; pytest 106 passed and 34 CUDA-only skipped.
-- CUDA verification: CTest 15/15; pytest 139 passed and one CPU-build-only skipped.
+- B-0006 measurement code commit: `2a0cb27` (`fix: persist and validate L1 experts`).
+- B-0006 raw/compact result commit: `fe328e4` (`bench: refresh B-0006 after review fixes`).
+- Latest local validation commit: `fe328e4`.
+- CPU verification: CTest 6/6; pytest 117 passed and 34 CUDA-only skipped.
+- CUDA verification: CTest 15/15; pytest 150 passed and one CPU-build-only skipped.
 - Compute Sanitizer: `test_cuda_device`, `test_cuda_dense`, `test_cuda_mxfp4`, `test_cuda_memory`, `test_cuda_pinned_memory`, `test_cuda_async_pipeline`, `test_cuda_residency`, `test_cuda_situ`, `test_cuda_ffn`, and `test_cuda_async_ffn` each report `ERROR SUMMARY: 0 errors`.
 - Exact generated tokens: `[43, 32, 28, 49, 9, 28]` and the same 24-entry routing trace across all B-0006 rows.
 - B-0006 artifact SHA-256: `077e10a3ba478e83ac8dfd2509ea51a6ea2bfdfe670b60fcadc7f74b97ff810c`; converter maximum source read: 257 bytes.
