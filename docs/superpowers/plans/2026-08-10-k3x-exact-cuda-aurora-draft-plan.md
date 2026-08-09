@@ -315,7 +315,7 @@ git commit -m "feat: separate CUDA draft telemetry"
 - Consumes: `benchmark_once(..., aurora_draft_backend="cpu|cuda-custom")` from Task 3.
 - Produces: nine raw JSON/CSV pairs, `summary.json`, `summary.csv`, exact pair deltas, and canonical SHA-256 records.
 
-- [ ] **Step 1: Write the missing-runner RED tests**
+- [x] **Step 1: Write the missing-runner RED tests**
 
 Create `tests/python/test_cuda_aurora_draft_ablation.py` beginning with.
 
@@ -337,7 +337,7 @@ Assert the exact case order.
 
 For a zero-warmup/one-sample run, assert all rows preserve natural target tokens/state/routes, each CPU/CUDA pair has equal proposed/accepted/committed counts and acceptance, CPU draft CUDA counters are zero, CUDA draft counters are positive, target CUDA counters stay zero, all eighteen raw digests match, summary CSV is LF, and the canonical aggregate matches.
 
-- [ ] **Step 2: Run and witness RED**
+- [x] **Step 2: Run and witness RED**
 
 Run.
 
@@ -348,7 +348,7 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 python -m pytest \
 
 Expected failure: `ModuleNotFoundError: tools.ablate_cuda_aurora_draft`.
 
-- [ ] **Step 3: Implement the minimal runner**
+- [x] **Step 3: Implement the minimal runner**
 
 Create `tools/ablate_cuda_aurora_draft.py` beginning with.
 
@@ -358,7 +358,7 @@ Create `tools/ablate_cuda_aurora_draft.py` beginning with.
 
 Reuse the B-0018 Top-16 fixture and diagnostic parity logic. Add only the nine specified cases. Reject any pair mismatch before writing summary files. Record paired decode delta, draft kernel delta, H2D bytes, and peak draft VRAM without interpreting logical Reader bytes as physical NVMe.
 
-- [ ] **Step 4: Run focused GREEN**
+- [x] **Step 4: Run focused GREEN**
 
 Run.
 
@@ -369,7 +369,7 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 python -m pytest \
 
 Expected: matrix, live one-sample parity, and digest tests pass.
 
-- [ ] **Step 5: Commit the measurement code before measuring**
+- [x] **Step 5: Commit the measurement code before measuring**
 
 ```bash
 git add tools/ablate_cuda_aurora_draft.py \
