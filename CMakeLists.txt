@@ -16,6 +16,7 @@ add_library(k3x_runtime
     runtime/src/ops.cpp
     runtime/src/profile.cpp
     runtime/src/backend_cpu.cpp
+    runtime/src/host_expert_store.cpp
 )
 if(K3X_ENABLE_CUDA)
     enable_language(CUDA)
@@ -58,6 +59,10 @@ add_test(NAME profile COMMAND test_profile)
 add_executable(test_backend tests/cpp/test_backend.cpp)
 target_link_libraries(test_backend PRIVATE k3x_runtime)
 add_test(NAME backend COMMAND test_backend)
+
+add_executable(test_host_expert_store tests/cpp/test_host_expert_store.cpp)
+target_link_libraries(test_host_expert_store PRIVATE k3x_runtime)
+add_test(NAME host_expert_store COMMAND test_host_expert_store)
 
 if(NOT K3X_ENABLE_CUDA)
     add_executable(test_backend_unavailable tests/cpp/test_backend_unavailable.cpp)

@@ -2,6 +2,7 @@
 #pragma once
 
 #include "k3x/backend.hpp"
+#include "k3x/host_expert_store.hpp"
 #include "k3x/reader.hpp"
 #include "k3x/status.hpp"
 
@@ -11,21 +12,11 @@
 #include <vector>
 
 namespace k3x {
-enum class L1ExpertCacheMode { disabled, static_admission };
-
 struct RuntimeOptions {
     bool incremental{true};
     bool diagnostics{};
     L1ExpertCacheMode l1_expert_cache{L1ExpertCacheMode::disabled};
     std::size_t l1_expert_cache_bytes{};
-};
-
-struct L1ExpertCacheStats {
-    std::uint64_t hits{};
-    std::uint64_t misses{};
-    std::uint64_t bypasses{};
-    std::size_t resident_bytes{};
-    std::size_t peak_resident_bytes{};
 };
 
 struct GenerationResult {
