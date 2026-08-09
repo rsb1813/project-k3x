@@ -1,0 +1,18 @@
+{
+  "activation_h2d_bytes": 286720,
+  "artifact_kind": "released_dimension_repeated_view",
+  "device_to_host_bytes": 4587520,
+  "expert_payload_bytes": 17547264,
+  "fused_moe_calls": 0,
+  "fused_moe_experts": 0,
+  "fusion": "none",
+  "iterations": 20,
+  "kernel_nanoseconds": 76422336,
+  "latency_nanoseconds_median": 7867604,
+  "maximum_absolute_error": 0,
+  "peak_vram_bytes": 23461888,
+  "routing_semantics": false,
+  "slots": 16,
+  "warmup": 3,
+  "weight_h2d_bytes": 0
+}

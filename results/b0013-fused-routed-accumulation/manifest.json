@@ -1,0 +1,40 @@
+{
+  "benchmark_id": "B-0013",
+  "date": "2026-08-10",
+  "measurement_commit": "58c36dd",
+  "hardware": {
+    "cpu": "AMD Ryzen 7 9800X3D",
+    "gpu": "NVIDIA GeForce RTX 5080",
+    "gpu_architecture": "sm_120",
+    "environment": "WSL2 Ubuntu 24.04.4, CUDA Toolkit 13.3.1"
+  },
+  "artifacts": {
+    "synthetic_top16_sha256": "edeaa4802b4bfac0624fa4d0e73917318076258d95e74e880c97a8b2709dd2d2",
+    "released_dimension_storage_sha256": "aab7aea48b03bdcd8e0b4d98c4780128ab689d2bba005089a49970eb0e326890"
+  },
+  "sampling": {
+    "warmup": 3,
+    "iterations": 20
+  },
+  "scope_notes": [
+    "Synthetic results use the deterministic natural Top-16 K3-compatible graph and are end-to-end synthetic measurements.",
+    "Released-dimension results repeat one immutable 17,547,264-byte expert view across 16 slots and are kernel/D2H measurements, not routing or full-model TPS evidence.",
+    "The synthetic command reached its 300-second host timeout after all four raw records and summary.json were published. Independent raw-summary, BenchmarkRecord schema, and CSV validation passed afterward."
+  ],
+  "sha256": {
+    "released-dimension/none.csv": "a86cb8c5b781a0b20e1e8c2b8c85663f773612f39335f3e486e4d8eb69d77d46",
+    "released-dimension/none.json": "61a3bee72d1fbfae5eb22f2886efb600422b63e6728e71b75baf8329447d092e",
+    "released-dimension/routed-accumulate.csv": "6848d84ff9439e671aee5b7d9bfcb64ca6c4404044918aecf162888fb2aacd7b",
+    "released-dimension/routed-accumulate.json": "91290851680aee83096d6f3d28a6c72a6994f2a11b78a0d5008f2fcdd0a31897",
+    "released-dimension/summary.json": "d6f186fb991c67e2c4a1cd4929816ca1cf5567b187a905dd447db99258fd1799",
+    "synthetic/prefetch-none.csv": "6ba0dc72ea59043501976b51e817e9d09ac39482a4983218ac407fad51b866ad",
+    "synthetic/prefetch-none.json": "cc6c4eab5bbe380131e18f933dec04fd6c2a3cb30f36600eacfd85b6750eeac0",
+    "synthetic/prefetch-routed-accumulate.csv": "28808475ac3b485e5381a2a64e9a2c1a47be9a7cce3033305607200c35dbe5a7",
+    "synthetic/prefetch-routed-accumulate.json": "89ade2d091a5302eec2c38ea0f759d44f0ac282f154eb24c500589504c0fbb6e",
+    "synthetic/summary.json": "996dad640c78ea356b1b9d13fb7879e07511cba42e7257a6c43fa95b7f274da7",
+    "synthetic/synchronous-none.csv": "881d774999fdfda5c09da28ed02bd9e089dc1f4dd901cf0ed9725a8c4ffe82b1",
+    "synthetic/synchronous-none.json": "6a6365db95ae64a6d80a0a49e73370029c8a2e5e77de326db5b62e852b2895c5",
+    "synthetic/synchronous-routed-accumulate.csv": "b3685919c84df07383862e34ced7031b9caa34a338724db050d8fad91911294b",
+    "synthetic/synchronous-routed-accumulate.json": "a6db52f4734b41107b9c176504035055afbc500b404ec7769e5f5eb3f2763aea"
+  }
+}

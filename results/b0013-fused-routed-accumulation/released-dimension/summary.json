@@ -1,0 +1,43 @@
+{
+  "d2h_reduction_bytes": 4300800,
+  "kernel_nanoseconds_delta": 4491104,
+  "latency_nanoseconds_delta": 630394,
+  "records": [
+    {
+      "activation_h2d_bytes": 286720,
+      "artifact_kind": "released_dimension_repeated_view",
+      "device_to_host_bytes": 4587520,
+      "expert_payload_bytes": 17547264,
+      "fused_moe_calls": 0,
+      "fused_moe_experts": 0,
+      "fusion": "none",
+      "iterations": 20,
+      "kernel_nanoseconds": 76422336,
+      "latency_nanoseconds_median": 7867604,
+      "maximum_absolute_error": 0,
+      "peak_vram_bytes": 23461888,
+      "routing_semantics": false,
+      "slots": 16,
+      "warmup": 3,
+      "weight_h2d_bytes": 0
+    },
+    {
+      "activation_h2d_bytes": 286720,
+      "artifact_kind": "released_dimension_repeated_view",
+      "device_to_host_bytes": 286720,
+      "expert_payload_bytes": 17547264,
+      "fused_moe_calls": 20,
+      "fused_moe_experts": 320,
+      "fusion": "routed-accumulate",
+      "iterations": 20,
+      "kernel_nanoseconds": 80913440,
+      "latency_nanoseconds_median": 8497998,
+      "maximum_absolute_error": 0,
+      "peak_vram_bytes": 23461888,
+      "routing_semantics": false,
+      "slots": 16,
+      "warmup": 3,
+      "weight_h2d_bytes": 0
+    }
+  ]
+}

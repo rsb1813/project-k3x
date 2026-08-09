@@ -1,0 +1,2 @@
+artifact_kind,routing_semantics,fusion,expert_payload_bytes,slots,warmup,iterations,latency_nanoseconds_median,maximum_absolute_error,kernel_nanoseconds,device_to_host_bytes,weight_h2d_bytes,activation_h2d_bytes,fused_moe_calls,fused_moe_experts,peak_vram_bytes
+released_dimension_repeated_view,False,none,17547264,16,3,20,7867604,0,76422336,4587520,0,286720,0,0,23461888
