@@ -1419,10 +1419,199 @@ public:
     }
 
     Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_batch(
-        std::span<const float>, std::size_t, Mxfp4MlpView, float,
-        std::optional<float>, std::uint32_t, ProfilePhase) override {
-        return Result<std::vector<std::vector<float>>>::failure(
-            ErrorCode::backend_unavailable);
+        std::span<const float> inputs, std::size_t batch_size,
+        Mxfp4MlpView expert, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) override {
+        constexpr auto precision = NumericPrecision::mxfp4_e2m1_e8m0;
+        const auto operation_start = std::chrono::steady_clock::now();
+        const auto multiply_fits = [](std::size_t left, std::size_t right) {
+            return right == 0 ||
+                   left <= std::numeric_limits<std::size_t>::max() / right;
+        };
+        if (options_.kind != BackendKind::cuda_custom ||
+            options_.cuda_boundary != CudaBoundaryMode::ffn_block ||
+            options_.cuda_allocation != CudaAllocationMode::reused ||
+            options_.cuda_weights != CudaWeightMode::transient ||
+            options_.cuda_transfer != CudaTransferMode::synchronous ||
+            options_.cuda_moe_fusion != CudaMoeFusionMode::none ||
+            batch_size == 0 || batch_size > 65535 ||
+            expert.gate.group_size != 32 || expert.up.group_size != 32 ||
+            expert.down.group_size != 32 ||
+            !multiply_fits(batch_size, expert.gate.cols) ||
+            !multiply_fits(batch_size, expert.gate.rows) ||
+            !multiply_fits(batch_size, expert.down.rows) ||
+            inputs.size() != batch_size * expert.gate.cols ||
+            !valid_mxfp4_size(expert.gate.cols, expert.gate) ||
+            !valid_mxfp4_size(expert.gate.cols, expert.up) ||
+            expert.gate.rows != expert.up.rows ||
+            !valid_mxfp4_size(expert.gate.rows, expert.down) ||
+            !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
+            (situ_linear &&
+             (!std::isfinite(*situ_linear) || *situ_linear <= 0.0F))) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+
+        const auto input_bytes = inputs.size_bytes();
+        const auto intermediate_count = batch_size * expert.gate.rows;
+        const auto intermediate_bytes = intermediate_count * sizeof(float);
+        const auto output_count = batch_size * expert.down.rows;
+        const auto output_bytes = output_count * sizeof(float);
+        const auto maximum_packed_bytes = std::max({
+            expert.gate.packed.size_bytes(), expert.up.packed.size_bytes(),
+            expert.down.packed.size_bytes()});
+        const auto maximum_scale_bytes = std::max({
+            expert.gate.scales.size_bytes(), expert.up.scales.size_bytes(),
+            expert.down.scales.size_bytes()});
+        const auto total_weight_transfer =
+            expert.gate.packed.size_bytes() + expert.gate.scales.size_bytes() +
+            expert.up.packed.size_bytes() + expert.up.scales.size_bytes() +
+            expert.down.packed.size_bytes() + expert.down.scales.size_bytes();
+
+        std::array<EventOwner, 8> events;
+        for (auto& event : events) {
+            if (event.ensure() != cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA batched expert event creation failed");
+            }
+        }
+        if (ffn_input_scratch_.reserve(input_bytes) != cudaSuccess ||
+            mxfp4_packed_scratch_.reserve(maximum_packed_bytes) != cudaSuccess ||
+            mxfp4_scales_scratch_.reserve(maximum_scale_bytes) != cudaSuccess ||
+            ffn_gate_scratch_.reserve(intermediate_bytes) != cudaSuccess ||
+            ffn_up_scratch_.reserve(intermediate_bytes) != cudaSuccess ||
+            ffn_activation_scratch_.reserve(intermediate_bytes) != cudaSuccess ||
+            ffn_output_scratch_.reserve(output_bytes) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA batched expert reusable allocation failed");
+        }
+
+        auto* device_input = static_cast<float*>(ffn_input_scratch_.get());
+        auto* device_packed = static_cast<std::uint8_t*>(
+            mxfp4_packed_scratch_.get());
+        auto* device_scales = static_cast<std::uint8_t*>(
+            mxfp4_scales_scratch_.get());
+        auto* device_gate = static_cast<float*>(ffn_gate_scratch_.get());
+        auto* device_up = static_cast<float*>(ffn_up_scratch_.get());
+        auto* device_activation = static_cast<float*>(
+            ffn_activation_scratch_.get());
+        auto* device_output = static_cast<float*>(ffn_output_scratch_.get());
+        if (cudaMemcpyAsync(device_input, inputs.data(), input_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA batched expert activation upload failed");
+        }
+
+        const auto launch_weight = [&](Mxfp4WeightView weight,
+                                       const float* input, float* output,
+                                       EventOwner& start, EventOwner& end) {
+            if (cudaMemcpyAsync(device_packed, weight.packed.data(),
+                                weight.packed.size_bytes(),
+                                cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+                cudaMemcpyAsync(device_scales, weight.scales.data(),
+                                weight.scales.size_bytes(),
+                                cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+                cudaEventRecord(start.get(), stream_) != cudaSuccess) {
+                return false;
+            }
+            return cuda::launch_mxfp4_matvec_batch(
+                       input, device_packed, device_scales, output,
+                       weight.rows, weight.cols, batch_size, stream_) ==
+                       cudaSuccess &&
+                   cudaEventRecord(end.get(), stream_) == cudaSuccess;
+        };
+
+        if (!launch_weight(expert.gate, device_input, device_gate,
+                           events[0], events[1]) ||
+            !launch_weight(expert.up, device_input, device_up,
+                           events[2], events[3])) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA batched expert gate or up failed");
+        }
+        if (cudaEventRecord(events[4].get(), stream_) != cudaSuccess ||
+            cuda::launch_situ_glu(
+                device_gate, device_up, device_activation,
+                intermediate_count, situ_beta, situ_linear.has_value(),
+                situ_linear.value_or(0.0F), false, stream_) != cudaSuccess ||
+            cudaEventRecord(events[5].get(), stream_) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA batched expert SiTU failed");
+        }
+        if (!launch_weight(expert.down, device_activation, device_output,
+                           events[6], events[7])) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA batched expert down failed");
+        }
+
+        std::vector<float> flat_output(output_count);
+        const auto d2h_start = std::chrono::steady_clock::now();
+        if (cudaMemcpyAsync(flat_output.data(), device_output, output_bytes,
+                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+            cudaStreamSynchronize(stream_) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA batched expert output copy or synchronization failed");
+        }
+
+        std::array<std::uint64_t, 4> durations{};
+        for (std::size_t pair = 0; pair < durations.size(); ++pair) {
+            float milliseconds = 0.0F;
+            if (cudaEventElapsedTime(&milliseconds, events[pair * 2].get(),
+                                     events[pair * 2 + 1].get()) !=
+                cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA batched expert event timing failed");
+            }
+            durations[pair] = static_cast<std::uint64_t>(std::llround(
+                static_cast<double>(milliseconds) * 1.0e6));
+        }
+
+        std::vector<std::vector<float>> outputs(batch_size);
+        for (std::size_t token = 0; token < batch_size; ++token) {
+            outputs[token].assign(
+                flat_output.begin() + token * expert.down.rows,
+                flat_output.begin() + (token + 1) * expert.down.rows);
+        }
+        ++runtime_stats_.stream_synchronization_count;
+        runtime_stats_.activation_h2d_bytes += input_bytes;
+        runtime_stats_.weight_h2d_bytes += total_weight_transfer;
+        ++runtime_stats_.ffn_block_calls;
+        ++runtime_stats_.ffn_block_experts;
+        ++runtime_stats_.batched_expert_ffn_calls;
+        runtime_stats_.batched_expert_ffn_tokens += batch_size;
+        record(phase, ProfileOperation::activation_host_to_device, precision,
+               layer, operation_start, 0, input_bytes, 0, true);
+        record(phase, ProfileOperation::weight_host_to_device, precision,
+               layer, operation_start, 0, total_weight_transfer, 0, true);
+        record(phase, ProfileOperation::device_to_host, precision, layer,
+               d2h_start, 0, output_bytes, 0, true);
+        record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+               operation_start,
+               expert.gate.packed.size_bytes() +
+                   expert.gate.scales.size_bytes(),
+               0, durations[0], true);
+        record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+               operation_start,
+               expert.up.packed.size_bytes() + expert.up.scales.size_bytes(),
+               0, durations[1], true);
+        record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+               operation_start,
+               expert.down.packed.size_bytes() +
+                   expert.down.scales.size_bytes(),
+               0, durations[3], true);
+        record(phase, ProfileOperation::situ_glu, NumericPrecision::fp32,
+               layer, operation_start, intermediate_bytes, 0, durations[2],
+               true);
+        return Result<std::vector<std::vector<float>>>::success(
+            std::move(outputs));
     }
 
     Result<std::vector<float>> mxfp4_situ_moe(
