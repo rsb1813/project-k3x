@@ -377,7 +377,7 @@ git add tools/ablate_cuda_aurora_draft.py \
 git commit -m "bench: add exact CUDA AURORA draft ablation"
 ```
 
-- [ ] **Step 6: Run canonical B-0019**
+- [x] **Step 6: Run canonical B-0019**
 
 Run on WSL2 with the RTX 5080.
 
@@ -391,7 +391,7 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 python \
 
 Do not claim a speedup until `summary.json` exists and all pair gates pass.
 
-- [ ] **Step 7: Add committed-evidence validation and commit results**
+- [x] **Step 7: Add committed-evidence validation and commit results**
 
 Extend the test to load `results/b0019-cuda-aurora-draft-wsl/`, recompute all raw/summary/aggregate digests and headline deltas, and assert 9 records plus 20 raw files. Run it, then commit.
 
