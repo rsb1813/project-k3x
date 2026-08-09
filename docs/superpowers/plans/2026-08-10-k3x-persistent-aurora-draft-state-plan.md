@@ -154,7 +154,7 @@ git commit -m "feat: add incremental draft cursor"
 - Consumes: Task 1 cursor, pending proposal tokens, internal `ModelState`.
 - Produces: exact `commit(accepted_prefix, committed_tokens)`, checkpoint restore, crop telemetry, and flattened-state diagnostics.
 
-- [ ] **Step 1: Add full-accept and rejected-prefix failing cases**
+- [x] **Step 1: Add full-accept and rejected-prefix failing cases**
 
 Extend the C++ test to compare the cursor against fresh fixed-K4 `generate_greedy` diagnostic runs.
 
@@ -170,11 +170,11 @@ require(after_full.value() == replay_tokens(
 
 Create a second cursor, propose four tokens, accept only the first, commit a mismatching target bonus, and require its next proposal and flattened state to match a fresh teacher-forced run over `context + accepted + bonus`. Assert `rollback_events == 1` and `mla_positions_cropped > 0`.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run the same focused pytest command. Expected: `commit` returns `invalid_state` or diagnostics/crop counters do not match because Task 1 has no transaction restore implementation.
 
-- [ ] **Step 3: Implement bounded checkpoints and exact commit**
+- [x] **Step 3: Implement bounded checkpoints and exact commit**
 
 Inside `Impl`, add:
 
@@ -195,13 +195,13 @@ struct Checkpoint {
 
 Record a base checkpoint before proposal and one checkpoint after each processed candidate. Restore by copying KDA, resizing MLA vectors, restoring `length`, and restoring logits. Count copied KDA scalar bytes with checked `uint64_t` arithmetic. For all-accepted commits, process the unconsumed final candidate; for shorter acceptance restore the matching checkpoint. Then process exactly one bonus token. Clear the transaction only after success.
 
-- [ ] **Step 4: Add lifecycle and failure-boundary RED/GREEN**
+- [x] **Step 4: Add lifecycle and failure-boundary RED/GREEN**
 
 Add cases for zero proposal, zero accepted, outstanding proposal, accepted count beyond proposal, wrong accepted prefix, missing/multiple bonus tokens, second commit, and reuse after latched failure. Capture Reader counters before malformed commits and require no change.
 
 Run focused pytest after adding the tests and observe the expected failure before implementation. Implement prevalidation before any restore or forward, latch failure on malformed input, then rerun until green.
 
-- [ ] **Step 5: Verify cursor and baseline tests**
+- [x] **Step 5: Verify cursor and baseline tests**
 
 ```bash
 cmake --build build -j2
@@ -211,7 +211,7 @@ K3X_BUILD_DIR=build python -m pytest \
 ctest --test-dir build --output-on-failure
 ```
 
-- [ ] **Step 6: Commit transaction semantics**
+- [x] **Step 6: Commit transaction semantics**
 
 ```bash
 git add runtime/src/model.cpp tests/cpp/test_incremental_cursor.cpp \
