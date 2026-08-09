@@ -79,6 +79,7 @@ class BenchmarkRecord:
     mla_kv_bytes: int
     per_layer_nanoseconds: tuple[int, ...]
     token_ids: tuple[int, ...]
+    routed_experts: tuple[int, ...]
 
     def __post_init__(self) -> None:
         if self.scope not in {
@@ -102,6 +103,9 @@ def write_results(record: BenchmarkRecord, json_path: Path, csv_path: Path) -> N
         str(value) for value in record.per_layer_nanoseconds
     )
     csv_payload["token_ids"] = ";".join(str(value) for value in record.token_ids)
+    csv_payload["routed_experts"] = ";".join(
+        str(value) for value in record.routed_experts
+    )
     with csv_path.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=csv_payload.keys())
         writer.writeheader()
@@ -226,6 +230,7 @@ def benchmark_once(
     samples: list[dict] = []
     peaks: list[int] = []
     ttft_samples: list[float] = []
+    routed_experts: tuple[int, ...] = ()
     with tempfile.TemporaryDirectory(prefix="k3x-benchmark-") as temporary:
         root = Path(temporary)
         for index in range(warmup + iterations):
@@ -302,6 +307,7 @@ def benchmark_once(
             max_absolute_error, max_relative_error = _numerical_errors(
                 reference, candidate
             )
+            routed_experts = tuple(candidate["prefill_routed_experts"])
     deterministic_fields = (
         "backend",
         "device",
@@ -464,6 +470,7 @@ def benchmark_once(
         mla_kv_bytes=mla_kv,
         per_layer_nanoseconds=layer_ns,
         token_ids=tuple(samples[0]["token_ids"]),
+        routed_experts=routed_experts,
     )
 
 

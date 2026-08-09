@@ -74,6 +74,7 @@ def _record() -> BenchmarkRecord:
         mla_kv_bytes=2048,
         per_layer_nanoseconds=(1, 2, 3, 4),
         token_ids=(43, 32, 28, 49, 9, 28),
+        routed_experts=(),
     )
 
 
@@ -116,6 +117,7 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert row["peak_vram_bytes"] == ""
     assert row["per_layer_nanoseconds"] == "1;2;3;4"
     assert row["token_ids"] == "43;32;28;49;9;28"
+    assert row["routed_experts"] == ""
 
 
 def test_ffn_boundary_matrix_and_runner_preserve_parity(

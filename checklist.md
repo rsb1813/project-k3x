@@ -99,5 +99,5 @@
 - [x] 상세 TDD 구현 계획 작성과 self-review.
 - [x] bounded pinned staging과 transfer stream primitive 구현.
 - [x] prepared exact MXFP4 expert FFN과 graph scheduling 연결.
-- [ ] profiler/schema/ablation runner 확장.
+- [x] profiler/schema/ablation runner 확장.
 - [ ] 전체 correctness, sanitizer, B-0005, TITAN Ledger 갱신.
