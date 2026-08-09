@@ -134,4 +134,92 @@ int main() {
         assert(!result);
         assert(result.error() == k3x::ErrorCode::invalid_state);
     }
+    {
+        const auto result = k3x::verify_greedy_target_block(
+            DraftProposal{.anchor_token = 10,
+                          .candidate_tokens = {11, 12}},
+            2, 128, std::vector<std::uint32_t>{11, 12, 13});
+        assert(result);
+        assert(result.value().accepted_draft_tokens == 2);
+        assert(result.value().all_draft_tokens_accepted);
+        assert((result.value().committed_tokens ==
+                std::vector<std::uint32_t>{11, 12, 13}));
+    }
+    {
+        const auto result = k3x::verify_greedy_target_block(
+            DraftProposal{.anchor_token = 10,
+                          .candidate_tokens = {99, 100}},
+            2, 128, std::vector<std::uint32_t>{11, 12, 13});
+        assert(result);
+        assert(result.value().accepted_draft_tokens == 0);
+        assert(!result.value().all_draft_tokens_accepted);
+        assert((result.value().committed_tokens ==
+                std::vector<std::uint32_t>{11}));
+    }
+    {
+        const auto result = k3x::verify_greedy_target_block(
+            DraftProposal{.anchor_token = 10,
+                          .candidate_tokens = {11, 99}},
+            2, 128, std::vector<std::uint32_t>{11, 12, 13});
+        assert(result);
+        assert(result.value().accepted_draft_tokens == 1);
+        assert(!result.value().all_draft_tokens_accepted);
+        assert((result.value().committed_tokens ==
+                std::vector<std::uint32_t>{11, 12}));
+    }
+    {
+        const auto result = k3x::verify_greedy_target_block(
+            DraftProposal{.anchor_token = 10,
+                          .candidate_tokens = {11, 12, 99}},
+            3, 128,
+            std::vector<std::uint32_t>{11, 12, 13, 14});
+        assert(result);
+        assert(result.value().accepted_draft_tokens == 2);
+        assert(!result.value().all_draft_tokens_accepted);
+        assert((result.value().committed_tokens ==
+                std::vector<std::uint32_t>{11, 12, 13}));
+    }
+    {
+        const auto result = k3x::verify_greedy_target_block(
+            DraftProposal{.anchor_token = 10}, 0, 128,
+            std::vector<std::uint32_t>{11});
+        assert(result);
+        assert(result.value().proposed_draft_tokens == 0);
+        assert(result.value().all_draft_tokens_accepted);
+        assert((result.value().committed_tokens ==
+                std::vector<std::uint32_t>{11}));
+    }
+    {
+        const auto result = k3x::verify_greedy_target_block(
+            DraftProposal{.anchor_token = 10,
+                          .candidate_tokens = {11, 12}},
+            2, 128, std::vector<std::uint32_t>{11, 12});
+        assert(!result);
+        assert(result.error() == k3x::ErrorCode::invalid_extent);
+    }
+    {
+        const auto result = k3x::verify_greedy_target_block(
+            DraftProposal{.anchor_token = 10,
+                          .candidate_tokens = {11, 12}},
+            2, 128,
+            std::vector<std::uint32_t>{11, 12, 13, 14});
+        assert(!result);
+        assert(result.error() == k3x::ErrorCode::invalid_extent);
+    }
+    {
+        const auto result = k3x::verify_greedy_target_block(
+            DraftProposal{.anchor_token = 10,
+                          .candidate_tokens = {128}},
+            1, 128, std::vector<std::uint32_t>{11, 12});
+        assert(!result);
+        assert(result.error() == k3x::ErrorCode::invalid_extent);
+    }
+    {
+        const auto result = k3x::verify_greedy_target_block(
+            DraftProposal{.anchor_token = 10,
+                          .candidate_tokens = {11}},
+            1, 128, std::vector<std::uint32_t>{11, 128});
+        assert(!result);
+        assert(result.error() == k3x::ErrorCode::invalid_state);
+    }
 }

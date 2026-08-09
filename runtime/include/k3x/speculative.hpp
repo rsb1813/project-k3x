@@ -43,4 +43,9 @@ using GreedyTargetStep =
 Result<DraftVerification> verify_greedy_draft(
     const DraftProposal& proposal, std::size_t max_draft_tokens,
     std::size_t vocabulary_size, const GreedyTargetStep& target_step);
+
+Result<DraftVerification> verify_greedy_target_block(
+    const DraftProposal& proposal, std::size_t max_draft_tokens,
+    std::size_t vocabulary_size,
+    std::span<const std::uint32_t> target_tokens);
 }
