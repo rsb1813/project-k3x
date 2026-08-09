@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 10 is published and verified. Milestone 11 adaptive Top-K and exact selected-expert rescue are implemented, measured by B-0012, and fully verified. Final review and public integration remain.
+Milestone 11 adaptive Top-K and exact selected-expert rescue are implemented, measured by B-0012, fully verified, and published through PR #11.
 
-State recorded on 2026-08-09 at verified Milestone 11 code head `5c0164d`; result head is `d58fad7`. Public `main` remains at verified Milestone 10 publication head `a82d733`, and the active branch is `codex/milestone-eleven-adaptive-topk-rescue`.
+State recorded on 2026-08-09 at verified Milestone 11 public integration head `edc6d60`; result head is `d58fad7`. Branch, PR, and post-merge correctness runs `31318880063`, `31318890885`, and `31318993688` succeeded. The active branch is `codex/milestone-eleven-adaptive-topk-rescue`.
 
 ## Completed work
 
@@ -85,11 +85,10 @@ State recorded on 2026-08-09 at verified Milestone 11 code head `5c0164d`; resul
 
 ## Next concrete tasks
 
-1. Complete Milestone 11 final review, public PR, CI, main integration, and post-merge verification.
-2. Begin the next charter checkpoint with a focused fused CUDA-kernel design and measured baseline; do not assume fusion wins.
-3. Add a bounded multi-expert or full-layer slice for representative cache pressure and locality evidence when needed by that kernel work.
-4. Add a future-layer predictor with recall-first exact-prefetch evaluation after the fused-kernel checkpoint.
-5. Run native-Linux P44 Pro warm/cold B-0008 through B-0012 only when that environment exists.
+1. Begin the next charter checkpoint with a focused fused CUDA-kernel design and measured baseline; do not assume fusion wins.
+2. Add a bounded multi-expert or full-layer slice for representative cache pressure and locality evidence when needed by that kernel work.
+3. Add a future-layer predictor with recall-first exact-prefetch evaluation after the fused-kernel checkpoint.
+4. Run native-Linux P44 Pro warm/cold B-0008 through B-0012 only when that environment exists.
 
 ## Hardware assumptions
 
@@ -116,7 +115,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Public Milestone 10 publication head: `a82d733102a9e719271af53f64228aed9837925e`; publication branch/main correctness runs `31316068815` and `31316069868` succeeded. PR #10 integration head remains `3d8c042`.
+- Public Milestone 11 integration head: `edc6d605a8c17277e66fcedd1540ed8c4b31f367`; branch/PR/main correctness runs `31318880063`, `31318890885`, and `31318993688` succeeded. PR #11 is merged.
 - Latest verified Milestone 11 code head: `5c0164d`; result head is `d58fad7` and measurement code is `bf81beb`.
 - B-0012 synthetic K3X artifact SHA-256: `89ef0b18f1adb55a305d111c6bb67eb8469e6dacc6eeac3363ad74a64ab0e861`; summary SHA-256: `72de06f6fe7ff18a82e67b87cb38c0cc7b1c2ee2819ac62fe2a828e69307cac9`.
 - CPU verification: CTest 11/11; pytest 227 passed and 41 skipped.

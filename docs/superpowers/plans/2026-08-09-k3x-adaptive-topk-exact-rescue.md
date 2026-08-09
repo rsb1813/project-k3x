@@ -34,4 +34,4 @@ Add a deterministic runtime routing-policy boundary with natural Top-K reference
 - [x] Run CPU, liburing/direct, CUDA, ASan/UBSan, and applicable Compute Sanitizer suites.
 - [x] Self-review all callers and serialization consumers; close every Critical/Important issue.
 - [x] Update ARCHITECTURE, DECISIONS, BENCHMARKS, and PROJECT_STATE last.
-- [ ] Publish through a public PR and verify branch/PR/main CI.
+- [x] Publish through a public PR and verify branch/PR/main CI.

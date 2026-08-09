@@ -491,6 +491,8 @@ Raw JSON/CSV, diagnostic JSON, and the programmatically cross-checked summary ar
 
 Verification passed CPU CTest 11/11 and pytest 227/41, liburing/direct CTest 12/12 and pytest 233/35, CUDA CTest 20/20 and pytest 260/8, plus ASan/UBSan liburing CTest 12/12 and targeted pytest 101/34. All ten CUDA Compute Sanitizer targets reported zero errors. A final self-review fix made natural mode ignore an otherwise out-of-range external quality floor; B-0012 uses natural Top-16 and its measured rows are unchanged.
 
+Public branch and PR correctness runs `31318880063` and `31318890885` succeeded at integration head `edc6d60`. PR #11 merged by fast-forward, and post-merge `main` correctness run `31318993688` also succeeded at that head.
+
 ## Derived bottleneck model — not a benchmark
 
 The released dimensions imply 17,547,264 bytes per native MXFP4 routed expert. With no cache reuse, natural Top-16 across 92 MoE layers implies 25,829,572,608 expert bytes/token. Applying the P44 Pro published 7.0 GB/s sequential figure gives a derived expert-only ceiling of about 0.271 tok/s and implies roughly 94.6% expert NVMe-byte avoidance for a 5 tok/s target.
