@@ -60,6 +60,11 @@ Result<std::size_t> AdaptiveDraftScheduler::select(
                                      rejection_cap_.value());
     }
     if (effective_maximum == 0) {
+        if (request_maximum != 0 && rejection_cap_.has_value() &&
+            rejection_cap_.value() == 0) {
+            rejection_cap_.reset();
+            retry_smallest_rung_ = true;
+        }
         return Result<std::size_t>::success(0);
     }
 
@@ -71,6 +76,12 @@ Result<std::size_t> AdaptiveDraftScheduler::select(
             }
         }
         return Result<std::size_t>::success(0);
+    }
+
+    if (retry_smallest_rung_ && effective_maximum >= ladder.front()) {
+        retry_smallest_rung_ = false;
+        record_selection(stats_, ladder.front());
+        return Result<std::size_t>::success(ladder.front());
     }
 
     const auto maximum_rung = rung_index(config_.maximum_length).value();

@@ -79,6 +79,8 @@ int main() {
         })));
         require(scheduler.select(4).value() == 0);
         require(scheduler.stats().scheduler_backoffs == 1);
+        require(static_cast<bool>(scheduler.observe({})));
+        require(scheduler.select(4).value() == 1);
     }
     {
         auto scheduler = make_adaptive();
