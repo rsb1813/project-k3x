@@ -465,8 +465,13 @@ def test_cuda_ffn_block_matches_operation_graph_and_routing(
     convert(synthetic_source, artifact, chunk_bytes=257)
 
     results: dict[str, dict] = {}
-    for boundary in ("operation", "ffn-block"):
-        output = tmp_path / f"{boundary}-{dense_precision}-{cuda_batching}.json"
+    cases = (
+        ("operation", "operation", "resident", 8 * 1024 * 1024, "synchronous", 0),
+        ("synchronous", "ffn-block", "transient", 0, "synchronous", 0),
+        ("prefetch", "ffn-block", "transient", 0, "prefetch", 1024 * 1024),
+    )
+    for name, boundary, weights, resident_bytes, transfer, pinned_bytes in cases:
+        output = tmp_path / f"{name}-{dense_precision}-{cuda_batching}.json"
         subprocess.run(
             [
                 str(runner),
@@ -478,39 +483,57 @@ def test_cuda_ffn_block_matches_operation_graph_and_routing(
                 "--backend", "cuda-custom",
                 "--dense-precision", dense_precision,
                 "--cuda-allocation", "reused",
-                "--cuda-weights", "resident",
+                "--cuda-weights", weights,
                 "--cuda-batching", cuda_batching,
                 "--cuda-boundary", boundary,
-                "--cuda-resident-bytes", str(8 * 1024 * 1024),
+                "--cuda-resident-bytes", str(resident_bytes),
+                "--cuda-transfer", transfer,
+                "--cuda-pinned-bytes", str(pinned_bytes),
                 "--json", str(output),
             ],
             check=True,
         )
-        results[boundary] = json.loads(output.read_text(encoding="utf-8"))
+        results[name] = json.loads(output.read_text(encoding="utf-8"))
 
     reference = results["operation"]
-    candidate = results["ffn-block"]
-    assert candidate["cuda_boundary"] == "ffn-block"
-    assert candidate["token_ids"] == reference["token_ids"] == [43, 32, 28, 49, 9, 28]
-    assert candidate["prefill_routed_experts"] == reference["prefill_routed_experts"]
-    assert candidate["ffn_block_calls"] > 0
-    assert candidate["ffn_block_experts"] > 0
-    np.testing.assert_allclose(
-        candidate["prefill_logits"], reference["prefill_logits"],
-        atol=tolerance, rtol=tolerance,
-    )
-    for actual, expected in zip(
-        candidate["prefill_layer_outputs"],
-        reference["prefill_layer_outputs"],
-        strict=True,
-    ):
+    synchronous = results["synchronous"]
+    prefetch = results["prefetch"]
+    for name, candidate in (("synchronous", synchronous), ("prefetch", prefetch)):
+        assert candidate["cuda_boundary"] == "ffn-block"
+        assert candidate["cuda_transfer"] == name
+        assert candidate["token_ids"] == reference["token_ids"] == [43, 32, 28, 49, 9, 28]
+        assert candidate["prefill_routed_experts"] == reference["prefill_routed_experts"]
+        assert candidate["ffn_block_calls"] > 0
+        assert candidate["ffn_block_experts"] > 0
         np.testing.assert_allclose(
-            actual, expected, atol=tolerance, rtol=tolerance
+            candidate["prefill_logits"], reference["prefill_logits"],
+            atol=tolerance, rtol=tolerance,
         )
-    np.testing.assert_allclose(
-        candidate["prefill_state"], reference["prefill_state"],
-        atol=tolerance, rtol=tolerance,
-    )
+        for actual, expected in zip(
+            candidate["prefill_layer_outputs"],
+            reference["prefill_layer_outputs"],
+            strict=True,
+        ):
+            np.testing.assert_allclose(
+                actual, expected, atol=tolerance, rtol=tolerance
+            )
+        np.testing.assert_allclose(
+            candidate["prefill_state"], reference["prefill_state"],
+            atol=tolerance, rtol=tolerance,
+        )
+    assert synchronous["cuda_pinned_bytes"] == 0
+    assert synchronous["pinned_host_bytes"] == 0
+    assert synchronous["async_prefetch_calls"] == 0
+    assert synchronous["async_prefetch_bytes"] == 0
+    assert synchronous["transfer_stream_wait_count"] == 0
+    assert prefetch["cuda_pinned_bytes"] == 1024 * 1024
+    assert prefetch["pinned_host_bytes"] == 1024 * 1024
+    assert prefetch["async_prefetch_calls"] > 0
+    assert prefetch["async_prefetch_bytes"] > 0
+    assert prefetch["transfer_stream_wait_count"] == prefetch["async_prefetch_calls"]
+    assert prefetch["stream_synchronization_count"] <= synchronous[
+        "stream_synchronization_count"
+    ]
 
 
 def test_cpp_runner_rejects_corrupt_model_before_generation(

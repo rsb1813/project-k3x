@@ -286,6 +286,11 @@ int main(int argc, char** argv) {
            << runtime.grouped_projection_members
            << ",\"ffn_block_calls\":" << runtime.ffn_block_calls
            << ",\"ffn_block_experts\":" << runtime.ffn_block_experts
+           << ",\"pinned_host_bytes\":" << runtime.pinned_host_bytes
+           << ",\"async_prefetch_calls\":" << runtime.async_prefetch_calls
+           << ",\"async_prefetch_bytes\":" << runtime.async_prefetch_bytes
+           << ",\"transfer_stream_wait_count\":"
+           << runtime.transfer_stream_wait_count
            << ",\"profile_wall_nanoseconds\":" << profile.wall_nanoseconds
            << ",\"profile_logical_bytes\":" << profile.logical_bytes
            << ",\"failed_operations\":" << profile.failed_operations

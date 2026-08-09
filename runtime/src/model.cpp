@@ -485,9 +485,13 @@ private:
         std::stable_sort(order.begin(), order.end(), [&](auto left, auto right) {
             return scores[left] + bias[left] > scores[right] + bias[right];
         });
-        const auto latent = matvec(base + "routed_down_proj",
-                                   config_.latent, config_.hidden, input,
-                                   layer, phase);
+        Vector latent;
+        if (backend_.options().cuda_transfer ==
+            CudaTransferMode::synchronous) {
+            latent = matvec(base + "routed_down_proj",
+                            config_.latent, config_.hidden, input,
+                            layer, phase);
+        }
         Vector mixed(config_.latent, 0.0F);
         float denominator = 0.0F;
         for (std::size_t slot = 0; slot < config_.top_k; ++slot) denominator += scores[order[slot]];
@@ -508,9 +512,29 @@ private:
             for (const auto& payload : payloads) {
                 expert_views.push_back(payload.view(config_.group_size));
             }
-            auto expert_outputs = backend_.mxfp4_situ_mlp_group(
-                latent, expert_views, config_.situ_beta, config_.situ_linear,
-                static_cast<std::uint32_t>(layer), phase);
+            Result<std::vector<std::vector<float>>> expert_outputs =
+                Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable);
+            if (backend_.options().cuda_transfer == CudaTransferMode::prefetch) {
+                auto token = backend_.prefetch_mxfp4_situ_mlp_group(
+                    expert_views, next_prefetch_sequence_++,
+                    static_cast<std::uint32_t>(layer), phase);
+                if (!token) {
+                    throw std::runtime_error("expert prefetch backend failure");
+                }
+                latent = matvec(base + "routed_down_proj",
+                                config_.latent, config_.hidden, input,
+                                layer, phase);
+                expert_outputs = backend_.mxfp4_situ_mlp_group_prepared(
+                    latent, token.value(), config_.situ_beta,
+                    config_.situ_linear, static_cast<std::uint32_t>(layer),
+                    phase);
+            } else {
+                expert_outputs = backend_.mxfp4_situ_mlp_group(
+                    latent, expert_views, config_.situ_beta,
+                    config_.situ_linear, static_cast<std::uint32_t>(layer),
+                    phase);
+            }
             if (!expert_outputs) {
                 throw std::runtime_error("expert FFN backend failure");
             }
@@ -579,6 +603,7 @@ private:
     std::unordered_map<std::uint64_t, Vector> tensors_;
     std::vector<std::uint64_t> layer_nanoseconds_ = std::vector<std::uint64_t>(config_.layers);
     std::vector<std::uint32_t> routed_experts_;
+    std::uint64_t next_prefetch_sequence_{1};
 };
 
 std::uint32_t argmax(const Vector& values) {
