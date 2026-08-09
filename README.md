@@ -140,6 +140,18 @@ B-0010 crosses four policies at 2-, 8-, and 16-expert synthetic capacities. At 8
 
 `--l1-expert-cache profiled --profile-prior-strength 4` enables the experimental exact prior/live eviction score. Profile observation is otherwise disabled unless metadata or profile I/O is explicitly requested. B-0011 preserves exact tokens, routing, logits, and recurrent state in every row. A matching prior reaches the same 23 hits and 628,080 logical Reader bytes as Least-Stale, but does not improve tiny-graph timing; the minimum-overlap alternate prior is worse. The mode remains opt-in.
 
+## Milestone 11 — adaptive Top-K and exact cold rescue
+
+`--routing natural|fixed|adaptive` keeps the checkpoint natural Top-K immutable while allowing explicit K4/K6/K8/K12/K16 experiments. Adaptive selection uses cumulative router mass, entropy effective support, boundary confidence, and an external quality floor. Agent-failure and critical signals can only raise fixed/adaptive K; natural routing ignores them and remains the default.
+
+Every selected cold expert is fetched through the exact native MXFP4 path, and residency never substitutes a lower-ranked expert. B-0012 shows 40.8%/27.2%/13.6% logical Reader-byte reductions for K4/K8/K12 against natural K16 on the 24-expert synthetic fixture, but all reduced-K rows change tokens, logits, and recurrent state. Fixed K16 and critical escalation are exact. The measured quality divergence keeps every reduced/adaptive mode explicitly lossy and opt-in.
+
+## Milestone 12 — routed CUDA accumulation fusion
+
+`--cuda-moe-fusion routed-accumulate` is available only with `cuda-custom + ffn-block`. It preserves natural router order and exact native MXFP4 gate/up/SiTU execution, then folds each down projection's contribution scale into ordered device accumulation so only the final mixed latent crosses D2H. Synchronous and prepared-prefetch paths share the same validation and telemetry contract. `none` remains the reference and default.
+
+B-0013 improves tiny synthetic natural Top-16 decode by 11.33% with synchronous transfer and 8.91% with prefetch while reducing D2H by 51,840 bytes per run. The bounded 3,584-by-3,072 released expert fixture instead becomes 8.01% slower in median latency despite a 93.75% D2H reduction. That representative-dimension regression prevents a default change. It is kernel/D2H evidence without routing semantics, not full-model token throughput.
+
 ## Quick start
 
 ### 1. Create an environment
