@@ -132,7 +132,7 @@
 - [x] LRU/LFU/Least-Stale exact policy 설계와 TDD 계획 작성.
 - [x] Deterministic trace oracle과 victim/collision tests.
 - [x] Runtime/CLI/telemetry integration.
-- [ ] B-0010 ablation, full verification, review, ledger, public integration.
+- [x] B-0010 ablation, full verification, review, ledger, public integration.
 
 ## Milestone 6 independent L2 reader
 

@@ -27,4 +27,4 @@ Reproduce SpecMD Least-Stale and compare it fairly with exact LRU/LFU policies w
 - [x] Run CPU, liburing/direct, CUDA, sanitizer, and applicable Compute Sanitizer suites.
 - [x] Complete one read-only final review and close Critical/Important findings.
 - [x] Update TITAN Ledger with `PROJECT_STATE.md` last.
-- [ ] Publish through a public PR and verify branch/PR/main CI.
+- [x] Publish through a public PR and verify branch/PR/main CI.

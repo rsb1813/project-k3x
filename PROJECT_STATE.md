@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 9 runtime-switchable exact expert cache policies, non-authoritative WSL2 B-0010 measurement, final review, review fix, and local verification are complete. Public integration is pending.
+Milestone 9 runtime-switchable exact expert cache policies, non-authoritative WSL2 B-0010 measurement, final review, review fix, verification, and public integration are complete.
 
-State recorded on 2026-08-09 at verified local Milestone 9 result head `ff65b5b`. Public `main` remains at Milestone 8 publication record `07dd36b`, and the active branch is `codex/milestone-nine-expert-cache-policies`.
+State recorded on 2026-08-09 at verified Milestone 9 integration head `185ae5d`. Public PR #9 is merged by fast-forward, post-merge main correctness run `31312852935` succeeded, and the preserved active branch is `codex/milestone-nine-expert-cache-policies`.
 
 ## Completed work
 
@@ -111,7 +111,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Public Milestone 8 integration head: `a2891727c80e180be8c74d76aab3b1535c9f4047`; PR #8 branch/PR runs `31310497619` and `31310504588` succeeded, and post-merge main run `31310608231` succeeded.
+- Public Milestone 9 integration head: `185ae5d8fb81cc881c04d16dee477db22f2ffbdc`; PR #9 branch/PR runs `31312742423` and `31312750299` succeeded, and post-merge main run `31312852935` succeeded.
 - Latest verified Milestone 9 review-fix commit: `fd05d95` (`fix: serialize shared cache policy context`).
 - Latest verified B-0010 result head: `ff65b5b`; measurement code is `fd05d95`.
 - B-0010 artifact SHA-256: `1d4a197a299493acf6eb39d8374a4f817ee58f6f570ad5f21f29fe9fe298d2de`; summary SHA-256: `f2ff111f08fd6e9bc2cee2df426aeef337dd08150663d4e6a71922ebf60c5b8b`.
