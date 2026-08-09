@@ -24,6 +24,7 @@ if(K3X_ENABLE_CUDA)
         runtime/cuda/backend_cuda.cu
         runtime/cuda/device_memory.cu
         runtime/cuda/mxfp4.cu
+        runtime/cuda/pinned_memory.cu
         runtime/cuda/resident_weights.cu
         runtime/cuda/situ.cu
     )
@@ -82,6 +83,12 @@ else()
     target_include_directories(test_cuda_memory PRIVATE runtime/cuda)
     set_target_properties(test_cuda_memory PROPERTIES CUDA_ARCHITECTURES "120-real")
     add_test(NAME cuda_memory COMMAND test_cuda_memory)
+
+    add_executable(test_cuda_pinned_memory tests/cuda/test_cuda_pinned_memory.cu)
+    target_link_libraries(test_cuda_pinned_memory PRIVATE k3x_runtime)
+    target_include_directories(test_cuda_pinned_memory PRIVATE runtime/cuda)
+    set_target_properties(test_cuda_pinned_memory PROPERTIES CUDA_ARCHITECTURES "120-real")
+    add_test(NAME cuda_pinned_memory COMMAND test_cuda_pinned_memory)
 
     add_executable(test_cuda_residency tests/cuda/test_cuda_residency.cu)
     target_link_libraries(test_cuda_residency PRIVATE k3x_runtime)
