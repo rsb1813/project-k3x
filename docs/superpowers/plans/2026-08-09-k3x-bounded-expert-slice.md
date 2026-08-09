@@ -158,27 +158,27 @@ Commit as `feat: identify non-executable storage fixtures`.
 - `StorageExpertLoad` contains `std::array<std::vector<std::byte>, 6> extents`, `std::array<std::byte, 32> ordered_sha256`, and `std::uint64_t logical_bytes`.
 - Produces executable: `k3x_storage_bench --model PATH --layer 1 --expert 0 --warmup N --iterations N --l2-io pread|io-uring --l2-cache buffered|direct --l2-queue-depth N`.
 
-- [ ] **Step 1: Write failing real-boundary tests.**
+- [x] **Step 1: Write failing real-boundary tests.**
 
 Invoke the not-yet-existing executable against the bounded artifact. Assert exact layer/expert identity, six calls in one batch per iteration, 17,547,264 logical bytes per load, six completions, zero failures/short reads, a 64-hex-character ordered digest, and rejection of a tiny executable artifact, missing expert, zero iterations, and invalid queue depth.
 
-- [ ] **Step 2: Run and verify RED.**
+- [x] **Step 2: Run and verify RED.**
 
 Expect failure because `k3x_storage_bench` does not exist.
 
-- [ ] **Step 3: Implement exact record resolution and one-batch loading.**
+- [x] **Step 3: Implement exact record resolution and one-batch loading.**
 
 Resolve canonical gate/up/down tensor IDs with `fnv1a64`, require native MXFP4 plus non-empty auxiliary extents, validate the three released shapes and total logical payload, then submit requests in gate-data, gate-scale, up-data, up-scale, down-data, down-scale order. Hash returned bytes in that same order.
 
-- [ ] **Step 4: Implement the minimal benchmark CLI.**
+- [x] **Step 4: Implement the minimal benchmark CLI.**
 
 Warm up outside the measured Reader, open a fresh Reader for measurements, time each complete expert load, and emit one JSON object with median/p05/p95 latency, loads per second, Reader counters, storage bytes/time, direct alignments, digest, and Linux process-I/O deltas. Do not emit token fields.
 
-- [ ] **Step 5: Build CPU and liburing variants and verify GREEN.**
+- [x] **Step 5: Build CPU and liburing variants and verify GREEN.**
 
 Run targeted pytest with `K3X_BUILD_DIR=build-cpu`, CTest in `build-cpu`, then rebuild `build-uring` and run the targeted test against it.
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
 
 Commit as `feat: benchmark exact expert extent loads`.
 

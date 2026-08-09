@@ -19,6 +19,7 @@ add_library(k3x_runtime
     runtime/src/profile.cpp
     runtime/src/backend_cpu.cpp
     runtime/src/host_expert_store.cpp
+    runtime/src/storage_slice.cpp
 )
 if(K3X_ENABLE_CUDA)
     enable_language(CUDA)
@@ -160,6 +161,9 @@ endif()
 
 add_executable(k3x_run runtime/src/main.cpp runtime/src/model.cpp)
 target_link_libraries(k3x_run PRIVATE k3x_runtime)
+
+add_executable(k3x_storage_bench runtime/src/storage_bench.cpp)
+target_link_libraries(k3x_storage_bench PRIVATE k3x_runtime)
 
 add_executable(test_model_session tests/cpp/test_model_session.cpp runtime/src/model.cpp)
 target_link_libraries(test_model_session PRIVATE k3x_runtime)
