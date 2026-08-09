@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 10 bounded task/session routing profiles, opt-in profiled eviction, non-authoritative WSL2 B-0011 measurement, self-review fixes, verification, and TITAN Ledger are complete locally. Public integration is pending.
+Milestone 10 bounded task/session routing profiles, opt-in profiled eviction, non-authoritative WSL2 B-0011 measurement, self-review fixes, verification, TITAN Ledger, and public integration are complete.
 
-State recorded on 2026-08-09 at verified Milestone 10 result head `308b0db`. Public main remains at Milestone 9 publication record `05af321`; the active branch is `codex/milestone-ten-task-session-profiles`.
+State recorded on 2026-08-09 at verified Milestone 10 integration head `3d8c042`. Public PR #10 is merged by fast-forward, post-merge main correctness run `31315950735` succeeded, and the preserved active branch is `codex/milestone-ten-task-session-profiles`.
 
 ## Completed work
 
@@ -61,7 +61,7 @@ State recorded on 2026-08-09 at verified Milestone 10 result head `308b0db`. Pub
 
 ## Work in progress
 
-- Milestone 10 implementation, B-0011, full verification, and ledger are complete locally on branch `codex/milestone-ten-task-session-profiles`; public PR/main integration remains.
+- Milestone 10 is complete and published. Milestone 11 Adaptive Top-K and exact cold-expert rescue design is next and has not started.
 - Milestone 9 Terra high final review found one valid Important shared-session policy-context issue. Commit `fd05d95` serializes complete generation calls; re-review found no remaining Critical or Important issue and withdrew an initial collision interpretation concern after deterministic future-layer trace review.
 - Static, LRU, LFU, Least-Stale, profiled eviction, and all non-default L2 modes remain experimental and opt-in. Transition prediction and cross-layer asynchronous L2 scheduling remain unimplemented.
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
@@ -85,9 +85,9 @@ State recorded on 2026-08-09 at verified Milestone 10 result head `308b0db`. Pub
 
 ## Next concrete tasks
 
-1. Publish Milestone 10 through a reviewed public PR, fast-forward `main`, and verify post-merge CI.
-2. Design Milestone 11 adaptive Top-K with natural Top-16 reference, per-token/layer policy telemetry, and exact cold-expert rescue separated from permanent pruning.
-3. Add RED tests for fixed K4/6/8/12/16, entropy/cumulative-mass selection, full 896-way score retention, high-score exact rescue, and quality escalation signals.
+1. Create the Milestone 11 branch and design adaptive Top-K with natural Top-16 reference, per-token/layer policy telemetry, and exact cold-expert rescue separated from permanent pruning.
+2. Add RED tests for fixed K4/6/8/12/16, entropy/cumulative-mass selection, full 896-way score retention, high-score exact rescue, and quality escalation signals.
+3. Implement the smallest exact routing-policy boundary before connecting storage rescue or agent-failure escalation.
 4. Add a bounded multi-expert or full-layer slice for representative cache pressure and locality evidence.
 5. Run native-Linux P44 Pro warm/cold B-0008 through B-0011 only when that environment exists.
 
@@ -116,7 +116,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Public Milestone 9 publication head: `05af321`; PR #9 and post-publication branch/main correctness runs succeeded.
+- Public Milestone 10 integration head: `3d8c0425827801c1d92449d1edfbc7195bd7e84f`; PR #10 branch/PR runs `31315847372` and `31315848859` succeeded, and post-merge main run `31315950735` succeeded.
 - Latest verified Milestone 10 code head: `5430074` (`fix: preserve bounded profile evidence`).
 - Latest verified B-0011 result head: `308b0db`; measurement code is `5430074`.
 - B-0011 synthetic K3X artifact SHA-256: `0dfe0fe7c64b364fc745fff5b6c9a1f06d1faf1dc140630a9240591540dd684d`; summary SHA-256: `029004e02a8484f281a332c09d49e7adc8eb1ed343ec692b030760288adbd94f`.
@@ -127,7 +127,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 - Compute Sanitizer: `test_cuda_device`, `test_cuda_dense`, `test_cuda_mxfp4`, `test_cuda_memory`, `test_cuda_pinned_memory`, `test_cuda_async_pipeline`, `test_cuda_residency`, `test_cuda_situ`, `test_cuda_ffn`, and `test_cuda_async_ffn` each report `ERROR SUMMARY: 0 errors`.
 - Existing executable-model exact generated tokens remain `[43, 32, 28, 49, 9, 28]` in all B-0011 rows.
 - B-0011 raw JSON/CSV, profiles, and cross-checked summary: `results/b0011-task-session-profiles-wsl/`.
-- Pre-publication ledger check remains pending after the final documentation commit.
+- Pre-publication ledger check: `git diff --check` passed, the dedicated B-0011 Python regression passed 10/10 with `K3X_BUILD_DIR=build-cpu`, and the recorded summary SHA-256 was reproduced.
 
 ## Proposed component status
 
