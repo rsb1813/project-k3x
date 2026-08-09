@@ -98,3 +98,6 @@
 - Task 9 검증은 CUDA CTest 9/9, CUDA graph parity 36 passed/1 skipped, CPU CTest 5/5, CPU pytest 62 passed/23 skipped, `test_cuda_mxfp4` Compute Sanitizer 0 errors이다. CUDA graph parity에는 두 backend의 FP32 allocation/weight/batching 16개 조합과 fully-enabled BF16 2개 조합이 포함되며 exact token `[43, 32, 28, 49, 9, 28]`을 유지한다.
 - Task 10 profiler는 successful H2D event를 immutable weight와 activation으로 분류하고 두 분류의 합을 기존 total H2D로 집계한다. 실패 event는 byte와 시간 집계에서 제외되며 failure count만 증가한다.
 - Task 10 ablation runner는 reference, reuse, residency, grouped 네 단계를 고정 순서로 한 process씩 측정하고 단계별 JSON/CSV와 인접 단계 counter delta를 담은 `summary.json`을 쓴다. 1-sample synthetic dry run에서 네 단계 옵션 identity와 `weight_h2d_bytes + activation_h2d_bytes == host_to_device_bytes`가 모두 유지됐다. 이 dry run 수치는 성능 결론으로 사용하지 않는다.
+- Task 11 최종 검증은 CPU CTest 5/5와 pytest 65 passed/23 skipped, CUDA CTest 9/9와 pytest 87 passed/1 skipped, 네 CUDA test의 Compute Sanitizer 0 errors이다.
+- B-0003에서 FP32 `cuda-dense` reference/reuse/residency/grouped decode는 12.1261/17.4560/18.0041/17.9018 tok/s이고, `cuda-custom`은 12.2647/17.1425/17.2723/16.8348 tok/s이다. Grouping은 activation H2D와 synchronization을 줄였지만 scalar residency보다 느려 기본값으로 채택하지 않는다.
+- Fully-enabled BF16은 `cuda-dense` 17.6861 tok/s와 `cuda-custom` 17.0032 tok/s이며 최대 절대 오차 0.00402409와 exact token을 유지했다. FP32 scalar residency보다 빠르지 않고 일반 품질 benchmark가 없으므로 opt-in을 유지한다.

@@ -72,6 +72,52 @@ The CPU backend wins this tiny end-to-end comparison. CUDA-event kernel work occ
 
 Raw records are stored in `results/m1-*.json` and `results/m1-*.csv`.
 
+## B-0003 — Milestone 2 CUDA allocation, residency, and grouping ablation
+
+| Field | Value |
+|---|---|
+| Evidence | measured; deltas and per-token conversions are arithmetic over measured counters |
+| Date | 2026-08-09 |
+| Code commit | `a468db8` |
+| Hardware | AMD Ryzen 7 9800X3D; NVIDIA GeForce RTX 5080 16,303 MiB; driver 591.86 |
+| Environment | WSL2 Ubuntu 24.04.4, Linux 6.18.33.2, CUDA Toolkit 13.3.1, nvcc 13.3.73, native `sm_120` Release build |
+| Model/checkpoint | regenerated deterministic `synthetic-milestone-one` K3-compatible K3X artifact; no full Kimi K3 weights |
+| Mode | exact incremental generation; fixed Top-2 synthetic routing; no pruning, proxy, speculation, adaptive K, asynchronous storage, or eviction |
+| Context length | 4 prompt tokens, prompt IDs `[1, 7, 3, 9]` |
+| Generated tokens | 6; exact `[43, 32, 28, 49, 9, 28]` verified by the benchmark's CPU diagnostic comparison |
+| Warmup / samples | 3 / 20 separate process runs per configuration |
+| Resident capacity | 8,388,608 bytes; measured resident use never exceeded 573,120 bytes |
+| NVMe GB/token | not measured; OS/block-device I/O counters are not implemented |
+| GPU utilization / memory bandwidth | not measured |
+| I/O stall time | not measured; asynchronous storage is not implemented |
+| Average Top-K | 2, fixed synthetic router setting |
+| Speculative acceptance / unique experts per verification block | not applicable; speculation is disabled |
+| Cold rescue count | not applicable; exact rescue is not implemented |
+
+| Backend / stage | Decode tok/s | Prefill tok/s | TTFT ms | Peak RSS MiB | H2D bytes/run | Weight / activation H2D | D2H bytes/run | Peak backend VRAM bytes | Alloc / free | Sync | Static-cache hit rate | Groups / members | Kernel ms/run |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `cuda-dense` reference | 12.1261 | 7.4290 | 1,206.070 | 483.23 | 4,999,104 | 4,893,696 / 105,408 | 90,864 | 25,216 | 1,404 / 1,404 | 468 | not applicable | 0 / 0 | 12.873 |
+| `cuda-dense` reuse | 17.4560 | 9.2222 | 1,097.150 | 483.58 | 4,999,104 | 4,893,696 / 105,408 | 90,864 | 41,472 | 6 / 3 | 468 | not applicable | 0 / 0 | 17.731 |
+| `cuda-dense` residency | **18.0041** | 9.2543 | 1,104.549 | 483.64 | 649,152 | 543,744 / 105,408 | 90,864 | 544,512 | 56 / 2 | 468 | 88.89% | 0 / 0 | 16.021 |
+| `cuda-dense` grouped | 17.9018 | 9.2907 | 1,100.236 | 483.34 | 626,112 | 543,744 / 82,368 | 90,864 | 569,728 | 59 / 3 | 378 | 88.89% | 63 / 153 | 16.519 |
+| `cuda-custom` reference | 12.2647 | 8.1162 | 1,009.112 | 483.79 | 5,107,968 | 4,981,824 / 126,144 | 111,600 | 25,216 | 2,052 / 2,052 | 630 | not applicable | 0 / 0 | 14.046 |
+| `cuda-custom` reuse | 17.1425 | 9.1379 | 1,103.961 | 483.88 | 5,107,968 | 4,981,824 / 126,144 | 111,600 | 41,472 | 10 / 3 | 630 | not applicable | 0 / 0 | 19.146 |
+| `cuda-custom` residency | **17.2723** | 9.1175 | 1,106.492 | 483.80 | 699,264 | 573,120 / 126,144 | 111,600 | 574,144 | 166 / 2 | 630 | 83.17% | 0 / 0 | 19.012 |
+| `cuda-custom` grouped | 16.8348 | 9.0853 | 1,107.039 | 483.88 | 669,312 | 573,120 / 96,192 | 111,600 | 600,160 | 172 / 3 | 486 | 83.17% | 117 / 261 | 22.683 |
+
+The fastest measured FP32 configuration for each CUDA identity is reusable allocation plus static residency with scalar projection calls. Relative to its reference, this improves decode by 48.47% for `cuda-dense` and 40.83% for `cuda-custom`. Residency reduces weight H2D by 88.89% and 88.50%, respectively. Grouping then reduces activation H2D by 21.86% for `cuda-dense` and 23.74% for `cuda-custom`, and reduces synchronization by 19.23% and 22.86%, but decode is 0.57% and 2.53% below scalar residency. Grouping is therefore measured and correct but not selected as a default.
+
+Grouped H2D is 0.000104352 GB/generated token for `cuda-dense` and 0.000111552 GB/generated token for `cuda-custom`, using decimal GB. These are host-to-device counters, not NVMe counters. The static-cache rates describe immutable synthetic tensors, not the future three-tier expert-cache hit rate.
+
+| Fully enabled BF16 backend | Decode tok/s | Prefill tok/s | TTFT ms | H2D bytes/run | Peak backend VRAM bytes | Max abs. error | Max rel. error |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `cuda-dense` | 17.6861 | 9.4550 | 1,092.242 | 313,056 | 285,376 | 0.00402409 | 17.5009 |
+| `cuda-custom` | 17.0032 | 9.2486 | 1,102.482 | 356,256 | 315,808 | 0.00402409 | 17.5009 |
+
+BF16 halves dense operand traffic and resident bytes but does not beat the corresponding FP32 scalar-residency result. Its large relative error is driven by near-zero reference values; exact tokens and maximum absolute error are the current bounded checks. No general quality benchmark has been run, so BF16 remains explicit rather than default.
+
+Raw records are stored under `results/m2-cuda-dense/` and `results/m2-cuda-custom/`. The first timed `cuda-custom` attempt was interrupted by the shell timeout after writing only partial stage files; the complete command was rerun from the reference stage with a sufficient timeout, and only the final overwritten records plus `summary.json` are retained.
+
 ## Derived bottleneck model — not a benchmark
 
 The released dimensions imply 17,547,264 bytes per native MXFP4 routed expert. With no cache reuse, natural Top-16 across 92 MoE layers implies 25,829,572,608 expert bytes/token. Applying the P44 Pro published 7.0 GB/s sequential figure gives a derived expert-only ceiling of about 0.271 tok/s and implies roughly 94.6% expert NVMe-byte avoidance for a 5 tok/s target.
@@ -81,6 +127,6 @@ These values are capacity and traffic estimates. They are not inserted into B-00
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
-- Persistent-buffer and layer/block-batched CUDA ablation against B-0002.
+- Wider layer/block GPU execution after the Milestone 2 operation-level ablation.
 - Full-dimension bounded-slice runtime before any full-model throughput claim.
 - Tiered-runtime NVMe, pinned H2D, cache-hit, utilization, memory-bandwidth, and I/O-stall counters.

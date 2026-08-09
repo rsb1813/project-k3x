@@ -80,6 +80,18 @@ The same graph can now be executed through three explicit identities with no sil
 
 The CUDA build targets native `sm_120`, validates compute capability 12.0 or newer, and records CUDA-event kernel time, directional transfers, and backend-owned peak VRAM. Both CUDA paths preserve the exact six-token sequence. FP32 layer, logit, and state error stays below `1.8e-7` maximum absolute error on the fixture. BF16 remains opt-in and preserves tokens with `0.004025` maximum absolute diagnostic error.
 
+## Milestone 2 — reusable memory and exact residency
+
+CUDA execution now exposes three independent switches while preserving the Milestone 1 reference path.
+
+| Switch | Reference | Optimized path |
+|---|---|---|
+| Allocation | `per-operation` | `reused` grow-only scratch and cached CUDA resources |
+| Weights | `transient` | Tensor-ID-keyed exact `resident` VRAM entries with a hard byte bound |
+| Scheduling | `scalar` | Same-input `grouped` dense and native MXFP4 projections |
+
+Static residency stores exact FP32, BF16-rounded, or native E2M1 plus E8M0/32 representations. Entries that do not fit bypass residency and use the exact transient path. This milestone deliberately has no eviction policy and is not yet the L0/L1/L2 expert cache.
+
 ## Quick start
 
 ### 1. Create an environment
@@ -149,6 +161,8 @@ Use `build\k3x_run.exe` on Windows.
 
 Select `--backend cuda-dense` or `--backend cuda-custom` only with a CUDA-enabled build. Use `--dense-precision bf16` for the opt-in BF16-rounded dense path. An unavailable CUDA request fails with `BACKEND_UNAVAILABLE`; it never changes the requested backend.
 
+The Milestone 2 switches are `--cuda-allocation`, `--cuda-weights`, `--cuda-batching`, and `--cuda-resident-bytes`. Defaults retain the exact reference behavior.
+
 ### 6. Reproduce the synthetic benchmark
 
 ```bash
@@ -161,6 +175,20 @@ python tools/benchmark_synthetic.py \
   --iterations 20 \
   --json build-results/milestone-one.json \
   --csv build-results/milestone-one.csv
+```
+
+Run the four-stage CUDA ablation sequentially with the same artifact and sample counts.
+
+```bash
+python tools/ablate_cuda_residency.py \
+  --artifact build-fixtures/synthetic.k3x \
+  --runner build-cuda/k3x_run \
+  --backend cuda-custom \
+  --dense-precision fp32 \
+  --cuda-resident-bytes 8388608 \
+  --warmup 3 \
+  --iterations 20 \
+  --output-dir build-results/m2-cuda-custom
 ```
 
 ## Measured results
@@ -187,7 +215,14 @@ The Milestone 1 comparison used commit `c92f498`, WSL2 Ubuntu 24.04.4, the Ryzen
 | `cuda-dense` | BF16 | 11.50 | 7.29 | 1,239.82 ms | 2,499,552 B | 11.84 ms | 0.00402409 |
 | `cuda-custom` | BF16 | 10.12 | 6.67 | 1,288.63 ms | 2,608,416 B | 14.31 ms | 0.00402409 |
 
-The CPU wins this deliberately tiny workload. That is a useful result, not a CUDA failure: device kernels account for only a small part of the run, while the correctness baseline allocates, stages, copies, synchronizes, and frees buffers for every operation and keeps the rest of the graph on CPU. The next optimization target is persistent residency plus layer/block batching, not a claim that the current kernel is fast. Raw results live in [`results/`](results/), and the complete measurement contract and unavailable counters are recorded in [`BENCHMARKS.md`](BENCHMARKS.md).
+The CPU wins this deliberately tiny Milestone 1 workload. Milestone 2 then measures each CUDA optimization independently.
+
+| Backend | Reference | Reuse | Residency | Grouped |
+|---|---:|---:|---:|---:|
+| `cuda-dense` FP32 decode tok/s | 12.13 | 17.46 | **18.00** | 17.90 |
+| `cuda-custom` FP32 decode tok/s | 12.26 | 17.14 | **17.27** | 16.83 |
+
+Reusable allocation removes most per-call allocation churn, and residency cuts measured synthetic weight H2D by about 88.5–88.9%. Grouping reduces activation traffic and synchronization but is slightly slower than scalar residency on both backends, so it remains opt-in. Fully enabled BF16 also remains opt-in because it does not beat FP32 scalar residency. These results validate mechanisms on the synthetic graph; they do not predict full Kimi K3 throughput. Raw results live in [`results/`](results/), and the complete measurement contract is in [`BENCHMARKS.md`](BENCHMARKS.md).
 
 ## K3X checkpoint format
 
@@ -236,8 +271,9 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Synthetic profiler and reproducible JSON/CSV output.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
+- [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.
 - [ ] Exact full-dimension CPU/GPU runtime over bounded checkpoint slices.
-- [ ] Persistent CUDA residency, batched layer execution, and fused K3-specific kernels.
+- [ ] Wider layer/block GPU execution and fused K3-specific kernels.
 - [ ] Three-tier asynchronous storage and deadline scheduler.
 - [ ] Least-Stale, task/session, and transition-aware expert caches.
 - [ ] Adaptive Top-K with exact cold-expert rescue.
@@ -266,7 +302,8 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 
 - The executable model is synthetic and text-only.
 - The runtime implements synthetic dimensions; the CUDA backend accelerates only dense and MXFP4 matrix operations while the graph remains host-driven.
-- CUDA buffers are allocated, transferred, synchronized, and freed per operation; persistent residency and asynchronous overlap are not implemented.
+- Reusable scratch, bounded static weight residency, and same-input grouping are implemented, but activations and results still cross the host/device boundary and asynchronous overlap is not implemented.
+- Static residency has no eviction and is not the future three-tier expert cache.
 - There is no async storage pipeline, cache policy, adaptive Top-K, or speculative decoder yet.
 - The converter has not processed the full Kimi K3 checkpoint.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.

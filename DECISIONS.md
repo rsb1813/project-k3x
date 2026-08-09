@@ -207,3 +207,14 @@
 - Benchmark result: B-0002 is the reference. Milestone 2 has no benchmark result until the implementation passes its ablation matrix.
 - Reason: the staged design removes measured redundant work while keeping each optimization independently disableable and preserving a narrow numerical oracle. It creates L0 primitives without inventing the later expert eviction policy.
 - Revisit: after the four-step allocation/residency/grouping ablation identifies the remaining host/device boundary cost.
+
+## D-019 — Keep CUDA optimizations explicit after Milestone 2 measurement
+
+- Date: 2026-08-09.
+- Status: accepted and measured.
+- Decision: retain `cpu` plus `per-operation + transient + scalar` as the default reference behavior. Keep reusable allocation, bounded static residency, grouping, and BF16 independently selectable. For synthetic CUDA work, `reused + resident + scalar` is the fastest measured configuration; grouped scheduling and BF16 are not promoted to defaults.
+- Alternatives considered: enable every Milestone 2 optimization by default; default to grouped FP32; default to grouped BF16; keep the exact reference defaults and publish the measured switches.
+- Evidence: CPU and CUDA graph parity preserve token IDs `[43, 32, 28, 49, 9, 28]`; CPU CTest passes 5/5 and pytest passes 65 with 23 CUDA skips; CUDA CTest passes 9/9 and pytest passes 87 with one CPU-only skip; four CUDA memcheck targets report zero errors.
+- Benchmark result: B-0003 measures `cuda-dense` FP32 at 12.1261, 17.4560, 18.0041, and 17.9018 decode tok/s across reference, reuse, residency, and grouped stages. `cuda-custom` measures 12.2647, 17.1425, 17.2723, and 16.8348 tok/s. Grouping reduces activation H2D and synchronization but does not beat scalar residency. Fully enabled BF16 measures 17.6861 and 17.0032 tok/s with maximum absolute error 0.00402409 and exact tokens.
+- Reason: allocation reuse and residency have positive end-to-end evidence, while grouping and BF16 do not have a throughput win on this fixture. The synthetic graph is too small and CPU-resident to justify changing the public default or projecting full-model performance.
+- Revisit: after a wider layer/block GPU executor removes CPU graph boundaries, and again after native-Linux full-dimension slice measurements establish representative transfer and compute costs.

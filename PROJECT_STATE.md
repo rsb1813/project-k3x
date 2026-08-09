@@ -2,97 +2,78 @@
 
 ## Current milestone
 
-Milestone 2 — reusable CUDA allocation, bounded exact weight residency, and same-input projection batching.
+Milestone 2 implementation and local measurement are complete. Publication review, the public branch, and CI remain in progress.
 
-Milestone 1 implementation, measurement, public merge, and Linux CI are complete. The user approved the staged Milestone 2 design and written specification; the detailed TDD implementation plan is complete and production implementation has not started.
-
-State recorded after the 2026-08-08 Milestone 2 specification approval and implementation-plan completion on branch `codex/milestone-two-residency`.
+State recorded on 2026-08-09 after B-0003 measurement on branch `codex/milestone-two-residency`.
 
 ## Completed work
 
-- Milestone 0 deterministic synthetic K3-compatible PyTorch graph.
-- KDA, Gated MLA, Attention Residual, Stable LatentMoE, router, native MXFP4, incremental state, and greedy generation tests.
-- K3X v1 streaming converter, strict Python/C++ reader, aligned extents, CRC32C, root SHA-256, crash-safe resume, and stale-ledger recovery.
-- Independent portable C++20 CPU synthetic runtime.
-- Python/C++ layer, logits, state, and exact-token parity.
-- Reproducible synthetic benchmark driver with JSON/CSV.
-- Public repository and Linux correctness workflow.
-- Approved Milestone 1 design and detailed TDD implementation plan.
-- TITAN LEDGER charter, architecture registry, decision ledger, benchmark ledger, and state protocol.
-- WSL 2.7.11.0 with Ubuntu 24.04.4 LTS, Linux 6.18.33.2, CUDA Toolkit 13.3.1, and RTX 5080 passthrough.
-- Linux Release baseline: CTest 2/2 and pytest 39/39 before cross-language path changes.
-- Cross-language native binary resolution through optional `K3X_BUILD_DIR`, verified by the complete Linux pytest suite.
-- Deterministic runtime `ProfileEvent` storage and successful-work aggregation, verified without clock, thread, JSON, or CUDA dependencies.
-- Explicit `ComputeBackend` boundary for exact CPU dense and native MXFP4 matrix operations, with compatibility and backend-selected generation overloads.
-- Optional CUDA 13.3 build with native `sm_120`, RTX 5080 capability validation, nonblocking stream and cuBLASLt RAII ownership, plus a CUDA-free OFF stub.
-- Release native tests use explicit return codes so `NDEBUG` cannot remove their behavior checks.
-- Row-major cuBLASLt dense matvec for FP32 and BF16-rounded operands with FP32 accumulation/output, zero-workspace heuristic selection, exact directional transfer-byte accounting, CUDA-event timing, and per-call device-memory accounting.
-- Exact native-byte K3 MXFP4 CUDA matvec with low-nibble-first E2M1 decode, E8M0/32 scaling, FP32 accumulation, stride coverage, typed validation, transfer accounting, and CUDA-event timing.
-- Explicit `cpu`, `cuda-dense`, and `cuda-custom` runtime selection plus FP32/BF16 dense precision selection without silent fallback.
-- End-to-end CPU/CUDA layer, logits, recurrent state, and exact-token parity on the deterministic K3X artifact.
-- JSON/CSV export of backend, device, precision, kernel time, directional transfer bytes, peak backend-owned VRAM, logical reads, layer timing, and numerical error.
-- B-0002 synthetic comparison with three warmups and 20 samples for CPU and both CUDA backends in FP32, plus both CUDA backends in BF16.
-- Milestone 1 fast-forward merge to public `main` at `254a9ac` and successful post-merge Linux correctness run `31259325702`.
-- Approved Milestone 2 design covering three independently switchable allocation, residency, and batching axes with B-0002 reference preservation.
+- Milestone 0 deterministic synthetic K3-compatible PyTorch graph, K3X v1 streaming converter, strict Python/C++ readers, and independent portable C++20 runtime.
+- KDA, Gated MLA, Attention Residual, Stable LatentMoE, router, native MXFP4, full/incremental state, layer/logit/state parity, and exact greedy token tests.
+- Public Milestone 1 at `254a9ac` with explicit CPU, `cuda-dense`, and `cuda-custom` identities; CUDA 13.3 native `sm_120`; cuBLASLt dense FP32/BF16; exact native-byte MXFP4 CUDA; deterministic JSON/CSV profiling; and B-0002.
+- Milestone 2 runtime switches for `per-operation|reused`, `transient|resident`, and `scalar|grouped`, with reference defaults preserved.
+- Tracked CUDA allocations, grow-only scratch buffers, reusable CUDA events and cuBLASLt plans, and exact live/peak VRAM counters.
+- Stable tensor identities and bounded static FP32, BF16, and native MXFP4 weight residency. Capacity misses bypass to the exact transient path; no eviction policy exists yet.
+- Same-input grouped CUDA projections for KDA Q/K/V, dense and shared gate/up, and routed-expert native MXFP4 gate/up. Expert down remains scalar after CPU SiTU-GLU.
+- Split immutable-weight and activation H2D profiler aggregation, stable runtime-counter export, and a deterministic four-stage sequential ablation runner.
+- B-0003 measurement with three warmups and 20 samples for both FP32 CUDA identities across reference, reuse, residency, and grouped stages, plus fully enabled BF16 measurements.
 
 ## Work in progress
 
-- Branch: `codex/milestone-two-residency`.
+- The TITAN Ledger and README are synchronized with B-0003.
+- Final read-only review found no Critical or Important issue. Commit the measurement artifacts and documents, push the public branch, open a PR, and verify Linux CI.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
-- The approved specification and TDD plan are complete. Inline execution begins with CUDA option/stat contracts and a failing native test.
-- Linux development runs as the unprivileged `jolib` user. The isolated Python environment is `/home/jolib/.venvs/k3x-m1`; repository build output is `build-linux`.
+- Linux Python environment: `/home/jolib/.venvs/k3x-m1`; builds: `build-linux` and `build-cuda`.
 
 ## Known failures and blockers
 
-- Windows Smart App Control blocks the newly linked unsigned `build/k3x_run.exe` before process creation.
-- Code Integrity events 3033 and 3077 cite policy `{0283ac0f-fff1-49ae-ada1-8a933130cad6}` and an unmet Enterprise signing level.
-- Fresh Windows CTest binaries run, but five Python cross-language cases that launch `k3x_run.exe` remain blocked on Windows. This does not block the verified WSL Linux path.
-- CUDA calls allocate and transfer per operation in the current correctness baseline; persistent residency and asynchronous overlap remain unimplemented.
-- Milestone 2 production code is not yet implemented; only its approved design and execution plan are claimed.
-- `cuda_dense` intentionally uses the CPU MXFP4 oracle with zero device traffic; this is its documented comparison contract, not an automatic fallback after a CUDA failure.
-- Direct cuBLASLt FP4 is rejected for exact K3 MXFP4 because NVIDIA requires UE4M3 scales per 16 FP4 values while K3 uses E8M0 scales per 32 values.
+- Windows Smart App Control still blocks unsigned `k3x_run.exe`; WSL2 is the verified local CUDA path and native Linux remains the final performance authority.
+- The executable checkpoint is synthetic and tiny. No full Kimi K3 weights have been downloaded, and B-0003 is not a full-model throughput claim.
+- The graph remains CPU-driven. Activation/result transfers, host activation and routing work, and frequent operation boundaries remain.
+- Static residency has no eviction, L1 RAM tier, L2 NVMe tier, prefetch, pinned-memory overlap, or deadline scheduler.
+- `cuda-dense` intentionally keeps native MXFP4 on the CPU as its documented comparison identity. `cuda-custom` is the exact GPU MXFP4 path.
+- GPU utilization, GPU memory bandwidth, NVMe GB/token, I/O stall time, and system-wide transfer overlap remain unmeasured.
+- Full-model quality, coding/agentic quality, adaptive Top-K, cold rescue, speculation, proxy, and pruning remain unimplemented or unmeasured.
 
 ## Next concrete tasks
 
-1. Implement CUDA option and runtime-stat contracts through a failing native test.
-2. Add CLI/schema controls and stable tensor-keyed backend views.
-3. Implement and independently ablate reusable allocation, exact static residency, and grouped projections.
-4. Remeasure CPU, CUDA dense, and CUDA custom before selecting any default.
-5. Use the measured remaining boundary cost to choose a wider GPU executor or the first L0/L1 asynchronous transfer pipeline.
+1. Finish public Milestone 2 review, PR, and Linux CI.
+2. Design and measure a wider layer/block GPU execution boundary that keeps intermediate activations on device.
+3. Build the first asynchronous L0/L1 transfer pipeline only after the wider boundary exposes representative transfer deadlines.
+4. Add full-dimension bounded checkpoint slices before any full Kimi K3 throughput claim.
+5. Continue with expert cache policies, task/session profiles, adaptive Top-K, and exact rescue in charter order.
 
 ## Hardware assumptions
 
 | Component | Current assumption or observation |
 |---|---|
-| CPU | AMD Ryzen 7 9800X3D target |
-| GPU | Locally observed NVIDIA GeForce RTX 5080, 16,303 MiB, compute capability 12.0 |
-| Driver | Locally observed 591.86 |
-| CUDA | WSL-installed toolkit 13.3.1 and nvcc 13.3.73 with `sm_120` support |
-| RAM | 96 GB DDR5-4200 target |
-| NVMe | Solidigm P44 Pro 2 TB target |
+| CPU | AMD Ryzen 7 9800X3D target and local host |
+| GPU | NVIDIA GeForce RTX 5080, 16,303 MiB, compute capability 12.0 |
+| Driver | 591.86 |
+| CUDA | Toolkit 13.3.1, nvcc 13.3.73, native `sm_120` |
+| RAM | 96 GB DDR5-4200 target; WSL2 exposed 49,251,213,312 bytes during earlier validation |
+| NVMe | Solidigm P44 Pro 2 TB target; not measured in Milestone 2 |
 | Final runtime OS | Linux native |
-| Current development OS | WSL2 Ubuntu 24.04.4 on Windows 11; Windows Smart App Control remains enforced |
+| Current development OS | WSL2 Ubuntu 24.04.4 on Windows 11 |
 
 ## Latest measured bottleneck
 
-B-0002 measures the tiny synthetic graph at 19.4858 CPU, 11.6682 FP32 `cuda-dense`, and 10.1118 FP32 `cuda-custom` decode tok/s. BF16 halves H2D bytes and backend-owned peak VRAM but does not improve decode throughput materially. CUDA-event work totals only 11.56--14.52 ms per run while end-to-end graph work takes hundreds of milliseconds. The latest measured bottleneck is per-operation allocation, host staging, synchronous copy/synchronization, and CPU-resident graph execution, not the CUDA kernel arithmetic.
+B-0003 measures `cuda-dense` FP32 reference, reuse, residency, and grouped decode at 12.1261, 17.4560, 18.0041, and 17.9018 tok/s. `cuda-custom` measures 12.2647, 17.1425, 17.2723, and 16.8348 tok/s. Reusable allocation removes most allocation churn, and static residency reduces weight H2D by about 88.5–88.9%.
 
-This does not replace the derived full-model traffic model. Uncached natural Top-16 expert reads across 92 MoE layers still imply 25.83 GB/token, but native-Linux NVMe traffic, cache reuse, I/O stalls, GPU utilization, and full-model throughput remain unmeasured.
+Grouping reduces activation H2D by 21.86–23.74% and synchronization by 19.23–22.86%, but it is 0.57–2.53% slower than scalar residency. CUDA-event kernel time remains only 16.02–19.01 ms for the fastest scalar-residency runs while end-to-end decode spans hundreds of milliseconds. The next measured bottleneck is the narrow CPU/GPU operation boundary and CPU-resident graph, not redundant weight upload or allocation alone.
+
+The derived uncached full-model expert traffic remains 25.83 GB/token, but it is not a measured full-model value. Native-Linux NVMe traffic, cache reuse, and full Kimi K3 throughput remain unknown.
 
 ## Last known-good state
 
-- Public `main`: `254a9acf8d62682693e2ce0bde37008ee69e8caf`.
-- GitHub Actions correctness run: `31259325702`, success on Linux after the Milestone 1 merge.
-- Public-main local tests: CPU CTest 5/5 and pytest 53 passed; CUDA CTest 7/7 and pytest 59 passed.
-- Milestone 1 design commit: `84edc6e`.
-- Linux environment: WSL 2.7.11.0, Ubuntu 24.04.4, kernel 6.18.33.2, CUDA Toolkit 13.3.1, nvcc 13.3.73, RTX 5080 compute capability 12.0.
-- Current worktree code commit: `c92f498` (`feat: profile backend-selected synthetic inference`).
-- CPU-only CTest: 5/5 pass; `k3x_run` has no CUDA or cuBLAS dynamic dependency.
-- CUDA CTest: 7/7 pass on RTX 5080; cuBLASLt FP32/BF16-rounded and exact native-byte MXFP4 literal checks pass, and MXFP4 `compute-sanitizer --tool memcheck` reports 0 errors.
-- CPU-only pytest: 53 passed and 7 CUDA-only cases skipped with `K3X_BUILD_DIR=build-cpu`.
-- CUDA-enabled pytest: 59 passed and 1 CPU-build-only case skipped with `K3X_BUILD_DIR=build-cuda`; FP32/BF16 CUDA graph parity and benchmark schema tests are included.
-- B-0002 raw JSON/CSV records are generated for CPU FP32 and both CUDA identities in FP32/BF16.
+- Public `main`: `254a9acf8d62682693e2ce0bde37008ee69e8caf`; prior Linux workflow `31259325702` succeeded.
+- Latest measured code commit: `a468db8` (`feat: add CUDA residency ablation reporting`).
+- CPU verification: CTest 5/5; pytest 65 passed and 23 CUDA-only skipped.
+- CUDA verification: CTest 9/9; pytest 87 passed and one CPU-build-only skipped.
+- Compute Sanitizer: `test_cuda_memory`, `test_cuda_residency`, `test_cuda_dense`, and `test_cuda_mxfp4` each report zero errors.
+- Exact generated tokens: `[43, 32, 28, 49, 9, 28]` across the complete CUDA option matrix and BF16 fully enabled modes.
+- B-0003 raw JSON/CSV: `results/m2-cuda-dense/` and `results/m2-cuda-custom/`.
 
 ## Proposed component status
 
-APOLLO, TITAN COUNCIL, AURORA, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE are proposed only. ATLAS, CHRONOS, and BLACKSTAR are reserved names without accepted definitions. None is claimed as implemented or benchmarked.
+APOLLO, TITAN COUNCIL, AURORA, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None is claimed as implemented or benchmarked.
