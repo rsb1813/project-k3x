@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 12 routed down-projection scaling and accumulation fusion is implemented, measured by B-0013, and fully verified. Public integration is pending.
+Milestone 12 routed down-projection scaling and accumulation fusion is implemented, measured by B-0013, fully verified, and published through PR #12.
 
-State recorded on 2026-08-10 at verified Milestone 12 result head `0632a0f`; measurement code is `58c36dd`. The active branch is `codex/milestone-twelve-fused-cuda`, based on public Milestone 11 integration head `dd80e53`.
+State recorded on 2026-08-10 at verified Milestone 12 public integration head `9e59a9d`; measurement code is `58c36dd` and result commit is `0632a0f`. Branch, PR, and post-merge correctness runs `31322043556`, `31322049903`, and `31322191670` succeeded. The active branch remains `codex/milestone-twelve-fused-cuda` while the next milestone is prepared.
 
 ## Completed work
 
@@ -66,7 +66,7 @@ State recorded on 2026-08-10 at verified Milestone 12 result head `0632a0f`; mea
 ## Work in progress
 
 - Milestone 12 implementation and B-0013 measurement are complete. `routed-accumulate` reduces intermediate D2H and improves the tiny synthetic graph, but the released 3,584-by-3,072 repeated-expert fixture is 8.01% slower in median latency. The mode remains experimental and `none` remains the default.
-- Milestone 12 TITAN Ledger update, final self-review, public PR, CI, and merge remain in progress.
+- Milestone 13 exact speculative block verification has not started. Draft/target separation and a token-major exact reference are the next design boundary; expert-major scheduling remains later work.
 - Milestone 9 Terra high final review found one valid Important shared-session policy-context issue. Commit `fd05d95` serializes complete generation calls; re-review found no remaining Critical or Important issue and withdrew an initial collision interpretation concern after deterministic future-layer trace review.
 - Static, LRU, LFU, Least-Stale, profiled eviction, and all non-default L2 modes remain experimental and opt-in. Transition prediction and cross-layer asynchronous L2 scheduling remain unimplemented.
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
@@ -90,8 +90,8 @@ State recorded on 2026-08-10 at verified Milestone 12 result head `0632a0f`; mea
 
 ## Next concrete tasks
 
-1. Complete Milestone 12 self-review, public PR, CI, fast-forward merge, and post-merge verification.
-2. Begin exact speculative block verification with the draft/target interface separated and token-major execution retained as the reference.
+1. Begin exact speculative block verification with the draft/target interface separated and token-major execution retained as the reference.
+2. Define acceptance, rollback, KV/KDA state-commit, and greedy-equivalence tests before implementing draft execution.
 3. Add expert-major scheduling only after exact block verification passes, measuring unique expert union and fetch amortization without changing target routing.
 4. Add a future-layer predictor with recall-first exact-prefetch evaluation after the speculative correctness boundary.
 5. Run native-Linux P44 Pro warm/cold B-0008 through B-0013 only when that environment exists.
@@ -121,7 +121,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Public Milestone 11 integration head: `dd80e53`; PR #11 and its post-merge correctness run succeeded.
+- Public Milestone 12 integration head: `9e59a9db96633e0434e30a60fb086725f69d615c`; branch/PR/main correctness runs `31322043556`, `31322049903`, and `31322191670` succeeded. PR #12 is merged.
 - Latest verified Milestone 12 result head: `0632a0f`; measurement code is `58c36dd`.
 - B-0013 synthetic artifact SHA-256: `edeaa4802b4bfac0624fa4d0e73917318076258d95e74e880c97a8b2709dd2d2`; released storage SHA-256: `aab7aea48b03bdcd8e0b4d98c4780128ab689d2bba005089a49970eb0e326890`.
 - B-0013 synthetic summary SHA-256: `996dad640c78ea356b1b9d13fb7879e07511cba42e7257a6c43fa95b7f274da7`; released summary SHA-256: `d6f186fb991c67e2c4a1cd4929816ca1cf5567b187a905dd447db99258fd1799`.

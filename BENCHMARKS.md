@@ -539,6 +539,8 @@ Raw JSON/CSV and checksummed summaries are under `results/b0013-fused-routed-acc
 
 Verification passed CPU CTest 11/11 and pytest 235/44, liburing/direct CTest 12/12 and pytest 237/42, CUDA CTest 20/20 and pytest 271/8, plus ASan/UBSan liburing CTest 12/12 and targeted pytest 49/5 with 57 deselected. Eleven CUDA Compute Sanitizer invocations, including the released-dimension fused benchmark, each reported zero errors. The first liburing pytest invocation omitted the required capability environment and produced one expected-selection failure; the corrected capability-enabled run passed. An initial malformed sanitizer loop ran no valid target; the corrected explicit invocations produced the reported results.
 
+Public branch and PR correctness runs `31322043556` and `31322049903` succeeded at integration head `9e59a9d`. PR #12 merged by fast-forward, and post-merge `main` correctness run `31322191670` also succeeded at that head.
+
 ## Derived bottleneck model — not a benchmark
 
 The released dimensions imply 17,547,264 bytes per native MXFP4 routed expert. With no cache reuse, natural Top-16 across 92 MoE layers implies 25,829,572,608 expert bytes/token. Applying the P44 Pro published 7.0 GB/s sequential figure gives a derived expert-only ceiling of about 0.271 tok/s and implies roughly 94.6% expert NVMe-byte avoidance for a 5 tok/s target.
