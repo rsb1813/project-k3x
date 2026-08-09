@@ -255,10 +255,10 @@ Update architecture and decisions, append B-0008, update README/checklist/contex
 
   Add failing regressions for storage-manifest hash validation, crash-safe fixture publication, and canonical source-matched resume extents. Apply the minimum fixes and rerun the affected converter suites before publication.
 
-- [ ] **Step 5: Publish and require public CI.**
+- [x] **Step 5: Publish and require public CI.**
 
 Push `codex/milestone-seven-bounded-slice`, open a draft public PR, require push and PR Linux CI, verify `origin/main` ancestry, fast-forward public `main`, confirm GitHub marks the PR merged, and require post-merge main CI. Record run IDs in the ledger with a final documentation commit.
 
-- [ ] **Step 6: Preserve the worktree.**
+- [x] **Step 6: Preserve the worktree.**
 
 Keep the isolated worktree available for the next deadline-aware cross-layer scheduling milestone.

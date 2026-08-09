@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 6 public integration is complete. Milestone 7 full-dimension bounded expert slice implementation, non-authoritative WSL2 B-0008 measurement, final review, and review fixes are complete; public integration is pending.
+Milestone 7 full-dimension bounded expert slice implementation, non-authoritative WSL2 B-0008 measurement, final review, review fixes, and public integration are complete.
 
-State recorded on 2026-08-09 at verified Milestone 7 review-fix commit `d929f57`. Public `main` remains at Milestone 6 publication record `11e1d9a`; active branch is `codex/milestone-seven-bounded-slice`.
+State recorded on 2026-08-09 at verified Milestone 7 integration head `e9a5d4d`. Public PR #7 is merged by fast-forward, post-merge main correctness run `31308147456` succeeded, and the preserved active branch is `codex/milestone-seven-bounded-slice`.
 
 ## Completed work
 
@@ -47,7 +47,6 @@ State recorded on 2026-08-09 at verified Milestone 7 review-fix commit `d929f57`
 
 ## Work in progress
 
-- Milestone 7 results and TITAN Ledger await public PR/CI integration.
 - Milestone 7 Terra high final review found no Critical issue and two Important source/resume integrity gaps. Commit `d929f57` closes both with nine added regressions; no Critical or Important finding remains unaddressed.
 - Static L1 admission and all non-default L2 modes remain experimental and opt-in. LRU, LFU, Least-Stale, eviction, task/session priors, prediction, and cross-layer asynchronous L2 scheduling remain unimplemented.
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
@@ -69,8 +68,8 @@ State recorded on 2026-08-09 at verified Milestone 7 review-fix commit `d929f57`
 
 ## Next concrete tasks
 
-1. Publish Milestone 7 through a public PR, require Linux CI, ancestry-check the merge, and confirm post-merge CI.
-2. Design deadline-aware cross-layer L2-to-L1 scheduling while preserving the exact blocking Reader mode.
+1. Design deadline-aware cross-layer L2-to-L1 scheduling while preserving the exact blocking Reader mode.
+2. Implement the smallest synthetic N/N+1/N+2 overlap boundary with an exact synchronous reference switch.
 3. Add a bounded multi-expert or full-layer slice when cache-pressure and physical-locality experiments require it.
 4. Run native-Linux P44 Pro warm/cold B-0008 only when that environment exists.
 5. Continue with Least-Stale, task/session profiles, adaptive Top-K, and exact rescue in charter order.
@@ -100,7 +99,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Public `main`: Milestone 6 publication record `11e1d9acdfe701f28111c278803c395adba79740`; correctness run `31305487562` succeeded.
+- Public `main` Milestone 7 integration head: `e9a5d4da8f0e7e25a8d47e5d60585b30baa7b792`; PR #7 branch/PR runs `31308034386` and `31308046877` succeeded, and post-merge main run `31308147456` succeeded.
 - Latest verified Milestone 7 review-fix commit: `d929f5711f21b853cbfd8c0cf031e0d2425d085c` (`fix: verify storage source and resume extents`).
 - Latest verified Milestone 7 measurement-code commit: `9198ed2` (`feat: ablate bounded expert storage reads`).
 - B-0008 artifact SHA-256: `b14610fd2b405dd97c09004fb29157f5b318522591546337bce89e7e8a6a2b65`; ordered payload digest: `e5fb7939474a57ab9263a791999d76ba078bd767cc3f155f3522b1bec576c7e4`.

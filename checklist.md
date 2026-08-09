@@ -136,4 +136,4 @@
 - [x] 전용 C++ expert-load benchmark와 B-0008 runner 구현.
 - [x] 전체 correctness, sanitizer, B-0008 측정, TITAN Ledger 갱신.
 - [x] Final review Important 2건의 source integrity 및 resume ledger 검증을 테스트 우선으로 수정.
-- [ ] Public GitHub PR, CI, main 반영과 post-merge CI 확인.
+- [x] Public GitHub PR, CI, main 반영과 post-merge CI 확인.
