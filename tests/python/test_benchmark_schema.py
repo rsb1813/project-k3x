@@ -33,7 +33,9 @@ def _record() -> BenchmarkRecord:
         cuda_weights="transient",
         cuda_batching="scalar",
         cuda_boundary="operation",
+        cuda_transfer="synchronous",
         cuda_resident_bytes=0,
+        cuda_pinned_bytes=0,
         kernel_nanoseconds=0,
         host_to_device_bytes=0,
         weight_h2d_bytes=0,
@@ -54,6 +56,18 @@ def _record() -> BenchmarkRecord:
         grouped_projection_members=0,
         ffn_block_calls=0,
         ffn_block_experts=0,
+        pinned_host_bytes=0,
+        peak_pinned_host_bytes=0,
+        async_prefetch_calls=0,
+        async_prefetch_bytes=0,
+        async_prefetch_ready_before_use=0,
+        async_prefetch_late_at_use=0,
+        transfer_stream_wait_count=0,
+        pinned_staging_nanoseconds=0,
+        transfer_device_nanoseconds=0,
+        transfer_stall_nanoseconds=0,
+        async_engine_count=0,
+        device_overlap=False,
         max_absolute_error=None,
         max_relative_error=None,
         kda_state_bytes=1024,
@@ -77,11 +91,15 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["cuda_weights"] == "transient"
     assert payload["cuda_batching"] == "scalar"
     assert payload["cuda_boundary"] == "operation"
+    assert payload["cuda_transfer"] == "synchronous"
     assert payload["cuda_resident_bytes"] == 0
+    assert payload["cuda_pinned_bytes"] == 0
     assert payload["device_allocation_count"] == 0
     assert payload["weight_h2d_bytes"] == 0
     assert payload["activation_h2d_bytes"] == 0
     assert payload["peak_vram_bytes"] is None
+    assert payload["async_engine_count"] == 0
+    assert payload["device_overlap"] is False
     with csv_path.open(newline="", encoding="utf-8") as stream:
         row = next(csv.DictReader(stream))
     assert row["decode_tokens_per_second"] == "50.0"
@@ -91,6 +109,10 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert row["grouped_projection_members"] == "0"
     assert row["ffn_block_calls"] == "0"
     assert row["ffn_block_experts"] == "0"
+    assert row["cuda_transfer"] == "synchronous"
+    assert row["cuda_pinned_bytes"] == "0"
+    assert row["transfer_device_nanoseconds"] == "0"
+    assert row["device_overlap"] == "False"
     assert row["peak_vram_bytes"] == ""
     assert row["per_layer_nanoseconds"] == "1;2;3;4"
     assert row["token_ids"] == "43;32;28;49;9;28"
@@ -275,7 +297,9 @@ def test_benchmark_once_collects_cpu_backend_profile(
     assert record.cuda_weights == "transient"
     assert record.cuda_batching == "scalar"
     assert record.cuda_boundary == "operation"
+    assert record.cuda_transfer == "synchronous"
     assert record.cuda_resident_bytes == 0
+    assert record.cuda_pinned_bytes == 0
     assert record.kernel_nanoseconds == 0
     assert record.host_to_device_bytes == 0
     assert record.weight_h2d_bytes == 0
@@ -296,6 +320,18 @@ def test_benchmark_once_collects_cpu_backend_profile(
     assert record.grouped_projection_members == 0
     assert record.ffn_block_calls == 0
     assert record.ffn_block_experts == 0
+    assert record.pinned_host_bytes == 0
+    assert record.peak_pinned_host_bytes == 0
+    assert record.async_prefetch_calls == 0
+    assert record.async_prefetch_bytes == 0
+    assert record.async_prefetch_ready_before_use == 0
+    assert record.async_prefetch_late_at_use == 0
+    assert record.transfer_stream_wait_count == 0
+    assert record.pinned_staging_nanoseconds == 0
+    assert record.transfer_device_nanoseconds == 0
+    assert record.transfer_stall_nanoseconds == 0
+    assert record.async_engine_count == 0
+    assert record.device_overlap is False
     assert record.max_absolute_error == 0.0
     assert record.max_relative_error == 0.0
 
@@ -371,3 +407,43 @@ def test_benchmark_once_reports_reused_cuda_scratch(
     assert record.peak_scratch_bytes >= record.scratch_bytes
     assert record.max_absolute_error is not None
     assert record.max_absolute_error <= 1.0e-4
+
+
+def test_benchmark_once_reports_exact_async_transfer_accounting(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    if Path(os.environ.get("K3X_BUILD_DIR", "build")).name != "build-cuda":
+        pytest.skip("CUDA transfer accounting is exercised only against build-cuda")
+    artifact = tmp_path / "synthetic.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    record = benchmark_once(
+        artifact,
+        cpp_binary("k3x_run"),
+        warmup=0,
+        iterations=1,
+        backend="cuda-custom",
+        dense_precision="fp32",
+        cuda_allocation="reused",
+        cuda_weights="transient",
+        cuda_batching="scalar",
+        cuda_boundary="ffn-block",
+        cuda_transfer="prefetch",
+        cuda_pinned_bytes=1024 * 1024,
+    )
+    assert record.cuda_transfer == "prefetch"
+    assert record.cuda_pinned_bytes == 1024 * 1024
+    assert record.pinned_host_bytes == 1024 * 1024
+    assert record.peak_pinned_host_bytes == 1024 * 1024
+    assert record.async_prefetch_calls > 0
+    assert 0 < record.async_prefetch_bytes <= record.weight_h2d_bytes
+    assert (
+        record.async_prefetch_ready_before_use
+        + record.async_prefetch_late_at_use
+        == record.async_prefetch_calls
+    )
+    assert record.transfer_stream_wait_count == record.async_prefetch_calls
+    assert record.pinned_staging_nanoseconds > 0
+    assert record.transfer_device_nanoseconds > 0
+    assert record.transfer_stall_nanoseconds >= 0
+    assert record.async_engine_count > 0
+    assert isinstance(record.device_overlap, bool)

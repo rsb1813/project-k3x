@@ -38,7 +38,9 @@ class BenchmarkRecord:
     cuda_weights: str
     cuda_batching: str
     cuda_boundary: str
+    cuda_transfer: str
     cuda_resident_bytes: int
+    cuda_pinned_bytes: int
     kernel_nanoseconds: int
     host_to_device_bytes: int
     weight_h2d_bytes: int
@@ -59,6 +61,18 @@ class BenchmarkRecord:
     grouped_projection_members: int
     ffn_block_calls: int
     ffn_block_experts: int
+    pinned_host_bytes: int
+    peak_pinned_host_bytes: int
+    async_prefetch_calls: int
+    async_prefetch_bytes: int
+    async_prefetch_ready_before_use: int
+    async_prefetch_late_at_use: int
+    transfer_stream_wait_count: int
+    pinned_staging_nanoseconds: int
+    transfer_device_nanoseconds: int
+    transfer_stall_nanoseconds: int
+    async_engine_count: int
+    device_overlap: bool
     max_absolute_error: float | None
     max_relative_error: float | None
     kda_state_bytes: int
@@ -106,7 +120,9 @@ def _run_process(
     cuda_weights: str,
     cuda_batching: str,
     cuda_boundary: str,
+    cuda_transfer: str,
     cuda_resident_bytes: int,
+    cuda_pinned_bytes: int,
     diagnostics: bool = False,
 ) -> tuple[dict, int, float]:
     command = [
@@ -117,7 +133,9 @@ def _run_process(
         "--cuda-weights", cuda_weights,
         "--cuda-batching", cuda_batching,
         "--cuda-boundary", cuda_boundary,
+        "--cuda-transfer", cuda_transfer,
         "--cuda-resident-bytes", str(cuda_resident_bytes),
+        "--cuda-pinned-bytes", str(cuda_pinned_bytes),
     ]
     if diagnostics:
         command.extend(["--diagnostics", "true"])
@@ -197,7 +215,9 @@ def benchmark_once(
     cuda_weights: str = "transient",
     cuda_batching: str = "scalar",
     cuda_boundary: str = "operation",
+    cuda_transfer: str = "synchronous",
     cuda_resident_bytes: int = 0,
+    cuda_pinned_bytes: int = 0,
 ) -> BenchmarkRecord:
     if warmup < 0 or iterations <= 0:
         raise ValueError("warmup must be non-negative and iterations must be positive")
@@ -220,7 +240,9 @@ def benchmark_once(
                 cuda_weights=cuda_weights,
                 cuda_batching=cuda_batching,
                 cuda_boundary=cuda_boundary,
+                cuda_transfer=cuda_transfer,
                 cuda_resident_bytes=cuda_resident_bytes,
+                cuda_pinned_bytes=cuda_pinned_bytes,
             )
             _, ttft_peak, ttft = _run_process(
                 artifact,
@@ -233,7 +255,9 @@ def benchmark_once(
                 cuda_weights=cuda_weights,
                 cuda_batching=cuda_batching,
                 cuda_boundary=cuda_boundary,
+                cuda_transfer=cuda_transfer,
                 cuda_resident_bytes=cuda_resident_bytes,
+                cuda_pinned_bytes=cuda_pinned_bytes,
             )
             if index >= warmup:
                 samples.append(sample)
@@ -254,7 +278,9 @@ def benchmark_once(
                 cuda_weights="transient",
                 cuda_batching="scalar",
                 cuda_boundary="operation",
+                cuda_transfer="synchronous",
                 cuda_resident_bytes=0,
+                cuda_pinned_bytes=0,
                 diagnostics=True,
             )
             candidate, _, _ = _run_process(
@@ -268,7 +294,9 @@ def benchmark_once(
                 cuda_weights=cuda_weights,
                 cuda_batching=cuda_batching,
                 cuda_boundary=cuda_boundary,
+                cuda_transfer=cuda_transfer,
                 cuda_resident_bytes=cuda_resident_bytes,
+                cuda_pinned_bytes=cuda_pinned_bytes,
                 diagnostics=True,
             )
             max_absolute_error, max_relative_error = _numerical_errors(
@@ -282,7 +310,9 @@ def benchmark_once(
         "cuda_weights",
         "cuda_batching",
         "cuda_boundary",
+        "cuda_transfer",
         "cuda_resident_bytes",
+        "cuda_pinned_bytes",
         "device_allocation_count",
         "device_free_count",
         "stream_synchronization_count",
@@ -299,6 +329,13 @@ def benchmark_once(
         "grouped_projection_members",
         "ffn_block_calls",
         "ffn_block_experts",
+        "pinned_host_bytes",
+        "peak_pinned_host_bytes",
+        "async_prefetch_calls",
+        "async_prefetch_bytes",
+        "transfer_stream_wait_count",
+        "async_engine_count",
+        "device_overlap",
         "token_ids",
     )
     if any(
@@ -313,12 +350,31 @@ def benchmark_once(
         cuda_weights,
         cuda_batching,
         cuda_boundary,
+        cuda_transfer,
         cuda_resident_bytes,
+        cuda_pinned_bytes,
     )
-    option_fields = deterministic_fields[:1] + deterministic_fields[2:8]
+    option_fields = (
+        "backend",
+        "dense_precision",
+        "cuda_allocation",
+        "cuda_weights",
+        "cuda_batching",
+        "cuda_boundary",
+        "cuda_transfer",
+        "cuda_resident_bytes",
+        "cuda_pinned_bytes",
+    )
     observed_options = tuple(samples[0][field] for field in option_fields)
     if observed_options != expected_options:
         raise RuntimeError("runner metadata did not match requested benchmark options")
+    if any(
+        item["async_prefetch_ready_before_use"]
+        + item["async_prefetch_late_at_use"]
+        != item["async_prefetch_calls"]
+        for item in samples
+    ):
+        raise RuntimeError("runner async readiness accounting is inconsistent")
     prefill_ns = statistics.median(item["prefill_nanoseconds"] for item in samples)
     decode_ns = statistics.median(item["decode_nanoseconds"] for item in samples)
     layer_count = len(samples[0]["per_layer_nanoseconds"])
@@ -348,7 +404,9 @@ def benchmark_once(
         cuda_weights=samples[0]["cuda_weights"],
         cuda_batching=samples[0]["cuda_batching"],
         cuda_boundary=samples[0]["cuda_boundary"],
+        cuda_transfer=samples[0]["cuda_transfer"],
         cuda_resident_bytes=samples[0]["cuda_resident_bytes"],
+        cuda_pinned_bytes=samples[0]["cuda_pinned_bytes"],
         kernel_nanoseconds=int(
             statistics.median(item["kernel_nanoseconds"] for item in samples)
         ),
@@ -375,6 +433,31 @@ def benchmark_once(
         grouped_projection_members=samples[0]["grouped_projection_members"],
         ffn_block_calls=samples[0]["ffn_block_calls"],
         ffn_block_experts=samples[0]["ffn_block_experts"],
+        pinned_host_bytes=samples[0]["pinned_host_bytes"],
+        peak_pinned_host_bytes=samples[0]["peak_pinned_host_bytes"],
+        async_prefetch_calls=samples[0]["async_prefetch_calls"],
+        async_prefetch_bytes=samples[0]["async_prefetch_bytes"],
+        async_prefetch_ready_before_use=int(statistics.median(
+            item["async_prefetch_ready_before_use"] for item in samples
+        )),
+        async_prefetch_late_at_use=(
+            samples[0]["async_prefetch_calls"]
+            - int(statistics.median(
+                item["async_prefetch_ready_before_use"] for item in samples
+            ))
+        ),
+        transfer_stream_wait_count=samples[0]["transfer_stream_wait_count"],
+        pinned_staging_nanoseconds=int(statistics.median(
+            item["pinned_staging_nanoseconds"] for item in samples
+        )),
+        transfer_device_nanoseconds=int(statistics.median(
+            item["transfer_device_nanoseconds"] for item in samples
+        )),
+        transfer_stall_nanoseconds=int(statistics.median(
+            item["transfer_stall_nanoseconds"] for item in samples
+        )),
+        async_engine_count=samples[0]["async_engine_count"],
+        device_overlap=bool(samples[0]["device_overlap"]),
         max_absolute_error=max_absolute_error,
         max_relative_error=max_relative_error,
         kda_state_bytes=kda_state,
@@ -409,7 +492,12 @@ def main() -> int:
     parser.add_argument(
         "--cuda-boundary", choices=("operation", "ffn-block"), default="operation"
     )
+    parser.add_argument(
+        "--cuda-transfer", choices=("synchronous", "prefetch"),
+        default="synchronous",
+    )
     parser.add_argument("--cuda-resident-bytes", type=int, default=0)
+    parser.add_argument("--cuda-pinned-bytes", type=int, default=0)
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--csv", type=Path, required=True)
     args = parser.parse_args()
@@ -424,7 +512,9 @@ def main() -> int:
         cuda_weights=args.cuda_weights,
         cuda_batching=args.cuda_batching,
         cuda_boundary=args.cuda_boundary,
+        cuda_transfer=args.cuda_transfer,
         cuda_resident_bytes=args.cuda_resident_bytes,
+        cuda_pinned_bytes=args.cuda_pinned_bytes,
     )
     write_results(result, args.json, args.csv)
     print(json.dumps(asdict(result), sort_keys=True, separators=(",", ":")))

@@ -287,10 +287,25 @@ int main(int argc, char** argv) {
            << ",\"ffn_block_calls\":" << runtime.ffn_block_calls
            << ",\"ffn_block_experts\":" << runtime.ffn_block_experts
            << ",\"pinned_host_bytes\":" << runtime.pinned_host_bytes
+           << ",\"peak_pinned_host_bytes\":"
+           << runtime.peak_pinned_host_bytes
            << ",\"async_prefetch_calls\":" << runtime.async_prefetch_calls
            << ",\"async_prefetch_bytes\":" << runtime.async_prefetch_bytes
+           << ",\"async_prefetch_ready_before_use\":"
+           << runtime.async_prefetch_ready_before_use
+           << ",\"async_prefetch_late_at_use\":"
+           << runtime.async_prefetch_late_at_use
            << ",\"transfer_stream_wait_count\":"
            << runtime.transfer_stream_wait_count
+           << ",\"pinned_staging_nanoseconds\":"
+           << runtime.pinned_staging_nanoseconds
+           << ",\"transfer_device_nanoseconds\":"
+           << runtime.transfer_device_nanoseconds
+           << ",\"transfer_stall_nanoseconds\":"
+           << runtime.transfer_stall_nanoseconds
+           << ",\"async_engine_count\":" << runtime.async_engine_count
+           << ",\"device_overlap\":"
+           << (runtime.device_overlap ? "true" : "false")
            << ",\"profile_wall_nanoseconds\":" << profile.wall_nanoseconds
            << ",\"profile_logical_bytes\":" << profile.logical_bytes
            << ",\"failed_operations\":" << profile.failed_operations
