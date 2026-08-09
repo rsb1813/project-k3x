@@ -185,7 +185,7 @@
 - [x] Write, self-review, and commit the persistent draft-state design.
 - [x] Write, self-review, and commit the detailed TDD implementation plan.
 - [x] Implement the incremental cursor and rollback contract through witnessed RED/GREEN cycles.
-- [ ] Integrate the persistent provider, CLI, schema, and replay-oracle parity.
+- [ ] Integrate the persistent provider, CLI, schema, and replay-oracle parity. Provider and generation-result parity are complete; CLI/schema remain.
 - [ ] Run B-0018, the full verification matrix, sanitizer coverage, and evidence cross-checks.
 - [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
 

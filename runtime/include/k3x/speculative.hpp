@@ -48,6 +48,11 @@ struct DraftProviderStats {
     std::uint64_t selected_length_4{};
     std::uint64_t scheduler_growths{};
     std::uint64_t scheduler_backoffs{};
+    std::uint64_t context_prefill_tokens{};
+    std::uint64_t incremental_forward_calls{};
+    std::uint64_t rollback_events{};
+    std::uint64_t mla_positions_cropped{};
+    std::uint64_t kda_checkpoint_bytes{};
 };
 
 class DraftProvider {

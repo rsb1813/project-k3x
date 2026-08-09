@@ -16,6 +16,8 @@ struct IncrementalDraftCursorStats {
     std::uint64_t rollback_events{};
     std::uint64_t mla_positions_cropped{};
     std::uint64_t kda_checkpoint_bytes{};
+    std::uint64_t routing_decisions{};
+    std::uint64_t routing_selected_experts{};
 };
 
 struct IncrementalDraftCursorDiagnostics {
