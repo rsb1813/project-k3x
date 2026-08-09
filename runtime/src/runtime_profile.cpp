@@ -107,14 +107,29 @@ std::span<const std::byte> bytes_of(std::string_view value) {
 }
 
 template <typename Map, typename Key>
-void bounded_increment(Map& counts, const Key& key, std::size_t limit) {
+bool bounded_increment(Map& counts, const Key& key, std::size_t limit) {
     if (auto found = counts.find(key); found != counts.end()) {
         if (found->second != std::numeric_limits<std::uint64_t>::max()) {
             ++found->second;
+            return true;
         }
     } else if (counts.size() < limit) {
         counts.emplace(key, 1);
+        return true;
     }
+    return false;
+}
+
+template <typename Map>
+bool checked_merge(Map& destination, const Map& source) {
+    for (const auto& [key, value] : source) {
+        auto& total = destination[key];
+        if (value > std::numeric_limits<std::uint64_t>::max() - total) {
+            return false;
+        }
+        total += value;
+    }
+    return true;
 }
 }
 
@@ -138,15 +153,17 @@ void RuntimeProfile::observe(std::uint64_t forward_cycle, std::size_t layer,
         previous_layer_ + 1 == layer) {
         for (const auto from : previous_selected_) {
             for (const auto to : selected) {
-                bounded_increment(live_transitions_, transition_key(from, to),
-                                  maximum_transition_records);
+                (void)bounded_increment(
+                    live_transitions_, transition_key(from, to),
+                    maximum_transition_records);
             }
         }
     }
     for (const auto key : selected) {
-        bounded_increment(live_frequency_, frequency_key(key),
-                          maximum_frequency_records);
-        if (live_route_observations_ != std::numeric_limits<std::uint64_t>::max()) {
+        if (bounded_increment(live_frequency_, frequency_key(key),
+                              maximum_frequency_records) &&
+            live_route_observations_ !=
+                std::numeric_limits<std::uint64_t>::max()) {
             ++live_route_observations_;
         }
     }
@@ -211,7 +228,12 @@ double RuntimeProfile::usefulness(ExpertKey key,
 
 std::vector<ExpertKey> RuntimeProfile::hot_bank(std::size_t count) const {
     std::map<FrequencyKey, std::uint64_t> merged = prior_frequency_;
-    for (const auto& [key, value] : live_frequency_) merged[key] += value;
+    for (const auto& [key, value] : live_frequency_) {
+        auto& total = merged[key];
+        total = value > std::numeric_limits<std::uint64_t>::max() - total
+                    ? std::numeric_limits<std::uint64_t>::max()
+                    : total + value;
+    }
     std::vector<std::pair<FrequencyKey, std::uint64_t>> ordered(
         merged.begin(), merged.end());
     std::sort(ordered.begin(), ordered.end(), [](const auto& left,
@@ -231,10 +253,22 @@ std::vector<ExpertKey> RuntimeProfile::hot_bank(std::size_t count) const {
 
 Result<bool> RuntimeProfile::save(const std::filesystem::path& path) const {
     std::map<FrequencyKey, std::uint64_t> frequencies = prior_frequency_;
-    for (const auto& [key, value] : live_frequency_) frequencies[key] += value;
+    if (!checked_merge(frequencies, live_frequency_)) {
+        return Result<bool>::failure(ErrorCode::invalid_state,
+                                     "runtime profile frequency overflow");
+    }
     std::map<TransitionKey, std::uint64_t> transitions = prior_transitions_;
-    for (const auto& [key, value] : live_transitions_) transitions[key] += value;
-    const auto observations = prior_route_observations_ + live_route_observations_;
+    if (!checked_merge(transitions, live_transitions_)) {
+        return Result<bool>::failure(ErrorCode::invalid_state,
+                                     "runtime profile transition overflow");
+    }
+    if (live_route_observations_ >
+        std::numeric_limits<std::uint64_t>::max() - prior_route_observations_) {
+        return Result<bool>::failure(ErrorCode::invalid_state,
+                                     "runtime profile observation overflow");
+    }
+    const auto observations =
+        prior_route_observations_ + live_route_observations_;
     const auto hot = hot_bank(persisted_hot_bank_size);
 
     std::ostringstream body;

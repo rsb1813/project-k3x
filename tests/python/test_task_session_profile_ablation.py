@@ -10,6 +10,8 @@ import pytest
 
 from tools import ablate_task_session_profiles
 from tools.benchmark_synthetic import BenchmarkRecord
+from k3x_converter.writer import convert
+from conftest import cpp_binary
 
 
 def _base_record() -> BenchmarkRecord:
@@ -98,6 +100,28 @@ def test_b0011_manifest_matches_raw_records_and_profiles() -> None:
         assert (result_dir / f"{case['name']}.csv").is_file()
         for field, value in raw.items():
             assert case[field] == value
+
+
+def test_benchmark_materializes_the_full_generation_profile(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    artifact = tmp_path / "synthetic.k3x"
+    profile = tmp_path / "observed.k3xp"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    record = ablate_task_session_profiles.benchmark_once(
+        artifact,
+        cpp_binary("k3x_run"),
+        warmup=0,
+        iterations=1,
+        backend="cpu",
+        l1_expert_cache="profiled",
+        l1_expert_cache_bytes=13056,
+        profile_prior_strength=4,
+        runtime_metadata="TASK=coding,REPO=k3x",
+        runtime_profile_out=profile,
+    )
+    assert record.runtime_profile_save_bytes == profile.stat().st_size
+    assert record.runtime_profile_live_observations > 0
 
 
 def test_b0011_writes_exact_profile_records(

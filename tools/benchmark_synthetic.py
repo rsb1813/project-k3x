@@ -335,7 +335,10 @@ def benchmark_once(
                 profile_prior_strength=profile_prior_strength,
                 runtime_metadata=runtime_metadata,
                 runtime_profile_in=runtime_profile_in,
-                runtime_profile_out=runtime_profile_out,
+                runtime_profile_out=(
+                    root / f"profile-run-{index}.k3xp"
+                    if runtime_profile_out is not None else None
+                ),
             )
             _, ttft_peak, ttft = _run_process(
                 artifact,
@@ -360,7 +363,10 @@ def benchmark_once(
                 profile_prior_strength=profile_prior_strength,
                 runtime_metadata=runtime_metadata,
                 runtime_profile_in=runtime_profile_in,
-                runtime_profile_out=runtime_profile_out,
+                runtime_profile_out=(
+                    root / f"profile-ttft-{index}.k3xp"
+                    if runtime_profile_out is not None else None
+                ),
             )
             if index >= warmup:
                 samples.append(sample)
@@ -443,6 +449,40 @@ def benchmark_once(
                 reference, candidate
             )
             routed_experts = tuple(candidate["prefill_routed_experts"])
+        if runtime_profile_out is not None:
+            materialized, _, _ = _run_process(
+                artifact,
+                runner,
+                generated_tokens,
+                root / "materialized-profile.json",
+                backend=backend,
+                dense_precision=dense_precision,
+                cuda_allocation=cuda_allocation,
+                cuda_weights=cuda_weights,
+                cuda_batching=cuda_batching,
+                cuda_boundary=cuda_boundary,
+                cuda_transfer=cuda_transfer,
+                cuda_resident_bytes=cuda_resident_bytes,
+                cuda_pinned_bytes=cuda_pinned_bytes,
+                l1_expert_cache=l1_expert_cache,
+                l1_expert_cache_bytes=l1_expert_cache_bytes,
+                l2_io=l2_io,
+                l2_cache=l2_cache,
+                l2_queue_depth=l2_queue_depth,
+                l2_expert_schedule=l2_expert_schedule,
+                profile_prior_strength=profile_prior_strength,
+                runtime_metadata=runtime_metadata,
+                runtime_profile_in=runtime_profile_in,
+                runtime_profile_out=runtime_profile_out,
+            )
+            if (
+                materialized["token_ids"] != samples[0]["token_ids"]
+                or materialized["runtime_profile_save_bytes"]
+                != samples[0]["runtime_profile_save_bytes"]
+                or Path(runtime_profile_out).stat().st_size
+                != samples[0]["runtime_profile_save_bytes"]
+            ):
+                raise RuntimeError("materialized runtime profile diverged")
     deterministic_fields = (
         "backend",
         "device",
@@ -463,6 +503,11 @@ def benchmark_once(
         "l1_expert_cache_collision_misses",
         "l1_expert_cache_resident_bytes",
         "peak_l1_expert_cache_resident_bytes",
+        "runtime_profile_metadata_count",
+        "runtime_profile_prior_weight",
+        "runtime_profile_live_observations",
+        "runtime_profile_load_bytes",
+        "runtime_profile_save_bytes",
         "l2_expert_schedule",
         "expert_load_submissions",
         "expert_load_inline_resident_hits",
