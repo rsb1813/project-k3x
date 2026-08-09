@@ -37,6 +37,7 @@ class BenchmarkRecord:
     cuda_allocation: str
     cuda_weights: str
     cuda_batching: str
+    cuda_boundary: str
     cuda_resident_bytes: int
     kernel_nanoseconds: int
     host_to_device_bytes: int
@@ -56,6 +57,8 @@ class BenchmarkRecord:
     peak_scratch_bytes: int
     grouped_projection_calls: int
     grouped_projection_members: int
+    ffn_block_calls: int
+    ffn_block_experts: int
     max_absolute_error: float | None
     max_relative_error: float | None
     kda_state_bytes: int
@@ -100,6 +103,7 @@ def _run_process(
     cuda_allocation: str,
     cuda_weights: str,
     cuda_batching: str,
+    cuda_boundary: str,
     cuda_resident_bytes: int,
     diagnostics: bool = False,
 ) -> tuple[dict, int, float]:
@@ -110,6 +114,7 @@ def _run_process(
         "--cuda-allocation", cuda_allocation,
         "--cuda-weights", cuda_weights,
         "--cuda-batching", cuda_batching,
+        "--cuda-boundary", cuda_boundary,
         "--cuda-resident-bytes", str(cuda_resident_bytes),
     ]
     if diagnostics:
@@ -189,6 +194,7 @@ def benchmark_once(
     cuda_allocation: str = "per-operation",
     cuda_weights: str = "transient",
     cuda_batching: str = "scalar",
+    cuda_boundary: str = "operation",
     cuda_resident_bytes: int = 0,
 ) -> BenchmarkRecord:
     if warmup < 0 or iterations <= 0:
@@ -211,6 +217,7 @@ def benchmark_once(
                 cuda_allocation=cuda_allocation,
                 cuda_weights=cuda_weights,
                 cuda_batching=cuda_batching,
+                cuda_boundary=cuda_boundary,
                 cuda_resident_bytes=cuda_resident_bytes,
             )
             _, ttft_peak, ttft = _run_process(
@@ -223,6 +230,7 @@ def benchmark_once(
                 cuda_allocation=cuda_allocation,
                 cuda_weights=cuda_weights,
                 cuda_batching=cuda_batching,
+                cuda_boundary=cuda_boundary,
                 cuda_resident_bytes=cuda_resident_bytes,
             )
             if index >= warmup:
@@ -243,6 +251,7 @@ def benchmark_once(
                 cuda_allocation="per-operation",
                 cuda_weights="transient",
                 cuda_batching="scalar",
+                cuda_boundary="operation",
                 cuda_resident_bytes=0,
                 diagnostics=True,
             )
@@ -256,6 +265,7 @@ def benchmark_once(
                 cuda_allocation=cuda_allocation,
                 cuda_weights=cuda_weights,
                 cuda_batching=cuda_batching,
+                cuda_boundary=cuda_boundary,
                 cuda_resident_bytes=cuda_resident_bytes,
                 diagnostics=True,
             )
@@ -269,6 +279,7 @@ def benchmark_once(
         "cuda_allocation",
         "cuda_weights",
         "cuda_batching",
+        "cuda_boundary",
         "cuda_resident_bytes",
         "device_allocation_count",
         "device_free_count",
@@ -284,6 +295,8 @@ def benchmark_once(
         "activation_h2d_bytes",
         "grouped_projection_calls",
         "grouped_projection_members",
+        "ffn_block_calls",
+        "ffn_block_experts",
     )
     if any(
         any(item[field] != samples[0][field] for field in deterministic_fields)
@@ -296,9 +309,10 @@ def benchmark_once(
         cuda_allocation,
         cuda_weights,
         cuda_batching,
+        cuda_boundary,
         cuda_resident_bytes,
     )
-    option_fields = deterministic_fields[:1] + deterministic_fields[2:7]
+    option_fields = deterministic_fields[:1] + deterministic_fields[2:8]
     observed_options = tuple(samples[0][field] for field in option_fields)
     if observed_options != expected_options:
         raise RuntimeError("runner metadata did not match requested benchmark options")
@@ -330,6 +344,7 @@ def benchmark_once(
         cuda_allocation=samples[0]["cuda_allocation"],
         cuda_weights=samples[0]["cuda_weights"],
         cuda_batching=samples[0]["cuda_batching"],
+        cuda_boundary=samples[0]["cuda_boundary"],
         cuda_resident_bytes=samples[0]["cuda_resident_bytes"],
         kernel_nanoseconds=int(
             statistics.median(item["kernel_nanoseconds"] for item in samples)
@@ -355,6 +370,8 @@ def benchmark_once(
         peak_scratch_bytes=samples[0]["peak_scratch_bytes"],
         grouped_projection_calls=samples[0]["grouped_projection_calls"],
         grouped_projection_members=samples[0]["grouped_projection_members"],
+        ffn_block_calls=samples[0]["ffn_block_calls"],
+        ffn_block_experts=samples[0]["ffn_block_experts"],
         max_absolute_error=max_absolute_error,
         max_relative_error=max_relative_error,
         kda_state_bytes=kda_state,
@@ -385,6 +402,9 @@ def main() -> int:
     parser.add_argument(
         "--cuda-batching", choices=("scalar", "grouped"), default="scalar"
     )
+    parser.add_argument(
+        "--cuda-boundary", choices=("operation", "ffn-block"), default="operation"
+    )
     parser.add_argument("--cuda-resident-bytes", type=int, default=0)
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--csv", type=Path, required=True)
@@ -399,6 +419,7 @@ def main() -> int:
         cuda_allocation=args.cuda_allocation,
         cuda_weights=args.cuda_weights,
         cuda_batching=args.cuda_batching,
+        cuda_boundary=args.cuda_boundary,
         cuda_resident_bytes=args.cuda_resident_bytes,
     )
     write_results(result, args.json, args.csv)

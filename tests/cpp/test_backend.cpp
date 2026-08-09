@@ -18,6 +18,7 @@ int main() {
     if (defaults.cuda_weights != k3x::CudaWeightMode::transient) return 22;
     if (defaults.cuda_batching != k3x::CudaBatchingMode::scalar) return 23;
     if (defaults.cuda_resident_bytes != 0) return 24;
+    if (defaults.cuda_boundary != k3x::CudaBoundaryMode::operation) return 58;
 
     const auto& options = backend->options();
     if (options.kind != k3x::BackendKind::cpu) return 25;
@@ -42,6 +43,8 @@ int main() {
     if (runtime_stats.activation_h2d_bytes != 0) return 42;
     if (runtime_stats.grouped_projection_calls != 0) return 43;
     if (runtime_stats.grouped_projection_members != 0) return 44;
+    if (runtime_stats.ffn_block_calls != 0) return 59;
+    if (runtime_stats.ffn_block_experts != 0) return 60;
 
     const std::array<float, 3> dense_input{2.0F, -1.0F, 0.5F};
     const std::array<float, 6> dense_weight{1.0F, 2.0F, 3.0F,

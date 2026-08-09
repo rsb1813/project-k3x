@@ -111,3 +111,4 @@
 - Sol 읽기 전용 자문은 같은 경계를 권장했고 fast-math 금지, preflight validation, 기존 resident table 재사용, 최종 sync 뒤 event 집계가 핵심 불변식이라고 확인했다. 자문 전후 작업 트리에는 예상 밖 변경이 없었다.
 - 구현 계획은 경계 옵션, portable oracle, strict SiTU, dense/shared block, exact MXFP4 expert group, graph 연결, 계측/ablation, B-0004와 원장 갱신의 여덟 의미 단위로 나눴다.
 - 연결된 구현의 일관성을 위해 primary agent가 계획을 직접 실행하며, Cloud Run 또는 유료 자원 생성 직전까지 단순 승인 질문 없이 진행한다.
+- Milestone 3 Task 1은 `operation|ffn-block` boundary 계약과 두 block 성공 계수를 runtime, CLI, JSON/CSV benchmark schema에 추가했다. `ffn-block`은 backend 생성 전에 `cuda-custom` 외 조합을 거부한다. RED는 enum/counter 컴파일 부재, unknown CLI, dataclass field 부재로 확인했고 GREEN은 CPU backend CTest 2/2와 Python 28 passed/23 skipped, CUDA backend CTest 1/1과 Python 50 passed/1 skipped다.

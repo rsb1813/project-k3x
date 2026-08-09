@@ -37,6 +37,7 @@ int main(int argc, char** argv) {
     std::string cuda_allocation_name = "per-operation";
     std::string cuda_weights_name = "transient";
     std::string cuda_batching_name = "scalar";
+    std::string cuda_boundary_name = "operation";
     std::string cuda_resident_bytes_text = "0";
     bool diagnostics = false;
     std::size_t count = 0;
@@ -54,6 +55,7 @@ int main(int argc, char** argv) {
         else if (key == "--cuda-allocation") cuda_allocation_name = value;
         else if (key == "--cuda-weights") cuda_weights_name = value;
         else if (key == "--cuda-batching") cuda_batching_name = value;
+        else if (key == "--cuda-boundary") cuda_boundary_name = value;
         else if (key == "--cuda-resident-bytes") cuda_resident_bytes_text = value;
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
     }
@@ -101,6 +103,14 @@ int main(int argc, char** argv) {
         std::cerr << "unknown CUDA batching mode: " << cuda_batching_name << '\n';
         return 2;
     }
+    if (cuda_boundary_name == "operation") {
+        backend_options.cuda_boundary = k3x::CudaBoundaryMode::operation;
+    } else if (cuda_boundary_name == "ffn-block") {
+        backend_options.cuda_boundary = k3x::CudaBoundaryMode::ffn_block;
+    } else {
+        std::cerr << "unknown CUDA boundary mode: " << cuda_boundary_name << '\n';
+        return 2;
+    }
     const auto* resident_begin = cuda_resident_bytes_text.data();
     const auto* resident_end = resident_begin + cuda_resident_bytes_text.size();
     const auto resident_parse = std::from_chars(
@@ -114,6 +124,11 @@ int main(int argc, char** argv) {
     if (backend_options.kind == k3x::BackendKind::cpu &&
         backend_options.dense_precision != k3x::DensePrecision::fp32) {
         std::cerr << "bf16 dense precision requires a CUDA backend\n";
+        return 2;
+    }
+    if (backend_options.cuda_boundary == k3x::CudaBoundaryMode::ffn_block &&
+        backend_options.kind != k3x::BackendKind::cuda_custom) {
+        std::cerr << "ffn-block boundary requires cuda-custom\n";
         return 2;
     }
     if (backend_options.kind == k3x::BackendKind::cpu &&
@@ -186,6 +201,8 @@ int main(int argc, char** argv) {
     write_json_string(output, cuda_weights_name);
     output << ",\"cuda_batching\":";
     write_json_string(output, cuda_batching_name);
+    output << ",\"cuda_boundary\":";
+    write_json_string(output, cuda_boundary_name);
     output << ",\"cuda_resident_bytes\":"
            << effective_options.cuda_resident_bytes;
     output << ",\"kernel_nanoseconds\":" << profile.device_nanoseconds
@@ -212,6 +229,8 @@ int main(int argc, char** argv) {
            << runtime.grouped_projection_calls
            << ",\"grouped_projection_members\":"
            << runtime.grouped_projection_members
+           << ",\"ffn_block_calls\":" << runtime.ffn_block_calls
+           << ",\"ffn_block_experts\":" << runtime.ffn_block_experts
            << ",\"profile_wall_nanoseconds\":" << profile.wall_nanoseconds
            << ",\"profile_logical_bytes\":" << profile.logical_bytes
            << ",\"failed_operations\":" << profile.failed_operations

@@ -18,6 +18,7 @@ enum class DensePrecision { fp32, bf16_rounded };
 enum class CudaAllocationMode { per_operation, reused };
 enum class CudaWeightMode { transient, resident };
 enum class CudaBatchingMode { scalar, grouped };
+enum class CudaBoundaryMode { operation, ffn_block };
 
 struct BackendOptions {
     BackendKind kind{BackendKind::cpu};
@@ -25,6 +26,7 @@ struct BackendOptions {
     CudaAllocationMode cuda_allocation{CudaAllocationMode::per_operation};
     CudaWeightMode cuda_weights{CudaWeightMode::transient};
     CudaBatchingMode cuda_batching{CudaBatchingMode::scalar};
+    CudaBoundaryMode cuda_boundary{CudaBoundaryMode::operation};
     std::uint64_t cuda_resident_bytes{};
 };
 
@@ -48,6 +50,8 @@ struct BackendRuntimeStats {
     std::uint64_t activation_h2d_bytes{};
     std::uint64_t grouped_projection_calls{};
     std::uint64_t grouped_projection_members{};
+    std::uint64_t ffn_block_calls{};
+    std::uint64_t ffn_block_experts{};
 };
 
 struct DenseWeightView {

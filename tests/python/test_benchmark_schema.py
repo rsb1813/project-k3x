@@ -31,6 +31,7 @@ def _record() -> BenchmarkRecord:
         cuda_allocation="per-operation",
         cuda_weights="transient",
         cuda_batching="scalar",
+        cuda_boundary="operation",
         cuda_resident_bytes=0,
         kernel_nanoseconds=0,
         host_to_device_bytes=0,
@@ -50,6 +51,8 @@ def _record() -> BenchmarkRecord:
         peak_scratch_bytes=0,
         grouped_projection_calls=0,
         grouped_projection_members=0,
+        ffn_block_calls=0,
+        ffn_block_experts=0,
         max_absolute_error=None,
         max_relative_error=None,
         kda_state_bytes=1024,
@@ -71,6 +74,7 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["cuda_allocation"] == "per-operation"
     assert payload["cuda_weights"] == "transient"
     assert payload["cuda_batching"] == "scalar"
+    assert payload["cuda_boundary"] == "operation"
     assert payload["cuda_resident_bytes"] == 0
     assert payload["device_allocation_count"] == 0
     assert payload["weight_h2d_bytes"] == 0
@@ -83,6 +87,8 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert row["cuda_allocation"] == "per-operation"
     assert row["weight_cache_bypasses"] == "0"
     assert row["grouped_projection_members"] == "0"
+    assert row["ffn_block_calls"] == "0"
+    assert row["ffn_block_experts"] == "0"
     assert row["peak_vram_bytes"] == ""
     assert row["per_layer_nanoseconds"] == "1;2;3;4"
 
@@ -217,6 +223,7 @@ def test_benchmark_once_collects_cpu_backend_profile(
     assert record.cuda_allocation == "per-operation"
     assert record.cuda_weights == "transient"
     assert record.cuda_batching == "scalar"
+    assert record.cuda_boundary == "operation"
     assert record.cuda_resident_bytes == 0
     assert record.kernel_nanoseconds == 0
     assert record.host_to_device_bytes == 0
@@ -236,6 +243,8 @@ def test_benchmark_once_collects_cpu_backend_profile(
     assert record.peak_scratch_bytes == 0
     assert record.grouped_projection_calls == 0
     assert record.grouped_projection_members == 0
+    assert record.ffn_block_calls == 0
+    assert record.ffn_block_experts == 0
     assert record.max_absolute_error == 0.0
     assert record.max_relative_error == 0.0
 

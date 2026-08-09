@@ -40,7 +40,7 @@
 - Produces: CLI and benchmark fields `cuda_boundary`, `ffn_block_calls`, and `ffn_block_experts`.
 - Consumes: all existing Milestone 2 options without changing defaults.
 
-- [ ] **Step 1: Write failing native and CLI contract tests**
+- [x] **Step 1: Write failing native and CLI contract tests**
 
 Add to `tests/cpp/test_backend.cpp`.
 
@@ -60,7 +60,7 @@ Require `--backend cpu --cuda-boundary ffn-block` and `--backend cuda-dense --cu
 
 Extend `_record()` and JSON/CSV assertions in `tests/python/test_benchmark_schema.py` with `cuda_boundary="operation"`, `ffn_block_calls=0`, and `ffn_block_experts=0`.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 ```bash
 cmake --build build-linux -j2
@@ -72,7 +72,7 @@ K3X_BUILD_DIR=build-linux python -m pytest -q \
 
 Expected: compilation or collection fails because the enum and serialized fields do not exist.
 
-- [ ] **Step 3: Implement option parsing, validation, and serialization**
+- [x] **Step 3: Implement option parsing, validation, and serialization**
 
 Add to `runtime/include/k3x/backend.hpp`.
 
@@ -94,11 +94,11 @@ if (backend_options.cuda_boundary == k3x::CudaBoundaryMode::ffn_block &&
 
 Serialize the effective option and counters. Extend `BenchmarkRecord`, `_run_process()`, `benchmark_once()`, deterministic-field validation, and benchmark CLI forwarding.
 
-- [ ] **Step 4: Verify CPU and CUDA schema paths**
+- [x] **Step 4: Verify CPU and CUDA schema paths**
 
 Run the Step 2 commands with `K3X_BUILD_DIR=build-linux` and `build-cuda`. Expected: all targeted tests pass and unsupported modes fail before inference.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add runtime/include/k3x/backend.hpp runtime/src/main.cpp \

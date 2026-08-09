@@ -43,6 +43,7 @@ def test_cpp_runner_rejects_unknown_backend_values(
         (["--cuda-allocation", "pool"], "unknown CUDA allocation mode: pool"),
         (["--cuda-weights", "lru"], "unknown CUDA weight mode: lru"),
         (["--cuda-batching", "graph"], "unknown CUDA batching mode: graph"),
+        (["--cuda-boundary", "layer"], "unknown CUDA boundary mode: layer"),
         (
             ["--cuda-resident-bytes", "-1"],
             "invalid CUDA resident byte capacity: -1",
@@ -105,6 +106,25 @@ def test_cpp_runner_rejects_invalid_cuda_weight_capacity_combinations(
     )
     assert result.returncode == 2
     assert result.stderr.strip() == message
+
+
+@pytest.mark.parametrize("backend", ["cpu", "cuda-dense"])
+def test_cpp_runner_rejects_ffn_block_boundary_without_custom_cuda(
+    backend: str,
+) -> None:
+    result = subprocess.run(
+        [
+            str(cpp_binary("k3x_run")),
+            "--backend",
+            backend,
+            "--cuda-boundary",
+            "ffn-block",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == "ffn-block boundary requires cuda-custom"
 
 
 def test_cpu_build_reports_explicit_cuda_request_as_unavailable() -> None:
