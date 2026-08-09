@@ -528,7 +528,7 @@ Update `ARCHITECTURE.md` with the actual implemented boundary, `DECISIONS.md` wi
 
 Capture `git status --short` and the relevant diff, request one Terra high read-only final review, verify that it made no filesystem changes, and apply any evidence-backed Critical or Important findings in one batch. Re-run affected tests after fixes.
 
-- [ ] **Step 8: Commit and publish the milestone branch**
+- [x] **Step 8: Commit and publish the milestone branch**
 
 ```bash
 git add ARCHITECTURE.md DECISIONS.md BENCHMARKS.md README.md checklist.md \

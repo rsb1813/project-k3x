@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 2 implementation, measurement, public merge, and Linux CI are complete. Milestone 3 implementation, full verification, Compute Sanitizer validation, B-0004 measurement, and final read-only review are complete; public integration is in progress.
+Milestone 2 and Milestone 3 implementation, measurement, public merge, and Linux CI are complete.
 
-State recorded on 2026-08-09 on branch `codex/milestone-three-ffn-blocks` after selecting the dependency-closed CUDA FFN boundary.
+State recorded on 2026-08-09 after PR #3 fast-forwarded public `main` to the dependency-closed CUDA FFN boundary and post-merge Linux CI succeeded.
 
 ## Completed work
 
@@ -24,8 +24,10 @@ State recorded on 2026-08-09 on branch `codex/milestone-three-ffn-blocks` after 
 
 ## Work in progress
 
+- No Milestone 3 implementation work remains in progress. The next milestone is the exact asynchronous L0/L1 transfer pipeline design.
 - The TITAN Ledger, README, checklist, context notes, and compact/raw B-0004 artifacts are synchronized with the measured Milestone 3 implementation.
-- Final Terra high read-only review found one Important fixed-group validation gap. Commit `3df8d3f` rejects non-32 MXFP4 FFN views before side effects and adds the group-size 16/64 regression. Documentation commit, public PR, Linux CI, and merge remain in the publication gate.
+- Final Terra high read-only review found one Important fixed-group validation gap. Commit `3df8d3f` rejects non-32 MXFP4 FFN views before side effects and adds the group-size 16/64 regression.
+- Public PR #3 merged by ancestry-verified fast-forward at `5de2514`; post-merge correctness run `31295154288` succeeded.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; builds: `build-linux` and `build-cuda`.
 
@@ -41,11 +43,10 @@ State recorded on 2026-08-09 on branch `codex/milestone-three-ffn-blocks` after 
 
 ## Next concrete tasks
 
-1. Complete the Milestone 3 read-only review, public PR, Linux CI, and verified merge.
-2. Design and implement the first exact asynchronous L0/L1 transfer pipeline against the now-measured FFN block deadline boundary while preserving a synchronous reference mode.
-3. Add pinned host staging, explicit transfer deadlines, overlap instrumentation, and deterministic no-output-change tests before selecting an asynchronous default.
-4. Add full-dimension bounded checkpoint slices before any full Kimi K3 throughput claim.
-5. Continue with L2 NVMe integration, expert cache policies, task/session profiles, adaptive Top-K, and exact rescue in charter order.
+1. Design and implement the first exact asynchronous L0/L1 transfer pipeline against the now-measured FFN block deadline boundary while preserving a synchronous reference mode.
+2. Add pinned host staging, explicit transfer deadlines, overlap instrumentation, and deterministic no-output-change tests before selecting an asynchronous default.
+3. Add full-dimension bounded checkpoint slices before any full Kimi K3 throughput claim.
+4. Continue with L2 NVMe integration, expert cache policies, task/session profiles, adaptive Top-K, and exact rescue in charter order.
 
 ## Hardware assumptions
 
@@ -70,7 +71,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Public `main`: `cd72613d0da1645e407980758646d4332a9f3225`; Milestone 2 Linux CI succeeded.
+- Public Milestone 3 `main`: `5de2514276a2f32e83fb5f2bbc33a0afd3066bb9`; post-merge correctness run `31295154288` succeeded.
 - Latest measured code commit: `0f6bbdd` (`feat: add FFN block ablation reporting`).
 - Latest validated code commit: `3df8d3f` (`fix: enforce native MXFP4 FFN groups`). The valid group-32 B-0004 path is unchanged.
 - CPU verification: CTest 5/5; pytest 70 passed and 26 CUDA-only skipped.
