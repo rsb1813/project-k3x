@@ -228,6 +228,7 @@ int test_exact_mxfp4_group() {
     k3x::Profiler profiler;
     auto backend = k3x::make_cuda_backend(options, &profiler);
     if (!backend) return 41;
+    if (backend.value()->runtime_stats().pinned_host_bytes != 0) return 57;
     if (const auto result = warm_expert_weights(*backend.value(), fixture, experts)) {
         return 41 + result;
     }

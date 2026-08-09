@@ -113,6 +113,11 @@ else()
     target_link_libraries(test_cuda_ffn PRIVATE k3x_runtime)
     set_target_properties(test_cuda_ffn PROPERTIES CUDA_ARCHITECTURES "120-real")
     add_test(NAME cuda_ffn COMMAND test_cuda_ffn)
+
+    add_executable(test_cuda_async_ffn tests/cuda/test_cuda_async_ffn.cu)
+    target_link_libraries(test_cuda_async_ffn PRIVATE k3x_runtime)
+    set_target_properties(test_cuda_async_ffn PROPERTIES CUDA_ARCHITECTURES "120-real")
+    add_test(NAME cuda_async_ffn COMMAND test_cuda_async_ffn)
 endif()
 
 add_executable(test_reader tests/cpp/test_reader.cpp)

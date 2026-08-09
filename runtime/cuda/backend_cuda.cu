@@ -2,6 +2,7 @@
 #include "k3x/backend.hpp"
 #include "k3x/ops.hpp"
 
+#include "async_mxfp4_pipeline.cuh"
 #include "device_memory.cuh"
 #include "mxfp4.cuh"
 #include "resident_weights.cuh"
@@ -135,7 +136,8 @@ class CudaBackend final : public ComputeBackend {
 public:
     CudaBackend(BackendOptions options, Profiler* profiler,
                 cudaStream_t stream, cublasLtHandle_t handle,
-                std::string device_name)
+                std::string device_name, std::uint64_t async_engine_count,
+                bool device_overlap)
         : options_(options), profiler_(profiler), stream_(stream), handle_(handle),
           device_name_(std::move(device_name)),
           dense_input_scratch_(&memory_stats_, &runtime_stats_),
@@ -153,6 +155,8 @@ public:
           mxfp4_scales_scratch_(&memory_stats_, &runtime_stats_),
           mxfp4_output_scratch_(&memory_stats_, &runtime_stats_),
           mxfp4_group_output_scratch_(&memory_stats_, &runtime_stats_) {
+        runtime_stats_.async_engine_count = async_engine_count;
+        runtime_stats_.device_overlap = device_overlap;
         if (options_.cuda_weights == CudaWeightMode::resident) {
             resident_weights_ = std::make_unique<cuda::ResidentWeightTable>(
                 options_.cuda_resident_bytes, &memory_stats_, &runtime_stats_,
@@ -169,6 +173,15 @@ public:
     const BackendOptions& options() const noexcept override { return options_; }
     BackendRuntimeStats runtime_stats() const noexcept override {
         return runtime_stats_;
+    }
+
+    cudaError_t initialize_async_pipeline() {
+        if (options_.cuda_transfer == CudaTransferMode::synchronous) {
+            return cudaSuccess;
+        }
+        async_pipeline_ = std::make_unique<cuda::AsyncMxfp4Pipeline>(
+            &memory_stats_, &runtime_stats_);
+        return async_pipeline_->initialize(options_.cuda_pinned_bytes);
     }
 
     Result<std::vector<float>> dense_matvec(
@@ -1689,24 +1702,244 @@ public:
     }
 
     Result<Mxfp4PrefetchToken> prefetch_mxfp4_situ_mlp_group(
-        std::span<const Mxfp4MlpView>, std::uint64_t, std::uint32_t,
-        ProfilePhase) override {
-        return Result<Mxfp4PrefetchToken>::failure(
-            ErrorCode::backend_unavailable);
+        std::span<const Mxfp4MlpView> experts, std::uint64_t use_sequence,
+        std::uint32_t layer, ProfilePhase phase) override {
+        if (!async_pipeline_ || experts.empty()) {
+            return Result<Mxfp4PrefetchToken>::failure(
+                async_pipeline_ ? ErrorCode::invalid_extent
+                                : ErrorCode::backend_unavailable);
+        }
+        const auto input_cols = experts.front().gate.cols;
+        const auto output_rows = experts.front().down.rows;
+        std::size_t maximum_intermediate = 0;
+        std::size_t maximum_output = 0;
+        for (const auto& expert : experts) {
+            if (expert.gate.cols != input_cols ||
+                expert.down.rows != output_rows) {
+                return Result<Mxfp4PrefetchToken>::failure(
+                    ErrorCode::invalid_mxfp4);
+            }
+            maximum_intermediate =
+                std::max(maximum_intermediate, expert.gate.rows);
+            maximum_output = std::max(maximum_output, expert.down.rows);
+        }
+        auto token = async_pipeline_->prepare(
+            experts, use_sequence, layer, phase);
+        if (token) {
+            prepared_mxfp4_ = PreparedMxfp4Metadata{
+                token.value(), layer, phase, input_cols, maximum_intermediate,
+                maximum_output, experts.size()};
+        }
+        return token;
     }
 
     Result<std::vector<std::vector<float>>>
     mxfp4_situ_mlp_group_prepared(
-        std::span<const float>, Mxfp4PrefetchToken, float,
-        std::optional<float>, std::uint32_t, ProfilePhase) override {
-        return Result<std::vector<std::vector<float>>>::failure(
-            ErrorCode::backend_unavailable);
+        std::span<const float> input, Mxfp4PrefetchToken token,
+        float situ_beta, std::optional<float> situ_linear,
+        std::uint32_t layer, ProfilePhase phase) override {
+        const auto operation_start = std::chrono::steady_clock::now();
+        constexpr auto precision = NumericPrecision::mxfp4_e2m1_e8m0;
+        if (!async_pipeline_) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        if (!prepared_mxfp4_ || token.value == 0 ||
+            token.value != prepared_mxfp4_->token.value ||
+            layer != prepared_mxfp4_->layer || phase != prepared_mxfp4_->phase) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::invalid_state);
+        }
+        if (input.size() != prepared_mxfp4_->input_cols ||
+            !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
+            (situ_linear &&
+             (!std::isfinite(*situ_linear) || *situ_linear <= 0.0F))) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+
+        struct PreparedMember {
+            std::array<std::unique_ptr<EventOwner>, 8> events;
+        };
+        std::vector<PreparedMember> members(prepared_mxfp4_->expert_count);
+        for (auto& member : members) {
+            for (auto& event : member.events) {
+                event = std::make_unique<EventOwner>();
+                if (event->ensure() != cudaSuccess) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        ErrorCode::backend_unavailable,
+                        "CUDA prepared expert FFN event creation failed");
+                }
+            }
+        }
+
+        const auto input_bytes = input.size_bytes();
+        const auto intermediate_bytes =
+            prepared_mxfp4_->maximum_intermediate * sizeof(float);
+        const auto output_bytes =
+            prepared_mxfp4_->maximum_output * sizeof(float);
+        if (ffn_input_scratch_.reserve(input_bytes) != cudaSuccess ||
+            ffn_gate_scratch_.reserve(intermediate_bytes) != cudaSuccess ||
+            ffn_up_scratch_.reserve(intermediate_bytes) != cudaSuccess ||
+            ffn_activation_scratch_.reserve(intermediate_bytes) != cudaSuccess ||
+            ffn_output_scratch_.reserve(output_bytes) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA prepared expert FFN reusable allocation failed");
+        }
+        auto* device_input = static_cast<float*>(ffn_input_scratch_.get());
+        auto* device_gate = static_cast<float*>(ffn_gate_scratch_.get());
+        auto* device_up = static_cast<float*>(ffn_up_scratch_.get());
+        auto* device_activation =
+            static_cast<float*>(ffn_activation_scratch_.get());
+        auto* device_output = static_cast<float*>(ffn_output_scratch_.get());
+        if (cudaMemcpyAsync(device_input, input.data(), input_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA prepared expert activation upload failed");
+        }
+
+        const auto consumed = async_pipeline_->consume(
+            token, layer, phase, stream_);
+        if (!consumed ||
+            consumed.value().size() != prepared_mxfp4_->expert_count) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                consumed ? ErrorCode::backend_unavailable : consumed.error(),
+                consumed ? "CUDA prepared expert count changed"
+                         : consumed.message());
+        }
+        const auto experts = consumed.value();
+        const auto launch_weight = [&](const cuda::DeviceMxfp4WeightView& weight,
+                                       const float* matvec_input, float* output,
+                                       EventOwner& start, EventOwner& end) {
+            return cudaEventRecord(start.get(), stream_) == cudaSuccess &&
+                   cuda::launch_mxfp4_matvec(
+                       matvec_input, weight.packed, weight.scales, output,
+                       weight.rows, weight.cols, stream_) == cudaSuccess &&
+                   cudaEventRecord(end.get(), stream_) == cudaSuccess;
+        };
+
+        std::vector<std::vector<float>> outputs(experts.size());
+        std::uint64_t total_output_bytes = 0;
+        const auto d2h_start = std::chrono::steady_clock::now();
+        for (std::size_t index = 0; index < experts.size(); ++index) {
+            const auto& expert = experts[index];
+            auto& events = members[index].events;
+            if (!launch_weight(expert.gate, device_input, device_gate,
+                               *events[0], *events[1]) ||
+                !launch_weight(expert.up, device_input, device_up,
+                               *events[2], *events[3])) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA prepared expert gate or up failed");
+            }
+            if (cudaEventRecord(events[4]->get(), stream_) != cudaSuccess ||
+                cuda::launch_situ_glu(
+                    device_gate, device_up, device_activation,
+                    expert.gate.rows, situ_beta, situ_linear.has_value(),
+                    situ_linear.value_or(0.0F), false, stream_) != cudaSuccess ||
+                cudaEventRecord(events[5]->get(), stream_) != cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA prepared expert SiTU failed");
+            }
+            if (!launch_weight(expert.down, device_activation, device_output,
+                               *events[6], *events[7])) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA prepared expert down failed");
+            }
+            outputs[index].resize(expert.down.rows);
+            const auto bytes = expert.down.rows * sizeof(float);
+            if (cudaMemcpyAsync(outputs[index].data(), device_output, bytes,
+                                cudaMemcpyDeviceToHost, stream_) != cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA prepared expert output copy failed");
+            }
+            total_output_bytes += bytes;
+        }
+        if (cudaStreamSynchronize(stream_) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA prepared expert synchronization failed");
+        }
+        ++runtime_stats_.stream_synchronization_count;
+        const auto transfer = async_pipeline_->complete(token);
+        if (!transfer) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                transfer.error(), transfer.message());
+        }
+
+        const auto elapsed = [](EventOwner& start, EventOwner& end,
+                                std::uint64_t& value) {
+            float milliseconds = 0.0F;
+            if (cudaEventElapsedTime(&milliseconds, start.get(), end.get()) !=
+                cudaSuccess) {
+                return false;
+            }
+            value = static_cast<std::uint64_t>(std::llround(
+                static_cast<double>(milliseconds) * 1.0e6));
+            return true;
+        };
+        for (std::size_t index = 0; index < experts.size(); ++index) {
+            std::array<std::uint64_t, 4> durations{};
+            auto& events = members[index].events;
+            for (std::size_t pair = 0; pair < durations.size(); ++pair) {
+                if (!elapsed(*events[pair * 2], *events[pair * 2 + 1],
+                             durations[pair])) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        ErrorCode::backend_unavailable,
+                        "CUDA prepared expert event timing failed");
+                }
+            }
+            const auto& expert = experts[index];
+            const auto logical_bytes = [](const auto& weight) {
+                return weight.rows * weight.cols / 2 +
+                       weight.rows * weight.cols / 32;
+            };
+            record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                   operation_start, logical_bytes(expert.gate), 0,
+                   durations[0], true);
+            record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                   operation_start, logical_bytes(expert.up), 0,
+                   durations[1], true);
+            record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                   operation_start, logical_bytes(expert.down), 0,
+                   durations[3], true);
+            record(phase, ProfileOperation::situ_glu, NumericPrecision::fp32,
+                   layer, operation_start, expert.gate.rows * sizeof(float), 0,
+                   durations[2], true);
+        }
+        runtime_stats_.activation_h2d_bytes += input_bytes;
+        ++runtime_stats_.ffn_block_calls;
+        runtime_stats_.ffn_block_experts += experts.size();
+        record(phase, ProfileOperation::activation_host_to_device, precision,
+               layer, operation_start, 0, input_bytes, 0, true);
+        record(phase, ProfileOperation::weight_host_to_device, precision, layer,
+               operation_start, 0, transfer.value().bytes, 0, true);
+        record(phase, ProfileOperation::device_to_host, precision, layer,
+               d2h_start, 0, total_output_bytes, 0, true);
+        prepared_mxfp4_.reset();
+        return Result<std::vector<std::vector<float>>>::success(
+            std::move(outputs));
     }
 
     BackendMemoryStats memory_stats() const noexcept override { return memory_stats_; }
     std::string_view device_name() const noexcept override { return device_name_; }
 
 private:
+    struct PreparedMxfp4Metadata {
+        Mxfp4PrefetchToken token;
+        std::uint32_t layer{};
+        ProfilePhase phase{};
+        std::size_t input_cols{};
+        std::size_t maximum_intermediate{};
+        std::size_t maximum_output{};
+        std::size_t expert_count{};
+    };
+
     using DensePlanKey =
         std::tuple<std::size_t, std::size_t, int, int>;
 
@@ -1858,6 +2091,8 @@ private:
     std::vector<std::unique_ptr<EventOwner>> mxfp4_group_event_ends_;
     std::map<DensePlanKey, std::unique_ptr<DensePlan>> dense_plans_;
     std::unique_ptr<cuda::ResidentWeightTable> resident_weights_;
+    std::unique_ptr<cuda::AsyncMxfp4Pipeline> async_pipeline_;
+    std::optional<PreparedMxfp4Metadata> prepared_mxfp4_;
 };
 
 Result<std::unique_ptr<ComputeBackend>> cuda_failure(
@@ -1872,6 +2107,22 @@ Result<std::unique_ptr<ComputeBackend>> make_cuda_backend(
     if (options.kind == BackendKind::cpu) {
         return cuda_failure(ErrorCode::backend_unavailable,
                             "CUDA factory requires a CUDA backend kind");
+    }
+    if (options.cuda_transfer == CudaTransferMode::prefetch &&
+        (options.kind != BackendKind::cuda_custom ||
+         options.cuda_boundary != CudaBoundaryMode::ffn_block ||
+         options.cuda_allocation != CudaAllocationMode::reused ||
+         options.cuda_weights != CudaWeightMode::transient ||
+         options.cuda_pinned_bytes == 0)) {
+        return cuda_failure(
+            ErrorCode::backend_unavailable,
+            "CUDA prefetch options do not satisfy the exact capability contract");
+    }
+    if (options.cuda_transfer == CudaTransferMode::synchronous &&
+        options.cuda_pinned_bytes != 0) {
+        return cuda_failure(
+            ErrorCode::backend_unavailable,
+            "synchronous CUDA transfer cannot allocate pinned staging");
     }
 
     int device = -1;
@@ -1899,6 +2150,12 @@ Result<std::unique_ptr<ComputeBackend>> make_cuda_backend(
         return cuda_failure(ErrorCode::backend_unavailable,
                             "CUDA device property query failed");
     }
+    int device_overlap = 0;
+    if (cudaDeviceGetAttribute(&device_overlap, cudaDevAttrGpuOverlap, device) !=
+        cudaSuccess) {
+        return cuda_failure(ErrorCode::backend_unavailable,
+                            "CUDA overlap capability query failed");
+    }
 
     StreamOwner stream;
     if (cudaStreamCreateWithFlags(stream.out(), cudaStreamNonBlocking) != cudaSuccess) {
@@ -1912,8 +2169,15 @@ Result<std::unique_ptr<ComputeBackend>> make_cuda_backend(
                             "cuBLASLt handle creation failed");
     }
 
-    std::unique_ptr<ComputeBackend> backend = std::make_unique<CudaBackend>(
-        options, profiler, stream.release(), handle.release(), properties.name);
+    auto concrete = std::make_unique<CudaBackend>(
+        options, profiler, stream.release(), handle.release(), properties.name,
+        static_cast<std::uint64_t>(properties.asyncEngineCount),
+        device_overlap != 0);
+    if (concrete->initialize_async_pipeline() != cudaSuccess) {
+        return cuda_failure(ErrorCode::backend_unavailable,
+                            "CUDA async transfer resource initialization failed");
+    }
+    std::unique_ptr<ComputeBackend> backend = std::move(concrete);
     return Result<std::unique_ptr<ComputeBackend>>::success(std::move(backend));
 }
 
