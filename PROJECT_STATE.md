@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 17 persistent AURORA draft state is implemented, measured, reviewed, and published in ready PR #23. The cursor, provider, `aurora-persistent` CLI, five cursor telemetry fields, canonical B-0018, full CPU/io_uring/CUDA verification, ASan/UBSan coverage, Compute Sanitizer, TITAN Ledger synchronization, and final self-review are complete. Complete-prefix replay remains the exact non-default oracle and the natural strict target verifier remains authoritative. PR merge and post-merge CI remain pending.
+Milestone 17 persistent AURORA draft state is implemented, measured, reviewed, and published on public `main` through merged PR #23 at integration head `30bbf7a8`. The cursor, provider, `aurora-persistent` CLI, five cursor telemetry fields, canonical B-0018, full CPU/io_uring/CUDA verification, ASan/UBSan coverage, Compute Sanitizer, TITAN Ledger synchronization, final review, merge, and post-merge CI are complete. Complete-prefix replay remains the exact non-default oracle and the natural strict target verifier remains authoritative.
 
-State audited on 2026-08-10 against public ledger head `44aa049` and isolated branch `codex/milestone-seventeen-persistent-aurora` through evidence commit `de63023`. The current CPU matrix passes CTest 14/14 and Python 272 passed/47 skipped. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 against public integration head `30bbf7a8` and post-merge correctness run `31340476396`. The current CPU matrix passes CTest 14/14 and Python 272 passed/47 skipped. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
@@ -114,8 +114,8 @@ State audited on 2026-08-10 against public ledger head `44aa049` and isolated br
 
 ## Next concrete tasks
 
-1. Publish and merge Milestone 17, then verify public `main` CI and update the public integration ledger.
-2. Start the next isolated milestone from measured B-0018: compare exact draft GPU execution, expert residency, and reduced precision as separate axes before selecting one.
+1. Start the next isolated milestone from measured B-0018: compare exact draft GPU execution, expert residency, and reduced precision as separate axes before selecting one.
+2. Update GitHub Actions dependencies to remove the observed Node.js 20 deprecation warning without changing the correctness workflow contract.
 
 ## Hardware assumptions
 
@@ -144,6 +144,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
+- Public Milestone 17 integration head `30bbf7a8` includes the complete implementation, B-0018 evidence, English README, and synchronized TITAN Ledger. PR #23 branch/PR correctness runs `31340338639`/`31340340063` and post-merge `main` correctness run `31340476396` succeeded.
 - Milestone 17 cursor/transaction head `6b3955a`, provider head `c28a732`, CLI/schema head `3459ca6`, and B-0018 evidence head `de63023` are the current verified lineage.
 - Current full verification passes CPU CTest 14/14 and pytest 272 passed/47 skipped, liburing/direct CTest 15/15 and pytest 278 passed/41 skipped, ASan/UBSan liburing CTest 15/15 plus five artifact-backed persistent tests, and CUDA CTest 23/23 with pytest 311 passed/8 skipped. The persistent CUDA expert-major Compute Sanitizer run reports zero errors.
 - B-0018 artifact SHA-256 is `81560d6250869426d739040c6e30d9a881b1f37f7a3f639345d27dd69a80ce96`; runner SHA-256 is `0eb212731be6e0a5344048aa6f6d76fb57732423017568112ec9d27f7b74d48d`; canonical aggregate SHA-256 is `abcef1afca7d6208808941323565bce44f25ecc6e9e0d28292ad54bfc7760cd0`; summary JSON/CSV SHA-256 is `a332af2d336cecb3060812a577f16e605bc832f4f21b74f315dfbbf8fd4f6132` / `c65d3bb9d8805f66249d0bb6ba380b8aa2508fd53a073c1bc3dece82e00fe472`.
