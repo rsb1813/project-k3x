@@ -148,6 +148,17 @@
 - [x] Reconcile `PROJECT_STATE.md` with public baseline `46105f8` and the Milestone 15 design-only boundary.
 - [x] Audit ARCHITECTURE, DECISIONS, BENCHMARKS, PERFORMANCE_MODEL, PLAN, K3X_FORMAT, and reference docs; retain accurate historical or constitutional text unchanged.
 - [x] Validate the Markdown diff and prepare the documentation change for public merge.
+
+## Milestone 15 — Exact CUDA expert-major execution
+
+- [x] Re-read the M14 CPU expert-major path and current CUDA MXFP4 FFN implementation.
+- [x] Inspect pinned MoonshotAI, vLLM, and NVIDIA primary sources relevant to expert-grouped token execution.
+- [x] Compare a single-expert multi-token primitive, temporary scalar residency, and a persistent multi-expert kernel.
+- [x] Write and self-review the accepted CUDA expert-major design.
+- [ ] Write the detailed TDD implementation plan.
+- [ ] Implement the backend batch contract through witnessed RED and GREEN cycles.
+- [ ] Integrate the exact CUDA runtime, CLI capability gate, and telemetry.
+- [ ] Run B-0016, full verification, sanitizer, ledger, review, and public integration.
 - [x] Update the README milestone badge and current implementation summary.
 - [x] Correct the stale speculative-implementation statement and publication HEAD in `PROJECT_STATE.md`.
 - [x] Run documentation checks, commit, publish, and verify public `main`.
