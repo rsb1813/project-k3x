@@ -40,6 +40,7 @@ private:
     std::array<bool, 3> observed_lengths_{};
     std::optional<std::size_t> largest_qualified_rung_;
     std::optional<std::size_t> rejection_cap_;
+    bool retry_smallest_rung_{};
     DraftProviderStats stats_{};
 };
 }
