@@ -1,7 +1,9 @@
 // exact CPU backend의 dense와 native MXFP4 행렬 연산 계약을 검증합니다.
 #include "k3x/backend.hpp"
+#include "k3x/ops.hpp"
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 
 int main() {
@@ -121,5 +123,84 @@ int main() {
         mxfp4_input, invalid_group, 12, k3x::ProfilePhase::decode);
     if (rejected || rejected.error() != k3x::ErrorCode::invalid_mxfp4) return 56;
     if (profiler.events().size() != event_count) return 57;
+
+    const std::array<float, 6> dense_gate{
+        1.0F, 0.0F, 0.0F, 0.0F, 1.0F, 0.0F};
+    const std::array<float, 6> dense_up{
+        0.0F, 0.0F, 2.0F, 1.0F, 0.0F, 0.0F};
+    const std::array<float, 4> dense_down{1.0F, 2.0F, -1.0F, 0.5F};
+    const k3x::DenseMlpView dense_mlp{
+        {301, dense_gate, 2, 3},
+        {302, dense_up, 2, 3},
+        {303, dense_down, 2, 2},
+    };
+    const auto dense_block = backend->dense_situ_mlp(
+        dense_input, dense_mlp, 2.0F, 1.5F, 13,
+        k3x::ProfilePhase::decode);
+    if (!dense_block || dense_block.value().size() != 2) return 61;
+    std::array<float, 2> dense_activation{};
+    const std::array<float, 2> dense_gate_output{2.0F, -1.0F};
+    const std::array<float, 2> dense_up_output{1.0F, 2.0F};
+    k3x::situ_glu(dense_activation, dense_gate_output, dense_up_output, 2.0F,
+                  1.5F);
+    const std::array<float, 2> dense_expected{
+        dense_activation[0] + 2.0F * dense_activation[1],
+        -dense_activation[0] + 0.5F * dense_activation[1],
+    };
+    if (std::abs(dense_block.value()[0] - dense_expected[0]) > 1.0e-6F ||
+        std::abs(dense_block.value()[1] - dense_expected[1]) > 1.0e-6F) {
+        return 62;
+    }
+
+    std::array<std::byte, 512> expert_gate{};
+    std::array<std::byte, 512> expert_up{};
+    std::array<std::byte, 16> expert_down_one{};
+    std::array<std::byte, 16> expert_down_two{};
+    expert_gate[0] = std::byte{0x10};
+    expert_up[0] = std::byte{0x20};
+    expert_down_one[0] = std::byte{0x02};
+    expert_down_two[0] = std::byte{0x04};
+    std::array<std::byte, 32> expert_intermediate_scales{};
+    expert_intermediate_scales.fill(std::byte{127});
+    const std::array<std::byte, 1> expert_down_scales{std::byte{127}};
+    const std::array<k3x::Mxfp4MlpView, 2> expert_mlps{{
+        {
+            {401, expert_gate, expert_intermediate_scales, 32, 32, 32},
+            {402, expert_up, expert_intermediate_scales, 32, 32, 32},
+            {403, expert_down_one, expert_down_scales, 1, 32, 32},
+        },
+        {
+            {404, expert_gate, expert_intermediate_scales, 32, 32, 32},
+            {405, expert_up, expert_intermediate_scales, 32, 32, 32},
+            {406, expert_down_two, expert_down_scales, 1, 32, 32},
+        },
+    }};
+    const auto expert_blocks = backend->mxfp4_situ_mlp_group(
+        mxfp4_input, expert_mlps, 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    if (!expert_blocks || expert_blocks.value().size() != 2) return 63;
+    std::array<float, 1> expert_activation{};
+    const std::array<float, 1> expert_gate_output{1.0F};
+    const std::array<float, 1> expert_up_output{2.0F};
+    k3x::situ_glu(expert_activation, expert_gate_output, expert_up_output,
+                  2.0F, 1.5F);
+    if (std::abs(expert_blocks.value()[0][0] - expert_activation[0]) >
+            1.0e-6F ||
+        std::abs(expert_blocks.value()[1][0] - 2.0F * expert_activation[0]) >
+            1.0e-6F) {
+        return 64;
+    }
+
+    auto invalid_expert_mlps = expert_mlps;
+    invalid_expert_mlps[1].down.scales = {};
+    const auto block_event_count = profiler.events().size();
+    const auto rejected_block = backend->mxfp4_situ_mlp_group(
+        mxfp4_input, invalid_expert_mlps, 2.0F, 1.5F, 15,
+        k3x::ProfilePhase::decode);
+    if (rejected_block ||
+        rejected_block.error() != k3x::ErrorCode::invalid_mxfp4) {
+        return 65;
+    }
+    if (profiler.events().size() != block_event_count) return 66;
     return 0;
 }

@@ -118,7 +118,7 @@ git commit -m "feat: define CUDA FFN block boundary"
 - Produces: `DenseMlpView`, `Mxfp4MlpView`, `ComputeBackend::dense_situ_mlp()`, and `ComputeBackend::mxfp4_situ_mlp_group()`.
 - Consumes: current dense, native MXFP4, and `situ_glu()` oracles.
 
-- [ ] **Step 1: Write failing dense and MXFP4 block tests**
+- [x] **Step 1: Write failing dense and MXFP4 block tests**
 
 Create a literal dense triplet and compare the new method with scalar gate, up, portable `situ_glu()`, and scalar down.
 
@@ -135,7 +135,7 @@ const auto dense_block = backend->dense_situ_mlp(
 
 Create two native MXFP4 triplets and require ordered outputs from `mxfp4_situ_mlp_group()`. Add an invalid second down view and assert rejection before profiler events are appended.
 
-- [ ] **Step 2: Run the CPU backend test and verify RED**
+- [x] **Step 2: Run the CPU backend test and verify RED**
 
 ```bash
 cmake --build build-linux -j2
@@ -144,7 +144,7 @@ ctest --test-dir build-linux -R backend --output-on-failure
 
 Expected: compilation fails because the block types and methods are missing.
 
-- [ ] **Step 3: Define exact interfaces**
+- [x] **Step 3: Define exact interfaces**
 
 Add `<optional>` and these view types to `backend.hpp`.
 
@@ -176,11 +176,11 @@ virtual Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_group(
     std::uint32_t layer, ProfilePhase phase) = 0;
 ```
 
-- [ ] **Step 4: Implement deterministic CPU composition**
+- [x] **Step 4: Implement deterministic CPU composition**
 
 Preflight all shapes before work. Dense calls scalar gate/up, portable `situ_glu()`, then scalar down. MXFP4 preflights every triplet, then performs the same scalar sequence in request order. Return the first typed error and never retain a partial output group.
 
-- [ ] **Step 5: Verify the complete CPU suite**
+- [x] **Step 5: Verify the complete CPU suite**
 
 ```bash
 cmake --build build-linux -j2
@@ -189,7 +189,7 @@ source /home/jolib/.venvs/k3x-m1/bin/activate
 K3X_BUILD_DIR=build-linux python -m pytest -q
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add runtime/include/k3x/backend.hpp runtime/src/backend_cpu.cpp \

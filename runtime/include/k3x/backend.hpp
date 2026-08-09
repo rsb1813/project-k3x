@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -70,6 +71,18 @@ struct Mxfp4WeightView {
     std::size_t group_size;
 };
 
+struct DenseMlpView {
+    DenseWeightView gate;
+    DenseWeightView up;
+    DenseWeightView down;
+};
+
+struct Mxfp4MlpView {
+    Mxfp4WeightView gate;
+    Mxfp4WeightView up;
+    Mxfp4WeightView down;
+};
+
 class ComputeBackend {
 public:
     virtual ~ComputeBackend() = default;
@@ -87,6 +100,14 @@ public:
         std::uint32_t layer, ProfilePhase phase) = 0;
     virtual Result<std::vector<std::vector<float>>> mxfp4_matvec_group(
         std::span<const float> input, std::span<const Mxfp4WeightView> weights,
+        std::uint32_t layer, ProfilePhase phase) = 0;
+    virtual Result<std::vector<float>> dense_situ_mlp(
+        std::span<const float> input, DenseMlpView weights,
+        float situ_beta, std::optional<float> situ_linear,
+        std::uint32_t layer, ProfilePhase phase) = 0;
+    virtual Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_group(
+        std::span<const float> input, std::span<const Mxfp4MlpView> experts,
+        float situ_beta, std::optional<float> situ_linear,
         std::uint32_t layer, ProfilePhase phase) = 0;
     Result<std::vector<float>> dense_matvec(
         std::span<const float> input, std::span<const float> values,

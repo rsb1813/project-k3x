@@ -102,6 +102,55 @@ public:
             std::move(outputs));
     }
 
+    Result<std::vector<float>> dense_situ_mlp(
+        std::span<const float> input, DenseMlpView weights,
+        float situ_beta, std::optional<float> situ_linear,
+        std::uint32_t layer, ProfilePhase phase) override {
+        if (!valid_dense_mlp(input, weights)) {
+            return Result<std::vector<float>>::failure(ErrorCode::invalid_extent);
+        }
+        auto gate = dense_matvec(input, weights.gate, layer, phase);
+        auto up = dense_matvec(input, weights.up, layer, phase);
+        if (!gate || !up) {
+            return Result<std::vector<float>>::failure(ErrorCode::invalid_extent);
+        }
+        std::vector<float> activated(weights.gate.rows);
+        situ_glu(activated, gate.value(), up.value(), situ_beta, situ_linear);
+        return dense_matvec(activated, weights.down, layer, phase);
+    }
+
+    Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_group(
+        std::span<const float> input, std::span<const Mxfp4MlpView> experts,
+        float situ_beta, std::optional<float> situ_linear,
+        std::uint32_t layer, ProfilePhase phase) override {
+        for (const auto& expert : experts) {
+            if (!valid_mxfp4_mlp(input, expert)) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::invalid_mxfp4);
+            }
+        }
+        std::vector<std::vector<float>> outputs;
+        outputs.reserve(experts.size());
+        for (const auto& expert : experts) {
+            auto gate = mxfp4_matvec(input, expert.gate, layer, phase);
+            auto up = mxfp4_matvec(input, expert.up, layer, phase);
+            if (!gate || !up) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::invalid_mxfp4);
+            }
+            std::vector<float> activated(expert.gate.rows);
+            situ_glu(activated, gate.value(), up.value(), situ_beta, situ_linear);
+            auto output = mxfp4_matvec(activated, expert.down, layer, phase);
+            if (!output) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    output.error(), output.message());
+            }
+            outputs.push_back(std::move(output.value()));
+        }
+        return Result<std::vector<std::vector<float>>>::success(
+            std::move(outputs));
+    }
+
     BackendMemoryStats memory_stats() const noexcept override { return {}; }
     std::string_view device_name() const noexcept override { return "CPU"; }
 
@@ -119,7 +168,12 @@ private:
 
     static bool valid_mxfp4(std::span<const float> input,
                             Mxfp4WeightView weight) {
-        if (input.size() != weight.cols || !weight.rows || !weight.cols ||
+        return valid_mxfp4(input.size(), weight);
+    }
+
+    static bool valid_mxfp4(std::size_t input_size,
+                            Mxfp4WeightView weight) {
+        if (input_size != weight.cols || !weight.rows || !weight.cols ||
             !weight.group_size || weight.cols % weight.group_size ||
             weight.cols % 2 ||
             weight.rows > std::numeric_limits<std::size_t>::max() /
@@ -135,6 +189,32 @@ private:
             if (scale == std::byte{0xff}) return false;
         }
         return true;
+    }
+
+    static bool valid_dense_mlp(std::span<const float> input,
+                                DenseMlpView weights) {
+        return valid_dense(input, weights.gate) &&
+               valid_dense(input, weights.up) && weights.gate.rows != 0 &&
+               weights.gate.rows == weights.up.rows &&
+               valid_dense_size(weights.gate.rows, weights.down);
+    }
+
+    static bool valid_dense_size(std::size_t input_size,
+                                 DenseWeightView weight) {
+        if (input_size != weight.cols || !weight.rows || !weight.cols ||
+            weight.rows > weight.values.size() ||
+            weight.rows > weight.values.size() / weight.cols) {
+            return false;
+        }
+        return weight.values.size() == weight.rows * weight.cols;
+    }
+
+    static bool valid_mxfp4_mlp(std::span<const float> input,
+                                Mxfp4MlpView expert) {
+        return valid_mxfp4(input, expert.gate) &&
+               valid_mxfp4(input, expert.up) &&
+               expert.gate.rows == expert.up.rows &&
+               valid_mxfp4(expert.gate.rows, expert.down);
     }
 
     void record(ProfilePhase phase, ProfileOperation operation,
