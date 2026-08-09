@@ -173,7 +173,7 @@
 - [x] Write and self-review the replay AURORA and adaptive scheduler design.
 - [x] Write and self-review the detailed TDD implementation plan.
 - [x] Implement scheduler feedback and provider contracts through witnessed RED/GREEN cycles.
-- [ ] Integrate AURORA replay CLI, telemetry, and exact target verification.
+- [x] Integrate AURORA replay CLI, telemetry, and exact target verification.
 - [ ] Run B-0017, the full verification matrix, sanitizer coverage, and evidence cross-checks.
 - [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
 

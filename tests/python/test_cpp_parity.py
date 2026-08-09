@@ -10,7 +10,9 @@ import torch
 
 from k3x_converter.reader import K3XReader
 from k3x_converter.writer import convert
+from k3x_ref.config import SyntheticK3Config
 from k3x_ref.fixtures import build_synthetic_model
+from k3x_ref.fixtures import write_source_checkpoint
 from k3x_ref.storage_fixture import write_bounded_expert_source
 
 
@@ -549,6 +551,114 @@ def test_cpp_scripted_speculation_preserves_greedy_execution(
     assert baseline["target_decode_forward_calls"] == 5
 
 
+def test_cpp_aurora_replay_preserves_natural_target_execution(
+    tmp_path: Path,
+) -> None:
+    config = SyntheticK3Config.default().replace(num_experts=24, top_k=16)
+    source = tmp_path / "source-top16"
+    write_source_checkpoint(source, config=config)
+    artifact = tmp_path / "top16.k3x"
+    convert(source, artifact, chunk_bytes=257)
+    runner = cpp_binary("k3x_run")
+    baseline_output = tmp_path / "natural.json"
+    common = [
+        str(runner), "--model", str(artifact),
+        "--prompt-ids", "1,7,3,9", "--generate", "6",
+        "--mode", "incremental", "--diagnostics", "true",
+    ]
+    subprocess.run([*common, "--json", str(baseline_output)], check=True)
+    baseline = json.loads(baseline_output.read_text(encoding="utf-8"))
+    for policy in ("fixed", "adaptive"):
+        aurora_output = tmp_path / f"aurora-{policy}.json"
+        subprocess.run(
+            [
+                *common,
+                "--speculative-mode", "aurora-replay",
+                "--speculative-block-size", "2",
+                "--aurora-draft-k", "4",
+                "--aurora-block-policy", policy,
+                "--json", str(aurora_output),
+            ],
+            check=True,
+        )
+        aurora = json.loads(aurora_output.read_text(encoding="utf-8"))
+        assert aurora["token_ids"] == baseline["token_ids"]
+        assert aurora["final_state"] == baseline["final_state"]
+        assert aurora["routed_experts"] == baseline["routed_experts"]
+        assert aurora["routed_k"] == baseline["routed_k"]
+        assert aurora["reader_completed_bytes"] == baseline["reader_completed_bytes"]
+        assert aurora["speculative_mode"] == "aurora-replay"
+        assert aurora["aurora_draft_k"] == 4
+        assert aurora["aurora_block_policy"] == policy
+        assert aurora["draft_proposal_calls"] > 0
+        assert aurora["draft_candidate_tokens"] > 0
+        assert aurora["draft_replayed_context_tokens"] > 0
+        assert aurora["draft_reader_read_calls"] > 0
+        assert aurora["draft_reader_completed_bytes"] > 0
+        assert aurora["draft_routing_decisions"] > 0
+
+
+def test_cpp_aurora_replay_preflight_rejects_invalid_combinations(
+    tmp_path: Path,
+) -> None:
+    config = SyntheticK3Config.default().replace(num_experts=24, top_k=16)
+    source = tmp_path / "source-top16"
+    write_source_checkpoint(source, config=config)
+    artifact = tmp_path / "top16.k3x"
+    convert(source, artifact, chunk_bytes=257)
+    runner = cpp_binary("k3x_run")
+    common = [
+        str(runner), "--model", str(artifact),
+        "--prompt-ids", "1,7,3,9", "--generate", "6",
+    ]
+    invalid_arguments = (
+        ["--speculative-mode", "aurora-replay", "--speculative-block-size", "2",
+         "--aurora-draft-k", "4", "--aurora-block-policy", "unknown"],
+        ["--speculative-mode", "aurora-replay", "--speculative-block-size", "2",
+         "--aurora-draft-k", "0"],
+        ["--speculative-mode", "aurora-replay", "--speculative-block-size", "2",
+         "--aurora-draft-k", "16"],
+        ["--speculative-mode", "aurora-replay", "--speculative-block-size", "3",
+         "--aurora-draft-k", "4"],
+        ["--speculative-mode", "aurora-replay", "--speculative-block-size", "2",
+         "--aurora-draft-k", "4", "--routing-mode", "fixed",
+         "--routing-fixed-k", "4"],
+        ["--speculative-mode", "none", "--aurora-draft-k", "4"],
+        ["--speculative-mode", "aurora-replay", "--speculative-block-size", "2",
+         "--aurora-draft-k", "4", "--mode", "full"],
+    )
+    for index, arguments in enumerate(invalid_arguments):
+        output = tmp_path / f"invalid-{index}.json"
+        result = subprocess.run(
+            [*common, *arguments, "--json", str(output)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 2
+        assert not output.exists()
+
+    natural8 = SyntheticK3Config.default().replace(num_experts=12, top_k=8)
+    source8 = tmp_path / "source-top8"
+    write_source_checkpoint(source8, config=natural8)
+    artifact8 = tmp_path / "top8.k3x"
+    convert(source8, artifact8, chunk_bytes=257)
+    output8 = tmp_path / "invalid-equal-k.json"
+    result8 = subprocess.run(
+        [
+            str(runner), "--model", str(artifact8),
+            "--prompt-ids", "1,7,3,9", "--generate", "6",
+            "--speculative-mode", "aurora-replay",
+            "--speculative-block-size", "2",
+            "--aurora-draft-k", "8",
+            "--json", str(output8),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result8.returncode == 2
+    assert not output8.exists()
+
+
 def test_cpp_expert_major_speculation_preserves_exact_state_and_reuses_payloads(
     synthetic_source: Path, tmp_path: Path
 ) -> None:
@@ -787,7 +897,7 @@ def test_cuda_expert_major_speculation_preserves_exact_state_and_unions_h2d(
         ),
         (
             ["--speculative-verification", "expert-major"],
-            "expert-major verification requires scripted-reference speculation",
+            "expert-major verification requires scripted-reference or AURORA replay speculation",
         ),
         (
             [
