@@ -14,6 +14,7 @@ from k3x_ref.kda import KDAState, KDAWeights, empty_kda_state, kda_prefill
 from k3x_ref.mla import MLAState, MLAWeights, empty_mla_state, mla_prefill
 from k3x_ref.moe import LatentMoEWeights, stable_latent_moe
 from k3x_ref.ops import rms_norm, situ_glu
+from k3x_ref.routing_policy import RoutingPolicyConfig
 
 
 @dataclass(frozen=True)
@@ -78,12 +79,18 @@ def dense_mlp(
 
 
 class SyntheticK3Model:
-    def __init__(self, cfg: SyntheticK3Config, weights: ModelWeights):
+    def __init__(
+        self,
+        cfg: SyntheticK3Config,
+        weights: ModelWeights,
+        routing_policy: RoutingPolicyConfig | None = None,
+    ):
         cfg.validate()
         if len(weights.layers) != len(cfg.layer_kinds):
             raise ValueError("weights.layers must match layer_kinds")
         self.cfg = cfg
         self.weights = weights
+        self.routing_policy = routing_policy
 
     def empty_state(
         self,
@@ -176,7 +183,10 @@ class SyntheticK3Model:
                 ffn_output = dense_mlp(normalized_ffn, layer.feed_forward, self.cfg)
             else:
                 ffn_output = stable_latent_moe(
-                    normalized_ffn, layer.feed_forward, self.cfg
+                    normalized_ffn,
+                    layer.feed_forward,
+                    self.cfg,
+                    self.routing_policy,
                 )
             hidden = prefix_sum + ffn_output
             if capture_layers:

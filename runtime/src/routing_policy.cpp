@@ -71,12 +71,18 @@ Result<RoutingDecision> select_routing(
     RoutingDecision decision;
     decision.natural_top_k = natural_top_k;
     decision.full_order.resize(scores.size());
+    std::vector<float> adjusted(scores.size());
+    for (std::size_t index = 0; index < scores.size(); ++index) {
+        adjusted[index] = scores[index] + correction_bias[index];
+        if (!std::isfinite(adjusted[index])) {
+            return fail("invalid adjusted routing score");
+        }
+    }
     std::iota(decision.full_order.begin(), decision.full_order.end(), 0);
     std::stable_sort(
         decision.full_order.begin(), decision.full_order.end(),
         [&](std::size_t left, std::size_t right) {
-            return static_cast<double>(scores[left]) + correction_bias[left] >
-                   static_cast<double>(scores[right]) + correction_bias[right];
+            return adjusted[left] > adjusted[right];
         });
 
     float natural_denominator = 0.0F;

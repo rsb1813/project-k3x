@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 10 is published and verified. Milestone 11 Task 1 standalone Adaptive Top-K routing policy is implemented and CPU-verified; reference-fixture and runtime integration remain.
+Milestone 10 is published and verified. Milestone 11 Tasks 1–2 standalone routing policy, configurable fixture, 16-of-24 model, and PyTorch reference execution are implemented and verified; C++ Engine/CLI integration remains.
 
 State recorded on 2026-08-09 at verified Milestone 10 publication head `a82d733`. Publication-record correctness runs `31316068815` and `31316069868` succeeded, and the active branch is `codex/milestone-eleven-adaptive-topk-rescue`.
 
@@ -61,7 +61,7 @@ State recorded on 2026-08-09 at verified Milestone 10 publication head `a82d733`
 
 ## Work in progress
 
-- Milestone 11 primary-source/current-code review, accepted design, plan, and standalone natural/fixed/adaptive routing policy are complete. The policy is not connected to Engine or CLI yet, so existing runtime behavior remains unchanged.
+- Milestone 11 standalone natural/fixed/adaptive policy and PyTorch 16-of-24 reference execution are complete. Fixed K16 equals natural Top-16 exactly in the reference. The policy is not connected to the C++ Engine or CLI yet, so existing runtime behavior remains unchanged.
 - Milestone 9 Terra high final review found one valid Important shared-session policy-context issue. Commit `fd05d95` serializes complete generation calls; re-review found no remaining Critical or Important issue and withdrew an initial collision interpretation concern after deterministic future-layer trace review.
 - Static, LRU, LFU, Least-Stale, profiled eviction, and all non-default L2 modes remain experimental and opt-in. Transition prediction and cross-layer asynchronous L2 scheduling remain unimplemented.
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
@@ -85,9 +85,9 @@ State recorded on 2026-08-09 at verified Milestone 10 publication head `a82d733`
 
 ## Next concrete tasks
 
-1. Extend fixture construction with an explicit configuration while proving the default source artifact is unchanged.
-2. Add an explicit 16-of-24 synthetic fixture and PyTorch oracle for fixed/adaptive routing.
-3. Connect one immutable routing decision to Engine loop bounds only after end-to-end reference evidence exists.
+1. Add C++ Engine RED parity for natural Top-2 and the 16-of-24 natural/fixed modes.
+2. Connect one immutable routing decision to Engine denominator, selected-set, loader, CUDA group, and CPU mixing bounds.
+3. Add CLI validation, variable-K diagnostics, policy telemetry, and exact selected cold-rescue counting.
 4. Add a bounded multi-expert or full-layer slice for representative cache pressure and locality evidence.
 5. Run native-Linux P44 Pro warm/cold B-0008 through B-0011 only when that environment exists.
 

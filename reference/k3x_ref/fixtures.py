@@ -187,8 +187,9 @@ def _build_weights(
 def build_synthetic_model(
     seed: int = 20260808,
     controlled: bool = False,
+    config: SyntheticK3Config | None = None,
 ) -> SyntheticK3Model:
-    cfg = SyntheticK3Config.default()
+    cfg = config or SyntheticK3Config.default()
     return SyntheticK3Model(cfg, _build_weights(cfg, seed, controlled))
 
 
@@ -217,9 +218,10 @@ def _collect_tensors(
 def write_source_checkpoint(
     path: Path,
     seed: int = 20260808,
+    config: SyntheticK3Config | None = None,
 ) -> dict[str, Any]:
     path.mkdir(parents=True, exist_ok=True)
-    model = build_synthetic_model(seed)
+    model = build_synthetic_model(seed, config=config)
     tensors: dict[str, torch.Tensor] = {}
     packed_shapes: dict[str, list[int]] = {}
     _collect_tensors(model.weights, "model", tensors, packed_shapes)

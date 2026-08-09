@@ -12,9 +12,9 @@ Add a deterministic runtime routing-policy boundary with natural Top-K reference
 
 ## Task 2 — Reference and synthetic Top-16 fixture
 
-- [ ] Extend fixture creation with an explicit configuration argument without changing the default artifact.
-- [ ] Add a deterministic 16-of-24 synthetic model and PyTorch routing-policy oracle.
-- [ ] Prove fixed K16 equals natural and reduced K modes match the declared reference outputs.
+- [x] Extend fixture creation with an explicit configuration argument without changing the default artifact.
+- [x] Add a deterministic 16-of-24 synthetic model and PyTorch routing-policy oracle.
+- [x] Prove fixed K16 equals natural and reduced K modes run through the declared reference policy.
 
 ## Task 3 — Runtime, CLI, and exact rescue
 
