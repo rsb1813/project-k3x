@@ -9,6 +9,7 @@ import pytest
 from conftest import cpp_binary
 from k3x_converter.writer import convert
 from tools.ablate_cuda_residency import cuda_residency_matrix, run_ablation
+from tools.ablate_cuda_ffn import ffn_boundary_matrix, run_ffn_ablation
 from tools.benchmark_synthetic import BenchmarkRecord, benchmark_once, write_results
 
 
@@ -58,6 +59,7 @@ def _record() -> BenchmarkRecord:
         kda_state_bytes=1024,
         mla_kv_bytes=2048,
         per_layer_nanoseconds=(1, 2, 3, 4),
+        token_ids=(43, 32, 28, 49, 9, 28),
     )
 
 
@@ -91,6 +93,55 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert row["ffn_block_experts"] == "0"
     assert row["peak_vram_bytes"] == ""
     assert row["per_layer_nanoseconds"] == "1;2;3;4"
+    assert row["token_ids"] == "43;32;28;49;9;28"
+
+
+def test_ffn_boundary_matrix_and_runner_preserve_parity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    matrix = ffn_boundary_matrix()
+    assert tuple(item["name"] for item in matrix) == (
+        "operation-scalar",
+        "operation-grouped",
+        "ffn-block-scalar",
+        "ffn-block-grouped",
+    )
+
+    def fake_benchmark_once(*args: object, **kwargs: object) -> BenchmarkRecord:
+        boundary = str(kwargs["cuda_boundary"])
+        batching = str(kwargs["cuda_batching"])
+        block = boundary == "ffn-block"
+        grouped = batching == "grouped"
+        return BenchmarkRecord(
+            **{
+                **_record().__dict__,
+                "backend": "cuda-custom",
+                "cuda_allocation": "reused",
+                "cuda_weights": "resident",
+                "cuda_batching": batching,
+                "cuda_boundary": boundary,
+                "cuda_resident_bytes": 4096,
+                "device_to_host_bytes": 35 if block and grouped else 40 if block else 80 if grouped else 100,
+                "stream_synchronization_count": 7 if block and grouped else 8 if block else 15 if grouped else 20,
+                "ffn_block_calls": 4 if block else 0,
+                "ffn_block_experts": 6 if block else 0,
+            }
+        )
+
+    monkeypatch.setattr("tools.ablate_cuda_ffn.benchmark_once", fake_benchmark_once)
+    summary = run_ffn_ablation(
+        tmp_path / "model.k3x",
+        tmp_path / "k3x_run",
+        dense_precision="fp32",
+        cuda_resident_bytes=4096,
+        warmup=0,
+        iterations=1,
+        output_dir=tmp_path / "ffn-ablation",
+    )
+    assert all(item["parity_status"] == "exact" for item in summary["records"])
+    assert summary["records"][2]["device_to_host_bytes"] < summary["records"][0]["device_to_host_bytes"]
+    assert summary["records"][3]["stream_synchronization_count"] < summary["records"][1]["stream_synchronization_count"]
+    assert (tmp_path / "ffn-ablation" / "summary.json").is_file()
 
 
 def test_schema_accepts_explicit_milestone_one_scope() -> None:

@@ -444,34 +444,34 @@ git commit -m "feat: connect FFN blocks to the synthetic graph"
 
 All four cases use `cuda-custom`, reused execution, resident weights, identical prompts, and identical generation length.
 
-- [ ] **Step 1: Write failing schema and ablation tests**
+- [x] **Step 1: Write failing schema and ablation tests**
 
 Require a `situ_glu` operation bucket and serialized `ffn_block_calls` and `ffn_block_experts` counters. Require the ablation runner to emit all four exact case names, common provenance fields, split weight/activation H2D, D2H, synchronization count, resident hits/misses, tokens, and parity status.
 
 Assert that operation cases report zero FFN block counters. Assert that FFN cases report nonzero counters and less D2H and synchronization traffic than their matching operation cases. Preserve resident-capacity invariants and exact output parity in every case.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 ```bash
 pytest -q tests/test_profile.py tests/test_benchmark_schema.py -k "ffn or situ"
 ```
 
-- [ ] **Step 3: Implement the smallest schema extension**
+- [x] **Step 3: Implement the smallest schema extension**
 
 Add the `situ_glu` timing bucket and the two counters without renaming existing fields. Serialize them in the same stable order as related CUDA metrics. Keep old benchmark consumers valid by adding fields rather than changing existing meanings.
 
-- [ ] **Step 4: Implement the exact four-case runner**
+- [x] **Step 4: Implement the exact four-case runner**
 
 Start `tools/ablate_cuda_ffn.py` with a one-line Korean role comment. Reuse the established benchmark invocation and aggregation helpers. Refuse mixed commits, checkpoint identities, prompts, or sample counts within one report.
 
-- [ ] **Step 5: Run a one-sample dry run**
+- [x] **Step 5: Run a one-sample dry run**
 
 ```bash
 python tools/ablate_cuda_ffn.py --binary build-cuda/k3x-runtime --artifact artifacts/m3-source.k3x --warmup 0 --samples 1 --output results/m3-ffn-dry-run.json
 pytest -q tests/test_profile.py tests/test_benchmark_schema.py
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add runtime/profile.hpp runtime/profile.cpp tests/test_profile.py \

@@ -64,6 +64,7 @@ class BenchmarkRecord:
     kda_state_bytes: int
     mla_kv_bytes: int
     per_layer_nanoseconds: tuple[int, ...]
+    token_ids: tuple[int, ...]
 
     def __post_init__(self) -> None:
         if self.scope not in {
@@ -86,6 +87,7 @@ def write_results(record: BenchmarkRecord, json_path: Path, csv_path: Path) -> N
     csv_payload["per_layer_nanoseconds"] = ";".join(
         str(value) for value in record.per_layer_nanoseconds
     )
+    csv_payload["token_ids"] = ";".join(str(value) for value in record.token_ids)
     with csv_path.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=csv_payload.keys())
         writer.writeheader()
@@ -297,6 +299,7 @@ def benchmark_once(
         "grouped_projection_members",
         "ffn_block_calls",
         "ffn_block_experts",
+        "token_ids",
     )
     if any(
         any(item[field] != samples[0][field] for field in deterministic_fields)
@@ -377,6 +380,7 @@ def benchmark_once(
         kda_state_bytes=kda_state,
         mla_kv_bytes=mla_kv,
         per_layer_nanoseconds=layer_ns,
+        token_ids=tuple(samples[0]["token_ids"]),
     )
 
 

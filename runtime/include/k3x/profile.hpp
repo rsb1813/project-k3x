@@ -14,6 +14,7 @@ enum class ProfileOperation {
     tensor_read,
     dense_matvec,
     mxfp4_matvec,
+    situ_glu,
     host_to_device,
     weight_host_to_device,
     activation_host_to_device,

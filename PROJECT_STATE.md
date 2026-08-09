@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 2 implementation, measurement, public merge, and Linux CI are complete. Milestone 3 implementation is in progress; CUDA FFN blocks are connected to the synthetic graph and profiler/ablation work is next.
+Milestone 2 implementation, measurement, public merge, and Linux CI are complete. Milestone 3 implementation and dry-run instrumentation are complete; full verification and B-0004 measurement are next.
 
 State recorded on 2026-08-09 on branch `codex/milestone-three-ffn-blocks` after selecting the dependency-closed CUDA FFN boundary.
 
@@ -30,6 +30,7 @@ State recorded on 2026-08-09 on branch `codex/milestone-three-ffn-blocks` after 
 - Task 4 implements one-stream dense FFN execution with one input upload, one final output download, and one final synchronization. Warm resident weights remain device-resident through gate/up/SiTU/down.
 - Task 5 implements ordered exact native MXFP4 expert groups with full preflight, existing hard-capacity residency, exact bypass, one shared latent upload, and one final synchronization.
 - Task 6 connects dense, shared, and routed block execution while preserving natural routing and CPU score mixing. Diagnostics now serialize the exact prefill routed-expert trace.
+- Task 7 records SiTU device time, preserves generated token IDs in benchmark artifacts, and provides a provenance-checked four-case FFN boundary ablation runner.
 - Latest graph verification: CPU parity 22 passed/22 skipped; CUDA CTest 11/11; CUDA parity 43 passed/1 skipped.
 - Latest full CPU verification remains CTest 5/5 and pytest 68 passed/23 skipped.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
@@ -47,7 +48,7 @@ State recorded on 2026-08-09 on branch `codex/milestone-three-ffn-blocks` after 
 
 ## Next concrete tasks
 
-1. Add the SiTU profiler bucket, FFN block schema invariants, and exact four-case ablation runner.
+1. Run full CPU/CUDA verification, six sanitizer targets, reproducible artifact conversion, and B-0004 FP32/BF16 measurement.
 2. Implement and independently measure dense/shared and exact native MXFP4 FFN blocks while preserving the operation reference path.
 3. Build the first asynchronous L0/L1 transfer pipeline only after the wider boundary exposes representative transfer deadlines.
 4. Add full-dimension bounded checkpoint slices before any full Kimi K3 throughput claim.

@@ -48,16 +48,26 @@ int main() {
                      0,
                      4096,
                      false});
+    profiler.record({k3x::ProfilePhase::decode,
+                     k3x::ProfileOperation::situ_glu,
+                     k3x::NumericPrecision::fp32,
+                     2,
+                     25,
+                     15,
+                     32,
+                     0,
+                     true});
 
     const auto& events = profiler.events();
-    if (events.size() != 5) return 1;
+    if (events.size() != 6) return 1;
     if (events.front().precision != k3x::NumericPrecision::fp32) return 2;
     if (events[3].precision != k3x::NumericPrecision::mxfp4_e2m1_e8m0) return 3;
 
     const auto summary = profiler.summary();
-    if (summary.wall_nanoseconds != 140) return 4;
-    if (summary.device_nanoseconds != 100) return 5;
-    if (summary.logical_bytes != 64) return 6;
+    if (events[5].operation != k3x::ProfileOperation::situ_glu) return 12;
+    if (summary.wall_nanoseconds != 165) return 4;
+    if (summary.device_nanoseconds != 115) return 5;
+    if (summary.logical_bytes != 96) return 6;
     if (summary.host_to_device_bytes != 256) return 7;
     if (summary.weight_host_to_device_bytes != 160) return 8;
     if (summary.activation_host_to_device_bytes != 96) return 9;

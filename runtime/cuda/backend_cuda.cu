@@ -1391,7 +1391,9 @@ public:
         record(phase, ProfileOperation::dense_matvec, precision, layer,
                operation_start, weights.down.values.size_bytes(), 0, down_ns,
                true);
-        static_cast<void>(situ_ns);
+        record(phase, ProfileOperation::situ_glu, precision, layer,
+               operation_start, intermediate_count * sizeof(float), 0,
+               situ_ns, true);
         return Result<std::vector<float>>::success(std::move(output));
     }
 
@@ -1665,6 +1667,9 @@ public:
                    expert.down.packed.size_bytes() +
                        expert.down.scales.size_bytes(),
                    0, durations[3], true);
+            record(phase, ProfileOperation::situ_glu, NumericPrecision::fp32,
+                   layer, operation_start,
+                   expert.gate.rows * sizeof(float), 0, durations[2], true);
         }
         ++runtime_stats_.stream_synchronization_count;
         runtime_stats_.activation_h2d_bytes += input_bytes;
