@@ -116,7 +116,9 @@ Reproduce the record with the commands in [`README.md`](README.md). JSON and CSV
 
 The accepted token-major verifier is a correctness reference, not a traffic optimization. For a proposal with `p` candidate tokens and `a` accepted candidates, it performs `a + 1` target forwards and commits `a + 1` tokens, including the target bonus token. Rejected suffix candidates are never executed. Its target work and committed KDA/MLA state therefore match ordinary greedy decoding; proposal and lifecycle overhead can only make this reference equal or slower.
 
-Future expert-major verification will be evaluated separately. For each MoE layer, its relevant traffic variable is the exact unique expert union across candidate-token routing decisions, not `block_tokens × Top-K` by assumption. B-0014 will record proposal count, proposed and accepted candidates, committed verification tokens, target forwards, Reader and H2D bytes, and state/routing parity. Unique expert union and fetch amortization remain not applicable until expert-major execution exists.
+B-0014 confirms this accounting on the synthetic CPU fixture. Greedy, perfect block-2, and mixed block-2 each perform five target decode forwards and read 665,616 logical bytes. Perfect acceptance is 1.0 and mixed acceptance is 0.25, but neither changes target work or traffic. Their measured +1.55% and +1.05% decode deltas are therefore treated as fixture variation rather than an amortization result.
+
+Future expert-major verification will be evaluated separately. For each MoE layer, its relevant traffic variable is the exact unique expert union across candidate-token routing decisions, not `block_tokens × Top-K` by assumption. Unique expert union and fetch amortization remain not applicable until expert-major execution exists.
 
 ## Required production measurements
 

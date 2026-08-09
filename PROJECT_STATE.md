@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 13 exact speculative block verification has a tested pure contract and incremental token-major runtime reference. CLI telemetry and B-0014 measurement are in progress; no speculative performance result is claimed yet.
+Milestone 13 exact token-major speculative verification, scripted CLI telemetry, B-0014, and full local verification are complete. Final review, publication ledger, and public integration remain.
 
-State recorded on 2026-08-10 from public documentation head `7748ca3` and development head `027b65c`. The active branch is `codex/milestone-thirteen-speculative-verification`. PR #11 and PR #12 are merged, their README sections are public, and the tested M13 contract/runtime implementation remains on the development branch until its measurement and final gate are complete.
+State recorded on 2026-08-10 from public documentation head `7748ca3` and M13 implementation head `2cf50b4`. The active branch is `codex/milestone-thirteen-speculative-verification`. PR #11 and PR #12 are merged, their README sections are public, and M13 remains on the development branch until final verification and publication gates complete.
 
 ## Completed work
 
@@ -66,7 +66,8 @@ State recorded on 2026-08-10 from public documentation head `7748ca3` and develo
 ## Work in progress
 
 - Milestone 12 implementation and B-0013 measurement are complete. `routed-accumulate` reduces intermediate D2H and improves the tiny synthetic graph, but the released 3,584-by-3,072 repeated-expert fixture is 8.01% slower in median latency. The mode remains experimental and `none` remains the default.
-- Milestone 13 design, pure proposal/verification/provider contract, and separate incremental runtime entrypoint are implemented. Strict greedy target verification accepts only successive argmax matches and commits one target bonus token. Perfect and mixed proposal blocks preserve greedy token, state, routing, Reader, and L1 behavior in tests.
+- Milestone 13 design, pure proposal/verification/provider contract, separate incremental runtime entrypoint, scripted CLI, telemetry schema, and B-0014 runner are implemented. Strict greedy target verification accepts only successive argmax matches and commits one target bonus token.
+- B-0014 perfect and mixed proposal blocks preserve greedy token, final KDA/MLA state, complete routing/K, Reader, L1, and five target-forward behavior. Measured +1.55%/+1.05% decode deltas are not accepted as acceleration because target work and traffic are identical.
 - DSpark learned drafting, confidence scheduling, parallel target execution, expert-major scheduling, EcoSpec, MoE-Spec, and AcceptMoE remain unimplemented. The accepted interface is lifecycle-compatible, not checkpoint- or tensor-ABI compatible with DeepSpec.
 - Milestone 9 Terra high final review found one valid Important shared-session policy-context issue. Commit `fd05d95` serializes complete generation calls; re-review found no remaining Critical or Important issue and withdrew an initial collision interpretation concern after deterministic future-layer trace review.
 - Static, LRU, LFU, Least-Stale, profiled eviction, and all non-default L2 modes remain experimental and opt-in. Transition prediction and cross-layer asynchronous L2 scheduling remain unimplemented.
@@ -91,11 +92,9 @@ State recorded on 2026-08-10 from public documentation head `7748ca3` and develo
 
 ## Next concrete tasks
 
-1. Expose deterministic scripted proposals and speculative counters through the CLI without changing the default greedy path.
-2. Extend benchmark JSON/CSV schemas and build the B-0014 correctness/overhead runner.
-3. Run full CPU, sanitizer, and applicable CUDA verification; record B-0014 raw artifacts and update the ledger.
-4. Publish Milestone 13 only after final review and green branch/PR checks.
-5. Add expert-major scheduling only after exact block verification passes B-0014, without changing target routing or commit semantics.
+1. Perform final read-only review, apply only verified Critical/Important findings, and rerun affected gates.
+2. Commit B-0014 artifacts and ledger, then publish Milestone 13 through a green branch/PR/main sequence.
+3. Start expert-major scheduling without changing the measured target routing or commit semantics.
 
 ## Hardware assumptions
 
@@ -112,9 +111,11 @@ State recorded on 2026-08-10 from public documentation head `7748ca3` and develo
 
 ## Latest measured bottleneck
 
-B-0013 shows that eliminating intermediate expert-result D2H is not sufficient to improve representative CUDA latency. On the natural Top-16 synthetic graph, routed accumulation improves decode by 11.33% with synchronous transfer and 8.91% with prefetch while reducing D2H by 51,840 bytes per run. On the released 3,584-by-3,072 expert repeated across 16 immutable slots, it reduces D2H by 93.75% but increases median latency by 8.01% and aggregate kernel time by 5.88%.
+B-0014 shows that token-major speculative verification does not reduce target work or weight traffic. Greedy, perfect block-2, and mixed block-2 all perform five target decode forwards and read 665,616 bytes while preserving exact state/routing. The measured +1.55%/+1.05% decode deltas are fixture variation, not an accepted speedup.
 
-The immediate CUDA bottleneck is sequential per-expert gate/up/down launch and ordered accumulation dependency at released dimensions, while KDA, MLA, routing, residual/state, and non-FFN orchestration remain CPU-driven. Gate/up launch fusion and expert-major multi-token reuse are possible future experiments, but neither is implemented or projected as a speedup.
+B-0013 remains the latest CUDA bottleneck evidence. Eliminating intermediate expert-result D2H improves the tiny natural Top-16 graph but the released 3,584-by-3,072 repeated-expert fixture is 8.01% slower because sequential expert launches and ordered accumulation dominate.
+
+The next speculative bottleneck is the absence of expert-major multi-token reuse. The immediate CUDA bottleneck remains sequential per-expert gate/up/down launch and ordered accumulation dependency at released dimensions, while KDA, MLA, routing, residual/state, and non-FFN orchestration remain CPU-driven.
 
 The immediate result is to retain CUDA MoE fusion `none` alongside natural routing with `disabled + blocking + pread + buffered` as defaults. Native-Linux physical NVMe traffic, controlled warm/cold behavior, full-model locality, coding quality, GPU utilization, and memory bandwidth remain unknown.
 
@@ -122,7 +123,9 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Development head `027b65c` implements the pure speculative contract and incremental runtime reference. Focused speculative/runtime tests and CPU CTest 12/12 passed; B-0014 has not been run.
+- M13 implementation head `2cf50b4` provides the pure contract, incremental reference, scripted CLI, telemetry, and B-0014 tooling. CPU CTest 12/12 and Python 245 passed/44 skipped succeeded before measurement.
+- B-0014 summary JSON/CSV SHA-256: `7cd834b1c65d507367320170cdf72ca76aace9f6a743da85a0a9f0cca4a21062` / `9c5fdba84c547f93e2a0a7d4c0b76412181ffb2c635ffd969537a154950ce75b`; raw-summary and exact-parity cross-check passed.
+- Post-measurement verification: CPU CTest 12/12 and pytest 245/44; liburing/direct CTest 13/13 and pytest 247/42; CUDA CTest 21/21 and pytest 281/8; ASan/UBSan CTest 13/13 and targeted pytest 26/3 with 104 deselected; perfect and mixed CUDA speculative Compute Sanitizer runs both 0 errors.
 - Public documentation head `7748ca3` includes dedicated English README sections for merged Milestones 11 and 12. Public `main` correctness run `31322913019` succeeded.
 - Public Milestone 12 publication head: `dc23020706bcca7a68b9a643c055f7627e31698b`; branch/PR/integration-main correctness runs `31322043556`, `31322049903`, and `31322191670` succeeded, and final publication-main run `31322330041` succeeded. PR #12 is merged.
 - Latest verified Milestone 12 result head: `0632a0f`; measurement code is `58c36dd`.

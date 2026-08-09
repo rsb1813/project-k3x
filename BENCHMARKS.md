@@ -547,9 +547,28 @@ The released dimensions imply 17,547,264 bytes per native MXFP4 routed expert. W
 
 These values are capacity and traffic estimates. They are not inserted into B-0001's NVMe field and must be replaced by Linux block-I/O measurements when the tiered runtime exists.
 
-## Pending benchmark gates
+## B-0014 — Milestone 13 exact token-major speculative verification
 
-Milestone 13 implementation evidence is currently test-only. At development head `027b65c`, CPU CTest passes 12/12 and the runtime integration fixtures preserve greedy tokens, final KDA/MLA state, full routing/K traces, Reader calls/bytes, and L1 counters across perfect and mixed proposal blocks. These are correctness results, not B-0014 timing or acceptance measurements.
+- Date: 2026-08-10.
+- Commit: implementation `2cf50b4`; result/ledger commit pending.
+- Hardware: AMD Ryzen 7 9800X3D host under WSL2 Linux `6.18.33.2-microsoft-standard-WSL2`; CPU backend only.
+- Model/checkpoint: synthetic executable `artifacts/synthetic.k3x`, SHA-256 `039d61ee9c2e13e27c9a2514bb476f8b122b8b37be0b7f85baf26c1a6611a2e9`.
+- Mode: incremental natural Top-2, disabled L1, blocking `pread + buffered`, 4 prompt tokens, 6 generated tokens, 3 warmups, 20 measured samples.
+- Cases: greedy reference; scripted perfect block-2 with 3/3 accepted draft tokens; scripted mixed block-2 with 1/4 accepted draft tokens including mismatch and empty proposals.
+
+| Case | Decode tok/s | Prefill tok/s | TTFT ms | Acceptance | Blocks | Target forwards | Reader bytes | Peak RSS |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| greedy | 171.4333 | 98.5411 | 402.8667 | n/a | 0 | 5 | 665,616 | 5,697,536 |
+| perfect-block2 | 174.0861 | 99.0932 | 405.6271 | 1.00 | 2 | 5 | 665,616 | 5,746,688 |
+| mixed-block2 | 173.2344 | 98.1697 | 406.1909 | 0.25 | 4 | 5 | 665,616 | 5,545,984 |
+
+Every row generated `[43, 32, 28, 49, 9, 28]` and matched greedy final KDA/MLA state, complete routed expert/K traces, Reader calls/bytes, and L1 hits/misses. H2D, D2H, kernel time, VRAM, and CUDA utilization are zero/not applicable on the CPU backend. The perfect and mixed decode deltas are +1.55% and +1.05%, but identical target-forward and traffic counts mean they are not evidence of speculative acceleration. Expert-major unique-union telemetry is not applicable because this is token-major execution.
+
+Raw and aggregate artifacts are under `results/b0014-speculative-verification-wsl/`. Summary JSON SHA-256 is `7cd834b1c65d507367320170cdf72ca76aace9f6a743da85a0a9f0cca4a21062`; summary CSV SHA-256 is `9c5fdba84c547f93e2a0a7d4c0b76412181ffb2c635ffd969537a154950ce75b`. An independent raw-summary and exact-parity cross-check passed.
+
+Post-measurement verification passed CPU CTest 12/12 and pytest 245/44, liburing/direct CTest 13/13 and pytest 247/42, CUDA CTest 21/21 and pytest 281/8, and ASan/UBSan liburing CTest 13/13 plus targeted pytest 26/3 with 104 deselected. Compute Sanitizer perfect and mixed CUDA speculative CLI runs each reported `ERROR SUMMARY: 0 errors`. The first liburing Python invocation omitted `K3X_TEST_IO_URING=1` and therefore selected the expected-unavailable test incorrectly; the corrected capability-aware run passed.
+
+## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
 - Native-Linux repetition of B-0004/B-0005/B-0006 and a larger KDA/MLA or decoder subgraph boundary.
@@ -557,6 +576,6 @@ Milestone 13 implementation evidence is currently test-only. At development head
 - Native-Linux repetition of B-0009 with representative multi-expert pressure and controlled warm/cold preparation before selecting any deadline policy.
 - Native-Linux repetition of B-0010 with a representative routing trace, full-size experts, and controlled warm/cold preparation before selecting any cache policy.
 - Native-Linux repetition of B-0011 with repository-duration sessions and controlled helpful, stale, and adversarial priors before selecting any profile policy.
-- B-0014 token-major speculative correctness and overhead measurement before any expert-major or speculative default claim.
+- Expert-major speculative verification with unique-expert union and physical traffic accounting before any speculative default claim.
 - Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.

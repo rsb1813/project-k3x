@@ -132,8 +132,8 @@
 - [x] Exact greedy token-major verification design and TDD plan.
 - [x] Pure proposal/verification/provider contract with native tests.
 - [x] Incremental runtime integration with greedy token/state/routing parity.
-- [ ] Telemetry and deterministic scripted-draft end-to-end harness.
-- [ ] B-0014 correctness and overhead measurement.
+- [x] Telemetry and deterministic scripted-draft end-to-end harness.
+- [x] B-0014 correctness and overhead measurement.
 - [ ] Full verification, sanitizer, ledger, review, and public integration.
 
 ## Milestone 8 — Deadline-aware exact expert loading
