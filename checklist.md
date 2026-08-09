@@ -130,7 +130,7 @@
 
 - [x] SpecMD 원문과 공개 구현 상태 재확인.
 - [x] LRU/LFU/Least-Stale exact policy 설계와 TDD 계획 작성.
-- [ ] Deterministic trace oracle과 victim/collision tests.
+- [x] Deterministic trace oracle과 victim/collision tests.
 - [ ] Runtime/CLI/telemetry integration.
 - [ ] B-0010 ablation, full verification, review, ledger, public integration.
 

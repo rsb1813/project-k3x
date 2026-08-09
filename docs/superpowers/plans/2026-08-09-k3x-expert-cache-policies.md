@@ -6,9 +6,9 @@ Reproduce SpecMD Least-Stale and compare it fairly with exact LRU/LFU policies w
 
 ## Task 1 — Policy contract and trace oracle
 
-- [ ] Add failing deterministic trace tests for static, LRU, LFU, and Least-Stale victim selection.
-- [ ] Add selected-set protection and collision-miss accounting tests.
-- [ ] Implement the minimum policy metadata and eviction loop.
+- [x] Add failing deterministic trace tests for static, LRU, LFU, and Least-Stale victim selection.
+- [x] Add selected-set protection and collision-miss accounting tests.
+- [x] Implement the minimum policy metadata and eviction loop.
 
 ## Task 2 — Runtime integration
 

@@ -2,6 +2,7 @@
 #include "k3x/host_expert_store.hpp"
 
 #include <atomic>
+#include <array>
 #include <barrier>
 #include <concepts>
 #include <chrono>
@@ -10,7 +11,6 @@
 #include <memory>
 #include <stdexcept>
 #include <thread>
-#include <utility>
 #include <utility>
 #include <vector>
 
@@ -164,6 +164,77 @@ int main() {
     for (const auto& handle : handles) {
         assert(handle.get() == handles.front().get());
     }
+
+    const auto load_key = [](HostExpertStore& target, ExpertKey key,
+                             std::uint64_t id) {
+        auto result = target.get_or_load(key, [id] {
+            return Result<k3x::ExpertMlpPayload>::success(payload(id));
+        });
+        assert(result);
+    };
+
+    HostExpertStore lru(L1ExpertCacheMode::lru, 3264);
+    lru.begin_access_set(0, 0, std::array{ExpertKey{0, 0}});
+    load_key(lru, {0, 0}, 100);
+    lru.begin_access_set(0, 1, std::array{ExpertKey{1, 0}});
+    load_key(lru, {1, 0}, 110);
+    lru.begin_access_set(0, 0, std::array{ExpertKey{0, 0}});
+    load_key(lru, {0, 0}, 100);
+    lru.begin_access_set(0, 2, std::array{ExpertKey{2, 0}});
+    load_key(lru, {2, 0}, 120);
+    assert(lru.contains({0, 0}));
+    assert(!lru.contains({1, 0}));
+    assert(lru.contains({2, 0}));
+    assert(lru.stats().evictions == 1);
+
+    HostExpertStore lfu(L1ExpertCacheMode::lfu, 3264);
+    lfu.begin_access_set(0, 0, std::array{ExpertKey{0, 0}});
+    load_key(lfu, {0, 0}, 130);
+    load_key(lfu, {0, 0}, 130);
+    lfu.begin_access_set(0, 1, std::array{ExpertKey{1, 0}});
+    load_key(lfu, {1, 0}, 140);
+    lfu.begin_access_set(0, 2, std::array{ExpertKey{2, 0}});
+    load_key(lfu, {2, 0}, 150);
+    assert(lfu.contains({0, 0}));
+    assert(!lfu.contains({1, 0}));
+    assert(lfu.contains({2, 0}));
+
+    HostExpertStore least_stale(L1ExpertCacheMode::least_stale, 4896);
+    for (std::size_t layer = 0; layer < 3; ++layer) {
+        const ExpertKey key{layer, 0};
+        least_stale.begin_access_set(0, layer, std::array{key});
+        load_key(least_stale, key, 160 + layer * 10);
+    }
+    least_stale.begin_access_set(1, 1, std::array{ExpertKey{1, 1}});
+    load_key(least_stale, {1, 1}, 190);
+    assert(!least_stale.contains({0, 0}));
+    assert(least_stale.contains({1, 0}));
+    assert(least_stale.contains({2, 0}));
+    assert(least_stale.contains({1, 1}));
+
+    HostExpertStore protected_set(L1ExpertCacheMode::lru, 3264);
+    protected_set.begin_access_set(0, 0, std::array{ExpertKey{0, 0}});
+    load_key(protected_set, {0, 0}, 200);
+    protected_set.begin_access_set(0, 1, std::array{ExpertKey{1, 0}});
+    load_key(protected_set, {1, 0}, 210);
+    protected_set.begin_access_set(
+        0, 2, std::array{ExpertKey{0, 0}, ExpertKey{2, 0}});
+    load_key(protected_set, {2, 0}, 220);
+    assert(protected_set.contains({0, 0}));
+    assert(!protected_set.contains({1, 0}));
+
+    HostExpertStore collision(L1ExpertCacheMode::lru, 3264);
+    collision.begin_access_set(0, 0, std::array{ExpertKey{0, 0}});
+    load_key(collision, {0, 0}, 230);
+    collision.begin_access_set(0, 1, std::array{ExpertKey{1, 0}});
+    load_key(collision, {1, 0}, 240);
+    collision.begin_access_set(0, 0, std::array{ExpertKey{0, 0}});
+    load_key(collision, {0, 0}, 230);
+    collision.begin_access_set(0, 2, std::array{ExpertKey{2, 0}});
+    load_key(collision, {2, 0}, 250);
+    collision.begin_access_set(0, 1, std::array{ExpertKey{1, 0}});
+    load_key(collision, {1, 0}, 240);
+    assert(collision.stats().collision_misses == 1);
 
     return 0;
 }

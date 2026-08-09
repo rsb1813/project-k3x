@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <tuple>
 
 namespace k3x {
 namespace {
@@ -64,10 +65,13 @@ std::size_t HostExpertStore::KeyHash::operator()(
 Result<ExpertPayloadHandle> HostExpertStore::get_or_load(
     ExpertKey key, const ExpertPayloadLoader& loader) {
     std::lock_guard lock(mutex_);
-    if (mode_ == L1ExpertCacheMode::static_admission) {
+    if (mode_ != L1ExpertCacheMode::disabled) {
         if (const auto found = entries_.find(key); found != entries_.end()) {
             ++stats_.hits;
-            return Result<ExpertPayloadHandle>::success(found->second);
+            found->second.last_cycle = active_cycle_;
+            found->second.last_access = next_access_++;
+            ++found->second.frequency;
+            return Result<ExpertPayloadHandle>::success(found->second.handle);
         }
     }
 
@@ -87,15 +91,80 @@ Result<ExpertPayloadHandle> HostExpertStore::get_or_load(
     }
 
     ++stats_.misses;
-    if (bytes.value() > capacity_bytes_ - stats_.resident_bytes) {
+    if (const auto evicted = evicted_cycle_.find(key);
+        evicted != evicted_cycle_.end() && evicted->second == active_cycle_) {
+        ++stats_.collision_misses;
+    }
+    if (bytes.value() > capacity_bytes_) {
         ++stats_.bypasses;
         return Result<ExpertPayloadHandle>::success(std::move(handle));
     }
-    entries_.emplace(key, handle);
+    if (mode_ == L1ExpertCacheMode::static_admission &&
+        bytes.value() > capacity_bytes_ - stats_.resident_bytes) {
+        ++stats_.bypasses;
+        return Result<ExpertPayloadHandle>::success(std::move(handle));
+    }
+    while (bytes.value() > capacity_bytes_ - stats_.resident_bytes) {
+        auto victim = entries_.end();
+        for (auto candidate = entries_.begin(); candidate != entries_.end();
+             ++candidate) {
+            if (protected_.contains(candidate->first)) continue;
+            if (victim == entries_.end()) {
+                victim = candidate;
+                continue;
+            }
+            const auto& left = candidate->second;
+            const auto& right = victim->second;
+            bool preferred = false;
+            if (mode_ == L1ExpertCacheMode::lru) {
+                preferred = std::tie(left.last_access, left.insertion) <
+                            std::tie(right.last_access, right.insertion);
+            } else if (mode_ == L1ExpertCacheMode::lfu) {
+                preferred = std::tie(left.frequency, left.last_access,
+                                     left.insertion) <
+                            std::tie(right.frequency, right.last_access,
+                                     right.insertion);
+            } else {
+                const auto left_current = left.last_cycle == active_cycle_;
+                const auto right_current = right.last_cycle == active_cycle_;
+                preferred = std::tuple(left_current, candidate->first.layer,
+                                       left.last_access, left.insertion) <
+                            std::tuple(right_current, victim->first.layer,
+                                       right.last_access, right.insertion);
+            }
+            if (preferred) victim = candidate;
+        }
+        if (victim == entries_.end()) {
+            ++stats_.bypasses;
+            return Result<ExpertPayloadHandle>::success(std::move(handle));
+        }
+        stats_.resident_bytes -= victim->second.bytes;
+        evicted_cycle_[victim->first] = active_cycle_;
+        entries_.erase(victim);
+        ++stats_.evictions;
+    }
+    entries_.emplace(
+        key, Entry{handle, bytes.value(), active_cycle_, next_access_++, 1,
+                   next_insertion_++});
     stats_.resident_bytes += bytes.value();
     stats_.peak_resident_bytes =
         std::max(stats_.peak_resident_bytes, stats_.resident_bytes);
     return Result<ExpertPayloadHandle>::success(std::move(handle));
+}
+
+void HostExpertStore::begin_access_set(
+    std::uint64_t forward_cycle, std::size_t layer,
+    std::span<const ExpertKey> selected) {
+    std::lock_guard lock(mutex_);
+    active_cycle_ = forward_cycle;
+    active_layer_ = layer;
+    protected_.clear();
+    for (const auto key : selected) {
+        protected_.insert(key);
+        if (const auto found = entries_.find(key); found != entries_.end()) {
+            found->second.last_cycle = active_cycle_;
+        }
+    }
 }
 
 bool HostExpertStore::contains(ExpertKey key) const {

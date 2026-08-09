@@ -9,16 +9,26 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <span>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace k3x {
-enum class L1ExpertCacheMode { disabled, static_admission };
+enum class L1ExpertCacheMode {
+    disabled,
+    static_admission,
+    lru,
+    lfu,
+    least_stale,
+};
 
 struct L1ExpertCacheStats {
     std::uint64_t hits{};
     std::uint64_t misses{};
     std::uint64_t bypasses{};
+    std::uint64_t evictions{};
+    std::uint64_t collision_misses{};
     std::size_t resident_bytes{};
     std::size_t peak_resident_bytes{};
 };
@@ -62,6 +72,9 @@ public:
 
     Result<ExpertPayloadHandle> get_or_load(
         ExpertKey key, const ExpertPayloadLoader& loader);
+    void begin_access_set(std::uint64_t forward_cycle,
+                          std::size_t layer,
+                          std::span<const ExpertKey> selected);
     bool contains(ExpertKey key) const;
     L1ExpertCacheStats stats() const;
 
@@ -70,10 +83,25 @@ private:
         std::size_t operator()(const ExpertKey& key) const noexcept;
     };
 
+    struct Entry {
+        ExpertPayloadHandle handle;
+        std::size_t bytes{};
+        std::uint64_t last_cycle{};
+        std::uint64_t last_access{};
+        std::uint64_t frequency{};
+        std::uint64_t insertion{};
+    };
+
     L1ExpertCacheMode mode_;
     std::size_t capacity_bytes_{};
     L1ExpertCacheStats stats_;
-    std::unordered_map<ExpertKey, ExpertPayloadHandle, KeyHash> entries_;
+    std::unordered_map<ExpertKey, Entry, KeyHash> entries_;
+    std::unordered_set<ExpertKey, KeyHash> protected_;
+    std::unordered_map<ExpertKey, std::uint64_t, KeyHash> evicted_cycle_;
+    std::uint64_t active_cycle_{};
+    std::size_t active_layer_{};
+    std::uint64_t next_access_{};
+    std::uint64_t next_insertion_{};
     mutable std::mutex mutex_;
 };
 }
