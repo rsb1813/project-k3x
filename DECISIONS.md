@@ -284,3 +284,14 @@
 - Benchmark result: B-0006 was rerun at commit `2a0cb27` after these changes; all eight rows preserve the same token and routing traces and the same matched cache/traffic invariants.
 - Reason: explicit session ownership matches the chartered session hot-bank lifetime without hidden global state, while pre-admission validation prevents corrupt exact payloads from becoming durable cache entries.
 - Revisit: when VAULT or multi-session serving defines persistence, isolation, and reclamation contracts beyond one in-process runtime session.
+
+## D-026 — Separate L2 I/O engine from page-cache policy and batch exact expert extents
+
+- Date: 2026-08-09.
+- Status: accepted design; implementation pending.
+- Decision: add an ordered Reader batch API and independent `pread|io_uring` engine and `buffered|direct` cache-mode axes. Keep `pread + buffered` as the default until native-Linux evidence supports a change.
+- Alternatives considered: replace every read with immediately awaited io_uring; introduce a general future/executor framework; add one bounded ordered batch and independent axes.
+- Evidence: the current reader opens and seeks a new stream for each extent, while one exact native expert requires six reads. Immediately awaiting one SQE cannot demonstrate queueing value, and combining io_uring with O_DIRECT would prevent attribution. Linux documentation also makes direct-I/O alignment and support filesystem-specific rather than universal.
+- Benchmark result: none. WSL2 `/mnt/c` is 9p/DrvFS and cannot select the P44 Pro native-Linux default.
+- Reason: an ordered six-extent batch is the smallest graph-visible boundary that can expose storage concurrency while retaining exact payload reconstruction and allowing engine/cache effects to be measured separately.
+- Revisit: after B-0007 native-Linux warm/cold measurements and again when deadline-aware multi-layer prefetch introduces cross-expert request ordering.

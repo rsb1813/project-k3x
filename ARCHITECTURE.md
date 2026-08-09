@@ -190,6 +190,14 @@ B-0006 admitted 18 synthetic experts into 29,376 bytes, recorded 36 hits and zer
 
 LRU, LFU, Least-Stale, task/session priors, eviction, prediction, asynchronous L2 reads, and cold rescue remain unimplemented. The accepted design and B-0006 matrix are in [`docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md`](docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md).
 
+## Milestone 6 proposed independent L2 reader
+
+The accepted Milestone 6 design separates the Linux I/O engine (`pread|io_uring`) from page-cache behavior (`buffered|direct`). Metadata and full-file verification remain on the portable buffered path. A Reader-owned hot data plane will retain exact single-extent wrappers and add an ordered batch operation so one native expert can request its six packed/scale extents together.
+
+The default remains `pread + buffered`. `io_uring` is an optional Linux build capability, and direct mode must obtain a trustworthy `STATX_DIOALIGN` contract and use aligned bounce buffers without silent fallback. Logical Reader bytes, aligned syscall bytes, and process block-I/O counters remain distinct; none is called physical NVMe traffic without an appropriate native-Linux measurement.
+
+This component is proposed and designed, not implemented. The normative design is in [`docs/superpowers/specs/2026-08-09-k3x-l2-reader-design.md`](docs/superpowers/specs/2026-08-09-k3x-l2-reader-design.md).
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

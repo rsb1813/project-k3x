@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 5 bounded persistent L1 expert-cache implementation, final review fixes, full verification, replacement B-0006 measurement, and public integration are complete.
+Milestone 5 bounded persistent L1 expert-cache implementation and public integration are complete. Milestone 6 independent L2 reader is in the accepted-design and implementation-planning stage.
 
-State recorded on 2026-08-09 after public Milestone 5 closure `dac4ed0`. PR #5 merged by ancestry-verified fast-forward; push/PR correctness runs `31301870446` and `31301880423` passed, and post-merge `main` correctness run `31301960103` passed.
+State recorded on 2026-08-09 after public Milestone 5 ledger closure `a7e8acf`; final main correctness run `31302070711` and branch run `31302069225` passed. Active branch is `codex/milestone-six-l2-reader`.
 
 ## Completed work
 
@@ -37,7 +37,9 @@ State recorded on 2026-08-09 after public Milestone 5 closure `dac4ed0`. PR #5 m
 ## Work in progress
 
 - Milestone 5 code and durable measurement documents are public on `main`.
+- Milestone 6 Reader hot-path investigation, primary Linux/liburing reference review, accepted design, B-0007 boundary, checklist, and implementation plan are complete.
 - Static L1 admission is experimental and opt-in. LRU, LFU, Least-Stale, eviction, task/session priors, prediction, and L2 async I/O remain unimplemented.
+- The proposed L2 reader has independent `pread|io_uring` and `buffered|direct` axes plus an ordered batch contract; no new data-plane implementation is claimed yet.
 - The TITAN Ledger, README, checklist, context notes, and compact/raw B-0005 artifacts are synchronized with the measured Milestone 4 implementation.
 - Final Terra high review found two Important Milestone 5 gaps: generation-local cache lifetime and insufficient native payload admission validation. Commit `2a0cb27` adds explicit `RuntimeSession` ownership and strict native group-32/triplet validation. No Critical or Important finding remains unaddressed.
 - Public PR #4 merged by ancestry-verified fast-forward at `c961026`; post-merge correctness run `31298966035` succeeded.
@@ -54,12 +56,16 @@ State recorded on 2026-08-09 after public Milestone 5 closure `dac4ed0`. PR #5 m
 - Exact prefetch is single-flight and limited to `cuda-custom + ffn-block + reused + transient`; it is not combined with static residency.
 - `cuda-dense` intentionally keeps native MXFP4 on the CPU as its documented comparison identity. `cuda-custom` is the exact GPU MXFP4 path.
 - GPU utilization, GPU memory bandwidth, NVMe GB/token, and storage I/O stall time remain unmeasured. L1-to-L0 staging, device-copy, readiness, wait, and exposed-stall counters are measured.
+- WSL2 exposes the repository through 9p/DrvFS and has no liburing development package installed. It is a correctness environment, not native P44 Pro performance authority.
 - Full-model quality, coding/agentic quality, adaptive Top-K, cold rescue, speculation, proxy, and pruning remain unimplemented or unmeasured.
 
 ## Next concrete tasks
 
-1. Design an independently switchable L2 reader and native-Linux benchmark for buffered I/O, `io_uring`, and `O_DIRECT` before choosing a default.
-2. Add full-dimension bounded checkpoint slices, then continue with policy/Least-Stale, task/session profiles, adaptive Top-K, and exact rescue in charter order.
+1. Implement the ordered batch contract and persistent buffered `pread` baseline with red-first Reader/model tests.
+2. Batch the six native expert extents without weakening atomic L1 admission or exact transient bypass.
+3. Add optional liburing and explicit `O_DIRECT` capability paths, then connect counters and B-0007.
+4. Run native-Linux P44 Pro measurements only when that environment is actually available; keep WSL2 evidence non-authoritative.
+5. Add full-dimension bounded checkpoint slices, then continue with policy/Least-Stale, task/session profiles, adaptive Top-K, and exact rescue in charter order.
 
 ## Hardware assumptions
 
@@ -86,7 +92,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Public Milestone 5 closure `main`: `dac4ed0dab17b64f44ae07a4965e71d7d57d2640`; correctness run `31301960103` succeeded.
+- Public Milestone 5 ledger closure `main`: `a7e8acf7011e1583a0fb561e4bf93b093302e796`; correctness run `31302070711` succeeded.
 - B-0006 measurement code commit: `2a0cb27` (`fix: persist and validate L1 experts`).
 - B-0006 raw/compact result commit: `fe328e4` (`bench: refresh B-0006 after review fixes`).
 - Latest local validation commit: `fe328e4`.

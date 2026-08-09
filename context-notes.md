@@ -161,3 +161,10 @@
 - Final Terra high review는 캐시가 generation 호출마다 재생성되어 session warm-cache 계약을 충족하지 못하는 점과 native expert admission 검증이 불충분한 점을 Important로 보고했다. Commit `2a0cb27`은 `RuntimeSession`에 store 수명을 두고 one-shot 호환 API를 유지하며, group-32 packed/scales 크기, reserved E8M0, triplet shape를 admission 전에 검증한다. 연속 generation 회귀에서 두 번째 호출은 misses가 늘지 않고 hits가 54 증가하며 Reader delta가 감소했고, malformed payload는 통계와 residency를 바꾸지 않았다.
 - 검토 수정 뒤 B-0006을 같은 artifact와 3 warmup/20 samples 조건으로 다시 측정했다. 위 최초 수치는 이 재측정으로 대체된다. 새 disabled/static decode는 FP32 synchronous 16.5587/47.6845, prefetch 16.7636/50.6235, BF16 synchronous 16.4052/47.7956, prefetch 16.5073/47.6198 tok/s다. 모든 cache, logical Reader, token, routing, GPU traffic 불변식은 동일하게 통과했다.
 - Public PR #5의 push/PR correctness run `31301870446`과 `31301880423`이 모두 성공했다. `origin/main`이 `dac4ed0`의 조상임을 확인한 뒤 fast-forward했고, post-merge main correctness run `31301960103`도 성공했다.
+
+## 2026-08-09 Milestone 6 설계
+
+- Public main `a7e8acf`에서 `codex/milestone-six-l2-reader`를 시작했다. 현재 hot path는 extent마다 새 `std::ifstream`을 열고 seek/read하며, L1 miss의 native expert 하나가 여섯 번 이 경로를 호출한다.
+- Engine과 page-cache policy를 한 enum에 합치지 않고 `pread|io_uring`과 `buffered|direct` 두 축으로 분리한다. Single-read wrapper와 ordered batch를 함께 두고 expert loader가 gate/up/down packed/scale 여섯 extent를 한 batch로 요청한다.
+- `io_uring`은 optional Linux capability로 두며 first comparison에서 registered buffers, SQPOLL, IOPOLL을 제외한다. `O_DIRECT`는 `statx(STATX_DIOALIGN)`으로 확인된 alignment만 사용하고 silent buffered fallback을 금지한다.
+- 현재 WSL2 source path는 9p/DrvFS이고 liburing development package가 설치되지 않았다. WSL2는 correctness/smoke에만 쓰며 P44 Pro native-Linux default 결정 근거로 사용하지 않는다. Logical/syscall/process I/O counters도 physical NVMe GB/token으로 표기하지 않는다.
