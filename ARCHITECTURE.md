@@ -304,6 +304,14 @@ B-0018 proves equal proposal/acceptance counts and exact target token, final-sta
 
 This implementation is published on public `main` through PR #23 at integration head `30bbf7a8`. Its branch, pull-request, and post-merge correctness runs all passed; publication does not change the experimental, non-default status above.
 
+## Milestone 18 experimental exact CUDA AURORA drafting
+
+Milestone 18 lets only the persistent AURORA provider own an independent `cuda-custom` draft backend. Replay remains CPU-only and CPU remains the draft default. The accepted CUDA identity is deliberately closed: FP32, reused allocation, transient weights, grouped execution, `ffn-block`, synchronous transfer, fusion `none`, and zero resident/pinned capacity. Runtime and provider validation reject every other identity before draft Reader or output mutation, and backend-unavailable errors propagate without CPU fallback.
+
+The target and draft data paths have separate `Profiler`, `BackendMemoryStats`, and `BackendRuntimeStats` instances. The output schema therefore identifies the draft device and effective CUDA configuration and reports draft kernel time, H2D weight/activation bytes, D2H bytes, peak VRAM, allocations, synchronizations, and cache counters without attributing them to a CPU target. Ordinary greedy and CPU draft execution retain literal zero defaults.
+
+B-0019 keeps the natural target on CPU and changes only draft placement. Fixed/adaptive token-major and expert-major CPU/CUDA pairs preserve proposals, acceptance, generated tokens, final KDA/MLA state, and committed routing. Transient synchronous CUDA drafting regresses paired decode by 96.22% to 97.00%, so the CUDA path remains an exact experimental diagnostic and is rejected as a default. Bounded draft residency, persistent multi-token/multi-expert kernels, reduced precision, and learned drafting remain separate proposed axes.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.
@@ -315,7 +323,7 @@ Status meanings are strict. `Implemented` requires code and passing tests. `Expe
 | CHRONOS | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
 | BLACKSTAR | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
 | PROMETHEUS-X | DSpark-compatible speculative decoding extended with MoE-aware expert-cost scheduling | Proposed |
-| AURORA | Self-speculative K3 fast-path drafter using reduced Top-K, reduced precision, and resident experts while retaining target verification | Experimental replay and persistent reduced-Top-K CPU state implemented; reduced precision, residency, and learned drafting proposed |
+| AURORA | Self-speculative K3 fast-path drafter using reduced Top-K, reduced precision, and resident experts while retaining target verification | Experimental replay, persistent reduced-Top-K CPU state, and exact transient CUDA draft implemented; CUDA transient default rejected by B-0019; reduced precision, residency, and learned drafting proposed |
 | ORBIT | Multi-layer lookahead expert residency and prefetch prediction | Proposed |
 | MERCURY | Dynamic CPU/GPU expert placement using predicted transfer-plus-compute latency | Proposed |
 | HELIOS | Automatic hardware/workload tuning for cache, Top-K, speculation, I/O, and placement parameters | Proposed |

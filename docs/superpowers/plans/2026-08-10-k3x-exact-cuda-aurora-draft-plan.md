@@ -424,7 +424,7 @@ git commit -m "bench: measure exact CUDA AURORA drafting"
 - Consumes: committed implementation and B-0019 artifacts.
 - Produces: reproducible verification evidence, synchronized current state, and public integration.
 
-- [ ] **Step 1: Rebuild and run the full CPU matrix**
+- [x] **Step 1: Rebuild and run the full CPU matrix**
 
 ```bash
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -433,7 +433,7 @@ ctest --test-dir build --output-on-failure
 K3X_BUILD_DIR=build python -m pytest -q
 ```
 
-- [ ] **Step 2: Run liburing/direct and ASan/UBSan matrices**
+- [x] **Step 2: Run liburing/direct and ASan/UBSan matrices**
 
 ```bash
 cmake -S . -B build-uring -G Ninja -DCMAKE_BUILD_TYPE=Release \
@@ -451,7 +451,7 @@ cmake --build build-uring-asan -j 8
 ASAN_OPTIONS=detect_leaks=0 ctest --test-dir build-uring-asan --output-on-failure
 ```
 
-- [ ] **Step 3: Run the full CUDA matrix**
+- [x] **Step 3: Run the full CUDA matrix**
 
 ```bash
 cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release \
@@ -462,7 +462,7 @@ ctest --test-dir build-cuda --output-on-failure
 K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 python -m pytest -q
 ```
 
-- [ ] **Step 4: Run Compute Sanitizer on the new draft path**
+- [x] **Step 4: Run Compute Sanitizer on the new draft path**
 
 Create an ignored synthetic artifact with the existing Python converter, then run.
 
@@ -482,7 +482,7 @@ compute-sanitizer --tool memcheck --error-exitcode=99 \
 
 Expected: `ERROR SUMMARY: 0 errors` and exit code zero.
 
-- [ ] **Step 5: Update measured documents and commit**
+- [x] **Step 5: Update measured documents and commit**
 
 Record exact commits, hardware, B-0019 values, hashes, tests, caveats, accepted/rejected decision, and the next measured bottleneck. Keep `PROJECT_CHARTER.md` unchanged. Update `PROJECT_STATE.md` last.
 
