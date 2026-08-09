@@ -95,6 +95,25 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["speculative_block_size"] == 0
     assert payload["aurora_draft_k"] == 0
     assert payload["aurora_block_policy"] == "none"
+    assert payload["aurora_draft_backend"] == "none"
+    assert payload["draft_device"] == "CPU"
+    assert payload["draft_cuda_allocation"] == "per-operation"
+    assert payload["draft_cuda_weights"] == "transient"
+    assert payload["draft_cuda_batching"] == "scalar"
+    assert payload["draft_cuda_boundary"] == "operation"
+    assert payload["draft_cuda_transfer"] == "synchronous"
+    assert payload["draft_cuda_moe_fusion"] == "none"
+    assert payload["draft_kernel_nanoseconds"] == 0
+    assert payload["draft_host_to_device_bytes"] == 0
+    assert payload["draft_weight_h2d_bytes"] == 0
+    assert payload["draft_activation_h2d_bytes"] == 0
+    assert payload["draft_device_to_host_bytes"] == 0
+    assert payload["draft_peak_vram_bytes"] == 0
+    assert payload["draft_device_allocation_count"] == 0
+    assert payload["draft_stream_synchronization_count"] == 0
+    assert payload["draft_weight_cache_hits"] == 0
+    assert payload["draft_weight_cache_misses"] == 0
+    assert payload["draft_weight_cache_bypasses"] == 0
     assert payload["draft_proposal_calls"] == 0
     assert payload["draft_candidate_tokens"] == 0
     assert payload["draft_replayed_context_tokens"] == 0
@@ -202,6 +221,11 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert row["speculative_verification_blocks"] == "0"
     assert row["aurora_draft_k"] == "0"
     assert row["aurora_block_policy"] == "none"
+    assert row["aurora_draft_backend"] == "none"
+    assert row["draft_device"] == "CPU"
+    assert row["draft_kernel_nanoseconds"] == "0"
+    assert row["draft_weight_h2d_bytes"] == "0"
+    assert row["draft_peak_vram_bytes"] == "0"
     assert row["draft_reader_completed_bytes"] == "0"
     assert row["draft_context_prefill_tokens"] == "0"
     assert row["draft_incremental_forward_calls"] == "0"

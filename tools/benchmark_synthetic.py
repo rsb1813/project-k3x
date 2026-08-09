@@ -158,6 +158,25 @@ class BenchmarkRecord:
     speculative_block_size: int = 0
     aurora_draft_k: int = 0
     aurora_block_policy: str = "none"
+    aurora_draft_backend: str = "none"
+    draft_device: str = "CPU"
+    draft_cuda_allocation: str = "per-operation"
+    draft_cuda_weights: str = "transient"
+    draft_cuda_batching: str = "scalar"
+    draft_cuda_boundary: str = "operation"
+    draft_cuda_transfer: str = "synchronous"
+    draft_cuda_moe_fusion: str = "none"
+    draft_kernel_nanoseconds: int = 0
+    draft_host_to_device_bytes: int = 0
+    draft_weight_h2d_bytes: int = 0
+    draft_activation_h2d_bytes: int = 0
+    draft_device_to_host_bytes: int = 0
+    draft_peak_vram_bytes: int = 0
+    draft_device_allocation_count: int = 0
+    draft_stream_synchronization_count: int = 0
+    draft_weight_cache_hits: int = 0
+    draft_weight_cache_misses: int = 0
+    draft_weight_cache_bypasses: int = 0
     draft_proposal_calls: int = 0
     draft_candidate_tokens: int = 0
     draft_replayed_context_tokens: int = 0
@@ -272,6 +291,7 @@ def _run_process(
     speculative_script: str = "",
     aurora_draft_k: int = 0,
     aurora_block_policy: str = "fixed",
+    aurora_draft_backend: str = "cpu",
     diagnostics: bool = False,
 ) -> tuple[dict, int, float]:
     command = [
@@ -308,6 +328,7 @@ def _run_process(
         command.extend([
             "--aurora-draft-k", str(aurora_draft_k),
             "--aurora-block-policy", aurora_block_policy,
+            "--aurora-draft-backend", aurora_draft_backend,
         ])
     if runtime_metadata:
         command.extend(["--runtime-metadata", runtime_metadata])
@@ -419,6 +440,7 @@ def benchmark_once(
     speculative_script: str = "",
     aurora_draft_k: int = 0,
     aurora_block_policy: str = "fixed",
+    aurora_draft_backend: str = "cpu",
 ) -> BenchmarkRecord:
     if warmup < 0 or iterations <= 0:
         raise ValueError("warmup must be non-negative and iterations must be positive")
@@ -474,6 +496,7 @@ def benchmark_once(
                 speculative_script=speculative_script,
                 aurora_draft_k=aurora_draft_k,
                 aurora_block_policy=aurora_block_policy,
+                aurora_draft_backend=aurora_draft_backend,
             )
             _, ttft_peak, ttft = _run_process(
                 artifact,
@@ -515,6 +538,7 @@ def benchmark_once(
                 speculative_script="",
                 aurora_draft_k=aurora_draft_k,
                 aurora_block_policy=aurora_block_policy,
+                aurora_draft_backend=aurora_draft_backend,
             )
             if index >= warmup:
                 samples.append(sample)
@@ -556,6 +580,7 @@ def benchmark_once(
                 speculative_script=speculative_script,
                 aurora_draft_k=aurora_draft_k,
                 aurora_block_policy=aurora_block_policy,
+                aurora_draft_backend=aurora_draft_backend,
                 diagnostics=True,
             )
             if diagnostic["token_ids"] != samples[0]["token_ids"]:
@@ -600,6 +625,7 @@ def benchmark_once(
                 speculative_script=speculative_script,
                 aurora_draft_k=aurora_draft_k,
                 aurora_block_policy=aurora_block_policy,
+                aurora_draft_backend=aurora_draft_backend,
                 diagnostics=True,
             )
             candidate, _, _ = _run_process(
@@ -635,6 +661,7 @@ def benchmark_once(
                 speculative_script=speculative_script,
                 aurora_draft_k=aurora_draft_k,
                 aurora_block_policy=aurora_block_policy,
+                aurora_draft_backend=aurora_draft_backend,
                 diagnostics=True,
             )
             max_absolute_error, max_relative_error = _numerical_errors(
@@ -684,6 +711,7 @@ def benchmark_once(
                 speculative_script=speculative_script,
                 aurora_draft_k=aurora_draft_k,
                 aurora_block_policy=aurora_block_policy,
+                aurora_draft_backend=aurora_draft_backend,
             )
             if (
                 materialized["token_ids"] != samples[0]["token_ids"]
@@ -787,6 +815,24 @@ def benchmark_once(
         "speculative_block_size",
         "aurora_draft_k",
         "aurora_block_policy",
+        "aurora_draft_backend",
+        "draft_device",
+        "draft_cuda_allocation",
+        "draft_cuda_weights",
+        "draft_cuda_batching",
+        "draft_cuda_boundary",
+        "draft_cuda_transfer",
+        "draft_cuda_moe_fusion",
+        "draft_host_to_device_bytes",
+        "draft_weight_h2d_bytes",
+        "draft_activation_h2d_bytes",
+        "draft_device_to_host_bytes",
+        "draft_peak_vram_bytes",
+        "draft_device_allocation_count",
+        "draft_stream_synchronization_count",
+        "draft_weight_cache_hits",
+        "draft_weight_cache_misses",
+        "draft_weight_cache_bypasses",
         "draft_proposal_calls",
         "draft_candidate_tokens",
         "draft_replayed_context_tokens",
@@ -854,6 +900,9 @@ def benchmark_once(
         speculative_block_size,
         aurora_draft_k if speculative_mode in ("aurora-replay", "aurora-persistent") else 0,
         aurora_block_policy if speculative_mode in ("aurora-replay", "aurora-persistent") else "none",
+        aurora_draft_backend
+        if speculative_mode in ("aurora-replay", "aurora-persistent")
+        else "none",
     )
     option_fields = (
         "backend",
@@ -883,6 +932,7 @@ def benchmark_once(
         "speculative_block_size",
         "aurora_draft_k",
         "aurora_block_policy",
+        "aurora_draft_backend",
     )
     observed_options = tuple(samples[0][field] for field in option_fields)
     float_option_fields = {"routing_mass_target", "routing_min_boundary_gap"}
@@ -1113,6 +1163,31 @@ def benchmark_once(
         speculative_block_size=samples[0]["speculative_block_size"],
         aurora_draft_k=samples[0]["aurora_draft_k"],
         aurora_block_policy=samples[0]["aurora_block_policy"],
+        aurora_draft_backend=samples[0]["aurora_draft_backend"],
+        draft_device=samples[0]["draft_device"],
+        draft_cuda_allocation=samples[0]["draft_cuda_allocation"],
+        draft_cuda_weights=samples[0]["draft_cuda_weights"],
+        draft_cuda_batching=samples[0]["draft_cuda_batching"],
+        draft_cuda_boundary=samples[0]["draft_cuda_boundary"],
+        draft_cuda_transfer=samples[0]["draft_cuda_transfer"],
+        draft_cuda_moe_fusion=samples[0]["draft_cuda_moe_fusion"],
+        draft_kernel_nanoseconds=int(statistics.median(
+            item["draft_kernel_nanoseconds"] for item in samples
+        )),
+        draft_host_to_device_bytes=samples[0]["draft_host_to_device_bytes"],
+        draft_weight_h2d_bytes=samples[0]["draft_weight_h2d_bytes"],
+        draft_activation_h2d_bytes=samples[0]["draft_activation_h2d_bytes"],
+        draft_device_to_host_bytes=samples[0]["draft_device_to_host_bytes"],
+        draft_peak_vram_bytes=max(
+            item["draft_peak_vram_bytes"] for item in samples
+        ),
+        draft_device_allocation_count=samples[0]["draft_device_allocation_count"],
+        draft_stream_synchronization_count=samples[0][
+            "draft_stream_synchronization_count"
+        ],
+        draft_weight_cache_hits=samples[0]["draft_weight_cache_hits"],
+        draft_weight_cache_misses=samples[0]["draft_weight_cache_misses"],
+        draft_weight_cache_bypasses=samples[0]["draft_weight_cache_bypasses"],
         draft_proposal_calls=samples[0]["draft_proposal_calls"],
         draft_candidate_tokens=samples[0]["draft_candidate_tokens"],
         draft_replayed_context_tokens=samples[0][
@@ -1262,6 +1337,10 @@ def main() -> int:
         "--aurora-block-policy", choices=("fixed", "adaptive"),
         default="fixed",
     )
+    parser.add_argument(
+        "--aurora-draft-backend", choices=("cpu", "cuda-custom"),
+        default="cpu",
+    )
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--csv", type=Path, required=True)
     args = parser.parse_args()
@@ -1298,6 +1377,7 @@ def main() -> int:
         speculative_script=args.speculative_script,
         aurora_draft_k=args.aurora_draft_k,
         aurora_block_policy=args.aurora_block_policy,
+        aurora_draft_backend=args.aurora_draft_backend,
     )
     write_results(result, args.json, args.csv)
     print(json.dumps(asdict(result), sort_keys=True, separators=(",", ":")))

@@ -91,6 +91,27 @@ def test_cuda_draft_matches_cpu_persistent_target_execution(
         cuda = results["cuda-custom"]
         assert cpu["aurora_draft_backend"] == "cpu"
         assert cuda["aurora_draft_backend"] == "cuda-custom"
+        assert cpu["draft_device"] == "CPU"
+        assert cpu["draft_kernel_nanoseconds"] == 0
+        assert cpu["draft_host_to_device_bytes"] == 0
+        assert cpu["draft_peak_vram_bytes"] == 0
+        assert cuda["draft_cuda_allocation"] == "reused"
+        assert cuda["draft_cuda_weights"] == "transient"
+        assert cuda["draft_cuda_batching"] == "grouped"
+        assert cuda["draft_cuda_boundary"] == "ffn-block"
+        assert cuda["draft_cuda_transfer"] == "synchronous"
+        assert cuda["draft_cuda_moe_fusion"] == "none"
+        assert cuda["draft_kernel_nanoseconds"] > 0
+        assert cuda["draft_host_to_device_bytes"] > 0
+        assert cuda["draft_weight_h2d_bytes"] > 0
+        assert cuda["draft_activation_h2d_bytes"] > 0
+        assert cuda["draft_device_to_host_bytes"] > 0
+        assert cuda["draft_peak_vram_bytes"] > 0
+        assert cuda["draft_device_allocation_count"] > 0
+        assert cuda["draft_stream_synchronization_count"] > 0
+        assert cuda["kernel_nanoseconds"] == 0
+        assert cuda["host_to_device_bytes"] == 0
+        assert cuda["peak_vram_bytes"] == 0
         for field in (
             "token_ids",
             "final_state",

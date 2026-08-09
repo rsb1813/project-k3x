@@ -968,6 +968,46 @@ int main(int argc, char** argv) {
     const auto memory = backend->memory_stats();
     const auto runtime = backend->runtime_stats();
     const auto& effective_options = backend->options();
+    const auto draft_profile = aurora_profiler.summary();
+    const auto draft_memory = aurora_backend
+        ? aurora_backend->memory_stats()
+        : k3x::BackendMemoryStats{};
+    const auto draft_runtime = aurora_backend
+        ? aurora_backend->runtime_stats()
+        : k3x::BackendRuntimeStats{};
+    const k3x::BackendOptions default_draft_options;
+    const auto& effective_draft_options = aurora_backend
+        ? aurora_backend->options()
+        : default_draft_options;
+    const auto draft_allocation_name =
+        effective_draft_options.cuda_allocation ==
+                k3x::CudaAllocationMode::reused
+            ? "reused"
+            : "per-operation";
+    const auto draft_weights_name =
+        effective_draft_options.cuda_weights == k3x::CudaWeightMode::resident
+            ? "resident"
+            : "transient";
+    const auto draft_batching_name =
+        effective_draft_options.cuda_batching ==
+                k3x::CudaBatchingMode::grouped
+            ? "grouped"
+            : "scalar";
+    const auto draft_boundary_name =
+        effective_draft_options.cuda_boundary ==
+                k3x::CudaBoundaryMode::ffn_block
+            ? "ffn-block"
+            : "operation";
+    const auto draft_transfer_name =
+        effective_draft_options.cuda_transfer ==
+                k3x::CudaTransferMode::prefetch
+            ? "prefetch"
+            : "synchronous";
+    const auto draft_moe_fusion_name =
+        effective_draft_options.cuda_moe_fusion ==
+                k3x::CudaMoeFusionMode::routed_accumulate
+            ? "routed-accumulate"
+            : "none";
     output << std::setprecision(9);
     output << "{\"backend\":";
     write_json_string(output, backend_name);
@@ -1028,6 +1068,43 @@ int main(int argc, char** argv) {
     output << ",\"aurora_draft_backend\":";
     write_json_string(
         output, aurora_mode ? aurora_draft_backend_name : "none");
+    output << ",\"draft_device\":";
+    write_json_string(
+        output, aurora_backend ? aurora_backend->device_name() : "CPU");
+    output << ",\"draft_cuda_allocation\":";
+    write_json_string(output, draft_allocation_name);
+    output << ",\"draft_cuda_weights\":";
+    write_json_string(output, draft_weights_name);
+    output << ",\"draft_cuda_batching\":";
+    write_json_string(output, draft_batching_name);
+    output << ",\"draft_cuda_boundary\":";
+    write_json_string(output, draft_boundary_name);
+    output << ",\"draft_cuda_transfer\":";
+    write_json_string(output, draft_transfer_name);
+    output << ",\"draft_cuda_moe_fusion\":";
+    write_json_string(output, draft_moe_fusion_name);
+    output << ",\"draft_kernel_nanoseconds\":"
+           << draft_profile.device_nanoseconds
+           << ",\"draft_host_to_device_bytes\":"
+           << draft_profile.host_to_device_bytes
+           << ",\"draft_weight_h2d_bytes\":"
+           << draft_profile.weight_host_to_device_bytes
+           << ",\"draft_activation_h2d_bytes\":"
+           << draft_profile.activation_host_to_device_bytes
+           << ",\"draft_device_to_host_bytes\":"
+           << draft_profile.device_to_host_bytes
+           << ",\"draft_peak_vram_bytes\":"
+           << draft_memory.peak_device_bytes
+           << ",\"draft_device_allocation_count\":"
+           << draft_runtime.device_allocation_count
+           << ",\"draft_stream_synchronization_count\":"
+           << draft_runtime.stream_synchronization_count
+           << ",\"draft_weight_cache_hits\":"
+           << draft_runtime.weight_cache_hits
+           << ",\"draft_weight_cache_misses\":"
+           << draft_runtime.weight_cache_misses
+           << ",\"draft_weight_cache_bypasses\":"
+           << draft_runtime.weight_cache_bypasses;
     output << ",\"draft_proposal_calls\":"
            << result.value().draft_proposal_calls
            << ",\"draft_candidate_tokens\":"
