@@ -473,7 +473,7 @@ git add README.md ARCHITECTURE.md PERFORMANCE_MODEL.md DECISIONS.md \
 git commit -m "docs: publish persistent AURORA evidence"
 ```
 
-- [ ] **Step 4: Perform final self-review**
+- [x] **Step 4: Perform final self-review**
 
 Review `origin/main...HEAD` for default-path changes, replay compatibility, target ownership, malformed-update Reader access, deep MLA copies, telemetry parity, raw-summary digest parity, and proposed-versus-measured language. Apply at most one focused correction batch and rerun affected tests.
 
