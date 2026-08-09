@@ -331,3 +331,5 @@
 - DeepSpec `005e03b8`의 실제 `draft_ops.py`는 block forward 뒤 `DynamicCache.crop(start)`를 호출하고 evaluator는 accepted draft prefix와 target token에 대응하는 verified hidden prefix만 다음 context로 남긴다. K3X는 target tensor ABI를 복사하지 않고 동일한 verified-only 상태 원칙을 KDA snapshot과 MLA logical crop으로 재현한다.
 - 전체 `ModelState` deep copy는 MLA host traffic이 context에 비례하므로 기각했다. Periodic checkpoint partial replay도 반복 weight 실행을 남기므로 기각했다. 단일 mutable cursor, bounded KDA snapshot, append-only MLA size mark, target bonus teacher forcing을 M17 경계로 선택했다.
 - 사용자의 기존 지침은 Cloud Run 이전의 단순 승인 단계를 중단 없이 진행하도록 허용한다. 따라서 비용·외부 자원·공개 API 기본값을 바꾸지 않는 이 설계 검토는 자율 승인으로 처리하되, replay oracle과 non-default 경계는 유지한다.
+- M17 구현 계획은 cursor 초기 prefill/proposal, transaction crop/commit, persistent provider, CLI/schema, B-0018, 전체 검증·원장·공개의 여섯 의미 단위로 고정했다. 각 production 단계는 artifact-backed RED를 먼저 목격하고 focused GREEN과 semantic commit을 남긴다.
+- 구현 실행은 사용자의 자율 진행 지침과 subagent 비사용 제약에 따라 이 세션의 inline `executing-plans` 경로를 선택한다.
