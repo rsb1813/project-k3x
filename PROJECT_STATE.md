@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 16 AURORA replay and adaptive block scheduling is in implementation. The separate CPU reduced-Top-K replay provider, strict lifecycle contract, draft telemetry surface, and pure `{1,2,4}` adaptive scheduler are implemented and tested. The existing natural strict target verifier remains authoritative, but its physical feedback decoration, end-to-end provider wiring, CLI/schema surface, and B-0017 measurement are not implemented yet. No Milestone 16 performance claim exists.
+Milestone 16 AURORA replay and adaptive block scheduling is in implementation. The separate CPU reduced-Top-K replay provider, strict lifecycle contract, draft telemetry surface, pure `{1,2,4}` adaptive scheduler, and target physical-feedback decoration are implemented and tested. The existing natural strict target verifier remains authoritative, but end-to-end provider wiring, CLI/schema surface, and B-0017 measurement are not implemented yet. No Milestone 16 performance claim exists.
 
-State audited on 2026-08-10 against public Milestone 15 integration head `c18df33`, final public documentation head `49ed848`, and active Milestone 16 implementation head `c20e28c`. The active isolated branch is `codex/milestone-sixteen-aurora`. The last full CPU baseline passes CTest 13/13 and Python 262 passed/47 skipped; the new provider boundary passes CPU CTest 14/14 and focused pytest 1/1. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 against public Milestone 15 integration head `c18df33`, final public documentation head `49ed848`, and active Milestone 16 implementation head `5723f59`. The active isolated branch is `codex/milestone-sixteen-aurora`. The last full CPU baseline passes CTest 13/13 and Python 262 passed/47 skipped; the new provider/feedback boundary passes CPU CTest 14/14 and focused artifact pytest. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
@@ -74,7 +74,7 @@ State audited on 2026-08-10 against public Milestone 15 integration head `c18df3
 
 ## Work in progress
 
-- Milestone 16 now has an intentionally slow replay provider before persistent KDA/MLA draft state. Natural target feedback decoration, end-to-end runtime integration, CLI/schema, B-0017, full verification, final review, and public integration remain pending.
+- Milestone 16 now has an intentionally slow replay provider and target cost feedback before persistent KDA/MLA draft state. End-to-end runtime integration, CLI/schema, B-0017, full verification, final review, and public integration remain pending.
 - The implemented scheduler explores `{1,2,4}` one rung at a time, uses Laplace-smoothed observed prefix survival and actual expert-major payload-load/assignment ratio, and immediately backs off after rejection. These thresholds are an experimental B-0017 identity, not a runtime default.
 - Milestone 15 implementation, B-0016, complete CPU/CUDA verification, Compute Sanitizer, final read-only review, public PR integration, and post-merge CI are complete.
 - B-0016 perfect CUDA expert-major blocks slightly reduce synthetic Reader/H2D traffic and improve tiny decode, while the mixed row evaluates three rejected positions and regresses traffic and decode. Released single-expert batching proves exact one-payload-per-group H2D reuse at batch sizes two and four. Neither result supports a default change.
@@ -134,7 +134,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Milestone 16 implementation head `c20e28c` contains the replay provider and adaptive scheduler. CPU CTest 14/14 and focused AURORA pytest 1/1 pass; the earlier full Python baseline remains 262 passed/47 skipped and must be rerun after CLI/schema integration.
+- Milestone 16 implementation head `5723f59` contains the replay provider, adaptive scheduler, and target physical feedback. CPU CTest 14/14 and focused artifact tests pass; the earlier full Python baseline remains 262 passed/47 skipped and must be rerun after CLI/schema integration.
 - Public Milestone 15 integration head `c18df33` includes the synchronized Milestone 11–15 implementation lineage, B-0016 evidence, LF-stable artifact digests, and final-review fix. Branch/PR correctness runs `31332732339`/`31332745907` and post-merge `main` run `31332852551` succeeded.
 - Public documentation reconciliation head `4052221` records PR #17 publication across README, BENCHMARKS, checklist, context notes, and project state. Its branch/PR correctness runs `31333096506`/`31333098541` and post-merge `main` run `31333233834` succeeded.
 - M15 design/plan heads are `b54e4b5`/`f574a36`; portable batch, native launcher, CUDA FFN, and runtime heads are `b9b10dc`, `459303e`, `b0c1a96`, and `e99bbc0`; B-0016 tooling, direct CLI fix, and LF-stable digest fix are `7899603`, `884a74e`, and `5b7b73b`.
@@ -167,4 +167,4 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Proposed component status
 
-AURORA's replay provider and adaptive scheduler are implemented and tested, but target/CLI integration and B-0017 remain pending. APOLLO, TITAN COUNCIL, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None of the proposed-only components is claimed as implemented or benchmarked.
+AURORA's replay provider, adaptive scheduler, and target feedback are implemented and tested, but CLI integration and B-0017 remain pending. APOLLO, TITAN COUNCIL, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None of the proposed-only components is claimed as implemented or benchmarked.

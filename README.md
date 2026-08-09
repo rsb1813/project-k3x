@@ -203,9 +203,9 @@ python tools/ablate_cuda_expert_major.py \
 
 ## Milestone 16 — AURORA replay reference in progress
 
-The standalone AURORA provider now replays the complete committed prefix through a separate CPU fixed-reduced-Top-K runtime and produces real candidate tokens. Its `{1,2,4}` scheduler gates one-rung exploration with Laplace-smoothed prefix survival and measured expert payload-load-to-assignment cost, then backs off immediately after rejection. Tests prove K4 candidate equality with an independent greedy oracle and enforce exact provider lifecycle and draft telemetry separation.
+The standalone AURORA provider now replays the complete committed prefix through a separate CPU fixed-reduced-Top-K runtime and produces real candidate tokens. Its `{1,2,4}` scheduler gates one-rung exploration with Laplace-smoothed prefix survival and measured expert payload-load-to-assignment cost, then backs off immediately after rejection. Token-major and expert-major target paths feed their actual evaluated/discarded work and expert cost to the provider before the next proposal. Tests prove K4 candidate equality with an independent greedy oracle and enforce exact provider lifecycle and draft telemetry separation.
 
-This is not yet an end-to-end CLI feature or a speed claim. Natural target feedback, CLI/schema integration, B-0017, and full CPU/CUDA validation remain in progress. Prefix replay is intentionally slow and exists as the correctness oracle for a later persistent KDA/MLA draft-state path.
+This is not yet an end-to-end CLI feature or a speed claim. CLI/schema integration, B-0017, and full CPU/CUDA validation remain in progress. Prefix replay is intentionally slow and exists as the correctness oracle for a later persistent KDA/MLA draft-state path.
 
 ## Quick start
 
