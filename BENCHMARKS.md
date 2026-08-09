@@ -608,26 +608,26 @@ Public branch and PR correctness runs `31328853375` and `31328869071` succeeded 
 
 | Graph case | Decode tok/s | Prefill tok/s | TTFT ms | Peak RSS | Peak VRAM | Acceptance | Evaluated / discarded | Batch calls / tokens | Kernel ms | Logical Reader GB/generated token | H2D GB/generated token |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| greedy | 61.2690 | 25.4532 | 869.8782 | 507,441,152 B | 43,680 B | n/a | 0 / 0 | 0 / 0 | 26.1533 | 0.000110936 | 0.000845760 |
-| token-major perfect-2 | 60.0987 | 26.1094 | 862.1426 | 507,596,800 B | 43,680 B | 1.00 | 0 / 0 | 0 / 0 | 27.2120 | 0.000110936 | 0.000845760 |
-| expert-major perfect-2 | 66.1869 | 26.5158 | 862.2326 | 507,670,528 B | 44,192 B | 1.00 | 5 / 0 | 24 / 30 | 24.5167 | 0.000109304 | 0.000844448 |
-| token-major mixed-2 | 59.4970 | 26.4221 | 866.7287 | 507,707,392 B | 43,680 B | 0.25 | 0 / 0 | 0 / 0 | 27.2904 | 0.000110936 | 0.000845760 |
-| expert-major mixed-2 | 39.9912 | 25.4448 | 865.2640 | 507,797,504 B | 44,192 B | 0.25 | 8 / 3 | 39 / 48 | 36.8958 | 0.000113384 | 0.001125744 |
+| greedy | 60.9608 | 25.1116 | 886.0143 | 507,486,208 B | 43,680 B | n/a | 0 / 0 | 0 / 0 | 26.0042 | 0.000110936 | 0.000845760 |
+| token-major perfect-2 | 60.1815 | 24.9711 | 867.5926 | 507,637,760 B | 43,680 B | 1.00 | 0 / 0 | 0 / 0 | 28.8968 | 0.000110936 | 0.000845760 |
+| expert-major perfect-2 | 70.1067 | 25.7569 | 860.8092 | 507,727,872 B | 44,192 B | 1.00 | 5 / 0 | 24 / 30 | 24.0656 | 0.000109304 | 0.000844448 |
+| token-major mixed-2 | 57.2332 | 25.9700 | 865.4655 | 507,600,896 B | 43,680 B | 0.25 | 0 / 0 | 0 / 0 | 29.6127 | 0.000110936 | 0.000845760 |
+| expert-major mixed-2 | 40.7627 | 25.5761 | 863.9135 | 507,551,744 B | 44,192 B | 0.25 | 8 / 3 | 39 / 48 | 34.7756 | 0.000113384 | 0.001125744 |
 
-All graph rows preserve the greedy token sequence, final KDA/MLA state, and committed expert/K traces. Average Top-K is 2, L1 hits/misses are zero because the cache is disabled, and perfect/mixed speculative acceptance is 1.0/0.25. Logical Reader GB/token is not physical NVMe GB/token. GPU utilization and memory bandwidth were not captured, so no value is inferred for them. The perfect expert-major row is 10.13% faster than its token-major pair and slightly reduces logical Reader and H2D traffic; the mixed row is 32.79% slower and increases both because it evaluates three rejected positions. No favorable direction was required.
+All graph rows preserve the greedy token sequence, final KDA/MLA state, and committed expert/K traces. Average Top-K is 2, L1 hits/misses are zero because the cache is disabled, and perfect/mixed speculative acceptance is 1.0/0.25. Logical Reader GB/token is not physical NVMe GB/token. GPU utilization and memory bandwidth were not captured, so no value is inferred for them. The perfect expert-major row is 16.49% faster than its token-major pair and slightly reduces logical Reader and H2D traffic; the mixed row is 28.78% slower and increases both because it evaluates three rejected positions. No favorable direction was required.
 
 | Released case | Median latency ms | Aggregate kernel ms | Weight H2D | Activation H2D | D2H | Peak VRAM | Batch calls / tokens | Max abs. error |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| scalar-2 | 3.7948 | 13.5063 | 701,890,560 B | 573,440 B | 573,440 B | 5,914,624 B | 0 / 0 | 0 |
-| batch-2 | 1.8675 | 8.7572 | 350,945,280 B | 573,440 B | 573,440 B | 5,980,160 B | 20 / 40 | 0 |
-| scalar-4 | 7.4285 | 27.2306 | 1,403,781,120 B | 1,146,880 B | 1,146,880 B | 5,914,624 B | 0 / 0 | 0 |
-| batch-4 | 1.9993 | 12.6733 | 350,945,280 B | 1,146,880 B | 1,146,880 B | 6,111,232 B | 20 / 80 | 0 |
+| scalar-2 | 3.4449 | 12.1719 | 701,890,560 B | 573,440 B | 573,440 B | 5,914,624 B | 0 / 0 | 0 |
+| batch-2 | 1.7378 | 8.0848 | 350,945,280 B | 573,440 B | 573,440 B | 5,980,160 B | 20 / 40 | 0 |
+| scalar-4 | 6.7053 | 24.4185 | 1,403,781,120 B | 1,146,880 B | 1,146,880 B | 5,914,624 B | 0 / 0 | 0 |
+| batch-4 | 2.6319 | 14.0455 | 350,945,280 B | 1,146,880 B | 1,146,880 B | 6,111,232 B | 20 / 80 | 0 |
 
-The released fixture has `routing_semantics=false`. Each scalar call transfers the 17,547,264-byte expert once per token; each batch call transfers it once per iteration. Batch-2 reduces weight H2D by 50%, median latency by 50.79%, and kernel time by 35.16%. Batch-4 reduces weight H2D by 75%, median latency by 73.09%, and kernel time by 53.46%. Activation H2D and D2H remain identical within each pair. This is a single-expert kernel/traffic result, not full-layer routing, full-model TPS, physical NVMe, or quality evidence.
+The released fixture has `routing_semantics=false`. Each scalar call transfers the 17,547,264-byte expert once per token; each batch call transfers it once per iteration. Batch-2 reduces weight H2D by 50%, median latency by 49.55%, and kernel time by 33.58%. Batch-4 reduces weight H2D by 75%, median latency by 60.75%, and kernel time by 42.48%. Activation H2D and D2H remain identical within each pair. This is a single-expert kernel/traffic result, not full-layer routing, full-model TPS, physical NVMe, or quality evidence.
 
-Raw JSON/CSV and diagnostics are under `results/b0016-cuda-expert-major-wsl/`. Canonical aggregate-record SHA-256 is `218bba0595002b6e0c40cd998ac611b929fd81c45a236bdeed732bc1a6311f0f`; summary JSON/CSV SHA-256 is `d9ee486e968de6e409e6b7211059c6daa83bb8e518a9e06ce7d09bced32e0667` / `0d9a919722410a57b3fdd45eaf35340795ecdf68e01998c43d50ac0bc7deb56c`. Independent validation recomputed all nine raw JSON/CSV digest pairs and the canonical aggregate.
+Raw JSON/CSV and diagnostics are under `results/b0016-cuda-expert-major-wsl/`. Canonical aggregate-record SHA-256 is `09a2537337df1fd2b8b39439f92ba7306cb09a6ed5e3f8bdc8db7d9d787029aa`; summary JSON/CSV SHA-256 is `5c8c32a6fed499a1ff8ddf2d0f2e0fdaa214e6a62715933edea850c5f42812540` / `f100f15803741531d88976a4cc64c0a0975acd94f71be99fce6bb45fe4422f65`. CSV writers explicitly use LF so Git text normalization preserves these digests. Independent validation recomputed all nine raw JSON/CSV digest pairs and the canonical aggregate.
 
-Verification passed CPU CTest 13/13 and pytest 262/47, CUDA CTest 22/22 and pytest 301/8. The released batch-2 executable under Compute Sanitizer reported `ERROR SUMMARY: 0 errors`. Public PR and post-merge CI evidence remain pending at this ledger revision.
+Verification passed CPU CTest 13/13 and pytest 262/47, liburing/direct CTest 14/14 and pytest 264/45, ASan/UBSan CTest 14/14, and CUDA CTest 22/22 with pytest 301/8. Compute Sanitizer reported `ERROR SUMMARY: 0 errors` for native MXFP4, CUDA FFN, released batch-2, perfect expert-major CLI, and mixed expert-major CLI. Public PR and post-merge CI evidence remain pending at this ledger revision.
 
 ## Pending benchmark gates
 
