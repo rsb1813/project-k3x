@@ -465,6 +465,7 @@ Result<Reader> Reader::open(const std::filesystem::path& path,
     reader.options_ = options;
     reader.superblock_.state = little<std::uint32_t>(block, 20);
     reader.superblock_.required_features = little<std::uint64_t>(block, 24);
+    reader.superblock_.optional_features = little<std::uint64_t>(block, 32);
     std::uint64_t* values[] = {&reader.superblock_.tensor_directory_offset,
                       &reader.superblock_.tensor_directory_length,
                       &reader.superblock_.layer_directory_offset,

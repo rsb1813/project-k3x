@@ -12,6 +12,7 @@ from conftest import cpp_binary
 from k3x_converter.format import SUPERBLOCK_BYTES, Superblock, root_sha256
 from k3x_converter.reader import K3XReader
 from k3x_converter.writer import convert
+from k3x_ref.storage_fixture import write_bounded_expert_source
 
 
 def _run_reader(path: Path) -> subprocess.CompletedProcess[str]:
@@ -32,6 +33,22 @@ def test_cpp_reader_keeps_one_linux_data_plane_descriptor(
     )
     assert result.returncode == 0
     assert artifact.is_file()
+
+
+def test_cpp_reader_exposes_storage_fixture_optional_identity(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "bounded-source"
+    write_bounded_expert_source(source, chunk_bytes=257 * 1024)
+    artifact = tmp_path / "bounded.k3x"
+    convert(source, artifact, chunk_bytes=193 * 1024)
+
+    result = subprocess.run(
+        [str(cpp_binary("test_reader")), str(artifact), "storage-fixture"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.skipif(

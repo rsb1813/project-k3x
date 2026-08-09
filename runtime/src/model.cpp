@@ -627,6 +627,10 @@ Result<GenerationResult> generate_greedy(Reader& reader,
                                          std::span<const std::uint32_t> prompt,
                                          std::size_t count,
                                          RuntimeSession& session) {
+    if (reader.superblock().optional_features & optional_storage_fixture) {
+        return Result<GenerationResult>::failure(
+            ErrorCode::non_executable_artifact);
+    }
     const auto& options = session.options();
     if (prompt.empty()) return Result<GenerationResult>::failure(ErrorCode::invalid_extent, "empty prompt");
     try {

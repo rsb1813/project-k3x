@@ -124,23 +124,23 @@ Commit as `feat: convert bounded storage fixtures`.
 - Adds: `ErrorCode::non_executable_artifact`, rendered as `NON_EXECUTABLE_ARTIFACT`.
 - Changes: every `generate_greedy` entry path rejects a Reader carrying the storage-fixture bit before backend work or tensor reads.
 
-- [ ] **Step 1: Write failing Reader identity and execution tests.**
+- [x] **Step 1: Write failing Reader identity and execution tests.**
 
 Use the real converted bounded artifact. Assert `test_reader` can report optional bit 0, while `k3x_run --model <slice> ...` exits with the stable non-executable error and zero data-plane Reader calls. Assert the ordinary tiny synthetic artifact still generates `[43, 32, 28, 49, 9, 28]`.
 
-- [ ] **Step 2: Run and verify RED.**
+- [x] **Step 2: Run and verify RED.**
 
 Expect the C++ Reader to omit the optional bit and execution to fail later with a missing tensor rather than `NON_EXECUTABLE_ARTIFACT`.
 
-- [ ] **Step 3: Implement parsing and the earliest shared execution guard.**
+- [x] **Step 3: Implement parsing and the earliest shared execution guard.**
 
 Read offset 32 without treating optional bits as required features. Put one guard at the shared generation boundary so compatibility overloads cannot bypass it. Preserve existing required-feature rejection.
 
-- [ ] **Step 4: Build and verify GREEN.**
+- [x] **Step 4: Build and verify GREEN.**
 
 Configure/build `build-cpu`, run CTest, run the two targeted Python files, then run full CPU pytest with `K3X_BUILD_DIR=build-cpu`.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 Commit as `feat: identify non-executable storage fixtures`.
 

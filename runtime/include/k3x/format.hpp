@@ -11,10 +11,12 @@ constexpr std::size_t tensor_record_bytes = 128;
 constexpr std::size_t layer_record_bytes = 64;
 constexpr std::size_t expert_record_bytes = 64;
 constexpr std::size_t model_config_bytes = 256;
+inline constexpr std::uint64_t optional_storage_fixture = 1ULL << 0;
 
 struct Superblock {
     std::uint32_t state{};
     std::uint64_t required_features{};
+    std::uint64_t optional_features{};
     std::uint64_t tensor_directory_offset{};
     std::uint64_t tensor_directory_length{};
     std::uint64_t layer_directory_offset{};

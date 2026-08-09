@@ -11,6 +11,7 @@ import torch
 from k3x_converter.reader import K3XReader
 from k3x_converter.writer import convert
 from k3x_ref.fixtures import build_synthetic_model
+from k3x_ref.storage_fixture import write_bounded_expert_source
 
 
 import pytest
@@ -20,6 +21,35 @@ from conftest import cpp_binary
 
 def cpu_only_build() -> bool:
     return cpp_binary("test_backend_unavailable").is_file()
+
+
+def test_cpp_runner_rejects_storage_fixture_before_graph_execution(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "bounded-source"
+    write_bounded_expert_source(source, chunk_bytes=257 * 1024)
+    artifact = tmp_path / "bounded.k3x"
+    output = tmp_path / "must-not-exist.json"
+    convert(source, artifact, chunk_bytes=193 * 1024)
+
+    result = subprocess.run(
+        [
+            str(cpp_binary("k3x_run")),
+            "--model",
+            str(artifact),
+            "--json",
+            str(output),
+            "--prompt-ids",
+            "1,7,3,9",
+            "--generate",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 4
+    assert result.stderr.strip() == "NON_EXECUTABLE_ARTIFACT"
+    assert not output.exists()
 
 
 @pytest.mark.parametrize(

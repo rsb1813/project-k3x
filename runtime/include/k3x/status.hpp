@@ -12,6 +12,7 @@ enum class ErrorCode {
     bad_magic,
     unsupported_version,
     unsupported_required_feature,
+    non_executable_artifact,
     superblock_crc_mismatch,
     truncated_file,
     invalid_directory,
@@ -35,6 +36,7 @@ inline const char* error_code_name(ErrorCode code) {
         case ErrorCode::bad_magic: return "BAD_MAGIC";
         case ErrorCode::unsupported_version: return "UNSUPPORTED_VERSION";
         case ErrorCode::unsupported_required_feature: return "UNSUPPORTED_REQUIRED_FEATURE";
+        case ErrorCode::non_executable_artifact: return "NON_EXECUTABLE_ARTIFACT";
         case ErrorCode::superblock_crc_mismatch: return "SUPERBLOCK_CRC_MISMATCH";
         case ErrorCode::truncated_file: return "TRUNCATED_FILE";
         case ErrorCode::invalid_directory: return "INVALID_DIRECTORY";

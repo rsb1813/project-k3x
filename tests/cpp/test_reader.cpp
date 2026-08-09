@@ -84,6 +84,12 @@ int main(int argc, char** argv) {
     }
     if (reader.value().tensors().empty()) return 3;
     if (argc == 3) {
+        if (std::string_view(argv[2]) == "storage-fixture") {
+            return reader.value().superblock().optional_features ==
+                    k3x::optional_storage_fixture
+                ? 0
+                : 14;
+        }
         if (std::string_view(argv[2]) != "persistent") return 10;
 #ifdef __linux__
         const auto moved = path.string() + ".moved";
