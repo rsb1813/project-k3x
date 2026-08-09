@@ -324,3 +324,10 @@
 - M16 전체 검증은 CPU CTest 14/14와 pytest 268/47, liburing/direct CTest 15/15와 pytest 274/41, ASan/UBSan CTest 15/15, CUDA CTest 23/23과 pytest 307/8을 통과했다. 새 CUDA expert-major AURORA CLI row는 Compute Sanitizer `ERROR SUMMARY: 0 errors`를 보고했다.
 - Milestone 16 branch/PR correctness run `31337234073`/`31337240722`가 통과했고 PR #20이 공개 integration head `df5c07d`로 rebase merge되었다. 병합 후 `main` correctness run `31337365175`도 통과해 AURORA replay 구현, B-0017 증거, README, TITAN Ledger가 공개 기준선에 포함되었다.
 - Milestone 16 공개 문서 정합 PR #21의 push/PR correctness run `31337548635`/`31337554179`가 통과했고 public documentation head `0eb0966`으로 rebase merge되었다. 병합 후 `main` correctness run `31337694471`도 성공했다.
+
+## 2026-08-10 Milestone 17 준비
+
+- 공개 `main` head `44aa049`에서 `codex/milestone-seventeen-persistent-aurora` worktree를 분리했다. CPU 기준선은 CTest 14/14와 Python 268 passed/47 skipped다.
+- DeepSpec `005e03b8`의 실제 `draft_ops.py`는 block forward 뒤 `DynamicCache.crop(start)`를 호출하고 evaluator는 accepted draft prefix와 target token에 대응하는 verified hidden prefix만 다음 context로 남긴다. K3X는 target tensor ABI를 복사하지 않고 동일한 verified-only 상태 원칙을 KDA snapshot과 MLA logical crop으로 재현한다.
+- 전체 `ModelState` deep copy는 MLA host traffic이 context에 비례하므로 기각했다. Periodic checkpoint partial replay도 반복 weight 실행을 남기므로 기각했다. 단일 mutable cursor, bounded KDA snapshot, append-only MLA size mark, target bonus teacher forcing을 M17 경계로 선택했다.
+- 사용자의 기존 지침은 Cloud Run 이전의 단순 승인 단계를 중단 없이 진행하도록 허용한다. 따라서 비용·외부 자원·공개 API 기본값을 바꾸지 않는 이 설계 검토는 자율 승인으로 처리하되, replay oracle과 non-default 경계는 유지한다.

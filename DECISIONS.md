@@ -451,3 +451,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: B-0017 measures natural greedy at 1140.3391 tok/s. All six replay rows preserve exact target output but regress decode by 46.35% to 62.52%. Fixed block-2 expert-major is best at 611.7589 tok/s with acceptance 1.0, target Reader 1,102,416 bytes, and additional draft Reader 1,454,112 bytes. Adaptive token/expert rows accept 0.5, replay 2,181,168 draft bytes, and measure 447.3694/427.4438 tok/s.
 - Reason: replay is slow but executes the real reduced-routing graph, produces non-scripted acceptance, isolates draft telemetry, and supplies an oracle for later persistent state without combining two correctness boundaries.
 - Revisit: after persistent draft-state parity proves identical proposals with less replay work; then evaluate reduced precision, resident experts, and confidence prediction separately. Do not tune the block thresholds around this tiny trace before removing prefix replay.
+
+## D-041 — Persist AURORA with bounded KDA checkpoints and MLA logical crop
+
+- Date: 2026-08-10.
+- Status: accepted design; implementation and B-0018 pending.
+- Decision: add an opaque incremental draft cursor that prefills verified context once, snapshots fixed-size KDA state, marks append-only MLA logical sizes, restores the target-accepted prefix, and teacher-forces the target bonus token. Retain complete-prefix replay as the exact oracle and expose persistent execution only through a new non-default mode.
+- Alternatives considered: deep-copy complete KDA/MLA state per candidate; replay from periodic context checkpoints; use one mutable state with bounded KDA snapshots and MLA crop; introduce copy-on-write MLA pages immediately.
+- Evidence: B-0017 attributes 1,454,112 to 2,181,168 additional logical draft Reader bytes and 13 to 20 replay positions to complete-prefix replay. DeepSpec `005e03b8` crops its speculative draft cache and carries forward only verified target context. K3X KDA state is context-independent in size, while MLA key/value state grows by position and supports exact suffix removal by logical vector sizes and length.
+- Benchmark result: pending B-0018. No traffic or throughput improvement is assumed.
+- Reason: the accepted boundary removes repeated weight execution without replacing it with context-proportional MLA copies, preserves strict target ownership, and keeps paging, precision, residency, and serialization outside one correctness change.
+- Revisit: after B-0018 proves proposal and state parity. Consider paged copy-on-write MLA only for multi-branch or VAULT requirements, and evaluate resident or reduced-precision drafting as separate axes.

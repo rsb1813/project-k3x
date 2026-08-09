@@ -177,6 +177,18 @@
 - [x] Run B-0017, the full verification matrix, sanitizer coverage, and evidence cross-checks.
 - [x] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
 
+## Milestone 17 — Persistent AURORA draft state
+
+- [x] Re-read the public charter, architecture, state, D-040, and B-0017 evidence.
+- [x] Reinspect DeepSpec `005e03b8` draft-cache crop and verified-context update code.
+- [x] Compare complete state copy, partial replay, and transactional KDA snapshot plus MLA crop designs.
+- [x] Write, self-review, and commit the persistent draft-state design.
+- [ ] Write, self-review, and commit the detailed TDD implementation plan.
+- [ ] Implement the incremental cursor and rollback contract through witnessed RED/GREEN cycles.
+- [ ] Integrate the persistent provider, CLI, schema, and replay-oracle parity.
+- [ ] Run B-0018, the full verification matrix, sanitizer coverage, and evidence cross-checks.
+- [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
+
 ## Milestone 14 — Exact expert-major speculative verification
 
 - [x] Re-read the TITAN Ledger and current token-major/runtime boundaries.
