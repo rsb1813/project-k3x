@@ -209,7 +209,7 @@ git commit -m "feat: add portable FFN block oracle"
 - Produces: `cuda::launch_situ_glu()` with FP32 or BF16-rounded device output.
 - Consumes: device-resident FP32 gate and up vectors.
 
-- [ ] **Step 1: Write the failing literal CUDA test**
+- [x] **Step 1: Write the failing literal CUDA test**
 
 Start the test with.
 
@@ -219,7 +219,7 @@ Start the test with.
 
 Test positive, negative, zero, saturated, and non-integer values. Compute FP32 expected output with portable `situ_glu()`. For BF16 output, independently round each expected FP32 value with the RNE bit oracle from `test_cuda_dense.cu`. Place guards after the output extent.
 
-- [ ] **Step 2: Add CMake targets and verify RED**
+- [x] **Step 2: Add CMake targets and verify RED**
 
 Add `runtime/cuda/situ.cu` to `k3x_runtime`, add `test_cuda_situ`, then run.
 
@@ -230,7 +230,7 @@ ctest --test-dir build-cuda -R cuda_situ --output-on-failure
 
 Expected: build fails because the launch contract is missing.
 
-- [ ] **Step 3: Implement the strict kernel**
+- [x] **Step 3: Implement the strict kernel**
 
 `runtime/cuda/situ.cuh` starts with.
 
@@ -256,7 +256,7 @@ cudaError_t launch_situ_glu(
 
 Use one thread per element. Preserve the expression order from `ops.cpp`, using `expf` and `tanhf`. Compute FP32 first, then write FP32 or `__float2bfloat16_rn`. Reject null pointers, zero count, non-finite or non-positive beta, and invalid optional linear beta.
 
-- [ ] **Step 4: Verify tolerance, guards, sanitizer, and flags**
+- [x] **Step 4: Verify tolerance, guards, sanitizer, and flags**
 
 ```bash
 cmake --build build-cuda -j2
@@ -268,7 +268,7 @@ cmake --build build-cuda --verbose 2>&1 | tee /tmp/k3x-m3-build.log
 
 Expected: FP32 is within `1e-6`, BF16 bits match the oracle, guards stay unchanged, and sanitizer reports zero errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add CMakeLists.txt runtime/cuda/situ.cuh runtime/cuda/situ.cu \

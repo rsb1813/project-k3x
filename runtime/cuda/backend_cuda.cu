@@ -1104,6 +1104,19 @@ public:
             std::move(outputs));
     }
 
+    Result<std::vector<float>> dense_situ_mlp(
+        std::span<const float>, DenseMlpView, float, std::optional<float>,
+        std::uint32_t, ProfilePhase) override {
+        return Result<std::vector<float>>::failure(ErrorCode::invalid_extent);
+    }
+
+    Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_group(
+        std::span<const float>, std::span<const Mxfp4MlpView>, float,
+        std::optional<float>, std::uint32_t, ProfilePhase) override {
+        return Result<std::vector<std::vector<float>>>::failure(
+            ErrorCode::invalid_mxfp4);
+    }
+
     BackendMemoryStats memory_stats() const noexcept override { return memory_stats_; }
     std::string_view device_name() const noexcept override { return device_name_; }
 

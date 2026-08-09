@@ -25,6 +25,7 @@ if(K3X_ENABLE_CUDA)
         runtime/cuda/device_memory.cu
         runtime/cuda/mxfp4.cu
         runtime/cuda/resident_weights.cu
+        runtime/cuda/situ.cu
     )
     target_link_libraries(k3x_runtime PUBLIC CUDA::cudart CUDA::cublasLt)
     set_target_properties(k3x_runtime PROPERTIES
@@ -87,6 +88,12 @@ else()
     target_include_directories(test_cuda_residency PRIVATE runtime/cuda)
     set_target_properties(test_cuda_residency PROPERTIES CUDA_ARCHITECTURES "120-real")
     add_test(NAME cuda_residency COMMAND test_cuda_residency)
+
+    add_executable(test_cuda_situ tests/cuda/test_cuda_situ.cu)
+    target_link_libraries(test_cuda_situ PRIVATE k3x_runtime)
+    target_include_directories(test_cuda_situ PRIVATE runtime/cuda)
+    set_target_properties(test_cuda_situ PROPERTIES CUDA_ARCHITECTURES "120-real")
+    add_test(NAME cuda_situ COMMAND test_cuda_situ)
 endif()
 
 add_executable(test_reader tests/cpp/test_reader.cpp)
