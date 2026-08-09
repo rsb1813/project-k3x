@@ -1396,10 +1396,289 @@ public:
     }
 
     Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_group(
-        std::span<const float>, std::span<const Mxfp4MlpView>, float,
-        std::optional<float>, std::uint32_t, ProfilePhase) override {
-        return Result<std::vector<std::vector<float>>>::failure(
-            ErrorCode::invalid_mxfp4);
+        std::span<const float> input, std::span<const Mxfp4MlpView> experts,
+        float situ_beta, std::optional<float> situ_linear,
+        std::uint32_t layer, ProfilePhase phase) override {
+        const auto operation_start = std::chrono::steady_clock::now();
+        constexpr auto precision = NumericPrecision::mxfp4_e2m1_e8m0;
+        if (options_.kind != BackendKind::cuda_custom ||
+            options_.cuda_boundary != CudaBoundaryMode::ffn_block ||
+            !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
+            (situ_linear &&
+             (!std::isfinite(*situ_linear) || *situ_linear <= 0.0F))) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+        for (const auto& expert : experts) {
+            if (!valid_mxfp4_size(input.size(), expert.gate) ||
+                !valid_mxfp4_size(input.size(), expert.up) ||
+                expert.gate.rows != expert.up.rows ||
+                !valid_mxfp4_size(expert.gate.rows, expert.down)) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::invalid_mxfp4);
+            }
+        }
+        if (experts.empty()) {
+            return Result<std::vector<std::vector<float>>>::success({});
+        }
+
+        struct WeightMember {
+            Mxfp4WeightView view;
+            void* packed{};
+            void* scales{};
+            std::uint64_t transfer_bytes{};
+        };
+        struct ExpertMember {
+            std::array<WeightMember, 3> weights;
+            std::array<std::unique_ptr<EventOwner>, 8> events;
+        };
+        std::vector<ExpertMember> members;
+        members.reserve(experts.size());
+        std::size_t maximum_packed_bytes = 0;
+        std::size_t maximum_scale_bytes = 0;
+        std::size_t maximum_intermediate = 0;
+        std::size_t maximum_output = 0;
+        std::uint64_t total_weight_transfer = 0;
+        for (const auto& expert : experts) {
+            ExpertMember member{{{{expert.gate}, {expert.up}, {expert.down}}}};
+            for (auto& weight : member.weights) {
+                weight.transfer_bytes =
+                    weight.view.packed.size_bytes() + weight.view.scales.size_bytes();
+                maximum_packed_bytes = std::max(
+                    maximum_packed_bytes, weight.view.packed.size_bytes());
+                maximum_scale_bytes = std::max(
+                    maximum_scale_bytes, weight.view.scales.size_bytes());
+                if (resident_weights_) {
+                    const auto acquisition = resident_weights_->acquire(
+                        {weight.view.tensor_id,
+                         cuda::WeightRepresentation::mxfp4,
+                         weight.view.rows, weight.view.cols,
+                         weight.view.group_size},
+                        weight.view.packed, weight.view.scales);
+                    if (!acquisition) {
+                        return Result<std::vector<std::vector<float>>>::failure(
+                            acquisition.error(), acquisition.message());
+                    }
+                    if (acquisition.value().disposition !=
+                        cuda::ResidentDisposition::bypass) {
+                        weight.packed =
+                            const_cast<void*>(acquisition.value().primary);
+                        weight.scales =
+                            const_cast<void*>(acquisition.value().secondary);
+                        weight.transfer_bytes =
+                            acquisition.value().uploaded_bytes;
+                    }
+                }
+                total_weight_transfer += weight.transfer_bytes;
+            }
+            maximum_intermediate =
+                std::max(maximum_intermediate, expert.gate.rows);
+            maximum_output = std::max(maximum_output, expert.down.rows);
+            for (auto& event : member.events) {
+                event = std::make_unique<EventOwner>();
+                if (event->ensure() != cudaSuccess) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        ErrorCode::backend_unavailable,
+                        "CUDA expert FFN event creation failed");
+                }
+            }
+            members.push_back(std::move(member));
+        }
+
+        const auto input_bytes = input.size_bytes();
+        const auto intermediate_bytes = maximum_intermediate * sizeof(float);
+        const auto output_bytes = maximum_output * sizeof(float);
+        cuda::DeviceAllocation local_input(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_packed(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_scales(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_gate(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_up(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_activation(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation local_output(&memory_stats_, &runtime_stats_);
+        void* device_input = nullptr;
+        void* transient_packed = nullptr;
+        void* transient_scales = nullptr;
+        void* device_gate = nullptr;
+        void* device_up = nullptr;
+        void* device_activation = nullptr;
+        void* device_output = nullptr;
+        if (options_.cuda_allocation == CudaAllocationMode::reused) {
+            if (ffn_input_scratch_.reserve(input_bytes) != cudaSuccess ||
+                mxfp4_packed_scratch_.reserve(maximum_packed_bytes) !=
+                    cudaSuccess ||
+                mxfp4_scales_scratch_.reserve(maximum_scale_bytes) !=
+                    cudaSuccess ||
+                ffn_gate_scratch_.reserve(intermediate_bytes) != cudaSuccess ||
+                ffn_up_scratch_.reserve(intermediate_bytes) != cudaSuccess ||
+                ffn_activation_scratch_.reserve(intermediate_bytes) !=
+                    cudaSuccess ||
+                ffn_output_scratch_.reserve(output_bytes) != cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA expert FFN reusable allocation failed");
+            }
+            device_input = ffn_input_scratch_.get();
+            transient_packed = mxfp4_packed_scratch_.get();
+            transient_scales = mxfp4_scales_scratch_.get();
+            device_gate = ffn_gate_scratch_.get();
+            device_up = ffn_up_scratch_.get();
+            device_activation = ffn_activation_scratch_.get();
+            device_output = ffn_output_scratch_.get();
+        } else if (local_input.allocate(input_bytes) != cudaSuccess ||
+                   local_packed.allocate(maximum_packed_bytes) != cudaSuccess ||
+                   local_scales.allocate(maximum_scale_bytes) != cudaSuccess ||
+                   local_gate.allocate(intermediate_bytes) != cudaSuccess ||
+                   local_up.allocate(intermediate_bytes) != cudaSuccess ||
+                   local_activation.allocate(intermediate_bytes) != cudaSuccess ||
+                   local_output.allocate(output_bytes) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA expert FFN allocation failed");
+        } else {
+            device_input = local_input.get();
+            transient_packed = local_packed.get();
+            transient_scales = local_scales.get();
+            device_gate = local_gate.get();
+            device_up = local_up.get();
+            device_activation = local_activation.get();
+            device_output = local_output.get();
+        }
+        if (cudaMemcpyAsync(device_input, input.data(), input_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA expert FFN activation upload failed");
+        }
+
+        const auto launch_weight = [&](WeightMember& weight,
+                                       const float* matvec_input,
+                                       float* output, EventOwner& start,
+                                       EventOwner& end) {
+            if (!weight.packed) {
+                weight.packed = transient_packed;
+                weight.scales = transient_scales;
+                if (cudaMemcpyAsync(weight.packed, weight.view.packed.data(),
+                                    weight.view.packed.size_bytes(),
+                                    cudaMemcpyHostToDevice, stream_) !=
+                        cudaSuccess ||
+                    cudaMemcpyAsync(weight.scales, weight.view.scales.data(),
+                                    weight.view.scales.size_bytes(),
+                                    cudaMemcpyHostToDevice, stream_) !=
+                        cudaSuccess) return false;
+            }
+            return cudaEventRecord(start.get(), stream_) == cudaSuccess &&
+                   cuda::launch_mxfp4_matvec(
+                       matvec_input,
+                       static_cast<const std::uint8_t*>(weight.packed),
+                       static_cast<const std::uint8_t*>(weight.scales), output,
+                       weight.view.rows, weight.view.cols, stream_) ==
+                       cudaSuccess &&
+                   cudaEventRecord(end.get(), stream_) == cudaSuccess;
+        };
+
+        std::vector<std::vector<float>> outputs(experts.size());
+        std::uint64_t total_output_bytes = 0;
+        for (std::size_t index = 0; index < experts.size(); ++index) {
+            auto& member = members[index];
+            const auto& expert = experts[index];
+            if (!launch_weight(member.weights[0],
+                               static_cast<const float*>(device_input),
+                               static_cast<float*>(device_gate),
+                               *member.events[0], *member.events[1]) ||
+                !launch_weight(member.weights[1],
+                               static_cast<const float*>(device_input),
+                               static_cast<float*>(device_up),
+                               *member.events[2], *member.events[3])) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA expert FFN gate or up failed");
+            }
+            if (cudaEventRecord(member.events[4]->get(), stream_) != cudaSuccess ||
+                cuda::launch_situ_glu(
+                    static_cast<const float*>(device_gate),
+                    static_cast<const float*>(device_up), device_activation,
+                    expert.gate.rows, situ_beta, situ_linear.has_value(),
+                    situ_linear.value_or(0.0F), false, stream_) != cudaSuccess ||
+                cudaEventRecord(member.events[5]->get(), stream_) != cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA expert FFN SiTU failed");
+            }
+            if (!launch_weight(member.weights[2],
+                               static_cast<const float*>(device_activation),
+                               static_cast<float*>(device_output),
+                               *member.events[6], *member.events[7])) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA expert FFN down failed");
+            }
+            outputs[index].resize(expert.down.rows);
+            const auto bytes = expert.down.rows * sizeof(float);
+            if (cudaMemcpyAsync(outputs[index].data(), device_output, bytes,
+                                cudaMemcpyDeviceToHost, stream_) != cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA expert FFN output copy failed");
+            }
+            total_output_bytes += bytes;
+        }
+        const auto d2h_start = std::chrono::steady_clock::now();
+        if (cudaStreamSynchronize(stream_) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA expert FFN synchronization failed");
+        }
+
+        const auto elapsed = [](EventOwner& start, EventOwner& end,
+                                std::uint64_t& nanoseconds) {
+            float milliseconds = 0.0F;
+            if (cudaEventElapsedTime(&milliseconds, start.get(), end.get()) !=
+                cudaSuccess) return false;
+            nanoseconds = static_cast<std::uint64_t>(std::llround(
+                static_cast<double>(milliseconds) * 1.0e6));
+            return true;
+        };
+        for (std::size_t expert_index = 0;
+             expert_index < experts.size(); ++expert_index) {
+            std::array<std::uint64_t, 4> durations{};
+            auto& events = members[expert_index].events;
+            for (std::size_t pair = 0; pair < durations.size(); ++pair) {
+                if (!elapsed(*events[pair * 2], *events[pair * 2 + 1],
+                             durations[pair])) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        ErrorCode::backend_unavailable,
+                        "CUDA expert FFN event timing failed");
+                }
+            }
+            const auto& expert = experts[expert_index];
+            record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                   operation_start,
+                   expert.gate.packed.size_bytes() +
+                       expert.gate.scales.size_bytes(),
+                   0, durations[0], true);
+            record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                   operation_start,
+                   expert.up.packed.size_bytes() + expert.up.scales.size_bytes(),
+                   0, durations[1], true);
+            record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                   operation_start,
+                   expert.down.packed.size_bytes() +
+                       expert.down.scales.size_bytes(),
+                   0, durations[3], true);
+        }
+        ++runtime_stats_.stream_synchronization_count;
+        runtime_stats_.activation_h2d_bytes += input_bytes;
+        runtime_stats_.weight_h2d_bytes += total_weight_transfer;
+        ++runtime_stats_.ffn_block_calls;
+        runtime_stats_.ffn_block_experts += experts.size();
+        record(phase, ProfileOperation::activation_host_to_device, precision,
+               layer, operation_start, 0, input_bytes, 0, true);
+        record(phase, ProfileOperation::weight_host_to_device, precision, layer,
+               operation_start, 0, total_weight_transfer, 0, true);
+        record(phase, ProfileOperation::device_to_host, precision, layer,
+               d2h_start, 0, total_output_bytes, 0, true);
+        return Result<std::vector<std::vector<float>>>::success(
+            std::move(outputs));
     }
 
     BackendMemoryStats memory_stats() const noexcept override { return memory_stats_; }
@@ -1466,7 +1745,12 @@ private:
 
     static bool valid_mxfp4(std::span<const float> input,
                             Mxfp4WeightView weight) {
-        if (input.size() != weight.cols || !weight.rows || !weight.cols ||
+        return valid_mxfp4_size(input.size(), weight);
+    }
+
+    static bool valid_mxfp4_size(std::size_t input_size,
+                                 Mxfp4WeightView weight) {
+        if (input_size != weight.cols || !weight.rows || !weight.cols ||
             !weight.group_size || weight.cols % weight.group_size ||
             weight.cols % 2 ||
             weight.rows > std::numeric_limits<std::size_t>::max() /

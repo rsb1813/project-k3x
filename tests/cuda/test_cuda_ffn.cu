@@ -161,10 +161,150 @@ int test_validation() {
     return 0;
 }
 
+struct Mxfp4Fixture {
+    std::array<float, 32> input{};
+    std::array<std::byte, 512> gate{};
+    std::array<std::byte, 512> up{};
+    std::array<std::byte, 16> down_one{};
+    std::array<std::byte, 16> down_two{};
+    std::array<std::byte, 32> intermediate_scales{};
+    std::array<std::byte, 1> down_scales{std::byte{127}};
+
+    Mxfp4Fixture() {
+        input[1] = 2.0F;
+        gate[0] = std::byte{0x10};
+        up[0] = std::byte{0x20};
+        down_one[0] = std::byte{0x02};
+        down_two[0] = std::byte{0x04};
+        intermediate_scales.fill(std::byte{127});
+    }
+
+    std::array<k3x::Mxfp4MlpView, 2> views() const {
+        return {{
+            {
+                {801, gate, intermediate_scales, 32, 32, 32},
+                {802, up, intermediate_scales, 32, 32, 32},
+                {803, down_one, down_scales, 1, 32, 32},
+            },
+            {
+                {804, gate, intermediate_scales, 32, 32, 32},
+                {805, up, intermediate_scales, 32, 32, 32},
+                {806, down_two, down_scales, 1, 32, 32},
+            },
+        }};
+    }
+};
+
+int warm_expert_weights(k3x::ComputeBackend& backend,
+                        const Mxfp4Fixture& fixture,
+                        std::span<const k3x::Mxfp4MlpView> experts) {
+    const std::array<float, 32> down_input{};
+    for (const auto& expert : experts) {
+        if (!backend.mxfp4_matvec(fixture.input, expert.gate, 10,
+                                  k3x::ProfilePhase::decode)) return 1;
+        if (!backend.mxfp4_matvec(fixture.input, expert.up, 10,
+                                  k3x::ProfilePhase::decode)) return 2;
+        if (!backend.mxfp4_matvec(down_input, expert.down, 10,
+                                  k3x::ProfilePhase::decode)) return 3;
+    }
+    return 0;
+}
+
+int test_exact_mxfp4_group() {
+    const Mxfp4Fixture fixture;
+    const auto experts = fixture.views();
+    auto cpu = k3x::make_cpu_backend();
+    const auto expected = cpu->mxfp4_situ_mlp_group(
+        fixture.input, experts, 2.0F, 1.5F, 10,
+        k3x::ProfilePhase::decode);
+    if (!expected) return 40;
+
+    k3x::BackendOptions options;
+    options.kind = k3x::BackendKind::cuda_custom;
+    options.cuda_boundary = k3x::CudaBoundaryMode::ffn_block;
+    options.cuda_allocation = k3x::CudaAllocationMode::reused;
+    options.cuda_weights = k3x::CudaWeightMode::resident;
+    options.cuda_resident_bytes = 2210;
+    k3x::Profiler profiler;
+    auto backend = k3x::make_cuda_backend(options, &profiler);
+    if (!backend) return 41;
+    if (const auto result = warm_expert_weights(*backend.value(), fixture, experts)) {
+        return 41 + result;
+    }
+    const auto before = backend.value()->runtime_stats();
+    const auto before_profile = profiler.summary();
+    const auto actual = backend.value()->mxfp4_situ_mlp_group(
+        fixture.input, experts, 2.0F, 1.5F, 10,
+        k3x::ProfilePhase::decode);
+    if (!actual || actual.value().size() != 2 ||
+        !nearly_equal(actual.value()[0], expected.value()[0], 1.0e-6F) ||
+        !nearly_equal(actual.value()[1], expected.value()[1], 1.0e-6F)) {
+        return 45;
+    }
+    const auto after = backend.value()->runtime_stats();
+    const auto after_profile = profiler.summary();
+    if (after.weight_cache_hits - before.weight_cache_hits != 6) return 46;
+    if (after.weight_h2d_bytes != before.weight_h2d_bytes) return 47;
+    if (after.activation_h2d_bytes - before.activation_h2d_bytes != 128) return 48;
+    if (after.stream_synchronization_count -
+            before.stream_synchronization_count != 1) return 49;
+    if (after.ffn_block_calls - before.ffn_block_calls != 1 ||
+        after.ffn_block_experts - before.ffn_block_experts != 2) return 50;
+    if (after_profile.device_to_host_bytes -
+            before_profile.device_to_host_bytes != 8) return 51;
+
+    auto invalid_experts = experts;
+    auto invalid_scales = fixture.intermediate_scales;
+    invalid_scales[0] = std::byte{0xFF};
+    invalid_experts[1].up.scales = invalid_scales;
+    const auto before_invalid = backend.value()->runtime_stats();
+    const auto before_invalid_events = profiler.events().size();
+    const auto rejected = backend.value()->mxfp4_situ_mlp_group(
+        fixture.input, invalid_experts, 2.0F, 1.5F, 10,
+        k3x::ProfilePhase::decode);
+    if (rejected || rejected.error() != k3x::ErrorCode::invalid_mxfp4) return 52;
+    const auto after_invalid = backend.value()->runtime_stats();
+    if (after_invalid.weight_cache_hits != before_invalid.weight_cache_hits ||
+        after_invalid.weight_cache_misses != before_invalid.weight_cache_misses ||
+        after_invalid.activation_h2d_bytes != before_invalid.activation_h2d_bytes ||
+        after_invalid.ffn_block_calls != before_invalid.ffn_block_calls ||
+        profiler.events().size() != before_invalid_events) return 53;
+    return 0;
+}
+
+int test_exact_mxfp4_capacity_bypass() {
+    const Mxfp4Fixture fixture;
+    const auto experts = fixture.views();
+    auto cpu = k3x::make_cpu_backend();
+    const auto expected = cpu->mxfp4_situ_mlp_group(
+        fixture.input, experts, 2.0F, 1.5F, 11,
+        k3x::ProfilePhase::decode);
+    if (!expected) return 60;
+    k3x::BackendOptions options;
+    options.kind = k3x::BackendKind::cuda_custom;
+    options.cuda_boundary = k3x::CudaBoundaryMode::ffn_block;
+    options.cuda_allocation = k3x::CudaAllocationMode::reused;
+    options.cuda_weights = k3x::CudaWeightMode::resident;
+    options.cuda_resident_bytes = 2209;
+    auto backend = k3x::make_cuda_backend(options);
+    if (!backend) return 61;
+    const auto actual = backend.value()->mxfp4_situ_mlp_group(
+        fixture.input, experts, 2.0F, 1.5F, 11,
+        k3x::ProfilePhase::decode);
+    if (!actual || actual.value() != expected.value()) return 62;
+    const auto stats = backend.value()->runtime_stats();
+    if (stats.weight_cache_bypasses == 0 ||
+        stats.resident_weight_bytes > options.cuda_resident_bytes ||
+        stats.ffn_block_calls != 1 || stats.ffn_block_experts != 2) return 63;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
     if (const auto result = test_fp32_and_residency()) return result;
     if (const auto result = test_bf16()) return result;
-    return test_validation();
+    if (const auto result = test_validation()) return result;
+    if (const auto result = test_exact_mxfp4_group()) return result;
+    return test_exact_mxfp4_capacity_bypass();
 }

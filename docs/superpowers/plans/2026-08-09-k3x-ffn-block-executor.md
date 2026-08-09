@@ -340,13 +340,13 @@ git commit -m "feat: execute dense FFN blocks on CUDA"
 - Consumes: an ordered list of exact gate/up/down MXFP4 triplets and one shared latent input.
 - Produces: ordered expert outputs without changing routing or mixing.
 
-- [ ] **Step 1: Write failing ordered-group, residency, and atomic-validation tests**
+- [x] **Step 1: Write failing ordered-group, residency, and atomic-validation tests**
 
 Construct two independently encoded native MXFP4 expert triplets. Require output order to match the request order and compare each output with the CPU block oracle.
 
 Warm all six resident weights, then require six resident hits, zero new weight H2D, one activation H2D, one final synchronization, one successful block call, and two successful block experts. Add a second-expert reserved-scale failure and require rejection before any copy, resident-table mutation, or successful counter increment. Add a hard-capacity case proving that the group cannot bypass the existing resident-byte limit.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 ```bash
 cmake --build build-cuda -j2
@@ -355,13 +355,13 @@ ctest --test-dir build-cuda -R cuda_ffn --output-on-failure
 
 Expected: the group contract is absent or the new assertions fail.
 
-- [ ] **Step 3: Implement preflight-complete exact group execution**
+- [x] **Step 3: Implement preflight-complete exact group execution**
 
 Validate every expert triplet, shape, tensor identity, representation, and E8M0 scale before enqueuing any copy or mutating counters. Resolve all triplet weights through the existing resident table and its hard capacity.
 
 Upload the shared latent once. For each expert, execute native MXFP4 gate and up projections, strict SiTU, then native MXFP4 down projection on the same stream. Reuse checked gate/up/activation/output arena regions only after their prior same-stream use. Copy ordered final outputs back, synchronize once after the complete group, read events, then commit profiler counters.
 
-- [ ] **Step 4: Verify exactness, accounting, and sanitizer**
+- [x] **Step 4: Verify exactness, accounting, and sanitizer**
 
 ```bash
 cmake --build build-cuda -j2
@@ -369,7 +369,7 @@ ctest --test-dir build-cuda -R "cuda_(mxfp4|ffn)" --output-on-failure
 /usr/local/cuda/bin/compute-sanitizer --tool memcheck build-cuda/test_cuda_ffn
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add runtime/cuda/backend_cuda.cu tests/cuda/test_cuda_ffn.cu
