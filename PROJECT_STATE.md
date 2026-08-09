@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 13 exact token-major speculative verification, scripted CLI telemetry, B-0014, and full local verification are complete. Final review, publication ledger, and public integration remain.
+Milestone 13 exact token-major speculative verification, scripted CLI telemetry, B-0014, full local verification, and final self-review are complete. Public PR integration remains.
 
 State recorded on 2026-08-10 from public documentation head `7748ca3` and M13 implementation head `2cf50b4`. The active branch is `codex/milestone-thirteen-speculative-verification`. PR #11 and PR #12 are merged, their README sections are public, and M13 remains on the development branch until final verification and publication gates complete.
 
@@ -92,8 +92,8 @@ State recorded on 2026-08-10 from public documentation head `7748ca3` and M13 im
 
 ## Next concrete tasks
 
-1. Perform final read-only review, apply only verified Critical/Important findings, and rerun affected gates.
-2. Commit B-0014 artifacts and ledger, then publish Milestone 13 through a green branch/PR/main sequence.
+1. Publish Milestone 13 through a green branch/PR/main sequence.
+2. Record the public integration commit and CI runs in the ledger.
 3. Start expert-major scheduling without changing the measured target routing or commit semantics.
 
 ## Hardware assumptions
@@ -124,6 +124,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 ## Last known-good state
 
 - M13 implementation head `2cf50b4` provides the pure contract, incremental reference, scripted CLI, telemetry, and B-0014 tooling. CPU CTest 12/12 and Python 245 passed/44 skipped succeeded before measurement.
+- B-0014 result/ledger commit: `e2e37bf`. Final self-review found no Critical or Important issue; default greedy behavior, proposal prevalidation, exact parity gates, and measured/proposed documentation boundaries remain intact.
 - B-0014 summary JSON/CSV SHA-256: `7cd834b1c65d507367320170cdf72ca76aace9f6a743da85a0a9f0cca4a21062` / `9c5fdba84c547f93e2a0a7d4c0b76412181ffb2c635ffd969537a154950ce75b`; raw-summary and exact-parity cross-check passed.
 - Post-measurement verification: CPU CTest 12/12 and pytest 245/44; liburing/direct CTest 13/13 and pytest 247/42; CUDA CTest 21/21 and pytest 281/8; ASan/UBSan CTest 13/13 and targeted pytest 26/3 with 104 deselected; perfect and mixed CUDA speculative Compute Sanitizer runs both 0 errors.
 - Public documentation head `7748ca3` includes dedicated English README sections for merged Milestones 11 and 12. Public `main` correctness run `31322913019` succeeded.

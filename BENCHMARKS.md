@@ -550,7 +550,7 @@ These values are capacity and traffic estimates. They are not inserted into B-00
 ## B-0014 — Milestone 13 exact token-major speculative verification
 
 - Date: 2026-08-10.
-- Commit: implementation `2cf50b4`; result/ledger commit pending.
+- Commit: implementation `2cf50b4`; result/ledger `e2e37bf`.
 - Hardware: AMD Ryzen 7 9800X3D host under WSL2 Linux `6.18.33.2-microsoft-standard-WSL2`; CPU backend only.
 - Model/checkpoint: synthetic executable `artifacts/synthetic.k3x`, SHA-256 `039d61ee9c2e13e27c9a2514bb476f8b122b8b37be0b7f85baf26c1a6611a2e9`.
 - Mode: incremental natural Top-2, disabled L1, blocking `pread + buffered`, 4 prompt tokens, 6 generated tokens, 3 warmups, 20 measured samples.
