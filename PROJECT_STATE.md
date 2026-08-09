@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 8 exact current-layer deadline expert loading, non-authoritative WSL2 B-0009 measurement, final review, review fixes, and local verification are complete. Public integration is pending.
+Milestone 8 exact current-layer deadline expert loading, non-authoritative WSL2 B-0009 measurement, final review, review fixes, local verification, and public integration are complete.
 
-State recorded on 2026-08-09 with implementation/review-fix head `68b3e54` and replacement measurement head `567c719`. Public `main` remains at Milestone 7 publication record `39b2d51`, and the active branch is `codex/milestone-eight-deadline-scheduler`.
+State recorded on 2026-08-09 at verified Milestone 8 integration head `a289172`. Public PR #8 is merged by fast-forward, post-merge main correctness run `31310608231` succeeded, and the preserved active branch is `codex/milestone-eight-deadline-scheduler`.
 
 ## Completed work
 
@@ -75,11 +75,11 @@ State recorded on 2026-08-09 with implementation/review-fix head `68b3e54` and r
 
 ## Next concrete tasks
 
-1. Publish Milestone 8 through a public PR, require branch/PR/main CI, and preserve the worktree.
-2. Design runtime-switchable expert cache-policy contracts and reproduce LRU, LFU, and Least-Stale without changing exact routing.
-3. Add deterministic routing-trace workloads and a bounded multi-expert or full-layer slice for cache pressure and locality evidence.
-4. Extend the current-layer worker only after a tested future-layer recall contract exists; do not claim ORBIT or N/N+1/N+2 before then.
-5. Run native-Linux P44 Pro warm/cold B-0008/B-0009 only when that environment exists, then continue task/session profiles, adaptive Top-K, and exact rescue in charter order.
+1. Design runtime-switchable expert cache-policy contracts and reproduce LRU, LFU, and Least-Stale without changing exact routing.
+2. Add deterministic routing-trace workloads and a bounded multi-expert or full-layer slice for cache pressure and locality evidence.
+3. Extend the current-layer worker only after a tested future-layer recall contract exists; do not claim ORBIT or N/N+1/N+2 before then.
+4. Run native-Linux P44 Pro warm/cold B-0008/B-0009 only when that environment exists.
+5. Continue task/session profiles, adaptive Top-K, and exact rescue in charter order after cache-policy evidence.
 
 ## Hardware assumptions
 
@@ -106,7 +106,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Public `main` remains at Milestone 7 publication record `39b2d51b01bc6ff0a71b92a36a9fea086256e3ed`; PR #7 and its branch/PR/main CI are complete.
+- Public Milestone 8 integration head: `a2891727c80e180be8c74d76aab3b1535c9f4047`; PR #8 branch/PR runs `31310497619` and `31310504588` succeeded, and post-merge main run `31310608231` succeeded.
 - Latest verified Milestone 8 review-fix commit: `68b3e54` (`fix: synchronize expert loader ownership`).
 - Latest verified B-0009 result head: `567c719`; measurement code is `68b3e54`.
 - B-0009 artifact SHA-256: `392b9237274e5580b665cf95afbda9a09e8d01ba7484bed00cf83a4ae99eb4fa`.
