@@ -6,9 +6,9 @@ Add bounded runtime-only metadata and deterministic persistent routing profiles 
 
 ## Task 1 — Profile data model and persistence
 
-- [ ] Add RED tests for metadata validation, frequency/transition observation, hot-bank ordering, canonical round-trip, checksum failure, and load failure atomicity.
-- [ ] Implement the minimal bounded v1 profile parser/writer and atomic save path.
-- [ ] Verify the dedicated profile CTest.
+- [x] Add RED tests for metadata validation, frequency/transition observation, hot-bank ordering, canonical round-trip, checksum failure, and load failure atomicity.
+- [x] Implement the minimal bounded v1 profile parser/writer and atomic save path.
+- [x] Verify the dedicated profile CTest.
 
 ## Task 2 — Profiled exact eviction
 
