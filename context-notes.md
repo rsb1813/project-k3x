@@ -109,3 +109,5 @@
 - `ffn-block` runtime mode는 `cuda-custom` 전용으로 제한한다. `cuda-dense`에서 routed MXFP4를 CPU로 내부 처리하면 advertised boundary 안에 silent CPU execution이 섞이므로 지원하지 않는다.
 - routed expert block은 선택된 Top-K triplet 전체를 한 group으로 받아 latent input을 한 번만 upload하고 expert 출력만 host로 반환한다. Router score, selection, output mixing은 CPU exact graph에 남는다.
 - Sol 읽기 전용 자문은 같은 경계를 권장했고 fast-math 금지, preflight validation, 기존 resident table 재사용, 최종 sync 뒤 event 집계가 핵심 불변식이라고 확인했다. 자문 전후 작업 트리에는 예상 밖 변경이 없었다.
+- 구현 계획은 경계 옵션, portable oracle, strict SiTU, dense/shared block, exact MXFP4 expert group, graph 연결, 계측/ablation, B-0004와 원장 갱신의 여덟 의미 단위로 나눴다.
+- 연결된 구현의 일관성을 위해 primary agent가 계획을 직접 실행하며, Cloud Run 또는 유료 자원 생성 직전까지 단순 승인 질문 없이 진행한다.
