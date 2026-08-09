@@ -121,8 +121,8 @@
 - [x] SiTU/down fusion, gate/up launch fusion, routed down-accumulation fusion 비교.
 - [x] 채택 설계와 TDD 구현 계획 작성 및 self-review.
 - [x] Accumulating native MXFP4 kernel을 RED에서 GREEN으로 구현.
-- [ ] Synchronous/prepared fused expert-group backend 경로 구현.
-- [ ] 기본값을 보존하는 runtime switch와 telemetry 연결.
+- [x] Synchronous/prepared fused expert-group backend 경로 구현.
+- [x] 기본값을 보존하는 runtime switch와 telemetry 연결.
 - [ ] B-0013 synthetic 및 released-dimension bounded 측정 도구 구현.
 - [ ] 전체 correctness, sanitizer, RTX 5080 ablation, ledger, review, public integration.
 

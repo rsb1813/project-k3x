@@ -79,6 +79,7 @@ def test_cpp_runner_rejects_unknown_backend_values(
         (["--cuda-batching", "graph"], "unknown CUDA batching mode: graph"),
         (["--cuda-boundary", "layer"], "unknown CUDA boundary mode: layer"),
         (["--cuda-transfer", "queue"], "unknown CUDA transfer mode: queue"),
+        (["--cuda-moe-fusion", "graph"], "unknown CUDA MoE fusion mode: graph"),
         (
             ["--cuda-resident-bytes", "-1"],
             "invalid CUDA resident byte capacity: -1",
@@ -294,6 +295,41 @@ def test_cpp_runner_rejects_ffn_block_boundary_without_custom_cuda(
     )
     assert result.returncode == 2
     assert result.stderr.strip() == "ffn-block boundary requires cuda-custom"
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (
+            ["--backend", "cpu", "--cuda-moe-fusion", "routed-accumulate"],
+            "routed-accumulate fusion requires cuda-custom",
+        ),
+        (
+            [
+                "--backend", "cuda-dense",
+                "--cuda-moe-fusion", "routed-accumulate",
+            ],
+            "routed-accumulate fusion requires cuda-custom",
+        ),
+        (
+            [
+                "--backend", "cuda-custom",
+                "--cuda-moe-fusion", "routed-accumulate",
+            ],
+            "routed-accumulate fusion requires ffn-block boundary",
+        ),
+    ],
+)
+def test_cpp_runner_rejects_invalid_cuda_moe_fusion_combinations(
+    arguments: list[str], message: str
+) -> None:
+    result = subprocess.run(
+        [str(cpp_binary("k3x_run")), *arguments],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == message
 
 
 @pytest.mark.parametrize(
@@ -897,11 +933,30 @@ def test_cuda_ffn_block_matches_operation_graph_and_routing(
 
     results: dict[str, dict] = {}
     cases = (
-        ("operation", "operation", "resident", 8 * 1024 * 1024, "synchronous", 0),
-        ("synchronous", "ffn-block", "transient", 0, "synchronous", 0),
-        ("prefetch", "ffn-block", "transient", 0, "prefetch", 1024 * 1024),
+        (
+            "operation", "operation", "resident", 8 * 1024 * 1024,
+            "synchronous", 0, "none",
+        ),
+        (
+            "synchronous", "ffn-block", "transient", 0,
+            "synchronous", 0, "none",
+        ),
+        (
+            "prefetch", "ffn-block", "transient", 0,
+            "prefetch", 1024 * 1024, "none",
+        ),
+        (
+            "fused-synchronous", "ffn-block", "transient", 0,
+            "synchronous", 0, "routed-accumulate",
+        ),
+        (
+            "fused-prefetch", "ffn-block", "transient", 0,
+            "prefetch", 1024 * 1024, "routed-accumulate",
+        ),
     )
-    for name, boundary, weights, resident_bytes, transfer, pinned_bytes in cases:
+    for (
+        name, boundary, weights, resident_bytes, transfer, pinned_bytes, fusion
+    ) in cases:
         output = tmp_path / f"{name}-{dense_precision}-{cuda_batching}.json"
         subprocess.run(
             [
@@ -920,6 +975,7 @@ def test_cuda_ffn_block_matches_operation_graph_and_routing(
                 "--cuda-resident-bytes", str(resident_bytes),
                 "--cuda-transfer", transfer,
                 "--cuda-pinned-bytes", str(pinned_bytes),
+                "--cuda-moe-fusion", fusion,
                 "--json", str(output),
             ],
             check=True,
@@ -929,7 +985,14 @@ def test_cuda_ffn_block_matches_operation_graph_and_routing(
     reference = results["operation"]
     synchronous = results["synchronous"]
     prefetch = results["prefetch"]
-    for name, candidate in (("synchronous", synchronous), ("prefetch", prefetch)):
+    fused_synchronous = results["fused-synchronous"]
+    fused_prefetch = results["fused-prefetch"]
+    for name, candidate in (
+        ("synchronous", synchronous),
+        ("prefetch", prefetch),
+        ("synchronous", fused_synchronous),
+        ("prefetch", fused_prefetch),
+    ):
         assert candidate["cuda_boundary"] == "ffn-block"
         assert candidate["cuda_transfer"] == name
         assert candidate["token_ids"] == reference["token_ids"] == [43, 32, 28, 49, 9, 28]
@@ -965,6 +1028,19 @@ def test_cuda_ffn_block_matches_operation_graph_and_routing(
     assert prefetch["stream_synchronization_count"] <= synchronous[
         "stream_synchronization_count"
     ]
+    assert reference["cuda_moe_fusion"] == "none"
+    assert synchronous["fused_moe_calls"] == 0
+    assert prefetch["fused_moe_calls"] == 0
+    for candidate, unfused in (
+        (fused_synchronous, synchronous),
+        (fused_prefetch, prefetch),
+    ):
+        assert candidate["cuda_moe_fusion"] == "routed-accumulate"
+        assert 0 < candidate["fused_moe_calls"] < candidate["ffn_block_calls"]
+        assert candidate["fused_moe_experts"] == candidate["ffn_block_experts"]
+        assert candidate["device_to_host_bytes"] < unfused[
+            "device_to_host_bytes"
+        ]
 
 
 @pytest.mark.parametrize(

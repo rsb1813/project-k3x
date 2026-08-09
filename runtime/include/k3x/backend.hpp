@@ -21,6 +21,7 @@ enum class CudaWeightMode { transient, resident };
 enum class CudaBatchingMode { scalar, grouped };
 enum class CudaBoundaryMode { operation, ffn_block };
 enum class CudaTransferMode { synchronous, prefetch };
+enum class CudaMoeFusionMode { none, routed_accumulate };
 
 struct BackendOptions {
     BackendKind kind{BackendKind::cpu};
@@ -30,6 +31,7 @@ struct BackendOptions {
     CudaBatchingMode cuda_batching{CudaBatchingMode::scalar};
     CudaBoundaryMode cuda_boundary{CudaBoundaryMode::operation};
     CudaTransferMode cuda_transfer{CudaTransferMode::synchronous};
+    CudaMoeFusionMode cuda_moe_fusion{CudaMoeFusionMode::none};
     std::uint64_t cuda_resident_bytes{};
     std::uint64_t cuda_pinned_bytes{};
 };
@@ -56,6 +58,8 @@ struct BackendRuntimeStats {
     std::uint64_t grouped_projection_members{};
     std::uint64_t ffn_block_calls{};
     std::uint64_t ffn_block_experts{};
+    std::uint64_t fused_moe_calls{};
+    std::uint64_t fused_moe_experts{};
     std::uint64_t pinned_host_bytes{};
     std::uint64_t peak_pinned_host_bytes{};
     std::uint64_t async_prefetch_calls{};
@@ -142,6 +146,11 @@ public:
         std::span<const float> input, Mxfp4PrefetchToken token,
         float situ_beta, std::optional<float> situ_linear,
         std::uint32_t layer, ProfilePhase phase) = 0;
+    virtual Result<std::vector<float>> mxfp4_situ_moe_prepared(
+        std::span<const float> input, Mxfp4PrefetchToken token,
+        std::span<const float> contributions, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) = 0;
     Result<std::vector<float>> dense_matvec(
         std::span<const float> input, std::span<const float> values,
         std::size_t rows, std::size_t cols, std::uint32_t layer,

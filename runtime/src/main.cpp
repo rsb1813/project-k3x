@@ -86,6 +86,7 @@ int main(int argc, char** argv) {
     std::string cuda_batching_name = "scalar";
     std::string cuda_boundary_name = "operation";
     std::string cuda_transfer_name = "synchronous";
+    std::string cuda_moe_fusion_name = "none";
     std::string cuda_resident_bytes_text = "0";
     std::string cuda_pinned_bytes_text = "0";
     std::string l1_expert_cache_name = "disabled";
@@ -118,6 +119,7 @@ int main(int argc, char** argv) {
         else if (key == "--cuda-batching") cuda_batching_name = value;
         else if (key == "--cuda-boundary") cuda_boundary_name = value;
         else if (key == "--cuda-transfer") cuda_transfer_name = value;
+        else if (key == "--cuda-moe-fusion") cuda_moe_fusion_name = value;
         else if (key == "--cuda-resident-bytes") cuda_resident_bytes_text = value;
         else if (key == "--cuda-pinned-bytes") cuda_pinned_bytes_text = value;
         else if (key == "--l1-expert-cache") l1_expert_cache_name = value;
@@ -383,6 +385,16 @@ int main(int argc, char** argv) {
         std::cerr << "unknown CUDA transfer mode: " << cuda_transfer_name << '\n';
         return 2;
     }
+    if (cuda_moe_fusion_name == "none") {
+        backend_options.cuda_moe_fusion = k3x::CudaMoeFusionMode::none;
+    } else if (cuda_moe_fusion_name == "routed-accumulate") {
+        backend_options.cuda_moe_fusion =
+            k3x::CudaMoeFusionMode::routed_accumulate;
+    } else {
+        std::cerr << "unknown CUDA MoE fusion mode: "
+                  << cuda_moe_fusion_name << '\n';
+        return 2;
+    }
     const auto* resident_begin = cuda_resident_bytes_text.data();
     const auto* resident_end = resident_begin + cuda_resident_bytes_text.size();
     const auto resident_parse = std::from_chars(
@@ -412,6 +424,19 @@ int main(int argc, char** argv) {
         backend_options.kind != k3x::BackendKind::cuda_custom) {
         std::cerr << "ffn-block boundary requires cuda-custom\n";
         return 2;
+    }
+    if (backend_options.cuda_moe_fusion ==
+            k3x::CudaMoeFusionMode::routed_accumulate) {
+        if (backend_options.kind != k3x::BackendKind::cuda_custom) {
+            std::cerr << "routed-accumulate fusion requires cuda-custom\n";
+            return 2;
+        }
+        if (backend_options.cuda_boundary !=
+            k3x::CudaBoundaryMode::ffn_block) {
+            std::cerr <<
+                "routed-accumulate fusion requires ffn-block boundary\n";
+            return 2;
+        }
     }
     if (backend_options.kind == k3x::BackendKind::cpu &&
         (backend_options.cuda_allocation != k3x::CudaAllocationMode::per_operation ||
@@ -588,6 +613,8 @@ int main(int argc, char** argv) {
     write_json_string(output, cuda_boundary_name);
     output << ",\"cuda_transfer\":";
     write_json_string(output, cuda_transfer_name);
+    output << ",\"cuda_moe_fusion\":";
+    write_json_string(output, cuda_moe_fusion_name);
     output << ",\"cuda_resident_bytes\":"
            << effective_options.cuda_resident_bytes;
     output << ",\"cuda_pinned_bytes\":"
@@ -718,6 +745,8 @@ int main(int argc, char** argv) {
            << runtime.grouped_projection_members
            << ",\"ffn_block_calls\":" << runtime.ffn_block_calls
            << ",\"ffn_block_experts\":" << runtime.ffn_block_experts
+           << ",\"fused_moe_calls\":" << runtime.fused_moe_calls
+           << ",\"fused_moe_experts\":" << runtime.fused_moe_experts
            << ",\"pinned_host_bytes\":" << runtime.pinned_host_bytes
            << ",\"peak_pinned_host_bytes\":"
            << runtime.peak_pinned_host_bytes

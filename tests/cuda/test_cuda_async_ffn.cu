@@ -135,6 +135,7 @@ int test_owned_payload_and_accounting() {
     const auto profile = profiler.summary();
     if (stats.stream_synchronization_count != 1 ||
         stats.ffn_block_calls != 1 || stats.ffn_block_experts != 2 ||
+        stats.fused_moe_calls != 0 || stats.fused_moe_experts != 0 ||
         stats.async_prefetch_calls != 1 || stats.async_prefetch_bytes != 2210 ||
         stats.weight_h2d_bytes != 2210 ||
         stats.transfer_stream_wait_count != 1 ||
@@ -223,9 +224,83 @@ int test_error_atomicity() {
     return 0;
 }
 
+int test_fused_prepared_mix() {
+    Fixture fixture;
+    const auto experts = fixture.views();
+    const std::array<float, 2> contributions{0.25F, -0.5F};
+    auto cpu = k3x::make_cpu_backend();
+    const auto expected = cpu->mxfp4_situ_moe(
+        fixture.input, experts, contributions, 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    if (!expected) return 30;
+
+    k3x::Profiler profiler;
+    auto options = prefetch_options();
+    options.cuda_moe_fusion = k3x::CudaMoeFusionMode::routed_accumulate;
+    auto backend = k3x::make_cuda_backend(options, &profiler);
+    if (!backend) return 31;
+    const auto token = backend.value()->prefetch_mxfp4_situ_mlp_group(
+        experts, 1, 14, k3x::ProfilePhase::decode);
+    if (!token) return 32;
+    fixture.mutate_payloads();
+
+    const auto before_invalid = backend.value()->runtime_stats();
+    const auto before_invalid_profile = profiler.summary();
+    const std::array<float, 1> wrong_count{1.0F};
+    const auto rejected_count =
+        backend.value()->mxfp4_situ_moe_prepared(
+            fixture.input, token.value(), wrong_count, 2.0F, 1.5F, 14,
+            k3x::ProfilePhase::decode);
+    const std::array<float, 2> nonfinite{
+        1.0F, std::numeric_limits<float>::quiet_NaN()};
+    const auto rejected_nonfinite =
+        backend.value()->mxfp4_situ_moe_prepared(
+            fixture.input, token.value(), nonfinite, 2.0F, 1.5F, 14,
+            k3x::ProfilePhase::decode);
+    const auto after_invalid = backend.value()->runtime_stats();
+    const auto after_invalid_profile = profiler.summary();
+    if (rejected_count ||
+        rejected_count.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        rejected_nonfinite ||
+        rejected_nonfinite.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        after_invalid.device_allocation_count !=
+            before_invalid.device_allocation_count ||
+        after_invalid.activation_h2d_bytes !=
+            before_invalid.activation_h2d_bytes ||
+        after_invalid.transfer_stream_wait_count !=
+            before_invalid.transfer_stream_wait_count ||
+        after_invalid_profile.host_to_device_bytes !=
+            before_invalid_profile.host_to_device_bytes) {
+        return 33;
+    }
+
+    const auto actual = backend.value()->mxfp4_situ_moe_prepared(
+        fixture.input, token.value(), contributions, 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    if (!actual || !nearly_equal(actual.value(), expected.value())) return 34;
+    const auto stats = backend.value()->runtime_stats();
+    const auto profile = profiler.summary();
+    if (stats.stream_synchronization_count != 1 ||
+        stats.ffn_block_calls != 1 || stats.ffn_block_experts != 2 ||
+        stats.fused_moe_calls != 1 || stats.fused_moe_experts != 2 ||
+        stats.async_prefetch_calls != 1 || stats.async_prefetch_bytes != 2210 ||
+        stats.transfer_stream_wait_count != 1 ||
+        profile.device_to_host_bytes != sizeof(float)) {
+        return 35;
+    }
+    const auto repeated = backend.value()->mxfp4_situ_moe_prepared(
+        fixture.input, token.value(), contributions, 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    if (repeated || repeated.error() != k3x::ErrorCode::invalid_state) {
+        return 36;
+    }
+    return 0;
+}
+
 }  // namespace
 
 int main() {
     if (const auto result = test_owned_payload_and_accounting()) return result;
-    return test_error_atomicity();
+    if (const auto result = test_error_atomicity()) return result;
+    return test_fused_prepared_mix();
 }

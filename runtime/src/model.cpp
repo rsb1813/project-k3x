@@ -683,37 +683,79 @@ private:
             for (const auto& payload : payloads) {
                 expert_views.push_back(payload->view(config_.group_size));
             }
-            Result<std::vector<std::vector<float>>> expert_outputs =
-                Result<std::vector<std::vector<float>>>::failure(
-                    ErrorCode::backend_unavailable);
-            if (backend_.options().cuda_transfer == CudaTransferMode::prefetch) {
-                auto token = backend_.prefetch_mxfp4_situ_mlp_group(
-                    expert_views, next_prefetch_sequence_++,
-                    static_cast<std::uint32_t>(layer), phase);
-                if (!token) {
-                    throw std::runtime_error("expert prefetch backend failure");
-                }
-                latent = matvec(base + "routed_down_proj",
-                                config_.latent, config_.hidden, input,
-                                layer, phase);
-                expert_outputs = backend_.mxfp4_situ_mlp_group_prepared(
-                    latent, token.value(), config_.situ_beta,
-                    config_.situ_linear, static_cast<std::uint32_t>(layer),
-                    phase);
-            } else {
-                expert_outputs = backend_.mxfp4_situ_mlp_group(
-                    latent, expert_views, config_.situ_beta,
-                    config_.situ_linear, static_cast<std::uint32_t>(layer),
-                    phase);
-            }
-            if (!expert_outputs) {
-                throw std::runtime_error("expert FFN backend failure");
-            }
+            std::vector<float> contributions;
+            contributions.reserve(selected_k);
             for (std::size_t slot = 0; slot < selected_k; ++slot) {
-                const auto weight = decision.normalized_weights[slot] *
-                                    config_.routed_scale;
-                for (std::size_t index = 0; index < mixed.size(); ++index) {
-                    mixed[index] += weight * expert_outputs.value()[slot][index];
+                contributions.push_back(
+                    decision.normalized_weights[slot] * config_.routed_scale);
+            }
+            if (backend_.options().cuda_moe_fusion ==
+                CudaMoeFusionMode::routed_accumulate) {
+                Result<std::vector<float>> fused_output =
+                    Result<std::vector<float>>::failure(
+                        ErrorCode::backend_unavailable);
+                if (backend_.options().cuda_transfer ==
+                    CudaTransferMode::prefetch) {
+                    auto token = backend_.prefetch_mxfp4_situ_mlp_group(
+                        expert_views, next_prefetch_sequence_++,
+                        static_cast<std::uint32_t>(layer), phase);
+                    if (!token) {
+                        throw std::runtime_error(
+                            "expert prefetch backend failure");
+                    }
+                    latent = matvec(base + "routed_down_proj",
+                                    config_.latent, config_.hidden, input,
+                                    layer, phase);
+                    fused_output = backend_.mxfp4_situ_moe_prepared(
+                        latent, token.value(), contributions,
+                        config_.situ_beta, config_.situ_linear,
+                        static_cast<std::uint32_t>(layer), phase);
+                } else {
+                    fused_output = backend_.mxfp4_situ_moe(
+                        latent, expert_views, contributions,
+                        config_.situ_beta, config_.situ_linear,
+                        static_cast<std::uint32_t>(layer), phase);
+                }
+                if (!fused_output) {
+                    throw std::runtime_error(
+                        "fused expert FFN backend failure");
+                }
+                mixed = std::move(fused_output.value());
+            } else {
+                Result<std::vector<std::vector<float>>> expert_outputs =
+                    Result<std::vector<std::vector<float>>>::failure(
+                        ErrorCode::backend_unavailable);
+                if (backend_.options().cuda_transfer ==
+                    CudaTransferMode::prefetch) {
+                    auto token = backend_.prefetch_mxfp4_situ_mlp_group(
+                        expert_views, next_prefetch_sequence_++,
+                        static_cast<std::uint32_t>(layer), phase);
+                    if (!token) {
+                        throw std::runtime_error(
+                            "expert prefetch backend failure");
+                    }
+                    latent = matvec(base + "routed_down_proj",
+                                    config_.latent, config_.hidden, input,
+                                    layer, phase);
+                    expert_outputs =
+                        backend_.mxfp4_situ_mlp_group_prepared(
+                            latent, token.value(), config_.situ_beta,
+                            config_.situ_linear,
+                            static_cast<std::uint32_t>(layer), phase);
+                } else {
+                    expert_outputs = backend_.mxfp4_situ_mlp_group(
+                        latent, expert_views, config_.situ_beta,
+                        config_.situ_linear,
+                        static_cast<std::uint32_t>(layer), phase);
+                }
+                if (!expert_outputs) {
+                    throw std::runtime_error("expert FFN backend failure");
+                }
+                for (std::size_t slot = 0; slot < selected_k; ++slot) {
+                    for (std::size_t index = 0; index < mixed.size(); ++index) {
+                        mixed[index] += contributions[slot] *
+                            expert_outputs.value()[slot][index];
+                    }
                 }
             }
         } else {

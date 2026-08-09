@@ -206,6 +206,14 @@ public:
             ErrorCode::backend_unavailable);
     }
 
+    Result<std::vector<float>> mxfp4_situ_moe_prepared(
+        std::span<const float>, Mxfp4PrefetchToken, std::span<const float>,
+        float, std::optional<float>, std::uint32_t,
+        ProfilePhase) override {
+        return Result<std::vector<float>>::failure(
+            ErrorCode::backend_unavailable);
+    }
+
     BackendMemoryStats memory_stats() const noexcept override { return {}; }
     std::string_view device_name() const noexcept override { return "CPU"; }
 

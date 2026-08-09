@@ -1423,7 +1423,9 @@ public:
         std::span<const float> contributions, float situ_beta,
         std::optional<float> situ_linear, std::uint32_t layer,
         ProfilePhase phase) override {
-        if (experts.empty() || experts.size() != contributions.size()) {
+        if (options_.cuda_moe_fusion !=
+                CudaMoeFusionMode::routed_accumulate ||
+            experts.empty() || experts.size() != contributions.size()) {
             return Result<std::vector<float>>::failure(
                 ErrorCode::invalid_mxfp4);
         }
@@ -1755,6 +1757,10 @@ public:
         runtime_stats_.weight_h2d_bytes += total_weight_transfer;
         ++runtime_stats_.ffn_block_calls;
         runtime_stats_.ffn_block_experts += experts.size();
+        if (fuse_outputs) {
+            ++runtime_stats_.fused_moe_calls;
+            runtime_stats_.fused_moe_experts += experts.size();
+        }
         record(phase, ProfileOperation::activation_host_to_device, precision,
                layer, operation_start, 0, input_bytes, 0, true);
         record(phase, ProfileOperation::weight_host_to_device, precision, layer,
@@ -1802,8 +1808,41 @@ public:
         std::span<const float> input, Mxfp4PrefetchToken token,
         float situ_beta, std::optional<float> situ_linear,
         std::uint32_t layer, ProfilePhase phase) override {
+        return mxfp4_situ_mlp_group_prepared_impl(
+            input, token, {}, situ_beta, situ_linear, layer, phase);
+    }
+
+    Result<std::vector<float>> mxfp4_situ_moe_prepared(
+        std::span<const float> input, Mxfp4PrefetchToken token,
+        std::span<const float> contributions, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) override {
+        if (options_.cuda_moe_fusion !=
+                CudaMoeFusionMode::routed_accumulate ||
+            contributions.empty()) {
+            return Result<std::vector<float>>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+        auto result = mxfp4_situ_mlp_group_prepared_impl(
+            input, token, contributions, situ_beta, situ_linear, layer,
+            phase);
+        if (!result) {
+            return Result<std::vector<float>>::failure(
+                result.error(), result.message());
+        }
+        return Result<std::vector<float>>::success(
+            std::move(result.value().front()));
+    }
+
+    Result<std::vector<std::vector<float>>>
+    mxfp4_situ_mlp_group_prepared_impl(
+        std::span<const float> input, Mxfp4PrefetchToken token,
+        std::span<const float> contributions, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) {
         const auto operation_start = std::chrono::steady_clock::now();
         constexpr auto precision = NumericPrecision::mxfp4_e2m1_e8m0;
+        const bool fuse_outputs = !contributions.empty();
         if (!async_pipeline_) {
             return Result<std::vector<std::vector<float>>>::failure(
                 ErrorCode::backend_unavailable);
@@ -1815,7 +1854,12 @@ public:
             return Result<std::vector<std::vector<float>>>::failure(
                 ErrorCode::invalid_state);
         }
-        if (input.size() != prepared_mxfp4_->input_cols ||
+        if ((fuse_outputs &&
+             contributions.size() != prepared_mxfp4_->expert_count) ||
+            (fuse_outputs &&
+             std::any_of(contributions.begin(), contributions.end(),
+                         [](float value) { return !std::isfinite(value); })) ||
+            input.size() != prepared_mxfp4_->input_cols ||
             !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
             (situ_linear &&
              (!std::isfinite(*situ_linear) || *situ_linear <= 0.0F))) {
@@ -1877,15 +1921,27 @@ public:
         const auto experts = consumed.value();
         const auto launch_weight = [&](const cuda::DeviceMxfp4WeightView& weight,
                                        const float* matvec_input, float* output,
-                                       EventOwner& start, EventOwner& end) {
-            return cudaEventRecord(start.get(), stream_) == cudaSuccess &&
-                   cuda::launch_mxfp4_matvec(
-                       matvec_input, weight.packed, weight.scales, output,
-                       weight.rows, weight.cols, stream_) == cudaSuccess &&
+                                       EventOwner& start, EventOwner& end,
+                                       bool scaled = false,
+                                       float contribution = 1.0F,
+                                       bool accumulate = false) {
+            if (cudaEventRecord(start.get(), stream_) != cudaSuccess) {
+                return false;
+            }
+            const auto launched = scaled
+                ? cuda::launch_mxfp4_matvec_accumulate(
+                      matvec_input, weight.packed, weight.scales, output,
+                      weight.rows, weight.cols, contribution, accumulate,
+                      stream_)
+                : cuda::launch_mxfp4_matvec(
+                      matvec_input, weight.packed, weight.scales, output,
+                      weight.rows, weight.cols, stream_);
+            return launched == cudaSuccess &&
                    cudaEventRecord(end.get(), stream_) == cudaSuccess;
         };
 
-        std::vector<std::vector<float>> outputs(experts.size());
+        std::vector<std::vector<float>> outputs(
+            fuse_outputs ? 1 : experts.size());
         std::uint64_t total_output_bytes = 0;
         const auto d2h_start = std::chrono::steady_clock::now();
         for (std::size_t index = 0; index < experts.size(); ++index) {
@@ -1910,20 +1966,37 @@ public:
                     "CUDA prepared expert SiTU failed");
             }
             if (!launch_weight(expert.down, device_activation, device_output,
-                               *events[6], *events[7])) {
+                               *events[6], *events[7], fuse_outputs,
+                               fuse_outputs ? contributions[index] : 1.0F,
+                               fuse_outputs && index != 0)) {
                 return Result<std::vector<std::vector<float>>>::failure(
                     ErrorCode::backend_unavailable,
                     "CUDA prepared expert down failed");
             }
-            outputs[index].resize(expert.down.rows);
-            const auto bytes = expert.down.rows * sizeof(float);
-            if (cudaMemcpyAsync(outputs[index].data(), device_output, bytes,
-                                cudaMemcpyDeviceToHost, stream_) != cudaSuccess) {
+            if (!fuse_outputs) {
+                outputs[index].resize(expert.down.rows);
+                const auto bytes = expert.down.rows * sizeof(float);
+                if (cudaMemcpyAsync(outputs[index].data(), device_output, bytes,
+                                    cudaMemcpyDeviceToHost, stream_) !=
+                    cudaSuccess) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        ErrorCode::backend_unavailable,
+                        "CUDA prepared expert output copy failed");
+                }
+                total_output_bytes += bytes;
+            }
+        }
+        if (fuse_outputs) {
+            outputs.front().resize(prepared_mxfp4_->maximum_output);
+            total_output_bytes =
+                prepared_mxfp4_->maximum_output * sizeof(float);
+            if (cudaMemcpyAsync(outputs.front().data(), device_output,
+                                total_output_bytes, cudaMemcpyDeviceToHost,
+                                stream_) != cudaSuccess) {
                 return Result<std::vector<std::vector<float>>>::failure(
                     ErrorCode::backend_unavailable,
-                    "CUDA prepared expert output copy failed");
+                    "CUDA prepared fused output copy failed");
             }
-            total_output_bytes += bytes;
         }
         if (cudaStreamSynchronize(stream_) != cudaSuccess) {
             return Result<std::vector<std::vector<float>>>::failure(
@@ -1980,6 +2053,10 @@ public:
         runtime_stats_.activation_h2d_bytes += input_bytes;
         ++runtime_stats_.ffn_block_calls;
         runtime_stats_.ffn_block_experts += experts.size();
+        if (fuse_outputs) {
+            ++runtime_stats_.fused_moe_calls;
+            runtime_stats_.fused_moe_experts += experts.size();
+        }
         record(phase, ProfileOperation::activation_host_to_device, precision,
                layer, operation_start, 0, input_bytes, 0, true);
         record(phase, ProfileOperation::weight_host_to_device, precision, layer,

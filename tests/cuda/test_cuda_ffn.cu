@@ -380,6 +380,7 @@ int test_exact_mxfp4_fused_mix() {
     k3x::BackendOptions options;
     options.kind = k3x::BackendKind::cuda_custom;
     options.cuda_boundary = k3x::CudaBoundaryMode::ffn_block;
+    options.cuda_moe_fusion = k3x::CudaMoeFusionMode::routed_accumulate;
     options.cuda_allocation = k3x::CudaAllocationMode::reused;
     options.cuda_weights = k3x::CudaWeightMode::resident;
     options.cuda_resident_bytes = 2210;
@@ -403,7 +404,9 @@ int test_exact_mxfp4_fused_mix() {
         after.stream_synchronization_count -
                 before.stream_synchronization_count != 1 ||
         after.ffn_block_calls - before.ffn_block_calls != 1 ||
-        after.ffn_block_experts - before.ffn_block_experts != 2) {
+        after.ffn_block_experts - before.ffn_block_experts != 2 ||
+        after.fused_moe_calls - before.fused_moe_calls != 1 ||
+        after.fused_moe_experts - before.fused_moe_experts != 2) {
         return 77;
     }
     if (after_profile.device_to_host_bytes -
