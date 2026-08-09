@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 5 public integration is complete. Milestone 6 independent exact L2 reader implementation, local verification, non-authoritative WSL2 B-0007 measurement, and final review are complete; public integration is in progress.
+Milestone 6 independent exact L2 reader implementation, local verification, non-authoritative WSL2 B-0007 measurement, final review, and public integration are complete.
 
-State recorded on 2026-08-09 at verified Milestone 6 review-fix commit `5160205`. Public `main` remains at Milestone 5 ledger closure `a7e8acf`; active branch is `codex/milestone-six-l2-reader`.
+State recorded on 2026-08-09 at verified Milestone 6 implementation head `1f2853e`. Public PR #6 is merged by fast-forward, and post-merge main correctness run `31305351800` succeeded. The preserved active branch is `codex/milestone-six-l2-reader`.
 
 ## Completed work
 
@@ -41,7 +41,7 @@ State recorded on 2026-08-09 at verified Milestone 6 review-fix commit `5160205`
 
 ## Work in progress
 
-- Milestone 6 code and measurement ledger await public PR/CI integration.
+- Milestone 7 full-dimension bounded checkpoint-slice design has not started.
 - Final Terra high review found two Important issues: io_uring failure-path buffer lifetime and a premature multi-megabyte-fixture claim. Commit `5160205` closes and invalidates a failed ring before buffers leave scope, adds a pending-read lifetime regression, and marks the fixture proposed. No Critical or Important finding remains unaddressed.
 - Static L1 admission and all non-default L2 modes remain experimental and opt-in. LRU, LFU, Least-Stale, eviction, task/session priors, prediction, and cross-layer asynchronous L2 scheduling remain unimplemented.
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
@@ -63,10 +63,10 @@ State recorded on 2026-08-09 at verified Milestone 6 review-fix commit `5160205`
 
 ## Next concrete tasks
 
-1. Publish Milestone 6 through a public PR, require Linux CI, ancestry-check the merge, and confirm post-merge CI.
-2. Add a full-dimension bounded checkpoint slice so storage request sizes and alignment amplification become representative without downloading the full model.
+1. Design and add a full-dimension bounded checkpoint slice so storage request sizes and alignment amplification become representative without downloading the full model.
+2. Re-measure Reader traffic and alignment amplification on that bounded slice while preserving exact reference parity.
 3. Implement deadline-aware cross-layer L2-to-L1 scheduling while preserving the exact blocking Reader mode.
-4. Run native-Linux P44 Pro warm/cold B-0007 only when that environment exists.
+4. Run native-Linux P44 Pro warm/cold storage benchmarks only when that environment exists.
 5. Continue with Least-Stale, task/session profiles, adaptive Top-K, and exact rescue in charter order.
 
 ## Hardware assumptions
@@ -94,8 +94,8 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Public `main`: Milestone 5 ledger closure `a7e8acf7011e1583a0fb561e4bf93b093302e796`; correctness run `31302070711` succeeded.
-- Latest verified Milestone 6 review-fix commit: `5160205` (`fix: close failed io_uring batches safely`).
+- Public `main` Milestone 6 implementation head: `1f2853ef1c62751923d7a6990f5855af4fbc1a8c`; PR #6 push/PR runs `31305244311` and `31305256170` succeeded, and post-merge main run `31305351800` succeeded.
+- Latest verified Milestone 6 review-fix commit: `5160205` (`fix: close failed io_uring batches safely`); final review-ledger commit: `1f2853e` (`docs: close Milestone 6 review`).
 - B-0007 successful-path measurement commit: `5049f26` (`feat: measure and ablate L2 reader modes`); raw ledger commit: `2e656ae`.
 - CPU verification: CTest 8/8; pytest 136 passed and 40 skipped.
 - Liburing/direct verification: CTest 9/9; pytest 137 passed and 39 skipped; ASan/UBSan CTest 9/9.

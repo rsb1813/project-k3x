@@ -124,4 +124,4 @@
 - [x] Six-extent expert batch 연결.
 - [x] Optional io_uring engine과 explicit O_DIRECT mode 구현.
 - [x] Runtime/profiler/B-0007 runner 연결.
-- [ ] 전체 correctness, sanitizer, 측정, TITAN Ledger, public GitHub 반영.
+- [x] 전체 correctness, sanitizer, 측정, TITAN Ledger, public GitHub 반영.
