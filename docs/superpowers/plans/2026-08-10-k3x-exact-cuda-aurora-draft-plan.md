@@ -50,7 +50,7 @@
 - Consumes: `ComputeBackend`, `BackendOptions`, and `AuroraPersistentDraftProvider::create`.
 - Produces: a persistent provider that accepts CPU or the exact fixed CUDA identity while replay remains CPU-only.
 
-- [ ] **Step 1: Write the direct provider parity test**
+- [x] **Step 1: Write the direct provider parity test**
 
 Create `tests/cuda/test_cuda_aurora_draft.cu` beginning with.
 
@@ -75,7 +75,7 @@ Compare the complete candidate vectors before any update, after an all-accepted 
 
 Extend `tests/python/test_persistent_aurora_runtime.py` with a CUDA-build-only wrapper that creates the existing 24-expert natural-Top-16 artifact and invokes `test_cuda_aurora_draft`.
 
-- [ ] **Step 2: Build CUDA and witness RED**
+- [x] **Step 2: Build CUDA and witness RED**
 
 Run.
 
@@ -90,11 +90,11 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 python -m pytest \
 
 Expected failure: missing `test_cuda_aurora_draft` executable and CPU-only provider validation.
 
-- [ ] **Step 3: Add the CUDA test target and provider validation**
+- [x] **Step 3: Add the CUDA test target and provider validation**
 
 Add the CUDA-only executable to `CMakeLists.txt` without registering it as a no-argument CTest. Split the shared validator into replay CPU validation and persistent validation. The persistent CUDA predicate must compare every fixed option and both zero capacities; any mismatch returns `unsupported AURORA persistent runtime combination` before cursor creation.
 
-- [ ] **Step 4: Run GREEN and regression tests**
+- [x] **Step 4: Run GREEN and regression tests**
 
 Run.
 
@@ -108,7 +108,7 @@ ctest --test-dir build-cuda --output-on-failure
 
 Expected: proposal/lifecycle parity passes and CUDA CTest passes without changing CPU defaults.
 
-- [ ] **Step 5: Commit the provider contract**
+- [x] **Step 5: Commit the provider contract**
 
 ```bash
 git add CMakeLists.txt runtime/src/aurora.cpp \
