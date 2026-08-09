@@ -23,6 +23,7 @@ add_library(k3x_runtime
     runtime/src/speculative.cpp
     runtime/src/runtime_profile.cpp
     runtime/src/backend_cpu.cpp
+    runtime/src/expert_major.cpp
     runtime/src/expert_scheduler.cpp
     runtime/src/host_expert_store.cpp
     runtime/src/storage_slice.cpp
@@ -95,6 +96,10 @@ add_test(NAME routing_policy COMMAND test_routing_policy)
 add_executable(test_speculative tests/cpp/test_speculative.cpp)
 target_link_libraries(test_speculative PRIVATE k3x_runtime)
 add_test(NAME speculative COMMAND test_speculative)
+
+add_executable(test_expert_major tests/cpp/test_expert_major.cpp)
+target_link_libraries(test_expert_major PRIVATE k3x_runtime)
+add_test(NAME expert_major COMMAND test_expert_major)
 
 add_executable(test_expert_scheduler tests/cpp/test_expert_scheduler.cpp)
 target_link_libraries(test_expert_scheduler PRIVATE k3x_runtime)
