@@ -288,10 +288,10 @@
 ## D-026 — Separate L2 I/O engine from page-cache policy and batch exact expert extents
 
 - Date: 2026-08-09.
-- Status: accepted design; implementation pending.
+- Status: accepted and implemented as an experimental, non-default runtime boundary.
 - Decision: add an ordered Reader batch API and independent `pread|io_uring` engine and `buffered|direct` cache-mode axes. Keep `pread + buffered` as the default until native-Linux evidence supports a change.
 - Alternatives considered: replace every read with immediately awaited io_uring; introduce a general future/executor framework; add one bounded ordered batch and independent axes.
-- Evidence: the current reader opens and seeks a new stream for each extent, while one exact native expert requires six reads. Immediately awaiting one SQE cannot demonstrate queueing value, and combining io_uring with O_DIRECT would prevent attribution. Linux documentation also makes direct-I/O alignment and support filesystem-specific rather than universal.
-- Benchmark result: none. WSL2 `/mnt/c` is 9p/DrvFS and cannot select the P44 Pro native-Linux default.
-- Reason: an ordered six-extent batch is the smallest graph-visible boundary that can expose storage concurrency while retaining exact payload reconstruction and allowing engine/cache effects to be measured separately.
+- Evidence: the previous reader opened and sought a new stream for every extent, while one exact native expert requires six reads. The implementation now retains one descriptor and batches those six extents. Linux direct-I/O support remains filesystem-specific: WSL2 `/mnt/c` rejects direct mode while WSL2 ext4 reports explicit alignment and runs it exactly.
+- Benchmark result: B-0007 at `5049f26` crossed all four modes for 3 warmups and 20 samples on WSL2 ext4. Every row preserved tokens, the 24-entry routing trace, 428 logical calls, 158 batches, and 665,616 logical bytes. Buffered modes submitted 665,616 bytes; direct modes submitted 756,736 aligned bytes. `io_uring` was slower than `pread` when buffered and faster when direct in this tiny WSL smoke, which is not native P44 Pro evidence.
+- Reason: an ordered six-extent batch is the smallest graph-visible boundary that exposes bounded storage concurrency while retaining exact payload reconstruction and independent attribution of engine and cache effects. Native evidence is insufficient to change the default.
 - Revisit: after B-0007 native-Linux warm/cold measurements and again when deadline-aware multi-layer prefetch introduces cross-expert request ordering.

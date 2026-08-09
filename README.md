@@ -33,7 +33,7 @@ flowchart LR
 ```
 
 > [!IMPORTANT]
-> Milestone 1 still uses a tiny synthetic model. Its measurements validate backend correctness and expose launch, transfer, and residency costs; they are not full Kimi K3 throughput claims. No full checkpoint was downloaded and no paid cloud resource was provisioned.
+> The implemented milestones still use a tiny synthetic model. Their measurements validate correctness and isolate runtime boundaries; they are not full Kimi K3 throughput claims. No full checkpoint was downloaded and no paid cloud resource was provisioned.
 
 ## Why a dedicated engine
 
@@ -110,6 +110,12 @@ This first boundary is deliberately limited to `cuda-custom + ffn-block + reused
 
 B-0006 validates the same handles across CPU operation execution, synchronous CUDA FFN blocks, and asynchronous prepared CUDA transfers. It does not implement LRU, LFU, Least-Stale, task/session profiles, prediction, asynchronous NVMe reads, or physical NVMe counters.
 
+## Milestone 6 — independent exact L2 reader
+
+The Linux data plane now keeps one descriptor and exposes independent `--l2-io pread|io-uring` and `--l2-cache buffered|direct` switches. Exact native MXFP4 experts submit their six packed/scale extents as one ordered batch. Optional liburing uses bounded explicit-offset reads; direct mode requires `STATX_DIOALIGN`, uses aligned bounce buffers, and fails closed without a supported alignment contract.
+
+The default remains `pread + buffered`. B-0007 preserves exact tokens, routing, and logical bytes across all four modes on WSL2 ext4, but it is a non-authoritative capability benchmark. The batch API still waits for completion; deadline-aware multi-layer prefetch and GPU overlap remain future work.
+
 ## Quick start
 
 ### 1. Create an environment
@@ -138,6 +144,8 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
+
+To build the optional Linux io_uring path, install liburing development headers and configure with `-DK3X_ENABLE_IO_URING=ON`. Unsupported runtime requests return `STORAGE_UNAVAILABLE`; they never fall back silently.
 
 For the RTX 5080 CUDA baseline, CUDA Toolkit 13.3 or newer is required.
 
@@ -313,6 +321,15 @@ Milestone 5 crosses disabled/static L1 admission with synchronous/prefetch trans
 
 Each static row records 36 hits, 18 misses, zero bypasses, and 29,376 resident bytes. Logical Reader calls fall from 428 to 212 while GPU traffic and execution counts remain unchanged. These are measurements on the tiny synthetic WSL2 graph, not physical NVMe results or projected full-Kimi throughput, so static admission remains opt-in.
 
+Milestone 6 crosses the L2 engine and cache axes with L1 disabled.
+
+| Cache mode | `pread` decode tok/s | `io_uring` decode tok/s | Logical / submitted bytes |
+|---|---:|---:|---:|
+| Buffered | **5,870.8082** | 5,616.1034 | 665,616 / 665,616 |
+| Direct | 163.3491 | 428.8471 | 665,616 / 756,736 |
+
+All four B-0007 rows preserve `[43, 32, 28, 49, 9, 28]` and the same 24-entry routing trace. These CPU figures come from a tiny 3×20 WSL2 ext4 capability benchmark, not the P44 Pro and not a full-model workload. They keep `pread + buffered` as the default but cannot choose the eventual native-Linux storage path.
+
 ## K3X checkpoint format
 
 K3X v1 trades general tensor-container flexibility for K3 execution order.
@@ -365,6 +382,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [ ] Exact full-dimension CPU/GPU runtime over bounded checkpoint slices.
 - [ ] Wider layer/block GPU execution and fused K3-specific kernels.
 - [x] Bounded no-eviction persistent L1 expert cache with exact transient bypass.
+- [x] Independent exact `pread|io_uring` and `buffered|direct` L2 reader with ordered expert batches.
 - [ ] Asynchronous L2 NVMe reads and deadline scheduler.
 - [ ] Least-Stale, task/session, and transition-aware expert caches.
 - [ ] Adaptive Top-K with exact cold-expert rescue.
@@ -395,7 +413,7 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - The runtime implements synthetic dimensions; the CUDA backend accelerates only dense and MXFP4 matrix operations while the graph remains host-driven.
 - Reusable scratch, bounded static weight residency, and same-input grouping are implemented, but activations and results still cross the host/device boundary and asynchronous overlap is not implemented.
 - Static residency has no eviction and is not the future three-tier expert cache.
-- There is no async storage pipeline, cache policy, adaptive Top-K, or speculative decoder yet.
+- The bounded io_uring batch reader is implemented, but there is no cross-layer asynchronous storage pipeline, deadline scheduler, cache policy, adaptive Top-K, or speculative decoder yet.
 - The converter has not processed the full Kimi K3 checkpoint.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.
 - No open-source license has been selected yet; public visibility does not itself grant reuse rights.

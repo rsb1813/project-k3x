@@ -60,6 +60,25 @@ def test_l2_reader_matrix_crosses_only_engine_and_cache_mode() -> None:
     )
 
 
+def test_b0007_manifest_matches_all_measured_raw_records() -> None:
+    root = Path(__file__).parents[2]
+    result_dir = root / "results" / "b0007-l2-reader-wsl"
+    summary = json.loads((result_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["benchmark_id"] == "B-0007"
+    assert summary["environment_label"] == "wsl2-ext4-smoke-non-authoritative"
+    assert summary["supported_cases"] == 4
+    assert summary["skipped_cases"] == 0
+    for case in summary["cases"]:
+        raw = json.loads(
+            (result_dir / f"{case['name']}.json").read_text(encoding="utf-8")
+        )
+        BenchmarkRecord(**raw)
+        assert case["status"] == "measured"
+        assert case["parity_status"] == "exact"
+        for field, value in raw.items():
+            assert case[field] == value
+
+
 def test_l2_ablation_validates_supported_cases_and_records_skips(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

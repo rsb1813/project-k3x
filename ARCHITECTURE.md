@@ -190,13 +190,13 @@ B-0006 admitted 18 synthetic experts into 29,376 bytes, recorded 36 hits and zer
 
 LRU, LFU, Least-Stale, task/session priors, eviction, prediction, asynchronous L2 reads, and cold rescue remain unimplemented. The accepted design and B-0006 matrix are in [`docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md`](docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md).
 
-## Milestone 6 proposed independent L2 reader
+## Milestone 6 experimental independent L2 reader
 
-The accepted Milestone 6 design separates the Linux I/O engine (`pread|io_uring`) from page-cache behavior (`buffered|direct`). Metadata and full-file verification remain on the portable buffered path. A Reader-owned hot data plane will retain exact single-extent wrappers and add an ordered batch operation so one native expert can request its six packed/scale extents together.
+Milestone 6 implements independent Linux I/O-engine (`pread|io_uring`) and page-cache (`buffered|direct`) axes. Metadata and full-file integrity verification remain on the portable buffered path. The Reader-owned hot data plane keeps one descriptor, preserves exact single-extent wrappers, and exposes an ordered batch operation. A native MXFP4 expert now requests its gate/up/down packed values and scales as one six-extent batch.
 
-The default remains `pread + buffered`. `io_uring` is an optional Linux build capability, and direct mode must obtain a trustworthy `STATX_DIOALIGN` contract and use aligned bounce buffers without silent fallback. Logical Reader bytes, aligned syscall bytes, and process block-I/O counters remain distinct; none is called physical NVMe traffic without an appropriate native-Linux measurement.
+`pread + buffered` remains the default. `io_uring` is an optional liburing build capability with bounded queue depth, explicit offsets, stable completion identity, partial-submission handling, and exact completion draining. Direct mode requires `STATX_DIOALIGN`, opens `O_DIRECT`, uses owned aligned bounce buffers, and fails with `STORAGE_UNAVAILABLE` instead of silently falling back. The current API waits for each ordered batch to complete; cross-layer deadline scheduling and compute/I/O overlap are not implemented.
 
-This component is proposed and designed, not implemented. The normative design is in [`docs/superpowers/specs/2026-08-09-k3x-l2-reader-design.md`](docs/superpowers/specs/2026-08-09-k3x-l2-reader-design.md).
+Runtime and benchmark records distinguish logical requested/completed bytes, aligned storage submitted/completed bytes, Reader storage elapsed time, and Linux process `rchar/read_bytes` deltas. B-0007 preserved exact tokens and the 24-entry routing trace across all four modes on WSL2 ext4. That measurement is a capability smoke, not native P44 Pro evidence and not physical NVMe traffic. The normative design is in [`docs/superpowers/specs/2026-08-09-k3x-l2-reader-design.md`](docs/superpowers/specs/2026-08-09-k3x-l2-reader-design.md).
 
 ## TITAN component registry
 

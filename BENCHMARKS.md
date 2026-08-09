@@ -246,6 +246,39 @@ Raw JSON/CSV records are stored under `results/b0006-l1-cache-fp32/` and `result
 
 The next bottleneck boundary is representative expert sizing and real L2 behavior. A native-Linux full-dimension bounded slice must measure buffered reads, `io_uring`, and `O_DIRECT`, physical block traffic, and deadlines before selecting an L2 path. Policy work such as Least-Stale also needs representative reuse traces and eviction pressure rather than the current all-fitting synthetic cache.
 
+## B-0007 — Milestone 6 independent L2 reader
+
+| Field | Value |
+|---|---|
+| Evidence | measured WSL2 capability benchmark; non-authoritative for the target NVMe |
+| Date | 2026-08-09 |
+| Measurement commit | `5049f26` |
+| Hardware | AMD Ryzen 7 9800X3D host; storage device performance intentionally not attributed |
+| Environment | WSL2 Ubuntu 24.04.4, Linux 6.18.33.2; artifact copied to WSL ext4 `/tmp`; liburing 2.5 |
+| Model/checkpoint | seeded 4-layer, 24-expert, 178-tensor synthetic K3X; artifact SHA-256 `039d61ee9c2e13e27c9a2514bb476f8b122b8b37be0b7f85baf26c1a6611a2e9` |
+| Mode | CPU FP32, incremental, L1 disabled; `pread|io_uring` crossed with `buffered|direct`; queue depth 8 |
+| Context length | 4 prompt tokens, IDs `[1, 7, 3, 9]` |
+| Generated tokens | 6, IDs `[43, 32, 28, 49, 9, 28]` in every row |
+| Routing | exact 24-entry prefill trace identical in every row; fixed synthetic Top-2, average Top-K 2 |
+| Warmup / samples | 3 / 20 separate process runs per row |
+| NVMe GB/token | not measured; process and Reader counters are not attributed to the P44 Pro |
+| GPU utilization / bandwidth / VRAM / H2D | not applicable to this CPU storage-boundary isolation |
+| Speculative acceptance / unique experts per verification block | not applicable; speculation is disabled |
+| Cold rescue | not implemented |
+
+| Engine / cache | Decode tok/s | Prefill tok/s | TTFT ms | RSS bytes | Logical calls / batches | Logical bytes | Submitted bytes | Reader storage ms | Process rchar / read bytes | Direct mem / offset align |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `pread` / buffered | **5,870.8082** | **2,824.4419** | **12.860** | 5,210,112 | 428 / 158 | 665,616 | 665,616 | **0.223** | 665,717 / 0 | 0 / 0 |
+| `io_uring` / buffered | 5,616.1034 | 2,681.1601 | 12.866 | 5,353,472 | 428 / 158 | 665,616 | 665,616 | 0.331 | 101 / 0 | 0 / 0 |
+| `pread` / direct | 163.3491 | 103.1181 | 50.220 | 5,394,432 | 428 / 158 | 665,616 | 756,736 | 67.173 | 756,837 / 756,736 | 4 / 512 |
+| `io_uring` / direct | 428.8471 | 153.7273 | 37.800 | 5,210,112 | 428 / 158 | 665,616 | 756,736 | 35.447 | 101 / 756,736 | 4 / 512 |
+
+All four cases report zero Reader failures and short reads and preserve exact token and routing parity. Direct mode adds 91,120 submitted bytes, a 13.69% alignment amplification on this tiny artifact. Linux `rchar` reflects synchronous read-family accounting and therefore does not mirror io_uring traffic; `read_bytes` is the process block-I/O delta and records zero for warm buffered rows and 756,736 for direct rows. Neither counter establishes physical P44 Pro traffic in WSL2.
+
+The tiny warm buffered case favors `pread`; direct mode is dominated by hundreds of small aligned reads, although batching makes io_uring materially less slow than direct `pread` in this environment. These figures neither select a native-Linux default nor project full-model throughput. `pread + buffered` remains the default until a full-dimension bounded slice is measured on native Linux with the P44 Pro. Raw JSON/CSV and the cross-checked manifest are under `results/b0007-l2-reader-wsl/`.
+
+Post-measurement verification passed CPU CTest 8/8 and pytest 135 passed/40 skipped, liburing/direct CTest 8/8 and pytest 136 passed/39 skipped, CUDA CTest 17/17 and pytest 168 passed/7 skipped. All ten CUDA Compute Sanitizer targets reported zero errors.
+
 ## Derived bottleneck model — not a benchmark
 
 The released dimensions imply 17,547,264 bytes per native MXFP4 routed expert. With no cache reuse, natural Top-16 across 92 MoE layers implies 25,829,572,608 expert bytes/token. Applying the P44 Pro published 7.0 GB/s sequential figure gives a derived expert-only ceiling of about 0.271 tok/s and implies roughly 94.6% expert NVMe-byte avoidance for a 5 tok/s target.
