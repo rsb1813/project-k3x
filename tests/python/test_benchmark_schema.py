@@ -141,6 +141,8 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["cuda_moe_fusion"] == "none"
     assert payload["fused_moe_calls"] == 0
     assert payload["fused_moe_experts"] == 0
+    assert payload["batched_expert_ffn_calls"] == 0
+    assert payload["batched_expert_ffn_tokens"] == 0
     assert payload["cuda_resident_bytes"] == 0
     assert payload["cuda_pinned_bytes"] == 0
     assert payload["device_allocation_count"] == 0
@@ -162,6 +164,8 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert row["cuda_moe_fusion"] == "none"
     assert row["fused_moe_calls"] == "0"
     assert row["fused_moe_experts"] == "0"
+    assert row["batched_expert_ffn_calls"] == "0"
+    assert row["batched_expert_ffn_tokens"] == "0"
     assert row["cuda_pinned_bytes"] == "0"
     assert row["transfer_device_nanoseconds"] == "0"
     assert row["device_overlap"] == "False"
