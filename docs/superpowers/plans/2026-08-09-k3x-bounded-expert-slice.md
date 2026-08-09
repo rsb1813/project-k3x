@@ -193,27 +193,27 @@ Commit as `feat: benchmark exact expert extent loads`.
 - Produces: `run_bounded_slice_ablation(artifact, runner, *, warmup, iterations, queue_depth, output_dir, environment_label) -> dict[str, object]`.
 - Produces B-0008 raw JSON/CSV and `summary.json` with supported/skipped cases and exact parity status.
 
-- [ ] **Step 1: Write failing matrix, validation, and artifact-cross-check tests.**
+- [x] **Step 1: Write failing matrix, validation, and artifact-cross-check tests.**
 
 Assert four unique cases, capability-only skips, identical ordered digest and 17,547,264 bytes/load across supported rows, buffered submitted/logical equality, direct submitted bytes not below logical bytes, raw file existence, and compact/raw equality.
 
-- [ ] **Step 2: Run and verify RED.**
+- [x] **Step 2: Run and verify RED.**
 
 Expect import failure for `tools.ablate_bounded_slice`.
 
-- [ ] **Step 3: Implement the minimum runner.**
+- [x] **Step 3: Implement the minimum runner.**
 
 Invoke the dedicated C++ executable directly, parse its single JSON object, validate identity and accounting before writing results, and never reuse `benchmark_synthetic.py` token schemas.
 
-- [ ] **Step 4: Verify all supported modes on WSL2 ext4.**
+- [x] **Step 4: Verify all supported modes on WSL2 ext4.**
 
 Copy the K3X artifact to `/tmp`, run one-sample smoke with the liburing build, and require exact digest/byte parity. Record unsupported modes only as `STORAGE_UNAVAILABLE`.
 
-- [ ] **Step 5: Run full CPU/liburing/CUDA test matrices.**
+- [x] **Step 5: Run full CPU/liburing/CUDA test matrices.**
 
 Run CTest and pytest for `build-cpu`, `build-uring`, and `build-cuda`; run ASan/UBSan for the new non-CUDA storage path. CUDA behavior must remain unchanged.
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
 
 Commit as `feat: ablate bounded expert storage reads`.
 

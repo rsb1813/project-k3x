@@ -133,6 +133,6 @@
 - [x] 상세 TDD 구현 계획 작성.
 - [x] Streaming safetensors source fixture와 manifest 구현.
 - [x] K3X optional storage-fixture identity와 converter round-trip 구현.
-- [ ] 전용 C++ expert-load benchmark와 B-0008 runner 구현.
+- [x] 전용 C++ expert-load benchmark와 B-0008 runner 구현.
 - [ ] 전체 correctness, sanitizer, B-0008 측정, TITAN Ledger 갱신.
 - [ ] Public GitHub PR, CI, main 반영과 post-merge CI 확인.
