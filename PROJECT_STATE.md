@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 2 implementation and local measurement are complete. Publication review, the public branch, and CI remain in progress.
+Milestone 2 implementation, measurement, public merge, and Linux CI are complete. The next milestone is the wider layer/block GPU execution boundary.
 
-State recorded on 2026-08-09 after B-0003 measurement on branch `codex/milestone-two-residency`.
+State recorded on 2026-08-09 after public fast-forward merge at `f71238c` and successful Linux workflow `31291903865`.
 
 ## Completed work
 
@@ -21,7 +21,8 @@ State recorded on 2026-08-09 after B-0003 measurement on branch `codex/milestone
 ## Work in progress
 
 - The TITAN Ledger and README are synchronized with B-0003.
-- Final read-only review found no Critical or Important issue. Commit the measurement artifacts and documents, push the public branch, open a PR, and verify Linux CI.
+- Public PR #2 is merged. Final read-only review found no Critical or Important issue, and the post-merge Linux workflow succeeded.
+- No Milestone 3 implementation has started. Its first design target is a wider GPU execution boundary that keeps intermediate activations on device.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; builds: `build-linux` and `build-cuda`.
 
@@ -37,11 +38,10 @@ State recorded on 2026-08-09 after B-0003 measurement on branch `codex/milestone
 
 ## Next concrete tasks
 
-1. Finish public Milestone 2 review, PR, and Linux CI.
-2. Design and measure a wider layer/block GPU execution boundary that keeps intermediate activations on device.
-3. Build the first asynchronous L0/L1 transfer pipeline only after the wider boundary exposes representative transfer deadlines.
-4. Add full-dimension bounded checkpoint slices before any full Kimi K3 throughput claim.
-5. Continue with expert cache policies, task/session profiles, adaptive Top-K, and exact rescue in charter order.
+1. Design and measure a wider layer/block GPU execution boundary that keeps intermediate activations on device.
+2. Build the first asynchronous L0/L1 transfer pipeline only after the wider boundary exposes representative transfer deadlines.
+3. Add full-dimension bounded checkpoint slices before any full Kimi K3 throughput claim.
+4. Continue with expert cache policies, task/session profiles, adaptive Top-K, and exact rescue in charter order.
 
 ## Hardware assumptions
 
@@ -66,7 +66,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Public `main`: `254a9acf8d62682693e2ce0bde37008ee69e8caf`; prior Linux workflow `31259325702` succeeded.
+- Public `main`: `f71238c963786707cf426eead4ca4c75a0fdcfe6`; Linux workflow `31291903865` succeeded.
 - Latest measured code commit: `a468db8` (`feat: add CUDA residency ablation reporting`).
 - CPU verification: CTest 5/5; pytest 65 passed and 23 CUDA-only skipped.
 - CUDA verification: CTest 9/9; pytest 87 passed and one CPU-build-only skipped.
