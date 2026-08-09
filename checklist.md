@@ -155,7 +155,7 @@
 - [x] Inspect pinned MoonshotAI, vLLM, and NVIDIA primary sources relevant to expert-grouped token execution.
 - [x] Compare a single-expert multi-token primitive, temporary scalar residency, and a persistent multi-expert kernel.
 - [x] Write and self-review the accepted CUDA expert-major design.
-- [ ] Write the detailed TDD implementation plan.
+- [x] Write and self-review the detailed TDD implementation plan.
 - [ ] Implement the backend batch contract through witnessed RED and GREEN cycles.
 - [ ] Integrate the exact CUDA runtime, CLI capability gate, and telemetry.
 - [ ] Run B-0016, full verification, sanitizer, ledger, review, and public integration.
