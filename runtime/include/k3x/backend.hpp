@@ -133,6 +133,11 @@ public:
         std::span<const float> input, std::span<const Mxfp4MlpView> experts,
         float situ_beta, std::optional<float> situ_linear,
         std::uint32_t layer, ProfilePhase phase) = 0;
+    virtual Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_batch(
+        std::span<const float> inputs, std::size_t batch_size,
+        Mxfp4MlpView expert, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) = 0;
     virtual Result<std::vector<float>> mxfp4_situ_moe(
         std::span<const float> input, std::span<const Mxfp4MlpView> experts,
         std::span<const float> contributions, float situ_beta,

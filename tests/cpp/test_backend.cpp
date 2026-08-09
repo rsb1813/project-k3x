@@ -2,9 +2,11 @@
 #include "k3x/backend.hpp"
 #include "k3x/ops.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 
 int main() {
     k3x::Profiler profiler;
@@ -220,6 +222,62 @@ int main() {
         std::abs(expert_blocks.value()[1][0] - 2.0F * expert_activation[0]) >
             1.0e-6F) {
         return 64;
+    }
+    auto second_mxfp4_input = mxfp4_input;
+    second_mxfp4_input[1] = -4.0F;
+    std::array<float, 64> flat_expert_inputs{};
+    std::copy(mxfp4_input.begin(), mxfp4_input.end(),
+              flat_expert_inputs.begin());
+    std::copy(second_mxfp4_input.begin(), second_mxfp4_input.end(),
+              flat_expert_inputs.begin() + 32);
+    const std::array<k3x::Mxfp4MlpView, 1> one_expert{expert_mlps[0]};
+    const auto scalar_first = backend->mxfp4_situ_mlp_group(
+        mxfp4_input, one_expert, 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    const auto scalar_second = backend->mxfp4_situ_mlp_group(
+        second_mxfp4_input, one_expert, 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    if (!scalar_first || !scalar_second) return 73;
+    const auto batched = backend->mxfp4_situ_mlp_batch(
+        flat_expert_inputs, 2, expert_mlps[0], 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    if (!batched || batched.value().size() != 2 ||
+        batched.value()[0].size() != 1 ||
+        batched.value()[1].size() != 1 ||
+        std::abs(batched.value()[0][0] - scalar_first.value()[0][0]) >
+            1.0e-6F ||
+        std::abs(batched.value()[1][0] - scalar_second.value()[0][0]) >
+            1.0e-6F) {
+        return 74;
+    }
+    const auto batch_event_count = profiler.events().size();
+    const auto rejected_empty_batch = backend->mxfp4_situ_mlp_batch(
+        {}, 0, expert_mlps[0], 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    const auto rejected_short_batch = backend->mxfp4_situ_mlp_batch(
+        std::span<const float>(flat_expert_inputs).first(63), 2,
+        expert_mlps[0], 2.0F, 1.5F, 14, k3x::ProfilePhase::decode);
+    const auto rejected_overflow_batch = backend->mxfp4_situ_mlp_batch(
+        {}, std::numeric_limits<std::size_t>::max(), expert_mlps[0], 2.0F,
+        1.5F, 14, k3x::ProfilePhase::decode);
+    const auto rejected_situ_batch = backend->mxfp4_situ_mlp_batch(
+        flat_expert_inputs, 2, expert_mlps[0], 0.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    auto invalid_batch_expert = expert_mlps[0];
+    invalid_batch_expert.down.scales = {};
+    const auto rejected_invalid_batch = backend->mxfp4_situ_mlp_batch(
+        flat_expert_inputs, 2, invalid_batch_expert, 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    if (rejected_empty_batch || rejected_short_batch ||
+        rejected_overflow_batch || rejected_situ_batch ||
+        rejected_invalid_batch ||
+        rejected_empty_batch.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        rejected_short_batch.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        rejected_overflow_batch.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        rejected_situ_batch.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        rejected_invalid_batch.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        profiler.events().size() != batch_event_count) {
+        return 75;
     }
     const std::array<float, 2> contributions{0.25F, -0.5F};
     const auto mixed = backend->mxfp4_situ_moe(
