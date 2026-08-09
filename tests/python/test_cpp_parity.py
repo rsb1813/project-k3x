@@ -18,6 +18,10 @@ import pytest
 from conftest import cpp_binary
 
 
+def cpu_only_build() -> bool:
+    return cpp_binary("test_backend_unavailable").is_file()
+
+
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
@@ -203,7 +207,7 @@ def test_cpp_runner_accepts_exact_cuda_prefetch_capability_combination() -> None
         capture_output=True,
         text=True,
     )
-    if Path(os.environ.get("K3X_BUILD_DIR", "build")).name == "build-cpu":
+    if cpu_only_build():
         assert result.returncode == 4
         assert result.stderr.startswith("BACKEND_UNAVAILABLE")
     else:
@@ -211,7 +215,7 @@ def test_cpp_runner_accepts_exact_cuda_prefetch_capability_combination() -> None
 
 
 def test_cpu_build_reports_explicit_cuda_request_as_unavailable() -> None:
-    if Path(os.environ.get("K3X_BUILD_DIR", "build")).name != "build-cpu":
+    if not cpu_only_build():
         pytest.skip("CPU-build contract is exercised only against build-cpu")
     result = subprocess.run(
         [str(cpp_binary("k3x_run")), "--backend", "cuda-custom"],
