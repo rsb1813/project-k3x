@@ -5,6 +5,7 @@
 ### Kimi K3, engineered for one consumer PC
 
 [![Milestone](https://img.shields.io/badge/milestone%2014-passing-20a46b?style=flat-square)](#milestone-14--exact-expert-major-verification)
+[![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
 [![Format](https://img.shields.io/badge/format-K3X%20v1-6f42c1?style=flat-square)](K3X_FORMAT.md)
@@ -37,10 +38,12 @@ flowchart LR
 
 | Public milestone | GitHub status | Evidence |
 |---|---|---|
-| Milestone 11 | [PR #11 merged](https://github.com/rsb1813/project-k3x/pull/11) | B-0012 adaptive Top-K and exact rescue |
-| Milestone 12 | [PR #12 merged](https://github.com/rsb1813/project-k3x/pull/12) | B-0013 routed CUDA accumulation |
+| Milestone 11 | [PR #11 merged](https://github.com/rsb1813/project-k3x/pull/11) at `edc6d605` | B-0012 adaptive Top-K and exact rescue |
+| Milestone 12 | [PR #12 merged](https://github.com/rsb1813/project-k3x/pull/12) at `9e59a9db` | B-0013 routed CUDA accumulation |
 | Milestone 13 | [PR #13 merged](https://github.com/rsb1813/project-k3x/pull/13) | B-0014 token-major verification |
 | Milestone 14 | [PR #15 merged](https://github.com/rsb1813/project-k3x/pull/15) | B-0015 exact CPU expert-major verification |
+
+PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public documentation baseline is `46105f8`, whose `main` correctness run `31329200483` passed.
 
 ## Why a dedicated engine
 

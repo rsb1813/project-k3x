@@ -281,3 +281,9 @@
 - M14 pre-publication 검증은 CPU CTest 13/13·Python 253/44, liburing/direct CTest 14/14·257/42, CUDA CTest 22/22·291/8, ASan/UBSan liburing CTest 14/14·targeted 95/35를 통과했다. CUDA FFN Compute Sanitizer는 0 errors였다. CPU-only expert-major CLI를 Compute Sanitizer로 감싼 시도는 instrumented CUDA API call 전 종료로 tool exit 1을 반환했으며 이를 sanitizer pass로 과장하지 않고 ASan/UBSan 증거를 사용한다.
 - 최종 자체 검토는 default token-major 스위치, unsupported-combination preflight, proposal 선검증, committed-only state/route, evaluated suffix 분리, unique-load/assignment 계수, benchmark caller/schema 전체, 디버그 잔여, `git diff --check`를 대조했다. Raw JSON/CSV SHA 10개와 aggregate SHA를 재계산하고 perfect/mixed 변화율을 독립 계산해 문서 소수점과 일치함을 확인했다. 공유 가능한 수준으로 판정하되 full-model·native Linux·physical NVMe/H2D·coding quality 미측정 caveat는 유지한다.
 - M14 integration head `012e598`은 branch/PR correctness run `31328853375`/`31328869071`을 통과했고 PR #15로 fast-forward merge되었다. Post-merge `main` correctness run `31329045623`도 성공했다. GitHub은 PR #15를 `MERGED`로, `origin/main`을 `012e598`로 확정했다.
+
+## 2026-08-10 Milestone 11–14 공개 문서 재동기화
+
+- 사용자 지시에 따라 PR #11과 PR #12의 GitHub 상태를 다시 조회했다. PR #11은 `edc6d605`, PR #12는 `9e59a9db`에서 병합되었고 두 커밋 모두 공개 문서 기준점 `46105f8`의 조상임을 확인했다.
+- README에는 동적 `main` correctness 배지, PR #11/#12 병합 커밋, 공개 문서 기준점 `46105f8`과 성공한 correctness run `31329200483`을 추가했다. `PROJECT_STATE.md`의 이전 M14 활성 브랜치 표기는 M15 설계 준비 상태와 문서 전용 브랜치 경계로 교정했다.
+- ARCHITECTURE, DECISIONS, BENCHMARKS, PERFORMANCE_MODEL, PLAN, K3X_FORMAT, PROJECT_CHARTER, 참고 문서와 이전 설계/계획 문서를 점검했다. 이미 정확한 구현·결정·측정·헌법·역사 기록은 불필요하게 다시 쓰지 않았으며, M15 구현이나 성능은 존재하는 것으로 표시하지 않았다.
