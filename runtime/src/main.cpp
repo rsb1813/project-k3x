@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -72,6 +73,31 @@ void write_error(k3x::ErrorCode code, const std::string& message) {
     std::cerr << '\n';
 }
 
+class ScriptedDraftProvider final : public k3x::DraftProvider {
+public:
+    explicit ScriptedDraftProvider(std::deque<k3x::DraftProposal> proposals)
+        : proposals_(std::move(proposals)) {}
+
+    k3x::Result<k3x::DraftProposal> propose(
+        const k3x::DraftRequest&) override {
+        if (proposals_.empty()) {
+            return k3x::Result<k3x::DraftProposal>::failure(
+                k3x::ErrorCode::invalid_state,
+                "scripted draft proposals exhausted");
+        }
+        auto proposal = std::move(proposals_.front());
+        proposals_.pop_front();
+        return k3x::Result<k3x::DraftProposal>::success(std::move(proposal));
+    }
+
+    void update(const k3x::DraftVerification&) override {}
+
+    bool empty() const { return proposals_.empty(); }
+
+private:
+    std::deque<k3x::DraftProposal> proposals_;
+};
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -101,6 +127,9 @@ int main(int argc, char** argv) {
     std::string routing_boundary_gap_text = "0";
     std::string routing_agent_failures_text = "0";
     std::string routing_critical_text = "false";
+    std::string speculative_mode_name = "none";
+    std::string speculative_block_size_text = "0";
+    std::string speculative_script_text;
     bool diagnostics = false;
     std::size_t count = 0;
     for (int index = 1; index + 1 < argc; index += 2) {
@@ -138,6 +167,9 @@ int main(int argc, char** argv) {
         else if (key == "--routing-min-boundary-gap") routing_boundary_gap_text = value;
         else if (key == "--routing-agent-failures") routing_agent_failures_text = value;
         else if (key == "--routing-critical") routing_critical_text = value;
+        else if (key == "--speculative-mode") speculative_mode_name = value;
+        else if (key == "--speculative-block-size") speculative_block_size_text = value;
+        else if (key == "--speculative-script") speculative_script_text = value;
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
     }
 
@@ -170,6 +202,88 @@ int main(int argc, char** argv) {
         return !text.empty() && parsed.ec == std::errc{} && parsed.ptr == end &&
                std::isfinite(value);
     };
+    std::size_t speculative_block_size = 0;
+    if (!parse_size(speculative_block_size_text, speculative_block_size)) {
+        std::cerr << "invalid speculative block size: "
+                  << speculative_block_size_text << '\n';
+        return 2;
+    }
+    if (speculative_mode_name != "none" &&
+        speculative_mode_name != "scripted-reference") {
+        std::cerr << "unknown speculative mode: " << speculative_mode_name
+                  << '\n';
+        return 2;
+    }
+    if (speculative_mode_name == "none" &&
+        (speculative_block_size != 0 || !speculative_script_text.empty())) {
+        std::cerr << "speculative mode none requires block size 0 and an empty script\n";
+        return 2;
+    }
+    if (speculative_mode_name == "scripted-reference" &&
+        speculative_block_size == 0) {
+        std::cerr << "scripted-reference speculation requires a positive block size\n";
+        return 2;
+    }
+    if (speculative_mode_name == "scripted-reference" &&
+        !runtime_options.incremental) {
+        std::cerr << "scripted-reference speculation requires incremental mode\n";
+        return 2;
+    }
+    std::deque<k3x::DraftProposal> scripted_proposals;
+    if (speculative_mode_name == "scripted-reference" &&
+        !speculative_script_text.empty()) {
+        std::stringstream script_parser(speculative_script_text);
+        std::string record;
+        while (std::getline(script_parser, record, ';')) {
+            const auto separator = record.find(':');
+            if (separator == std::string::npos || separator == 0 ||
+                record.find(':', separator + 1) != std::string::npos) {
+                std::cerr << "invalid speculative script record: " << record
+                          << '\n';
+                return 2;
+            }
+            std::uint32_t anchor = 0;
+            const auto anchor_text = record.substr(0, separator);
+            const auto anchor_parsed = std::from_chars(
+                anchor_text.data(), anchor_text.data() + anchor_text.size(),
+                anchor);
+            if (anchor_parsed.ec != std::errc{} ||
+                anchor_parsed.ptr != anchor_text.data() + anchor_text.size()) {
+                std::cerr << "invalid speculative script record: " << record
+                          << '\n';
+                return 2;
+            }
+            k3x::DraftProposal proposal;
+            proposal.anchor_token = anchor;
+            const auto candidates_text = record.substr(separator + 1);
+            if (!candidates_text.empty()) {
+                std::stringstream candidate_parser(candidates_text);
+                std::string candidate_text;
+                while (std::getline(candidate_parser, candidate_text, ',')) {
+                    std::uint32_t candidate = 0;
+                    const auto candidate_parsed = std::from_chars(
+                        candidate_text.data(),
+                        candidate_text.data() + candidate_text.size(),
+                        candidate);
+                    if (candidate_text.empty() ||
+                        candidate_parsed.ec != std::errc{} ||
+                        candidate_parsed.ptr !=
+                            candidate_text.data() + candidate_text.size()) {
+                        std::cerr << "invalid speculative script record: "
+                                  << record << '\n';
+                        return 2;
+                    }
+                    proposal.candidate_tokens.push_back(candidate);
+                }
+                if (candidates_text.back() == ',') {
+                    std::cerr << "invalid speculative script record: "
+                              << record << '\n';
+                    return 2;
+                }
+            }
+            scripted_proposals.push_back(std::move(proposal));
+        }
+    }
     if (!parse_size(routing_fixed_k_text,
                     runtime_options.routing_policy.fixed_k)) {
         std::cerr << "invalid routing fixed K: " << routing_fixed_k_text << '\n';
@@ -561,12 +675,26 @@ int main(int argc, char** argv) {
     }
     k3x::RuntimeSession session(runtime_options, std::move(runtime_profile));
     const auto process_io_before = process_io_snapshot();
-    auto result = k3x::generate_greedy(
-        reader.value(), *backend, prompt, count, session);
+    std::unique_ptr<ScriptedDraftProvider> scripted_provider;
+    if (speculative_mode_name == "scripted-reference") {
+        scripted_provider = std::make_unique<ScriptedDraftProvider>(
+            std::move(scripted_proposals));
+    }
+    auto result = scripted_provider
+        ? k3x::generate_speculative(
+              reader.value(), *backend, prompt, count, session,
+              *scripted_provider, speculative_block_size)
+        : k3x::generate_greedy(
+              reader.value(), *backend, prompt, count, session);
     const auto process_io = process_io_delta(
         process_io_before, process_io_snapshot());
     if (!result) {
         write_error(result.error(), result.message());
+        return 4;
+    }
+    if (scripted_provider && !scripted_provider->empty()) {
+        write_error(k3x::ErrorCode::invalid_state,
+                    "unused scripted draft proposals");
         return 4;
     }
     std::uint64_t runtime_profile_save_bytes = 0;
@@ -639,6 +767,30 @@ int main(int argc, char** argv) {
            << result.value().l1_expert_cache.peak_resident_bytes;
     output << ",\"routing_mode\":";
     write_json_string(output, routing_mode_name);
+    output << ",\"speculative_mode\":";
+    write_json_string(output, speculative_mode_name);
+    output << ",\"speculative_block_size\":" << speculative_block_size
+           << ",\"speculative_verification_blocks\":"
+           << result.value().speculative_verification_blocks
+           << ",\"speculative_proposed_draft_tokens\":"
+           << result.value().speculative_proposed_draft_tokens
+           << ",\"speculative_accepted_draft_tokens\":"
+           << result.value().speculative_accepted_draft_tokens
+           << ",\"speculative_committed_tokens\":"
+           << result.value().speculative_committed_tokens
+           << ",\"speculative_max_proposal_tokens\":"
+           << result.value().speculative_max_proposal_tokens
+           << ",\"target_decode_forward_calls\":"
+           << result.value().target_decode_forward_calls
+           << ",\"speculative_acceptance_rate\":";
+    if (result.value().speculative_proposed_draft_tokens == 0) {
+        output << "null";
+    } else {
+        output << static_cast<double>(
+                      result.value().speculative_accepted_draft_tokens) /
+                      static_cast<double>(
+                          result.value().speculative_proposed_draft_tokens);
+    }
     const auto routing_decisions = result.value().routing_decisions;
     const auto routing_average = [&](double sum) {
         return routing_decisions ? sum / static_cast<double>(routing_decisions)
@@ -838,6 +990,24 @@ int main(int argc, char** argv) {
          index < result.value().prefill_routed_k.size(); ++index) {
         if (index) output << ',';
         output << result.value().prefill_routed_k[index];
+    }
+    output << "],\"final_state\":[";
+    for (std::size_t index = 0; index < result.value().final_state.size();
+         ++index) {
+        if (index) output << ',';
+        output << result.value().final_state[index];
+    }
+    output << "],\"routed_experts\":[";
+    for (std::size_t index = 0;
+         index < result.value().routed_experts.size(); ++index) {
+        if (index) output << ',';
+        output << result.value().routed_experts[index];
+    }
+    output << "],\"routed_k\":[";
+    for (std::size_t index = 0; index < result.value().routed_k.size();
+         ++index) {
+        if (index) output << ',';
+        output << result.value().routed_k[index];
     }
     output << "],\"token_ids\":[";
     for (std::size_t index = 0; index < result.value().token_ids.size(); ++index) {

@@ -151,6 +151,15 @@ class BenchmarkRecord:
     natural_routing_prefix_rate: float | None = None
     natural_prefill_logits_max_abs_error: float | None = None
     natural_prefill_state_max_abs_error: float | None = None
+    speculative_mode: str = "none"
+    speculative_block_size: int = 0
+    speculative_verification_blocks: int = 0
+    speculative_proposed_draft_tokens: int = 0
+    speculative_accepted_draft_tokens: int = 0
+    speculative_committed_tokens: int = 0
+    speculative_max_proposal_tokens: int = 0
+    target_decode_forward_calls: int = 0
+    speculative_acceptance_rate: float | None = None
 
     def __post_init__(self) -> None:
         if self.scope not in {
@@ -216,6 +225,9 @@ def _run_process(
     routing_min_boundary_gap: float = 0.0,
     routing_agent_failures: int = 0,
     routing_critical: bool = False,
+    speculative_mode: str = "none",
+    speculative_block_size: int = 0,
+    speculative_script: str = "",
     diagnostics: bool = False,
 ) -> tuple[dict, int, float]:
     command = [
@@ -243,6 +255,9 @@ def _run_process(
         "--routing-min-boundary-gap", str(routing_min_boundary_gap),
         "--routing-agent-failures", str(routing_agent_failures),
         "--routing-critical", str(routing_critical).lower(),
+        "--speculative-mode", speculative_mode,
+        "--speculative-block-size", str(speculative_block_size),
+        "--speculative-script", speculative_script,
     ]
     if runtime_metadata:
         command.extend(["--runtime-metadata", runtime_metadata])
@@ -348,6 +363,9 @@ def benchmark_once(
     routing_min_boundary_gap: float = 0.0,
     routing_agent_failures: int = 0,
     routing_critical: bool = False,
+    speculative_mode: str = "none",
+    speculative_block_size: int = 0,
+    speculative_script: str = "",
 ) -> BenchmarkRecord:
     if warmup < 0 or iterations <= 0:
         raise ValueError("warmup must be non-negative and iterations must be positive")
@@ -395,6 +413,9 @@ def benchmark_once(
                 routing_min_boundary_gap=routing_min_boundary_gap,
                 routing_agent_failures=routing_agent_failures,
                 routing_critical=routing_critical,
+                speculative_mode=speculative_mode,
+                speculative_block_size=speculative_block_size,
+                speculative_script=speculative_script,
             )
             _, ttft_peak, ttft = _run_process(
                 artifact,
@@ -430,6 +451,9 @@ def benchmark_once(
                 routing_min_boundary_gap=routing_min_boundary_gap,
                 routing_agent_failures=routing_agent_failures,
                 routing_critical=routing_critical,
+                speculative_mode=speculative_mode,
+                speculative_block_size=speculative_block_size,
+                speculative_script="",
             )
             if index >= warmup:
                 samples.append(sample)
@@ -465,6 +489,9 @@ def benchmark_once(
                 routing_min_boundary_gap=routing_min_boundary_gap,
                 routing_agent_failures=routing_agent_failures,
                 routing_critical=routing_critical,
+                speculative_mode=speculative_mode,
+                speculative_block_size=speculative_block_size,
+                speculative_script=speculative_script,
                 diagnostics=True,
             )
             if diagnostic["token_ids"] != samples[0]["token_ids"]:
@@ -499,6 +526,9 @@ def benchmark_once(
                 routing_min_boundary_gap=routing_min_boundary_gap,
                 routing_agent_failures=routing_agent_failures,
                 routing_critical=routing_critical,
+                speculative_mode=speculative_mode,
+                speculative_block_size=speculative_block_size,
+                speculative_script=speculative_script,
                 diagnostics=True,
             )
             candidate, _, _ = _run_process(
@@ -528,6 +558,9 @@ def benchmark_once(
                 routing_min_boundary_gap=routing_min_boundary_gap,
                 routing_agent_failures=routing_agent_failures,
                 routing_critical=routing_critical,
+                speculative_mode=speculative_mode,
+                speculative_block_size=speculative_block_size,
+                speculative_script=speculative_script,
                 diagnostics=True,
             )
             max_absolute_error, max_relative_error = _numerical_errors(
@@ -567,6 +600,9 @@ def benchmark_once(
                 routing_min_boundary_gap=routing_min_boundary_gap,
                 routing_agent_failures=routing_agent_failures,
                 routing_critical=routing_critical,
+                speculative_mode=speculative_mode,
+                speculative_block_size=speculative_block_size,
+                speculative_script=speculative_script,
             )
             if (
                 materialized["token_ids"] != samples[0]["token_ids"]
@@ -663,6 +699,15 @@ def benchmark_once(
         "transfer_stream_wait_count",
         "async_engine_count",
         "device_overlap",
+        "speculative_mode",
+        "speculative_block_size",
+        "speculative_verification_blocks",
+        "speculative_proposed_draft_tokens",
+        "speculative_accepted_draft_tokens",
+        "speculative_committed_tokens",
+        "speculative_max_proposal_tokens",
+        "target_decode_forward_calls",
+        "speculative_acceptance_rate",
         "token_ids",
     )
     if any(
@@ -693,6 +738,8 @@ def benchmark_once(
         routing_min_boundary_gap,
         routing_agent_failures,
         routing_critical,
+        speculative_mode,
+        speculative_block_size,
     )
     option_fields = (
         "backend",
@@ -717,6 +764,8 @@ def benchmark_once(
         "routing_min_boundary_gap",
         "routing_agent_failures",
         "routing_critical",
+        "speculative_mode",
+        "speculative_block_size",
     )
     observed_options = tuple(samples[0][field] for field in option_fields)
     float_option_fields = {"routing_mass_target", "routing_min_boundary_gap"}
@@ -938,6 +987,29 @@ def benchmark_once(
             "routing_quality_escalated_decisions"
         ],
         cold_rescue_count=samples[0]["cold_rescue_count"],
+        speculative_mode=samples[0]["speculative_mode"],
+        speculative_block_size=samples[0]["speculative_block_size"],
+        speculative_verification_blocks=samples[0][
+            "speculative_verification_blocks"
+        ],
+        speculative_proposed_draft_tokens=samples[0][
+            "speculative_proposed_draft_tokens"
+        ],
+        speculative_accepted_draft_tokens=samples[0][
+            "speculative_accepted_draft_tokens"
+        ],
+        speculative_committed_tokens=samples[0][
+            "speculative_committed_tokens"
+        ],
+        speculative_max_proposal_tokens=samples[0][
+            "speculative_max_proposal_tokens"
+        ],
+        target_decode_forward_calls=samples[0][
+            "target_decode_forward_calls"
+        ],
+        speculative_acceptance_rate=samples[0][
+            "speculative_acceptance_rate"
+        ],
     )
 
 
@@ -998,6 +1070,13 @@ def main() -> int:
     parser.add_argument("--routing-min-boundary-gap", type=float, default=0.0)
     parser.add_argument("--routing-agent-failures", type=int, default=0)
     parser.add_argument("--routing-critical", action="store_true")
+    parser.add_argument(
+        "--speculative-mode",
+        choices=("none", "scripted-reference"),
+        default="none",
+    )
+    parser.add_argument("--speculative-block-size", type=int, default=0)
+    parser.add_argument("--speculative-script", default="")
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--csv", type=Path, required=True)
     args = parser.parse_args()
@@ -1028,6 +1107,9 @@ def main() -> int:
         routing_min_boundary_gap=args.routing_min_boundary_gap,
         routing_agent_failures=args.routing_agent_failures,
         routing_critical=args.routing_critical,
+        speculative_mode=args.speculative_mode,
+        speculative_block_size=args.speculative_block_size,
+        speculative_script=args.speculative_script,
     )
     write_results(result, args.json, args.csv)
     print(json.dumps(asdict(result), sort_keys=True, separators=(",", ":")))

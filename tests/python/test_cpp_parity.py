@@ -468,6 +468,159 @@ def test_cpp_generation_matches_python_golden(
     assert result["weight_cache_hits"] == 0
 
 
+def test_cpp_scripted_speculation_preserves_greedy_execution(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    runner = cpp_binary("k3x_run")
+    artifact = tmp_path / "synthetic.k3x"
+    baseline_output = tmp_path / "baseline.json"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    common = [
+        str(runner),
+        "--model",
+        str(artifact),
+        "--prompt-ids",
+        "1,7,3,9",
+        "--generate",
+        "6",
+        "--mode",
+        "incremental",
+        "--diagnostics",
+        "true",
+    ]
+    subprocess.run([*common, "--json", str(baseline_output)], check=True)
+    baseline = json.loads(baseline_output.read_text(encoding="utf-8"))
+    tokens = baseline["token_ids"]
+
+    perfect_script = f"{tokens[0]}:{tokens[1]},{tokens[2]};{tokens[3]}:{tokens[4]}"
+    wrong_first = (tokens[1] + 1) % 64
+    wrong_late = (tokens[4] + 1) % 64
+    mixed_script = (
+        f"{tokens[0]}:{wrong_first},{tokens[2]};"
+        f"{tokens[1]}:;"
+        f"{tokens[2]}:{tokens[3]},{wrong_late};"
+        f"{tokens[4]}:"
+    )
+    cases = (
+        ("perfect", perfect_script, 2, 3, 3, 5, 2),
+        ("mixed", mixed_script, 4, 4, 1, 5, 2),
+    )
+    for name, script, blocks, proposed, accepted, committed, maximum in cases:
+        output = tmp_path / f"{name}.json"
+        subprocess.run(
+            [
+                *common,
+                "--speculative-mode",
+                "scripted-reference",
+                "--speculative-block-size",
+                "2",
+                "--speculative-script",
+                script,
+                "--json",
+                str(output),
+            ],
+            check=True,
+        )
+        result = json.loads(output.read_text(encoding="utf-8"))
+        assert result["token_ids"] == baseline["token_ids"]
+        assert result["final_state"] == baseline["final_state"]
+        assert result["routed_experts"] == baseline["routed_experts"]
+        assert result["routed_k"] == baseline["routed_k"]
+        assert result["reader_read_calls"] == baseline["reader_read_calls"]
+        assert result["reader_completed_bytes"] == baseline["reader_completed_bytes"]
+        assert result["l1_expert_cache_hits"] == baseline["l1_expert_cache_hits"]
+        assert result["l1_expert_cache_misses"] == baseline["l1_expert_cache_misses"]
+        assert result["speculative_mode"] == "scripted-reference"
+        assert result["speculative_block_size"] == 2
+        assert result["speculative_verification_blocks"] == blocks
+        assert result["speculative_proposed_draft_tokens"] == proposed
+        assert result["speculative_accepted_draft_tokens"] == accepted
+        assert result["speculative_committed_tokens"] == committed
+        assert result["speculative_max_proposal_tokens"] == maximum
+        assert result["target_decode_forward_calls"] == 5
+        assert result["speculative_acceptance_rate"] == pytest.approx(
+            accepted / proposed
+        )
+
+    assert baseline["speculative_mode"] == "none"
+    assert baseline["speculative_block_size"] == 0
+    assert baseline["speculative_verification_blocks"] == 0
+    assert baseline["speculative_acceptance_rate"] is None
+    assert baseline["target_decode_forward_calls"] == 5
+
+    unused_output = tmp_path / "unused.json"
+    unused = subprocess.run(
+        [
+            *common,
+            "--speculative-mode",
+            "scripted-reference",
+            "--speculative-block-size",
+            "2",
+            "--speculative-script",
+            f"{perfect_script};{tokens[5]}:",
+            "--json",
+            str(unused_output),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert unused.returncode == 4
+    assert unused.stderr.strip() == "INVALID_STATE: unused scripted draft proposals"
+    assert not unused_output.exists()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (["--speculative-mode", "warp"], "unknown speculative mode: warp"),
+        (
+            ["--speculative-mode", "scripted-reference"],
+            "scripted-reference speculation requires a positive block size",
+        ),
+        (
+            ["--speculative-block-size", "2"],
+            "speculative mode none requires block size 0 and an empty script",
+        ),
+        (
+            ["--speculative-script", "1:2"],
+            "speculative mode none requires block size 0 and an empty script",
+        ),
+        (
+            [
+                "--speculative-mode",
+                "scripted-reference",
+                "--speculative-block-size",
+                "2",
+                "--mode",
+                "full",
+            ],
+            "scripted-reference speculation requires incremental mode",
+        ),
+        (
+            [
+                "--speculative-mode",
+                "scripted-reference",
+                "--speculative-block-size",
+                "2",
+                "--speculative-script",
+                "1",
+            ],
+            "invalid speculative script record: 1",
+        ),
+    ],
+)
+def test_cpp_runner_rejects_invalid_speculative_options(
+    arguments: list[str], message: str
+) -> None:
+    result = subprocess.run(
+        [str(cpp_binary("k3x_run")), *arguments],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == message
+
+
 def test_static_l1_cache_preserves_cpu_graph_and_avoids_reader_calls(
     synthetic_source: Path, tmp_path: Path
 ) -> None:

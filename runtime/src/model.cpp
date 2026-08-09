@@ -863,6 +863,7 @@ Result<GenerationResult> generate_greedy(Reader& reader,
                     const auto decode_start = std::chrono::steady_clock::now();
                     for (std::size_t index = 1; index < count; ++index) {
                         logits = engine.forward(token, state, ProfilePhase::decode);
+                        ++result.target_decode_forward_calls;
                         token = argmax(logits);
                         result.token_ids.push_back(token);
                     }
@@ -883,6 +884,9 @@ Result<GenerationResult> generate_greedy(Reader& reader,
                     const auto phase = index < prompt.size() ? ProfilePhase::prefill
                                                              : ProfilePhase::decode;
                     logits = engine.forward(sequence[index], state, phase);
+                    if (phase == ProfilePhase::decode) {
+                        ++result.target_decode_forward_calls;
+                    }
                 }
                 const auto token = argmax(logits);
                 result.token_ids.push_back(token);
@@ -997,6 +1001,7 @@ Result<GenerationResult> generate_speculative(
                     [&](std::uint32_t input_token) {
                         auto target_logits = engine.forward(
                             input_token, state, ProfilePhase::decode);
+                        ++result.target_decode_forward_calls;
                         return Result<std::uint32_t>::success(
                             argmax(target_logits));
                     });

@@ -95,6 +95,7 @@ struct GenerationResult {
     std::vector<std::uint32_t> routed_k;
     std::uint64_t prefill_nanoseconds{};
     std::uint64_t decode_nanoseconds{};
+    std::uint64_t target_decode_forward_calls{};
     std::uint64_t speculative_verification_blocks{};
     std::uint64_t speculative_proposed_draft_tokens{};
     std::uint64_t speculative_accepted_draft_tokens{};

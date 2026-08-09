@@ -88,6 +88,11 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["routing_mode"] == "natural"
     assert payload["routing_average_top_k"] == 0.0
     assert payload["cold_rescue_count"] == 0
+    assert payload["speculative_mode"] == "none"
+    assert payload["speculative_block_size"] == 0
+    assert payload["speculative_verification_blocks"] == 0
+    assert payload["target_decode_forward_calls"] == 0
+    assert payload["speculative_acceptance_rate"] is None
     assert payload["l1_expert_cache_bytes"] == 0
     assert payload["l1_expert_cache_hits"] == 0
     assert payload["l1_expert_cache_evictions"] == 0
@@ -154,6 +159,9 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert row["token_ids"] == "43;32;28;49;9;28"
     assert row["routed_experts"] == ""
     assert row["routed_k"] == ""
+    assert row["speculative_mode"] == "none"
+    assert row["speculative_verification_blocks"] == "0"
+    assert row["speculative_acceptance_rate"] == ""
 
 
 def test_ffn_boundary_matrix_and_runner_preserve_parity(
@@ -345,6 +353,39 @@ def test_benchmark_once_collects_cpu_backend_profile(
     assert record.l1_expert_cache_bypasses == 0
     assert record.l1_expert_cache_evictions == 0
     assert record.l1_expert_cache_collision_misses == 0
+    assert record.speculative_mode == "none"
+    assert record.speculative_block_size == 0
+    assert record.speculative_verification_blocks == 0
+    assert record.target_decode_forward_calls == 5
+    assert record.speculative_acceptance_rate is None
+
+
+def test_benchmark_once_collects_scripted_speculative_telemetry(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    artifact = tmp_path / "synthetic.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    record = benchmark_once(
+        artifact,
+        cpp_binary("k3x_run"),
+        warmup=0,
+        iterations=1,
+        backend="cpu",
+        dense_precision="fp32",
+        speculative_mode="scripted-reference",
+        speculative_block_size=2,
+        speculative_script="43:32,28;49:9",
+    )
+    assert record.token_ids == (43, 32, 28, 49, 9, 28)
+    assert record.speculative_mode == "scripted-reference"
+    assert record.speculative_block_size == 2
+    assert record.speculative_verification_blocks == 2
+    assert record.speculative_proposed_draft_tokens == 3
+    assert record.speculative_accepted_draft_tokens == 3
+    assert record.speculative_committed_tokens == 5
+    assert record.speculative_max_proposal_tokens == 2
+    assert record.target_decode_forward_calls == 5
+    assert record.speculative_acceptance_rate == 1.0
     assert record.l1_expert_cache_resident_bytes == 0
     assert record.reader_read_calls > 0
     assert record.reader_requested_bytes >= record.reader_completed_bytes > 0
