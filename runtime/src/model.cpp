@@ -69,10 +69,12 @@ struct ModelState { std::vector<KdaState> kda; MlaState mla; };
 
 class Engine {
 public:
-    Engine(Reader& reader, ComputeBackend& backend, bool trace_routing)
+    Engine(Reader& reader, ComputeBackend& backend, RuntimeOptions options)
         : reader_(reader), backend_(backend),
           config_(decode_config(reader.model_config())),
-          trace_routing_(trace_routing) {
+          trace_routing_(options.diagnostics),
+          expert_store_(options.l1_expert_cache,
+                        options.l1_expert_cache_bytes) {
         state_template_.kda.resize(3);
         for (auto& state : state_template_.kda) {
             const auto history = (config_.conv_kernel - 1) * config_.hidden;
@@ -87,6 +89,9 @@ public:
     const std::vector<std::uint64_t>& layer_nanoseconds() const { return layer_nanoseconds_; }
     const std::vector<std::uint32_t>& routed_experts() const {
         return routed_experts_;
+    }
+    const L1ExpertCacheStats& expert_cache_stats() const {
+        return expert_store_.stats();
     }
 
     Vector forward(std::uint32_t token, ModelState& state, ProfilePhase phase,
@@ -157,29 +162,6 @@ private:
         std::size_t cols;
     };
 
-    struct ExpertProjection {
-        std::uint64_t id;
-        std::vector<std::byte> packed;
-        std::vector<std::byte> scales;
-        std::size_t rows;
-        std::size_t cols;
-
-        Mxfp4WeightView view(std::size_t group_size) const {
-            return {id, packed, scales, rows, cols, group_size};
-        }
-    };
-
-    struct ExpertMlpPayload {
-        ExpertProjection gate;
-        ExpertProjection up;
-        ExpertProjection down;
-
-        Mxfp4MlpView view(std::size_t group_size) const {
-            return {gate.view(group_size), up.view(group_size),
-                    down.view(group_size)};
-        }
-    };
-
     static std::string layer_name(std::size_t layer, const std::string& suffix) {
         return "model.layers." + std::to_string(layer) + "." + suffix;
     }
@@ -199,24 +181,59 @@ private:
         return {fnv1a64(name.c_str()), tensor(name), rows, cols};
     }
 
-    ExpertMlpPayload load_expert(std::size_t layer, std::size_t expert_id) {
-        const auto base = layer_name(
-            layer, "feed_forward.experts." + std::to_string(expert_id));
-        const auto load = [&](const std::string& suffix) {
-            const auto id = fnv1a64((base + "." + suffix).c_str());
-            auto packed = reader_.read_tensor(id);
-            auto scales = reader_.read_auxiliary(id);
-            const auto record = std::find_if(
-                reader_.tensors().begin(), reader_.tensors().end(),
-                [id](const auto& item) { return item.tensor_id == id; });
-            if (!packed || !scales || record == reader_.tensors().end()) {
-                throw std::runtime_error("missing expert");
-            }
-            return ExpertProjection{
-                id, std::move(packed.value()), std::move(scales.value()),
-                record->dimensions[0], record->dimensions[1]};
-        };
-        return {load("gate"), load("up"), load("down")};
+    ExpertPayloadHandle load_expert(std::size_t layer,
+                                    std::size_t expert_id) {
+        auto result = expert_store_.get_or_load(
+            {layer, expert_id}, [&, layer, expert_id]() {
+                const auto base = layer_name(
+                    layer, "feed_forward.experts." +
+                               std::to_string(expert_id));
+                const auto load = [&](const std::string& suffix)
+                    -> Result<ExpertProjection> {
+                    const auto id = fnv1a64((base + "." + suffix).c_str());
+                    auto packed = reader_.read_tensor(id);
+                    if (!packed) {
+                        return Result<ExpertProjection>::failure(
+                            packed.error(), packed.message());
+                    }
+                    auto scales = reader_.read_auxiliary(id);
+                    if (!scales) {
+                        return Result<ExpertProjection>::failure(
+                            scales.error(), scales.message());
+                    }
+                    const auto record = std::find_if(
+                        reader_.tensors().begin(), reader_.tensors().end(),
+                        [id](const auto& item) { return item.tensor_id == id; });
+                    if (record == reader_.tensors().end()) {
+                        return Result<ExpertProjection>::failure(
+                            ErrorCode::tensor_not_found, "missing expert");
+                    }
+                    return Result<ExpertProjection>::success({
+                        id, std::move(packed.value()),
+                        std::move(scales.value()), record->dimensions[0],
+                        record->dimensions[1]});
+                };
+                auto gate = load("gate");
+                if (!gate) {
+                    return Result<ExpertMlpPayload>::failure(
+                        gate.error(), gate.message());
+                }
+                auto up = load("up");
+                if (!up) {
+                    return Result<ExpertMlpPayload>::failure(
+                        up.error(), up.message());
+                }
+                auto down = load("down");
+                if (!down) {
+                    return Result<ExpertMlpPayload>::failure(
+                        down.error(), down.message());
+                }
+                return Result<ExpertMlpPayload>::success(
+                    {std::move(gate.value()), std::move(up.value()),
+                     std::move(down.value())});
+            });
+        if (!result) throw std::runtime_error("missing expert");
+        return std::move(result.value());
     }
 
     Vector matvec(const std::string& name, std::size_t rows,
@@ -456,8 +473,8 @@ private:
                   ProfilePhase phase) {
         const auto payload = load_expert(layer, expert_id);
         const std::array<Mxfp4WeightView, 2> gate_up_views{{
-            payload.gate.view(config_.group_size),
-            payload.up.view(config_.group_size),
+            payload->gate.view(config_.group_size),
+            payload->up.view(config_.group_size),
         }};
         auto gate_up = backend_.mxfp4_matvec_group(
             input, gate_up_views, static_cast<std::uint32_t>(layer), phase);
@@ -466,7 +483,7 @@ private:
         situ_glu(activated, gate_up.value()[0], gate_up.value()[1],
                  config_.situ_beta, config_.situ_linear);
         auto output = backend_.mxfp4_matvec(
-            activated, payload.down.view(config_.group_size),
+            activated, payload->down.view(config_.group_size),
             static_cast<std::uint32_t>(layer), phase);
         if (!output) throw std::runtime_error("invalid expert");
         return output.value();
@@ -502,7 +519,7 @@ private:
             }
         }
         if (backend_.options().cuda_boundary == CudaBoundaryMode::ffn_block) {
-            std::vector<ExpertMlpPayload> payloads;
+            std::vector<ExpertPayloadHandle> payloads;
             payloads.reserve(config_.top_k);
             for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
                 payloads.push_back(load_expert(layer, order[slot]));
@@ -510,7 +527,7 @@ private:
             std::vector<Mxfp4MlpView> expert_views;
             expert_views.reserve(payloads.size());
             for (const auto& payload : payloads) {
-                expert_views.push_back(payload.view(config_.group_size));
+                expert_views.push_back(payload->view(config_.group_size));
             }
             Result<std::vector<std::vector<float>>> expert_outputs =
                 Result<std::vector<std::vector<float>>>::failure(
@@ -599,6 +616,7 @@ private:
     ComputeBackend& backend_;
     Config config_;
     bool trace_routing_{};
+    HostExpertStore expert_store_;
     ModelState state_template_;
     std::unordered_map<std::uint64_t, Vector> tensors_;
     std::vector<std::uint64_t> layer_nanoseconds_ = std::vector<std::uint64_t>(config_.layers);
@@ -618,7 +636,7 @@ Result<GenerationResult> generate_greedy(Reader& reader,
                                          RuntimeOptions options) {
     if (prompt.empty()) return Result<GenerationResult>::failure(ErrorCode::invalid_extent, "empty prompt");
     try {
-        Engine engine(reader, backend, options.diagnostics);
+        Engine engine(reader, backend, options);
         GenerationResult result;
         if (options.incremental) {
             auto state = engine.empty_state();
@@ -677,6 +695,7 @@ Result<GenerationResult> generate_greedy(Reader& reader,
                 std::chrono::steady_clock::now() - decode_start).count();
         }
         result.per_layer_nanoseconds = engine.layer_nanoseconds();
+        result.l1_expert_cache = engine.expert_cache_stats();
         return Result<GenerationResult>::success(std::move(result));
     } catch (const std::exception& error) {
         return Result<GenerationResult>::failure(ErrorCode::invalid_extent, error.what());

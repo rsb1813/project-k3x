@@ -295,6 +295,20 @@ int main(int argc, char** argv) {
            << effective_options.cuda_resident_bytes;
     output << ",\"cuda_pinned_bytes\":"
            << effective_options.cuda_pinned_bytes;
+    output << ",\"l1_expert_cache_mode\":";
+    write_json_string(output, l1_expert_cache_name);
+    output << ",\"l1_expert_cache_bytes\":"
+           << runtime_options.l1_expert_cache_bytes;
+    output << ",\"l1_expert_cache_hits\":"
+           << result.value().l1_expert_cache.hits
+           << ",\"l1_expert_cache_misses\":"
+           << result.value().l1_expert_cache.misses
+           << ",\"l1_expert_cache_bypasses\":"
+           << result.value().l1_expert_cache.bypasses
+           << ",\"l1_expert_cache_resident_bytes\":"
+           << result.value().l1_expert_cache.resident_bytes
+           << ",\"peak_l1_expert_cache_resident_bytes\":"
+           << result.value().l1_expert_cache.peak_resident_bytes;
     output << ",\"kernel_nanoseconds\":" << profile.device_nanoseconds
            << ",\"host_to_device_bytes\":" << profile.host_to_device_bytes
            << ",\"weight_h2d_bytes\":"
