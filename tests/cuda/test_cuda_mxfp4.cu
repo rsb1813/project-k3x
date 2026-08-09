@@ -5,6 +5,7 @@
 
 #include <cuda_runtime_api.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -314,6 +315,119 @@ int test_scaled_ordered_accumulation() {
     return 0;
 }
 
+int test_batched_token_rows() {
+    constexpr std::size_t rows = 3;
+    constexpr std::size_t cols = 64;
+    constexpr std::size_t batch_size = 3;
+    std::array<float, batch_size * cols> inputs{};
+    inputs[0] = 1.0F;
+    inputs[1] = 2.0F;
+    inputs[2] = 1.5F;
+    inputs[3] = -0.5F;
+    inputs[cols] = -2.0F;
+    inputs[cols + 1] = 0.25F;
+    inputs[2 * cols + 32] = 4.0F;
+    inputs[2 * cols + 33] = -3.0F;
+
+    std::array<std::byte, 96> packed{};
+    packed[0] = std::byte{0x10};
+    packed[1] = std::byte{0x72};
+    packed[16] = std::byte{0xD4};
+    packed[32] = std::byte{0x96};
+    packed[48] = std::byte{0x23};
+    packed[64] = std::byte{0xF5};
+    packed[80] = std::byte{0x4A};
+    const std::array<std::byte, 6> scales{
+        std::byte{127}, std::byte{128}, std::byte{126},
+        std::byte{129}, std::byte{125}, std::byte{127},
+    };
+
+    std::array<float, batch_size * rows> expected{};
+    for (std::size_t token = 0; token < batch_size; ++token) {
+        const auto oracle = k3x::mxfp4_matmul(
+            std::span<const float>(inputs).subspan(token * cols, cols),
+            packed, scales, rows, cols, 32);
+        if (!oracle) return 80;
+        std::copy(oracle.value().begin(), oracle.value().end(),
+                  expected.begin() + token * rows);
+    }
+
+    float* device_inputs = nullptr;
+    std::byte* device_packed = nullptr;
+    std::byte* device_scales = nullptr;
+    float* device_outputs = nullptr;
+    if (cudaMalloc(&device_inputs, inputs.size() * sizeof(float)) != cudaSuccess ||
+        cudaMalloc(&device_packed, packed.size()) != cudaSuccess ||
+        cudaMalloc(&device_scales, scales.size()) != cudaSuccess ||
+        cudaMalloc(&device_outputs, expected.size() * sizeof(float)) !=
+            cudaSuccess) {
+        return 81;
+    }
+    if (cudaMemcpy(device_inputs, inputs.data(), inputs.size() * sizeof(float),
+                   cudaMemcpyHostToDevice) != cudaSuccess ||
+        cudaMemcpy(device_packed, packed.data(), packed.size(),
+                   cudaMemcpyHostToDevice) != cudaSuccess ||
+        cudaMemcpy(device_scales, scales.data(), scales.size(),
+                   cudaMemcpyHostToDevice) != cudaSuccess) {
+        return 82;
+    }
+
+    if (k3x::cuda::launch_mxfp4_matvec_batch(
+            device_inputs,
+            reinterpret_cast<const std::uint8_t*>(device_packed),
+            reinterpret_cast<const std::uint8_t*>(device_scales),
+            device_outputs, rows, cols, batch_size, nullptr) != cudaSuccess ||
+        cudaDeviceSynchronize() != cudaSuccess) {
+        return 83;
+    }
+    std::array<float, batch_size * rows> actual{};
+    if (cudaMemcpy(actual.data(), device_outputs, actual.size() * sizeof(float),
+                   cudaMemcpyDeviceToHost) != cudaSuccess) {
+        return 84;
+    }
+    for (std::size_t index = 0; index < actual.size(); ++index) {
+        if (!nearly_equal(actual[index], expected[index])) return 85;
+    }
+
+    if (k3x::cuda::launch_mxfp4_matvec(
+            device_inputs,
+            reinterpret_cast<const std::uint8_t*>(device_packed),
+            reinterpret_cast<const std::uint8_t*>(device_scales),
+            device_outputs, rows, cols, nullptr) != cudaSuccess ||
+        cudaDeviceSynchronize() != cudaSuccess) {
+        return 86;
+    }
+    std::array<float, rows> scalar{};
+    if (cudaMemcpy(scalar.data(), device_outputs, scalar.size() * sizeof(float),
+                   cudaMemcpyDeviceToHost) != cudaSuccess ||
+        k3x::cuda::launch_mxfp4_matvec_batch(
+            device_inputs,
+            reinterpret_cast<const std::uint8_t*>(device_packed),
+            reinterpret_cast<const std::uint8_t*>(device_scales),
+            device_outputs, rows, cols, 1, nullptr) != cudaSuccess ||
+        cudaDeviceSynchronize() != cudaSuccess) {
+        return 87;
+    }
+    std::array<float, rows> batch_one{};
+    if (cudaMemcpy(batch_one.data(), device_outputs,
+                   batch_one.size() * sizeof(float),
+                   cudaMemcpyDeviceToHost) != cudaSuccess ||
+        scalar != batch_one ||
+        k3x::cuda::launch_mxfp4_matvec_batch(
+            device_inputs,
+            reinterpret_cast<const std::uint8_t*>(device_packed),
+            reinterpret_cast<const std::uint8_t*>(device_scales),
+            device_outputs, rows, cols, 0, nullptr) != cudaErrorInvalidValue) {
+        return 88;
+    }
+
+    cudaFree(device_outputs);
+    cudaFree(device_scales);
+    cudaFree(device_packed);
+    cudaFree(device_inputs);
+    return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -395,5 +509,7 @@ int main() {
     if (allocation_result != 0) return allocation_result;
     const auto grouped_result = test_grouped_resident_execution();
     if (grouped_result != 0) return grouped_result;
-    return test_scaled_ordered_accumulation();
+    const auto accumulation_result = test_scaled_ordered_accumulation();
+    if (accumulation_result != 0) return accumulation_result;
+    return test_batched_token_rows();
 }

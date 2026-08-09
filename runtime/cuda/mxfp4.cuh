@@ -13,6 +13,12 @@ cudaError_t launch_mxfp4_matvec(
     const std::uint8_t* scales, float* output,
     std::size_t rows, std::size_t cols, cudaStream_t stream);
 
+cudaError_t launch_mxfp4_matvec_batch(
+    const float* inputs, const std::uint8_t* packed,
+    const std::uint8_t* scales, float* outputs,
+    std::size_t rows, std::size_t cols, std::size_t batch_size,
+    cudaStream_t stream);
+
 cudaError_t launch_mxfp4_matvec_accumulate(
     const float* input, const std::uint8_t* packed,
     const std::uint8_t* scales, float* output,
