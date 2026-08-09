@@ -184,7 +184,7 @@
 - [x] Compare complete state copy, partial replay, and transactional KDA snapshot plus MLA crop designs.
 - [x] Write, self-review, and commit the persistent draft-state design.
 - [x] Write, self-review, and commit the detailed TDD implementation plan.
-- [ ] Implement the incremental cursor and rollback contract through witnessed RED/GREEN cycles.
+- [x] Implement the incremental cursor and rollback contract through witnessed RED/GREEN cycles.
 - [ ] Integrate the persistent provider, CLI, schema, and replay-oracle parity.
 - [ ] Run B-0018, the full verification matrix, sanitizer coverage, and evidence cross-checks.
 - [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.

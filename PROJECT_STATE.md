@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 17 persistent AURORA draft state is in implementation. The opaque cursor now performs one-time context prefill and produces an exact fixed-K4 incremental proposal, but commit, rollback, provider integration, CLI, and B-0018 remain pending. Milestone 16 replay remains the exact non-default oracle and the natural strict target verifier remains authoritative.
+Milestone 17 persistent AURORA draft state is in implementation. The cursor now performs one-time context prefill, exact fixed-K4 proposals, bounded KDA checkpoint restore, MLA logical crop, and target-bonus teacher forcing with direct flattened-state parity. Provider integration, CLI, and B-0018 remain pending. Milestone 16 replay remains the exact non-default oracle and the natural strict target verifier remains authoritative.
 
 State audited on 2026-08-10 against public ledger head `44aa049` and isolated branch `codex/milestone-seventeen-persistent-aurora`. The fresh CPU baseline passes CTest 14/14 and Python 268 passed/47 skipped. No paid cloud resource or full Kimi K3 checkpoint is in use.
 

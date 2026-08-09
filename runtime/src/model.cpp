@@ -1124,9 +1124,79 @@ std::uint32_t argmax(const Vector& values) {
 }
 
 struct IncrementalDraftCursor::Impl {
+    struct MlaMark {
+        std::size_t length{};
+        std::size_t keys{};
+        std::size_t values{};
+        std::size_t shared_keys{};
+    };
+
+    struct Checkpoint {
+        std::vector<KdaState> kda;
+        MlaMark mla;
+        Vector logits;
+    };
+
     Impl(Reader& reader, ComputeBackend& backend, RuntimeSession& session)
         : engine(reader, backend, session), state(engine.empty_state()),
           session(session) {}
+
+    std::uint64_t kda_bytes() const {
+        std::uint64_t elements = 0;
+        for (const auto& item : state.kda) {
+            for (const auto* values : {
+                     &item.conv_q, &item.conv_k,
+                     &item.conv_v, &item.recurrent}) {
+                if (values->size() >
+                    (std::numeric_limits<std::uint64_t>::max() - elements)) {
+                    throw std::overflow_error("KDA checkpoint size overflow");
+                }
+                elements += values->size();
+            }
+        }
+        if (elements >
+            std::numeric_limits<std::uint64_t>::max() / sizeof(float)) {
+            throw std::overflow_error("KDA checkpoint byte overflow");
+        }
+        return elements * sizeof(float);
+    }
+
+    Checkpoint capture() {
+        const auto bytes = kda_bytes();
+        if (stats.kda_checkpoint_bytes >
+            std::numeric_limits<std::uint64_t>::max() - bytes) {
+            throw std::overflow_error("KDA checkpoint counter overflow");
+        }
+        stats.kda_checkpoint_bytes += bytes;
+        return {
+            .kda = state.kda,
+            .mla = {
+                .length = state.mla.length,
+                .keys = state.mla.keys.size(),
+                .values = state.mla.values.size(),
+                .shared_keys = state.mla.shared_keys.size(),
+            },
+            .logits = logits,
+        };
+    }
+
+    void restore(const Checkpoint& checkpoint) {
+        if (checkpoint.mla.length > state.mla.length ||
+            checkpoint.mla.keys > state.mla.keys.size() ||
+            checkpoint.mla.values > state.mla.values.size() ||
+            checkpoint.mla.shared_keys > state.mla.shared_keys.size()) {
+            throw std::runtime_error("invalid incremental draft checkpoint");
+        }
+        stats.mla_positions_cropped +=
+            state.mla.length - checkpoint.mla.length;
+        state.kda = checkpoint.kda;
+        state.mla.keys.resize(checkpoint.mla.keys);
+        state.mla.values.resize(checkpoint.mla.values);
+        state.mla.shared_keys.resize(checkpoint.mla.shared_keys);
+        state.mla.length = checkpoint.mla.length;
+        logits = checkpoint.logits;
+        ++stats.rollback_events;
+    }
 
     Engine engine;
     ModelState state;
@@ -1134,6 +1204,8 @@ struct IncrementalDraftCursor::Impl {
     RuntimeSession& session;
     IncrementalDraftCursorStats stats{};
     std::vector<std::uint32_t> pending_candidates;
+    std::unique_ptr<Checkpoint> base_checkpoint;
+    std::vector<Checkpoint> processed_checkpoints;
     bool pending{};
     bool failed{};
 };
@@ -1184,6 +1256,9 @@ Result<std::vector<std::uint32_t>> IncrementalDraftCursor::propose(
     try {
         std::vector<std::uint32_t> candidates;
         candidates.reserve(count);
+        impl_->processed_checkpoints.clear();
+        impl_->base_checkpoint =
+            std::make_unique<Impl::Checkpoint>(impl_->capture());
         for (std::size_t index = 0; index < count; ++index) {
             const auto token = argmax(impl_->logits);
             candidates.push_back(token);
@@ -1191,6 +1266,7 @@ Result<std::vector<std::uint32_t>> IncrementalDraftCursor::propose(
                 impl_->logits = impl_->engine.forward(
                     token, impl_->state, ProfilePhase::decode);
                 ++impl_->stats.incremental_forward_calls;
+                impl_->processed_checkpoints.push_back(impl_->capture());
             }
         }
         impl_->pending_candidates = candidates;
@@ -1208,10 +1284,56 @@ Result<std::vector<std::uint32_t>> IncrementalDraftCursor::propose(
 }
 
 Result<bool> IncrementalDraftCursor::commit(
-    std::size_t, std::span<const std::uint32_t>) {
-    impl_->failed = true;
-    return Result<bool>::failure(
-        ErrorCode::invalid_state, "incremental draft commit unavailable");
+    std::size_t accepted_prefix,
+    std::span<const std::uint32_t> committed_tokens) {
+    auto generation_guard = impl_->session.acquire_generation_guard();
+    bool valid = !impl_->failed && impl_->pending &&
+        impl_->base_checkpoint &&
+        accepted_prefix <= impl_->pending_candidates.size() &&
+        committed_tokens.size() == accepted_prefix + 1;
+    for (std::size_t index = 0; valid && index < accepted_prefix; ++index) {
+        valid = committed_tokens[index] == impl_->pending_candidates[index];
+    }
+    if (!valid) {
+        impl_->failed = true;
+        impl_->pending = false;
+        return Result<bool>::failure(
+            ErrorCode::invalid_state, "invalid incremental draft commit");
+    }
+
+    try {
+        const auto processed_candidates = impl_->pending_candidates.empty()
+            ? std::size_t{0}
+            : impl_->pending_candidates.size() - 1;
+        if (accepted_prefix < processed_candidates) {
+            const auto& checkpoint = accepted_prefix == 0
+                ? *impl_->base_checkpoint
+                : impl_->processed_checkpoints[accepted_prefix - 1];
+            impl_->restore(checkpoint);
+        }
+        if (accepted_prefix == impl_->pending_candidates.size() &&
+            accepted_prefix != 0) {
+            impl_->logits = impl_->engine.forward(
+                impl_->pending_candidates.back(), impl_->state,
+                ProfilePhase::decode);
+            ++impl_->stats.incremental_forward_calls;
+        }
+        impl_->logits = impl_->engine.forward(
+            committed_tokens.back(), impl_->state, ProfilePhase::decode);
+        ++impl_->stats.incremental_forward_calls;
+        impl_->pending = false;
+        impl_->pending_candidates.clear();
+        impl_->processed_checkpoints.clear();
+        impl_->base_checkpoint.reset();
+        return Result<bool>::success(true);
+    } catch (const std::exception& error) {
+        impl_->failed = true;
+        impl_->pending = false;
+        if (auto* loader = impl_->session.expert_loader()) {
+            loader->wait_idle();
+        }
+        return Result<bool>::failure(ErrorCode::invalid_extent, error.what());
+    }
 }
 
 IncrementalDraftCursorStats IncrementalDraftCursor::stats() const noexcept {
@@ -1220,6 +1342,7 @@ IncrementalDraftCursorStats IncrementalDraftCursor::stats() const noexcept {
 
 IncrementalDraftCursorDiagnostics
 IncrementalDraftCursor::diagnostics() const {
+    auto generation_guard = impl_->session.acquire_generation_guard();
     return {
         .flattened_state = impl_->engine.flatten_state(impl_->state),
         .mla_length = impl_->state.mla.length,
