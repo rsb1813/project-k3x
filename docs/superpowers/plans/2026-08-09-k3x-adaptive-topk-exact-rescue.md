@@ -6,9 +6,9 @@ Add a deterministic runtime routing-policy boundary with natural Top-K reference
 
 ## Task 1 — Pure routing policy
 
-- [ ] Add RED tests for natural/fixed/adaptive selection, stable ties, invalid configuration, mass, entropy effective support, boundary confidence, and quality floors.
-- [ ] Implement the smallest standalone routing-policy type with bounded telemetry.
-- [ ] Verify the dedicated CPU unit test and unchanged natural router tests.
+- [x] Add RED tests for natural/fixed/adaptive selection, stable ties, invalid configuration, mass, entropy effective support, boundary confidence, and quality floors.
+- [x] Implement the smallest standalone routing-policy type with bounded telemetry.
+- [x] Verify the dedicated CPU unit test and unchanged natural router tests.
 
 ## Task 2 — Reference and synthetic Top-16 fixture
 
