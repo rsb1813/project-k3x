@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 17 persistent AURORA draft state is in implementation. The cursor and provider perform one-time context prefill, exact fixed-K4 proposals, bounded KDA checkpoint restore, MLA logical crop, and target-bonus teacher forcing. Provider-level and token-major/CPU expert-major target parity match the replay oracle on the Top-16 synthetic artifact. The `aurora-persistent` CLI and five cursor telemetry fields now pass the focused CPU matrix; B-0018 evidence and final ledger synchronization remain pending. Milestone 16 replay remains the exact non-default oracle and the natural strict target verifier remains authoritative.
+Milestone 17 persistent AURORA draft state is in final verification. The cursor, provider, `aurora-persistent` CLI, and five cursor telemetry fields are implemented. Provider-level and token-major/CPU expert-major target parity match the replay oracle on the Top-16 synthetic artifact. Canonical B-0018 measured four exact replay/persistent pairs and independently verified all raw and summary digests. Full build variants, sanitizer coverage, TITAN Ledger synchronization, review, and publication remain pending. Milestone 16 replay remains the exact non-default oracle and the natural strict target verifier remains authoritative.
 
 State audited on 2026-08-10 against public ledger head `44aa049` and isolated branch `codex/milestone-seventeen-persistent-aurora`. The fresh CPU baseline passes CTest 14/14 and Python 268 passed/47 skipped. No paid cloud resource or full Kimi K3 checkpoint is in use.
 

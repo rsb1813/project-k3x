@@ -373,7 +373,7 @@ git commit -m "feat: expose persistent AURORA runtime"
 - Consumes: `benchmark_once`, `write_results`, B-0017 artifact construction and diagnostic parity helpers.
 - Produces: nine-row B-0018 raw evidence, canonical summary, checksums, and exact matched-pair validation.
 
-- [ ] **Step 1: Add the B-0018 matrix and failing evidence test**
+- [x] **Step 1: Add the B-0018 matrix and failing evidence test**
 
 Create the runner with a Korean role header and this exact case matrix.
 
@@ -393,11 +393,11 @@ CASES = (
 
 The test must require matched proposal tokens, acceptance, target tokens, final state, committed routes, persistent replay-context zero, one context prefill, positive incremental forwards, and canonical raw JSON/CSV digests. Run it before results exist and verify RED due to missing summary.
 
-- [ ] **Step 2: Implement the runner and one-sample smoke**
+- [x] **Step 2: Implement the runner and one-sample smoke**
 
 Reuse B-0017 source generation and LF CSV writing. Add pair names to each summary record and reject any matched proposal/acceptance divergence. Run with zero warmups and one sample into an untracked build-results directory. Fix only runner/schema defects revealed by actual errors.
 
-- [ ] **Step 3: Run canonical B-0018**
+- [x] **Step 3: Run canonical B-0018**
 
 ```bash
 python tools/ablate_persistent_aurora.py \
@@ -408,11 +408,11 @@ python tools/ablate_persistent_aurora.py \
 
 Record the measured direction even if persistent state is slower. Never derive physical NVMe values from Reader counters.
 
-- [ ] **Step 4: Cross-check committed bytes independently**
+- [x] **Step 4: Cross-check committed bytes independently**
 
 The pytest must recompute every raw JSON/CSV SHA-256, summary CSV SHA-256, canonical sorted-record aggregate, exact diagnostic parity, and headline percentage deltas from committed bytes. Require nine raw pairs and fail on CRLF-normalized digest drift.
 
-- [ ] **Step 5: Commit B-0018 evidence**
+- [x] **Step 5: Commit B-0018 evidence**
 
 ```bash
 git add tools/ablate_persistent_aurora.py \
