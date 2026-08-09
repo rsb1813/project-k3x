@@ -14,6 +14,8 @@ SpecMD arXiv 2602.03921 defines Least-Stale as a two-queue spatial-temporal evic
 
 Each cache access supplies `(forward_cycle, layer, access_sequence)`. A cycle is one token forward through all decoder layers. The store retains exact immutable whole-expert handles and charges the existing six native MXFP4 extents.
 
+One `RuntimeSession` permits one active generation at a time. The session-level generation guard covers the complete graph call so concurrent callers cannot overwrite the store's active cycle, layer, or selected-set policy context. Independent sessions remain independent.
+
 - `static` admits only when unused capacity is sufficient and otherwise bypasses exactly.
 - `lru` evicts the least recently accessed entry, with stable insertion sequence as the tie-break.
 - `lfu` evicts the lowest lifetime access count, then least recent access, then stable insertion sequence.
@@ -23,7 +25,7 @@ The selected Top-K set is marked current before any miss admission. This prevent
 
 ## Metrics
 
-Add evictions, collision misses, and policy identity. A collision miss occurs when an entry evicted during a forward cycle is requested again before that cycle ends. Preserve hits, misses, bypasses, current bytes, and peak bytes.
+Add evictions, collision misses, and policy identity. A collision miss occurs when an entry evicted during a forward cycle is requested again before that cycle ends. This includes a future-layer expert retained from the prior token, evicted by an earlier layer in the current token, and then requested when execution reaches its own layer. Preserve hits, misses, bypasses, current bytes, and peak bytes.
 
 ## Evaluation
 

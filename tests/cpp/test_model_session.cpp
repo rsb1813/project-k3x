@@ -1,8 +1,10 @@
 // 동일 runtime session의 연속 generation이 L1 expert residency를 재사용하는지 검증합니다.
 #include "k3x/model.hpp"
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <future>
 #include <stdexcept>
 #include <string_view>
 #include <vector>
@@ -119,5 +121,21 @@ int main(int argc, char** argv) {
     require(routed.size() >= 2);
     require(protected_session.expert_store().contains({3, routed[routed.size() - 2]}));
     require(!protected_session.expert_store().contains({3, routed.back()}));
+
+    auto serialized_reader = k3x::Reader::open(
+        std::filesystem::path(argv[1]), reader_options);
+    require(static_cast<bool>(serialized_reader));
+    auto serialized_backend = k3x::make_cpu_backend();
+    k3x::RuntimeSession serialized_session(options);
+    auto generation_guard = serialized_session.acquire_generation_guard();
+    auto concurrent_generation = std::async(std::launch::async, [&] {
+        return k3x::generate_greedy(
+            serialized_reader.value(), *serialized_backend,
+            std::vector<std::uint32_t>{1}, 0, serialized_session);
+    });
+    require(concurrent_generation.wait_for(std::chrono::milliseconds(50)) ==
+            std::future_status::timeout);
+    generation_guard.unlock();
+    require(static_cast<bool>(concurrent_generation.get()));
     return 0;
 }

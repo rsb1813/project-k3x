@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <span>
 #include <vector>
 
@@ -42,6 +43,9 @@ public:
     std::uint64_t acquire_forward_cycle() noexcept {
         return next_forward_cycle_.fetch_add(1, std::memory_order_relaxed);
     }
+    std::unique_lock<std::mutex> acquire_generation_guard() {
+        return std::unique_lock(generation_mutex_);
+    }
     DeadlineExpertLoader* expert_loader() noexcept {
         return expert_loader_.get();
     }
@@ -55,6 +59,7 @@ private:
     HostExpertStore expert_store_;
     std::unique_ptr<DeadlineExpertLoader> expert_loader_;
     std::atomic<std::uint64_t> next_forward_cycle_{};
+    std::mutex generation_mutex_;
 };
 
 struct GenerationResult {

@@ -744,6 +744,7 @@ Result<GenerationResult> generate_greedy(Reader& reader,
                                          std::span<const std::uint32_t> prompt,
                                          std::size_t count,
                                          RuntimeSession& session) {
+    auto generation_guard = session.acquire_generation_guard();
     if (reader.superblock().optional_features & optional_storage_fixture) {
         return Result<GenerationResult>::failure(
             ErrorCode::non_executable_artifact);
