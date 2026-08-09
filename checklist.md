@@ -85,7 +85,7 @@
 - [x] TDD 구현 계획 작성과 self-review.
 - [x] `cuda-boundary` 옵션과 capability validation 구현.
 - [x] strict FP32 SiTU-GLU CUDA kernel과 literal oracle 검증.
-- [ ] dense/shared FFN block 구현과 graph 연결.
-- [ ] exact native MXFP4 routed expert block group 구현과 graph 연결.
+- [x] dense/shared FFN block 구현과 graph 연결.
+- [x] exact native MXFP4 routed expert block group 구현과 graph 연결.
 - [ ] profiler/schema/ablation runner 확장.
 - [ ] 전체 correctness, sanitizer, B-0004, TITAN Ledger 갱신.

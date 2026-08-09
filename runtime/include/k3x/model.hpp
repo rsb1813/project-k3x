@@ -16,6 +16,7 @@ struct GenerationResult {
     std::vector<std::vector<float>> prefill_layer_outputs;
     std::vector<float> prefill_logits;
     std::vector<float> prefill_state;
+    std::vector<std::uint32_t> prefill_routed_experts;
     std::uint64_t prefill_nanoseconds{};
     std::uint64_t decode_nanoseconds{};
 };

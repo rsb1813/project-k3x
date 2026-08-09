@@ -69,9 +69,10 @@ struct ModelState { std::vector<KdaState> kda; MlaState mla; };
 
 class Engine {
 public:
-    Engine(Reader& reader, ComputeBackend& backend)
+    Engine(Reader& reader, ComputeBackend& backend, bool trace_routing)
         : reader_(reader), backend_(backend),
-          config_(decode_config(reader.model_config())) {
+          config_(decode_config(reader.model_config())),
+          trace_routing_(trace_routing) {
         state_template_.kda.resize(3);
         for (auto& state : state_template_.kda) {
             const auto history = (config_.conv_kernel - 1) * config_.hidden;
@@ -84,6 +85,9 @@ public:
 
     ModelState empty_state() const { return state_template_; }
     const std::vector<std::uint64_t>& layer_nanoseconds() const { return layer_nanoseconds_; }
+    const std::vector<std::uint32_t>& routed_experts() const {
+        return routed_experts_;
+    }
 
     Vector forward(std::uint32_t token, ModelState& state, ProfilePhase phase,
                    std::vector<Vector>* layer_outputs = nullptr) {
@@ -153,6 +157,29 @@ private:
         std::size_t cols;
     };
 
+    struct ExpertProjection {
+        std::uint64_t id;
+        std::vector<std::byte> packed;
+        std::vector<std::byte> scales;
+        std::size_t rows;
+        std::size_t cols;
+
+        Mxfp4WeightView view(std::size_t group_size) const {
+            return {id, packed, scales, rows, cols, group_size};
+        }
+    };
+
+    struct ExpertMlpPayload {
+        ExpertProjection gate;
+        ExpertProjection up;
+        ExpertProjection down;
+
+        Mxfp4MlpView view(std::size_t group_size) const {
+            return {gate.view(group_size), up.view(group_size),
+                    down.view(group_size)};
+        }
+    };
+
     static std::string layer_name(std::size_t layer, const std::string& suffix) {
         return "model.layers." + std::to_string(layer) + "." + suffix;
     }
@@ -170,6 +197,26 @@ private:
     DenseWeightView dense_weight(const std::string& name, std::size_t rows,
                                  std::size_t cols) {
         return {fnv1a64(name.c_str()), tensor(name), rows, cols};
+    }
+
+    ExpertMlpPayload load_expert(std::size_t layer, std::size_t expert_id) {
+        const auto base = layer_name(
+            layer, "feed_forward.experts." + std::to_string(expert_id));
+        const auto load = [&](const std::string& suffix) {
+            const auto id = fnv1a64((base + "." + suffix).c_str());
+            auto packed = reader_.read_tensor(id);
+            auto scales = reader_.read_auxiliary(id);
+            const auto record = std::find_if(
+                reader_.tensors().begin(), reader_.tensors().end(),
+                [id](const auto& item) { return item.tensor_id == id; });
+            if (!packed || !scales || record == reader_.tensors().end()) {
+                throw std::runtime_error("missing expert");
+            }
+            return ExpertProjection{
+                id, std::move(packed.value()), std::move(scales.value()),
+                record->dimensions[0], record->dimensions[1]};
+        };
+        return {load("gate"), load("up"), load("down")};
     }
 
     Vector matvec(const std::string& name, std::size_t rows,
@@ -376,6 +423,18 @@ private:
     Vector activated_mlp(const Vector& input, const std::string& base,
                          std::size_t intermediate, std::size_t layer,
                          ProfilePhase phase) {
+        if (backend_.options().cuda_boundary == CudaBoundaryMode::ffn_block) {
+            const DenseMlpView weights{
+                dense_weight(base + ".gate", intermediate, input.size()),
+                dense_weight(base + ".up", intermediate, input.size()),
+                dense_weight(base + ".down", config_.hidden, intermediate),
+            };
+            auto output = backend_.dense_situ_mlp(
+                input, weights, config_.situ_beta, config_.situ_linear,
+                static_cast<std::uint32_t>(layer), phase);
+            if (!output) throw std::runtime_error("dense FFN backend failure");
+            return std::move(output.value());
+        }
         const std::array<DenseProjection, 2> projections{{
             {base + ".gate", intermediate, input.size()},
             {base + ".up", intermediate, input.size()},
@@ -395,37 +454,10 @@ private:
 
     Vector expert(const Vector& input, std::size_t layer, std::size_t expert_id,
                   ProfilePhase phase) {
-        const auto base = layer_name(layer, "feed_forward.experts." + std::to_string(expert_id));
-        struct ExpertProjection {
-            std::uint64_t id;
-            std::vector<std::byte> packed;
-            std::vector<std::byte> scales;
-            std::size_t rows;
-            std::size_t cols;
-
-            Mxfp4WeightView view(std::size_t group_size) const {
-                return {id, packed, scales, rows, cols, group_size};
-            }
-        };
-        auto load = [&](const std::string& suffix) {
-            const auto id = fnv1a64((base + "." + suffix).c_str());
-            auto packed = reader_.read_tensor(id);
-            auto scales = reader_.read_auxiliary(id);
-            const auto record = std::find_if(reader_.tensors().begin(), reader_.tensors().end(),
-                                             [id](const auto& item) { return item.tensor_id == id; });
-            if (!packed || !scales || record == reader_.tensors().end()) throw std::runtime_error("missing expert");
-            return ExpertProjection{id, std::move(packed.value()),
-                                    std::move(scales.value()),
-                                    record->dimensions[0],
-                                    record->dimensions[1]};
-        };
-        const std::array<ExpertProjection, 2> gate_up_payloads{{
-            load("gate"),
-            load("up"),
-        }};
+        const auto payload = load_expert(layer, expert_id);
         const std::array<Mxfp4WeightView, 2> gate_up_views{{
-            gate_up_payloads[0].view(config_.group_size),
-            gate_up_payloads[1].view(config_.group_size),
+            payload.gate.view(config_.group_size),
+            payload.up.view(config_.group_size),
         }};
         auto gate_up = backend_.mxfp4_matvec_group(
             input, gate_up_views, static_cast<std::uint32_t>(layer), phase);
@@ -433,9 +465,8 @@ private:
         Vector activated(config_.expert_intermediate);
         situ_glu(activated, gate_up.value()[0], gate_up.value()[1],
                  config_.situ_beta, config_.situ_linear);
-        const auto down = load("down");
         auto output = backend_.mxfp4_matvec(
-            activated, down.view(config_.group_size),
+            activated, payload.down.view(config_.group_size),
             static_cast<std::uint32_t>(layer), phase);
         if (!output) throw std::runtime_error("invalid expert");
         return output.value();
@@ -460,28 +491,82 @@ private:
         Vector mixed(config_.latent, 0.0F);
         float denominator = 0.0F;
         for (std::size_t slot = 0; slot < config_.top_k; ++slot) denominator += scores[order[slot]];
-        for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
-            const auto output = expert(latent, layer, order[slot], phase);
-            const auto weight = scores[order[slot]] / std::max(denominator, 1e-20F) * config_.routed_scale;
-            for (std::size_t index = 0; index < mixed.size(); ++index) mixed[index] += weight * output[index];
+        if (trace_routing_) {
+            for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
+                routed_experts_.push_back(
+                    static_cast<std::uint32_t>(order[slot]));
+            }
+        }
+        if (backend_.options().cuda_boundary == CudaBoundaryMode::ffn_block) {
+            std::vector<ExpertMlpPayload> payloads;
+            payloads.reserve(config_.top_k);
+            for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
+                payloads.push_back(load_expert(layer, order[slot]));
+            }
+            std::vector<Mxfp4MlpView> expert_views;
+            expert_views.reserve(payloads.size());
+            for (const auto& payload : payloads) {
+                expert_views.push_back(payload.view(config_.group_size));
+            }
+            auto expert_outputs = backend_.mxfp4_situ_mlp_group(
+                latent, expert_views, config_.situ_beta, config_.situ_linear,
+                static_cast<std::uint32_t>(layer), phase);
+            if (!expert_outputs) {
+                throw std::runtime_error("expert FFN backend failure");
+            }
+            for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
+                const auto weight = scores[order[slot]] /
+                    std::max(denominator, 1e-20F) * config_.routed_scale;
+                for (std::size_t index = 0; index < mixed.size(); ++index) {
+                    mixed[index] += weight * expert_outputs.value()[slot][index];
+                }
+            }
+        } else {
+            for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
+                const auto output = expert(latent, layer, order[slot], phase);
+                const auto weight = scores[order[slot]] /
+                    std::max(denominator, 1e-20F) * config_.routed_scale;
+                for (std::size_t index = 0; index < mixed.size(); ++index) {
+                    mixed[index] += weight * output[index];
+                }
+            }
         }
         const auto routed_norm = normalized(mixed, tensor(base + "routed_norm"), config_.epsilon);
         auto output = matvec(base + "routed_up_proj", config_.hidden,
                              config_.latent, routed_norm, layer, phase);
-        const std::array<DenseProjection, 2> shared_projections{{
-            {base + "shared_gate", config_.expert_intermediate,
-             config_.hidden},
-            {base + "shared_up", config_.expert_intermediate,
-             config_.hidden},
-        }};
-        auto shared_gate_up = matvec_group(
-            shared_projections, input, layer, phase);
-        Vector shared_activated(config_.expert_intermediate);
-        situ_glu(shared_activated, shared_gate_up[0], shared_gate_up[1],
-                 config_.situ_beta, config_.situ_linear);
-        const auto shared = matvec(base + "shared_down", config_.hidden,
-                                   config_.expert_intermediate, shared_activated,
-                                   layer, phase);
+        Vector shared;
+        if (backend_.options().cuda_boundary == CudaBoundaryMode::ffn_block) {
+            const DenseMlpView shared_weights{
+                dense_weight(base + "shared_gate", config_.expert_intermediate,
+                             config_.hidden),
+                dense_weight(base + "shared_up", config_.expert_intermediate,
+                             config_.hidden),
+                dense_weight(base + "shared_down", config_.hidden,
+                             config_.expert_intermediate),
+            };
+            auto shared_result = backend_.dense_situ_mlp(
+                input, shared_weights, config_.situ_beta, config_.situ_linear,
+                static_cast<std::uint32_t>(layer), phase);
+            if (!shared_result) {
+                throw std::runtime_error("shared FFN backend failure");
+            }
+            shared = std::move(shared_result.value());
+        } else {
+            const std::array<DenseProjection, 2> shared_projections{{
+                {base + "shared_gate", config_.expert_intermediate,
+                 config_.hidden},
+                {base + "shared_up", config_.expert_intermediate,
+                 config_.hidden},
+            }};
+            auto shared_gate_up = matvec_group(
+                shared_projections, input, layer, phase);
+            Vector shared_activated(config_.expert_intermediate);
+            situ_glu(shared_activated, shared_gate_up[0], shared_gate_up[1],
+                     config_.situ_beta, config_.situ_linear);
+            shared = matvec(base + "shared_down", config_.hidden,
+                            config_.expert_intermediate, shared_activated,
+                            layer, phase);
+        }
         for (std::size_t index = 0; index < output.size(); ++index) output[index] += shared[index];
         return output;
     }
@@ -489,9 +574,11 @@ private:
     Reader& reader_;
     ComputeBackend& backend_;
     Config config_;
+    bool trace_routing_{};
     ModelState state_template_;
     std::unordered_map<std::uint64_t, Vector> tensors_;
     std::vector<std::uint64_t> layer_nanoseconds_ = std::vector<std::uint64_t>(config_.layers);
+    std::vector<std::uint32_t> routed_experts_;
 };
 
 std::uint32_t argmax(const Vector& values) {
@@ -507,7 +594,7 @@ Result<GenerationResult> generate_greedy(Reader& reader,
                                          bool diagnostics) {
     if (prompt.empty()) return Result<GenerationResult>::failure(ErrorCode::invalid_extent, "empty prompt");
     try {
-        Engine engine(reader, backend);
+        Engine engine(reader, backend, diagnostics);
         GenerationResult result;
         if (incremental) {
             auto state = engine.empty_state();
@@ -529,7 +616,10 @@ Result<GenerationResult> generate_greedy(Reader& reader,
             }
             result.prefill_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - prefill_start).count();
-            if (diagnostics) result.prefill_state = engine.flatten_state(state);
+            if (diagnostics) {
+                result.prefill_state = engine.flatten_state(state);
+                result.prefill_routed_experts = engine.routed_experts();
+            }
             if (count) {
                 auto token = argmax(logits);
                 result.token_ids.push_back(token);

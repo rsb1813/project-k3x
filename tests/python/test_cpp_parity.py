@@ -359,6 +359,77 @@ def test_cuda_backends_match_synthetic_graph_and_tokens(
     )
 
 
+@pytest.mark.parametrize(
+    ("dense_precision", "cuda_batching", "tolerance"),
+    [
+        ("fp32", "scalar", 1e-4),
+        ("fp32", "grouped", 1e-4),
+        ("bf16", "scalar", 2e-2),
+        ("bf16", "grouped", 2e-2),
+    ],
+)
+def test_cuda_ffn_block_matches_operation_graph_and_routing(
+    synthetic_source: Path,
+    tmp_path: Path,
+    dense_precision: str,
+    cuda_batching: str,
+    tolerance: float,
+) -> None:
+    if Path(os.environ.get("K3X_BUILD_DIR", "build")).name != "build-cuda":
+        pytest.skip("CUDA FFN parity is exercised only against build-cuda")
+    runner = cpp_binary("k3x_run")
+    artifact = tmp_path / "synthetic.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+
+    results: dict[str, dict] = {}
+    for boundary in ("operation", "ffn-block"):
+        output = tmp_path / f"{boundary}-{dense_precision}-{cuda_batching}.json"
+        subprocess.run(
+            [
+                str(runner),
+                "--model", str(artifact),
+                "--prompt-ids", "1,7,3,9",
+                "--generate", "6",
+                "--mode", "incremental",
+                "--diagnostics", "true",
+                "--backend", "cuda-custom",
+                "--dense-precision", dense_precision,
+                "--cuda-allocation", "reused",
+                "--cuda-weights", "resident",
+                "--cuda-batching", cuda_batching,
+                "--cuda-boundary", boundary,
+                "--cuda-resident-bytes", str(8 * 1024 * 1024),
+                "--json", str(output),
+            ],
+            check=True,
+        )
+        results[boundary] = json.loads(output.read_text(encoding="utf-8"))
+
+    reference = results["operation"]
+    candidate = results["ffn-block"]
+    assert candidate["cuda_boundary"] == "ffn-block"
+    assert candidate["token_ids"] == reference["token_ids"] == [43, 32, 28, 49, 9, 28]
+    assert candidate["prefill_routed_experts"] == reference["prefill_routed_experts"]
+    assert candidate["ffn_block_calls"] > 0
+    assert candidate["ffn_block_experts"] > 0
+    np.testing.assert_allclose(
+        candidate["prefill_logits"], reference["prefill_logits"],
+        atol=tolerance, rtol=tolerance,
+    )
+    for actual, expected in zip(
+        candidate["prefill_layer_outputs"],
+        reference["prefill_layer_outputs"],
+        strict=True,
+    ):
+        np.testing.assert_allclose(
+            actual, expected, atol=tolerance, rtol=tolerance
+        )
+    np.testing.assert_allclose(
+        candidate["prefill_state"], reference["prefill_state"],
+        atol=tolerance, rtol=tolerance,
+    )
+
+
 def test_cpp_runner_rejects_corrupt_model_before_generation(
     synthetic_source: Path, tmp_path: Path
 ) -> None:

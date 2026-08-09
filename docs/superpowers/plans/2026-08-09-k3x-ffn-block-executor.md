@@ -389,27 +389,27 @@ git commit -m "feat: execute exact expert FFN blocks on CUDA"
 - Uses dense blocks for activated/shared FFNs and one ordered expert group for each routed MoE invocation when `cuda-boundary=ffn-block`.
 - Keeps router selection and score-weighted mixing on CPU.
 
-- [ ] **Step 1: Write failing CLI and parity matrix tests**
+- [x] **Step 1: Write failing CLI and parity matrix tests**
 
 Add `cuda-custom` parity cases for FP32 and BF16, scalar and grouped scheduling, and reused resident weights. Require exact generated tokens, layer outputs within the existing representation-specific tolerance, and exact recurrent-state evolution. Record the prefill routed-expert identities and require them to equal the operation reference so the test proves that the execution boundary did not alter routing.
 
 Reject `ffn-block` with CPU or `cuda-dense`, and reject unsupported option combinations with a direct capability error rather than silently falling back.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 ```bash
 pytest -q tests/test_cpp_parity.py -k "ffn_block or cuda_boundary"
 ```
 
-- [ ] **Step 3: Refactor owned expert payloads without changing operation behavior**
+- [x] **Step 3: Refactor owned expert payloads without changing operation behavior**
 
 Move the existing projection descriptor into the engine-private model surface and define an owned expert MLP payload containing exact gate/up/down projections. Update all loaders and operation call sites mechanically, then run the complete CPU parity suite before connecting the new branch.
 
-- [ ] **Step 4: Connect dense/shared and routed block branches**
+- [x] **Step 4: Connect dense/shared and routed block branches**
 
 When the selected boundary is `ffn-block`, call `dense_situ_mlp()` for activated and shared FFNs. For routed MoE, collect the already selected expert triplets in router order, call `mxfp4_situ_mlp_group()` once, and apply the unchanged CPU score-weighted mixing. Do not move router, Top-K, mixing, residual, attention, or recurrent state logic.
 
-- [ ] **Step 5: Verify graph parity**
+- [x] **Step 5: Verify graph parity**
 
 ```bash
 cmake --build build-cpu -j2
@@ -420,7 +420,7 @@ ctest --test-dir build-cuda --output-on-failure
 pytest -q tests/test_cpp_parity.py
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add runtime/model.hpp runtime/model.cpp runtime/main.cpp tests/test_cpp_parity.py

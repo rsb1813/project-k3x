@@ -263,6 +263,12 @@ int main(int argc, char** argv) {
         if (index) output << ',';
         output << result.value().prefill_state[index];
     }
+    output << "],\"prefill_routed_experts\":[";
+    for (std::size_t index = 0;
+         index < result.value().prefill_routed_experts.size(); ++index) {
+        if (index) output << ',';
+        output << result.value().prefill_routed_experts[index];
+    }
     output << "],\"token_ids\":[";
     for (std::size_t index = 0; index < result.value().token_ids.size(); ++index) {
         if (index) output << ',';
