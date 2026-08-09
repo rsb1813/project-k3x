@@ -377,7 +377,7 @@ git commit -m "feat: add AURORA replay drafter"
 - Produces: `GenerationResult::draft_provider` counters flattened as explicit fields.
 - Guarantees: feedback reflects actual target work and is visible to `update` before the provider chooses the next block.
 
-- [ ] **Step 1: Write failing runtime assertions**
+- [x] **Step 1: Write failing runtime assertions**
 
 Extend `ScriptedDraftProvider` in `test_model_session.cpp` to return sentinel stats and assert feedback received in `verifications`.
 
@@ -396,7 +396,7 @@ require(perfect_result.value().draft_selected_length_2 == 3);
 
 For mixed expert-major, assert evaluated positions equal the full block, discarded equals the rejected suffix, and feedback payload loads/assignments equal the block counters. For token-major mismatch, assert evaluated is accepted plus one and discarded is zero.
 
-- [ ] **Step 2: Run and verify RED**
+- [x] **Step 2: Run and verify RED**
 
 Run:
 
@@ -406,7 +406,7 @@ cmake --build build --target test_model_session -j 8
 
 Expected: compilation fails because `GenerationResult` lacks draft fields and runtime does not decorate feedback.
 
-- [ ] **Step 3: Implement runtime decoration**
+- [x] **Step 3: Implement runtime decoration**
 
 Add explicit `draft_*` counters matching every `DraftProviderStats` field to `GenerationResult`. In each loop iteration capture target counters before verification. Before `draft_provider.update` set physical feedback.
 
@@ -427,7 +427,7 @@ draft_provider.update(verification.value());
 
 At successful function exit, copy `draft_provider.stats()` into `GenerationResult`. Do not copy provider stats on failure and do not alter ordinary greedy result fields.
 
-- [ ] **Step 4: Run focused and regression GREEN**
+- [x] **Step 4: Run focused and regression GREEN**
 
 Run:
 
@@ -441,7 +441,7 @@ python -m pytest -q \
 
 Expected: all selected tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add runtime/include/k3x/model.hpp runtime/src/model.cpp tests/cpp/test_model_session.cpp

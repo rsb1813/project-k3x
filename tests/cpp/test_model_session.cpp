@@ -48,6 +48,14 @@ public:
         verifications.push_back(verification);
     }
 
+    k3x::DraftProviderStats stats() const noexcept override {
+        return {
+            .proposal_calls = 7,
+            .candidate_tokens = 9,
+            .selected_length_2 = 3,
+        };
+    }
+
     struct RequestRecord {
         std::uint32_t anchor_token{};
         std::size_t max_draft_tokens{};
@@ -93,6 +101,10 @@ int main(int argc, char** argv) {
     auto first = k3x::generate_greedy(
         reader.value(), *backend, prompt, 6, session);
     require(static_cast<bool>(first));
+    require(first.value().draft_proposal_calls == 0);
+    require(first.value().draft_candidate_tokens == 0);
+    require(first.value().draft_reader_bytes == 0);
+    require(first.value().draft_scheduler_growths == 0);
     const auto first_reads = reader.value().counters();
     const auto first_cache = first.value().l1_expert_cache;
     require(first.value().expert_load_scheduler.submissions == 0);
@@ -244,6 +256,12 @@ int main(int argc, char** argv) {
     require(perfect.verifications.size() == 2);
     require(perfect.verifications[0].accepted_draft_tokens == 2);
     require(perfect.verifications[1].accepted_draft_tokens == 1);
+    require(perfect.verifications[0].target_positions_evaluated == 3);
+    require(perfect.verifications[0].target_positions_discarded == 0);
+    require(perfect.verifications[1].target_positions_evaluated == 2);
+    require(perfect_result.value().draft_proposal_calls == 7);
+    require(perfect_result.value().draft_candidate_tokens == 9);
+    require(perfect_result.value().draft_selected_length_2 == 3);
 
     ScriptedDraftProvider mixed({
         {.anchor_token = greedy_tokens[0],
@@ -266,6 +284,13 @@ int main(int argc, char** argv) {
     require(mixed_reads.calls == first_reads.calls);
     require(mixed_reads.requested_bytes == first_reads.requested_bytes);
     require(mixed.verifications.size() == 4);
+    require(mixed.verifications[0].target_positions_evaluated == 1);
+    require(mixed.verifications[1].target_positions_evaluated == 1);
+    require(mixed.verifications[2].target_positions_evaluated == 2);
+    require(mixed.verifications[3].target_positions_evaluated == 1);
+    for (const auto& verification : mixed.verifications) {
+        require(verification.target_positions_discarded == 0);
+    }
 
     auto exact_options = options;
     exact_options.l1_expert_cache = k3x::L1ExpertCacheMode::disabled;
@@ -342,6 +367,10 @@ int main(int argc, char** argv) {
             token_major_perfect.verifications[0].committed_tokens);
     require(expert_major_perfect.verifications[1].committed_tokens ==
             token_major_perfect.verifications[1].committed_tokens);
+    require(expert_major_perfect.verifications[0].target_positions_evaluated == 3);
+    require(expert_major_perfect.verifications[1].target_positions_evaluated == 2);
+    require(expert_major_perfect.verifications[0].target_positions_discarded == 0);
+    require(expert_major_perfect.verifications[1].target_positions_discarded == 0);
 
     ScriptedDraftProvider token_major_mixed({
         {.anchor_token = greedy_tokens[0],
@@ -385,6 +414,24 @@ int main(int argc, char** argv) {
         require(expert_major_mixed.verifications[index].accepted_draft_tokens ==
                 token_major_mixed.verifications[index].accepted_draft_tokens);
     }
+    require(expert_major_mixed.verifications[0].target_positions_evaluated == 3);
+    require(expert_major_mixed.verifications[0].target_positions_discarded == 2);
+    require(expert_major_mixed.verifications[1].target_positions_evaluated == 1);
+    require(expert_major_mixed.verifications[1].target_positions_discarded == 0);
+    require(expert_major_mixed.verifications[2].target_positions_evaluated == 3);
+    require(expert_major_mixed.verifications[2].target_positions_discarded == 1);
+    require(expert_major_mixed.verifications[3].target_positions_evaluated == 1);
+    require(expert_major_mixed.verifications[3].target_positions_discarded == 0);
+    std::uint64_t feedback_payload_loads = 0;
+    std::uint64_t feedback_assignments = 0;
+    for (const auto& verification : expert_major_mixed.verifications) {
+        feedback_payload_loads += verification.expert_major_payload_loads;
+        feedback_assignments += verification.expert_major_assignments;
+    }
+    require(feedback_payload_loads ==
+            expert_major_mixed_result.value().expert_major_payload_loads);
+    require(feedback_assignments ==
+            expert_major_mixed_result.value().expert_major_assignments);
 
     auto require_expert_major_preflight_rejection =
         [&](k3x::RuntimeOptions rejected_options) {
