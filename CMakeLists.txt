@@ -21,6 +21,7 @@ add_library(k3x_runtime
     runtime/src/profile.cpp
     runtime/src/routing_policy.cpp
     runtime/src/speculative.cpp
+    runtime/src/aurora_scheduler.cpp
     runtime/src/runtime_profile.cpp
     runtime/src/backend_cpu.cpp
     runtime/src/expert_major.cpp
@@ -96,6 +97,10 @@ add_test(NAME routing_policy COMMAND test_routing_policy)
 add_executable(test_speculative tests/cpp/test_speculative.cpp)
 target_link_libraries(test_speculative PRIVATE k3x_runtime)
 add_test(NAME speculative COMMAND test_speculative)
+
+add_executable(test_aurora_scheduler tests/cpp/test_aurora_scheduler.cpp)
+target_link_libraries(test_aurora_scheduler PRIVATE k3x_runtime)
+add_test(NAME aurora_scheduler COMMAND test_aurora_scheduler)
 
 add_executable(test_expert_major tests/cpp/test_expert_major.cpp)
 target_link_libraries(test_expert_major PRIVATE k3x_runtime)
