@@ -176,6 +176,18 @@ def test_full_dimension_storage_fixture_round_trips_with_optional_identity(
         record.quantization == Quantization.MXFP4
         for record in reader.tensor_records
     )
+    base = "model.layers.1.feed_forward.experts.0"
+    by_id = {record.tensor_id: record for record in reader.tensor_records}
+    execution_order = [
+        by_id[fnv1a64(f"{base}.{role}")]
+        for role in ("gate", "up", "down")
+    ]
+    physical_offsets = [
+        offset
+        for record in execution_order
+        for offset in (record.data_offset, record.auxiliary_offset)
+    ]
+    assert physical_offsets == sorted(physical_offsets)
 
 
 @pytest.mark.parametrize(

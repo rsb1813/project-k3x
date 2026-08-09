@@ -111,6 +111,14 @@ def _load_plans(source: Path) -> tuple[dict, list[_TensorPlan]]:
                                  int(layer_match.group(1)) if layer_match else -1,
                                  int(expert_match.group(2)) if expert_match else -1))
         consumed.add(name)
+    if manifest["format"] == "k3-storage-slice-v1":
+        role_order = {"gate": 0, "up": 1, "down": 2}
+        plans.sort(
+            key=lambda plan: role_order.get(
+                match.group(3) if (match := _EXPERT_RE.match(plan.name)) else "",
+                len(role_order),
+            )
+        )
     ids = [fnv1a64(item.name) for item in plans]
     if len(ids) != len(set(ids)):
         raise K3XError("TENSOR_ID_COLLISION")
