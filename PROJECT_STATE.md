@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 17 persistent AURORA draft state is implemented, measured, and in final review before publication. The cursor, provider, `aurora-persistent` CLI, five cursor telemetry fields, canonical B-0018, full CPU/io_uring/CUDA verification, ASan/UBSan coverage, Compute Sanitizer, and TITAN Ledger synchronization are complete. Complete-prefix replay remains the exact non-default oracle and the natural strict target verifier remains authoritative. Public PR integration and post-merge CI remain pending.
+Milestone 17 persistent AURORA draft state is implemented, measured, reviewed, and ready for publication. The cursor, provider, `aurora-persistent` CLI, five cursor telemetry fields, canonical B-0018, full CPU/io_uring/CUDA verification, ASan/UBSan coverage, Compute Sanitizer, TITAN Ledger synchronization, and final self-review are complete. Complete-prefix replay remains the exact non-default oracle and the natural strict target verifier remains authoritative. Public PR integration and post-merge CI remain pending.
 
 State audited on 2026-08-10 against public ledger head `44aa049` and isolated branch `codex/milestone-seventeen-persistent-aurora` through evidence commit `de63023`. The current CPU matrix passes CTest 14/14 and Python 272 passed/47 skipped. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
@@ -82,7 +82,7 @@ State audited on 2026-08-10 against public ledger head `44aa049` and isolated br
 
 ## Work in progress
 
-- Milestone 17 implementation, B-0018, full verification, evidence cross-checks, and ledger synchronization are complete; final review and public integration remain in progress.
+- Milestone 17 implementation, B-0018, full verification, evidence cross-checks, ledger synchronization, and final self-review are complete; public integration remains in progress.
 - Complete-prefix `aurora-replay` remains executable as the required candidate/state oracle. No default, draft precision, residency, scheduler threshold, or target verifier changed in Milestone 17.
 - Milestone 16 implementation, B-0017, full verification, evidence cross-checks, final self-review, public integration, and documentation reconciliation are complete.
 - The scheduler explores `{1,2,4}` one rung at a time, uses Laplace-smoothed observed prefix survival and actual expert-major payload-load/assignment ratio, immediately backs off after rejection, and retries the smallest rung after one zero-draft step. These thresholds are an experimental B-0017 identity, not a runtime default.
@@ -114,9 +114,8 @@ State audited on 2026-08-10 against public ledger head `44aa049` and isolated br
 
 ## Next concrete tasks
 
-1. Complete final diff/evidence review and resolve only Critical or Important findings.
-2. Publish and merge Milestone 17, then verify public `main` CI and update the public integration ledger.
-3. Start the next isolated milestone from measured B-0018: compare exact draft GPU execution, expert residency, and reduced precision as separate axes before selecting one.
+1. Publish and merge Milestone 17, then verify public `main` CI and update the public integration ledger.
+2. Start the next isolated milestone from measured B-0018: compare exact draft GPU execution, expert residency, and reduced precision as separate axes before selecting one.
 
 ## Hardware assumptions
 
