@@ -20,6 +20,20 @@ def _run_reader(path: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run([str(runner), str(path)], capture_output=True, text=True)
 
 
+def test_cpp_reader_keeps_one_linux_data_plane_descriptor(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    artifact = tmp_path / "persistent.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    result = subprocess.run(
+        [str(cpp_binary("test_reader")), str(artifact), "persistent"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert artifact.is_file()
+
+
 def test_cpp_binary_uses_configured_build_directory(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

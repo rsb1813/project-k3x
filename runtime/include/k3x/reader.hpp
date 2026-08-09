@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <span>
 #include <vector>
 
@@ -41,6 +42,12 @@ struct ReadCounters {
 
 class Reader {
 public:
+    Reader(Reader&&) noexcept;
+    Reader& operator=(Reader&&) noexcept;
+    ~Reader();
+    Reader(const Reader&) = delete;
+    Reader& operator=(const Reader&) = delete;
+
     static Result<Reader> open(const std::filesystem::path& path,
                                VerifyMode mode = VerifyMode::checksums);
     static Result<Reader> open(const std::filesystem::path& path,
@@ -55,8 +62,11 @@ public:
     const ReadCounters& counters() const { return counters_; }
     const ReaderOptions& options() const { return options_; }
 private:
+    Reader();
+    struct DataPlane;
     Result<std::vector<std::byte>> read_extent(std::uint64_t offset, std::uint64_t length) const;
     std::filesystem::path path_;
+    std::unique_ptr<DataPlane> data_plane_;
     ReaderOptions options_{};
     Superblock superblock_;
     std::vector<TensorRecord> tensors_;

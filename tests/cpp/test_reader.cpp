@@ -4,15 +4,29 @@
 #include <array>
 #include <filesystem>
 #include <iostream>
+#include <string_view>
 
 int main(int argc, char** argv) {
-    if (argc != 2) return 2;
-    const auto reader = k3x::Reader::open(std::filesystem::path(argv[1]));
+    if (argc != 2 && argc != 3) return 2;
+    const auto path = std::filesystem::path(argv[1]);
+    const auto reader = k3x::Reader::open(path);
     if (!reader) {
         std::cerr << k3x::error_code_name(reader.error()) << '\n';
         return 1;
     }
     if (reader.value().tensors().empty()) return 3;
+    if (argc == 3) {
+        if (std::string_view(argv[2]) != "persistent") return 10;
+#ifdef __linux__
+        const auto moved = path.string() + ".moved";
+        std::filesystem::rename(path, moved);
+        const auto persistent = reader.value().read_tensor(
+            reader.value().tensors().front().tensor_id);
+        std::filesystem::rename(moved, path);
+        if (!persistent || persistent.value().empty()) return 11;
+#endif
+        return 0;
+    }
     const auto payload = reader.value().read_tensor(reader.value().tensors().front().tensor_id);
     if (!payload || payload.value().empty()) return 4;
     if (reader.value().counters().calls != 1 ||

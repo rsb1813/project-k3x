@@ -12,6 +12,12 @@
 #include <span>
 #include <unordered_set>
 
+#ifndef _WIN32
+#include <cerrno>
+#include <fcntl.h>
+#include <unistd.h>
+#endif
+
 namespace k3x {
 namespace {
 template <typename T>
@@ -83,6 +89,86 @@ TensorRecord decode_tensor(std::span<const std::byte> value) {
     return result;
 }
 }
+
+struct Reader::DataPlane {
+    static Result<std::unique_ptr<DataPlane>> open_buffered(
+        const std::filesystem::path& path) {
+        auto result = std::unique_ptr<DataPlane>(new DataPlane);
+#ifdef _WIN32
+        result->path = path;
+#else
+        result->descriptor = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+        if (result->descriptor < 0) {
+            return Result<std::unique_ptr<DataPlane>>::failure(
+                ErrorCode::io_error);
+        }
+#endif
+        return Result<std::unique_ptr<DataPlane>>::success(
+            std::move(result));
+    }
+
+    ~DataPlane() {
+#ifndef _WIN32
+        if (descriptor >= 0) ::close(descriptor);
+#endif
+    }
+
+    Result<std::vector<std::byte>> read(
+        std::uint64_t offset, std::uint64_t length,
+        ReadCounters& counters) const {
+#ifdef _WIN32
+        counters.storage_submitted_bytes += length;
+        auto result = read_raw(path, offset, length);
+        if (result) {
+            counters.storage_completed_bytes += result.value().size();
+        }
+        return result;
+#else
+        if (offset > static_cast<std::uint64_t>(
+                         std::numeric_limits<off_t>::max())) {
+            return Result<std::vector<std::byte>>::failure(
+                ErrorCode::invalid_extent);
+        }
+        std::vector<std::byte> data(static_cast<std::size_t>(length));
+        std::size_t completed = 0;
+        while (completed < data.size()) {
+            const auto remaining = data.size() - completed;
+            const auto requested = std::min<std::size_t>(
+                remaining,
+                static_cast<std::size_t>(
+                    std::numeric_limits<ssize_t>::max()));
+            counters.storage_submitted_bytes += requested;
+            const auto result = ::pread(
+                descriptor, data.data() + completed, requested,
+                static_cast<off_t>(offset + completed));
+            if (result < 0) {
+                if (errno == EINTR) continue;
+                return Result<std::vector<std::byte>>::failure(
+                    ErrorCode::io_error);
+            }
+            if (result == 0) {
+                return Result<std::vector<std::byte>>::failure(
+                    ErrorCode::truncated_file);
+            }
+            completed += static_cast<std::size_t>(result);
+            counters.storage_completed_bytes +=
+                static_cast<std::uint64_t>(result);
+        }
+        return Result<std::vector<std::byte>>::success(std::move(data));
+#endif
+    }
+
+#ifdef _WIN32
+    std::filesystem::path path;
+#else
+    int descriptor{-1};
+#endif
+};
+
+Reader::Reader() = default;
+Reader::Reader(Reader&&) noexcept = default;
+Reader& Reader::operator=(Reader&&) noexcept = default;
+Reader::~Reader() = default;
 
 std::uint64_t fnv1a64(const char* value) {
     std::uint64_t hash = 0xcbf29ce484222325ULL;
@@ -358,17 +444,21 @@ Result<Reader> Reader::open(const std::filesystem::path& path,
             return Result<Reader>::failure(ErrorCode::root_sha256_mismatch);
         }
     }
+    auto data_plane = DataPlane::open_buffered(path);
+    if (!data_plane) {
+        return Result<Reader>::failure(data_plane.error(),
+                                       data_plane.message());
+    }
+    reader.data_plane_ = std::move(data_plane.value());
     return Result<Reader>::success(std::move(reader));
 }
 
 Result<std::vector<std::byte>> Reader::read_extent(std::uint64_t offset, std::uint64_t length) const {
     ++counters_.calls;
     counters_.requested_bytes += length;
-    counters_.storage_submitted_bytes += length;
-    auto result = read_raw(path_, offset, length);
+    auto result = data_plane_->read(offset, length, counters_);
     if (result) {
         counters_.completed_bytes += result.value().size();
-        counters_.storage_completed_bytes += result.value().size();
         ++counters_.completions;
     } else {
         if (result.error() == ErrorCode::truncated_file) ++counters_.short_reads;
