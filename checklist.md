@@ -175,7 +175,7 @@
 - [x] Implement scheduler feedback and provider contracts through witnessed RED/GREEN cycles.
 - [x] Integrate AURORA replay CLI, telemetry, and exact target verification.
 - [x] Run B-0017, the full verification matrix, sanitizer coverage, and evidence cross-checks.
-- [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
+- [x] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
 
 ## Milestone 14 — Exact expert-major speculative verification
 
