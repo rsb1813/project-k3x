@@ -656,6 +656,8 @@ Raw JSON/CSV, diagnostics, and independently cross-checked summaries are under `
 
 Verification passed CPU CTest 14/14 and pytest 268/47, liburing/direct CTest 15/15 and pytest 274/41, ASan/UBSan liburing CTest 15/15, and CUDA CTest 23/23 with pytest 307/8. Compute Sanitizer reported `ERROR SUMMARY: 0 errors` for the combined CUDA expert-major AURORA CLI path. These checks establish synthetic exactness and memory-safety coverage; they do not establish full-model quality or performance.
 
+Public branch and pull-request correctness runs `31337234073` and `31337240722` passed. PR #20 was rebase-merged at public integration head `df5c07d`, and post-merge `main` correctness run `31337365175` passed.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.

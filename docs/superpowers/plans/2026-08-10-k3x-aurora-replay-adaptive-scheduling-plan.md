@@ -628,6 +628,6 @@ git add tools/ablate_aurora_replay.py tests/python/test_aurora_replay_ablation.p
 git commit -m "bench: measure AURORA replay scheduling"
 ```
 
-- [ ] **Step 7: Final review and public integration**
+- [x] **Step 7: Final review and public integration**
 
 Run `git diff --check`, review every default and evidence boundary, request one read-only Terra high final review, apply at most one batch of valid Critical/Important fixes, rerun affected verification, push the branch, open a ready public PR, wait for push/PR correctness, rebase-merge, and verify post-merge `main` correctness before declaring Milestone 16 public.
