@@ -287,3 +287,10 @@
 - 사용자 지시에 따라 PR #11과 PR #12의 GitHub 상태를 다시 조회했다. PR #11은 `edc6d605`, PR #12는 `9e59a9db`에서 병합되었고 두 커밋 모두 공개 문서 기준점 `46105f8`의 조상임을 확인했다.
 - README에는 동적 `main` correctness 배지, PR #11/#12 병합 커밋, 공개 문서 기준점 `46105f8`과 성공한 correctness run `31329200483`을 추가했다. `PROJECT_STATE.md`의 이전 M14 활성 브랜치 표기는 M15 설계 준비 상태와 문서 전용 브랜치 경계로 교정했다.
 - ARCHITECTURE, DECISIONS, BENCHMARKS, PERFORMANCE_MODEL, PLAN, K3X_FORMAT, PROJECT_CHARTER, 참고 문서와 이전 설계/계획 문서를 점검했다. 이미 정확한 구현·결정·측정·헌법·역사 기록은 불필요하게 다시 쓰지 않았으며, M15 구현이나 성능은 존재하는 것으로 표시하지 않았다.
+
+## 2026-08-10 Milestone 15 설계
+
+- M14의 stable first-use union은 expert payload를 host에서 한 번 읽지만 CUDA scalar FFN을 assignment마다 호출하면 transient gate/up/down weight가 반복 H2D된다. 따라서 M15의 좁은 목표를 단일 expert와 여러 token latent를 받는 native MXFP4 batch primitive로 고정했다.
+- vLLM `83ad767e`는 token assignment를 expert별 정렬하고 한 expert weight에 token tile을 묶어 L2 재사용을 유도한다. MoonshotAI Kimi K3 `3cb39dfd`의 native MXFP4, latent 3,584, expert hidden 3,072, natural Top-16 계약을 유지한다. NVIDIA CUDA 13.3은 grouped/batched API가 모든 크기에서 우월하다고 보장하지 않으므로 범용 grouped GEMM 대신 기존 E2M1/E8M0 산술을 확장한 `(row, token)` 2차원 kernel을 측정 대상으로 선택했다.
+- 임시 VRAM residency로 scalar 호출을 감싸는 안은 cache 소유권과 telemetry가 섞여 H2D union 증거가 모호해 배제했다. 모든 expert/token을 한 persistent kernel로 묶는 안은 routing, state rollback, variable assignments, ordered mixing을 한 번에 결합하므로 이번 milestone 범위를 넘는다.
+- 첫 CUDA 경계는 `cuda-custom + ffn-block + reused + transient + synchronous + fusion none`, disabled L1, blocking L2, natural routing, no profile, four-layer synthetic graph로 제한한다. Token-major와 CPU expert-major는 그대로 남고, learned draft·동적 block·EcoSpec/MoE-Spec/AcceptMoE는 다음 독립 단계다.
