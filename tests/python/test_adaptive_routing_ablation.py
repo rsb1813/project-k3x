@@ -89,6 +89,26 @@ def test_adaptive_routing_matrix_covers_reference_ladder_escalation_and_rescue()
     assert rescue["l1_expert_cache_bytes"] == 6528
 
 
+def test_b0012_manifest_matches_raw_records() -> None:
+    root = Path(__file__).parents[2]
+    result_dir = root / "results" / "b0012-adaptive-routing-wsl"
+    summary = json.loads((result_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["benchmark_id"] == "B-0012"
+    assert summary["environment_label"] == "wsl2-ext4-warm-non-authoritative"
+    assert summary["rescue_capacity_bytes"] == 6528
+    assert summary["supported_cases"] == 15
+    for case in summary["cases"]:
+        raw = json.loads(
+            (result_dir / f"{case['name']}.json").read_text(encoding="utf-8")
+        )
+        BenchmarkRecord(**raw)
+        assert case["status"] == "measured"
+        assert (result_dir / f"{case['name']}.csv").is_file()
+        assert (result_dir / f"{case['name']}-diagnostic.json").is_file()
+        for field, value in raw.items():
+            assert case[field] == value
+
+
 def test_prefix_validation_rejects_residency_substitution() -> None:
     baseline = _diagnostic(ablate_adaptive_routing.adaptive_routing_matrix(6528)[0])
     candidate = dict(baseline)
