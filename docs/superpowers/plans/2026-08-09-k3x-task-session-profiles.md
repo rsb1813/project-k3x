@@ -24,8 +24,8 @@ Add bounded runtime-only metadata and deterministic persistent routing profiles 
 
 ## Task 4 — Measurement, ledger, and publication
 
-- [ ] Run B-0011 with raw JSON/CSV and programmatic parity checks.
-- [ ] Run CPU, liburing/direct, CUDA, sanitizer, and applicable Compute Sanitizer suites.
-- [ ] Complete one read-only final review and close Critical/Important findings.
-- [ ] Update TITAN Ledger with `PROJECT_STATE.md` last.
-- [ ] Publish through a public PR and verify branch/PR/main CI.
+- [x] Run B-0011 with raw JSON/CSV and programmatic parity checks.
+- [x] Run CPU, liburing/direct, CUDA, sanitizer, and applicable Compute Sanitizer suites.
+- [x] Complete self-review and close Critical/Important findings.
+- [x] Update TITAN Ledger with `PROJECT_STATE.md` last.
+- [x] Publish through a public PR and verify branch/PR/main CI.

@@ -144,6 +144,16 @@
 - [x] B-0011 measurement, full verification, self-review fixes, and TITAN Ledger update.
 - [x] Public PR, main fast-forward integration, and post-merge CI verification.
 
+## Milestone 11 — Adaptive Top-K and exact rescue
+
+- [x] Inspect the full-score router boundary and primary Kimi K3/vLLM evidence.
+- [x] Compare checkpoint mutation, prefix selection, and residency-aware substitution.
+- [x] Write the accepted design and TDD implementation plan.
+- [ ] Implement and verify the pure routing policy.
+- [ ] Add the 16-of-24 reference fixture and end-to-end parity.
+- [ ] Integrate CLI, telemetry, escalation, and exact rescue.
+- [ ] Run B-0012, full verification, ledger, review, and public integration.
+
 ## Milestone 6 independent L2 reader
 
 - [x] 기존 Reader hot path와 Linux I/O capability 경계 조사.
