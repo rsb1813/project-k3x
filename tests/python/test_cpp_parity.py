@@ -549,6 +549,7 @@ def test_cpp_scripted_speculation_preserves_greedy_execution(
     assert baseline["speculative_verification_blocks"] == 0
     assert baseline["speculative_acceptance_rate"] is None
     assert baseline["target_decode_forward_calls"] == 5
+    assert baseline["aurora_draft_backend"] == "none"
 
 
 def test_cpp_aurora_replay_preserves_natural_target_execution(
@@ -593,6 +594,7 @@ def test_cpp_aurora_replay_preserves_natural_target_execution(
             assert aurora["speculative_mode"] == mode
             assert aurora["aurora_draft_k"] == 4
             assert aurora["aurora_block_policy"] == policy
+            assert aurora["aurora_draft_backend"] == "cpu"
             assert aurora["draft_proposal_calls"] > 0
             assert aurora["draft_candidate_tokens"] > 0
             assert aurora["draft_reader_read_calls"] > 0
@@ -880,6 +882,28 @@ def test_cuda_expert_major_speculation_preserves_exact_state_and_unions_h2d(
     ("arguments", "message"),
     [
         (["--speculative-mode", "warp"], "unknown speculative mode: warp"),
+        (
+            ["--aurora-draft-backend", "cuda-custom"],
+            "speculative mode none does not accept speculative options",
+        ),
+        (
+            [
+                "--speculative-mode", "aurora-replay",
+                "--speculative-block-size", "2",
+                "--aurora-draft-k", "4",
+                "--aurora-draft-backend", "cuda-custom",
+            ],
+            "AURORA replay requires CPU draft backend",
+        ),
+        (
+            [
+                "--speculative-mode", "aurora-persistent",
+                "--speculative-block-size", "2",
+                "--aurora-draft-k", "4",
+                "--aurora-draft-backend", "warp",
+            ],
+            "unknown AURORA draft backend: warp",
+        ),
         (
             ["--speculative-mode", "scripted-reference"],
             "scripted-reference speculation requires a positive block size",

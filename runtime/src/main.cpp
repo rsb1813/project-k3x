@@ -144,8 +144,10 @@ int main(int argc, char** argv) {
     std::string speculative_script_text;
     std::string aurora_draft_k_text = "0";
     std::string aurora_block_policy_name = "fixed";
+    std::string aurora_draft_backend_name = "cpu";
     bool aurora_draft_k_supplied = false;
     bool aurora_block_policy_supplied = false;
+    bool aurora_draft_backend_supplied = false;
     bool diagnostics = false;
     std::size_t count = 0;
     for (int index = 1; index + 1 < argc; index += 2) {
@@ -194,6 +196,10 @@ int main(int argc, char** argv) {
         else if (key == "--aurora-block-policy") {
             aurora_block_policy_name = value;
             aurora_block_policy_supplied = true;
+        }
+        else if (key == "--aurora-draft-backend") {
+            aurora_draft_backend_name = value;
+            aurora_draft_backend_supplied = true;
         }
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
     }
@@ -249,6 +255,12 @@ int main(int argc, char** argv) {
     }
     const bool aurora_mode = speculative_mode_name == "aurora-replay" ||
         speculative_mode_name == "aurora-persistent";
+    if (aurora_draft_backend_name != "cpu" &&
+        aurora_draft_backend_name != "cuda-custom") {
+        std::cerr << "unknown AURORA draft backend: "
+                  << aurora_draft_backend_name << '\n';
+        return 2;
+    }
     if (speculative_verification_name == "token-major") {
         runtime_options.speculative_verification =
             k3x::SpeculativeVerificationMode::token_major;
@@ -272,13 +284,20 @@ int main(int argc, char** argv) {
         return 2;
     }
     if (speculative_mode_name == "none" &&
-        (aurora_draft_k_supplied || aurora_block_policy_supplied)) {
+        (aurora_draft_k_supplied || aurora_block_policy_supplied ||
+         aurora_draft_backend_supplied)) {
         std::cerr << "speculative mode none does not accept speculative options\n";
         return 2;
     }
     if (speculative_mode_name == "scripted-reference" &&
-        (aurora_draft_k_supplied || aurora_block_policy_supplied)) {
+        (aurora_draft_k_supplied || aurora_block_policy_supplied ||
+         aurora_draft_backend_supplied)) {
         std::cerr << "scripted-reference does not accept AURORA options\n";
+        return 2;
+    }
+    if (speculative_mode_name == "aurora-replay" &&
+        aurora_draft_backend_name != "cpu") {
+        std::cerr << "AURORA replay requires CPU draft backend\n";
         return 2;
     }
     if (speculative_mode_name == "scripted-reference" &&
@@ -839,7 +858,34 @@ int main(int argc, char** argv) {
             return 3;
         }
         aurora_reader.emplace(std::move(opened_draft_reader.value()));
-        aurora_backend = k3x::make_cpu_backend(&aurora_profiler);
+        if (aurora_draft_backend_name == "cpu") {
+            aurora_backend = k3x::make_cpu_backend(&aurora_profiler);
+        } else {
+            k3x::BackendOptions draft_backend_options;
+            draft_backend_options.kind = k3x::BackendKind::cuda_custom;
+            draft_backend_options.dense_precision =
+                k3x::DensePrecision::fp32;
+            draft_backend_options.cuda_allocation =
+                k3x::CudaAllocationMode::reused;
+            draft_backend_options.cuda_weights =
+                k3x::CudaWeightMode::transient;
+            draft_backend_options.cuda_batching =
+                k3x::CudaBatchingMode::grouped;
+            draft_backend_options.cuda_boundary =
+                k3x::CudaBoundaryMode::ffn_block;
+            draft_backend_options.cuda_transfer =
+                k3x::CudaTransferMode::synchronous;
+            draft_backend_options.cuda_moe_fusion =
+                k3x::CudaMoeFusionMode::none;
+            auto created_backend = k3x::make_cuda_backend(
+                draft_backend_options, &aurora_profiler);
+            if (!created_backend) {
+                write_error(created_backend.error(),
+                            created_backend.message());
+                return 4;
+            }
+            aurora_backend = std::move(created_backend.value());
+        }
         k3x::RuntimeOptions draft_options;
         draft_options.incremental = true;
         draft_options.routing_policy.mode = k3x::RoutingMode::fixed;
@@ -979,6 +1025,9 @@ int main(int argc, char** argv) {
         output, aurora_mode
                     ? aurora_block_policy_name
                     : "none");
+    output << ",\"aurora_draft_backend\":";
+    write_json_string(
+        output, aurora_mode ? aurora_draft_backend_name : "none");
     output << ",\"draft_proposal_calls\":"
            << result.value().draft_proposal_calls
            << ",\"draft_candidate_tokens\":"
