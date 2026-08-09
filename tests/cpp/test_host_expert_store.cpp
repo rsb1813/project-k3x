@@ -3,12 +3,14 @@
 
 #include <atomic>
 #include <barrier>
+#include <concepts>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 #include <utility>
 #include <vector>
 
@@ -34,6 +36,9 @@ k3x::ExpertMlpPayload payload(std::uint64_t base) {
 }
 
 int main() {
+    static_assert(std::same_as<
+                  decltype(std::declval<const k3x::HostExpertStore&>().stats()),
+                  k3x::L1ExpertCacheStats>);
     using k3x::ErrorCode;
     using k3x::ExpertKey;
     using k3x::HostExpertStore;

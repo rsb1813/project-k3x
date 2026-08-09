@@ -140,6 +140,7 @@ struct DeadlineExpertLoader::Impl {
                 if (stopping && queue.empty()) return;
                 job = queue.top();
                 queue.pop();
+                active = true;
             }
             const auto start = Clock::now();
             auto result = invoke_loader(job.loader);
@@ -156,6 +157,11 @@ struct DeadlineExpertLoader::Impl {
             }
             ++metrics->completions;
             job.state->condition.notify_all();
+            {
+                std::lock_guard lock(mutex);
+                active = false;
+            }
+            idle_condition.notify_all();
         }
     }
 
@@ -163,9 +169,11 @@ struct DeadlineExpertLoader::Impl {
     std::shared_ptr<detail::ExpertLoadMetrics> metrics;
     std::mutex mutex;
     std::condition_variable condition;
+    std::condition_variable idle_condition;
     std::priority_queue<Job, std::vector<Job>, LaterDeadline> queue;
     std::uint64_t next_sequence{};
     bool stopping{};
+    bool active{};
     std::thread worker;
 };
 
@@ -223,6 +231,12 @@ Result<ExpertLoadTicket> DeadlineExpertLoader::submit(
     impl_->condition.notify_one();
     return Result<ExpertLoadTicket>::success(
         ExpertLoadTicket(state, impl_->metrics));
+}
+
+void DeadlineExpertLoader::wait_idle() {
+    std::unique_lock lock(impl_->mutex);
+    impl_->idle_condition.wait(
+        lock, [&] { return impl_->queue.empty() && !impl_->active; });
 }
 
 ExpertLoadSchedulerStats DeadlineExpertLoader::stats() const {

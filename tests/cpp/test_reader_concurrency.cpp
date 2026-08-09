@@ -2,11 +2,13 @@
 #include "k3x/reader.hpp"
 
 #include <atomic>
+#include <concepts>
 #include <cstddef>
 #include <filesystem>
 #include <stdexcept>
 #include <string_view>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -16,6 +18,9 @@ void require(bool condition, const char* message) {
 }
 
 int main(int argc, char** argv) {
+    static_assert(std::same_as<
+                  decltype(std::declval<const k3x::Reader&>().counters()),
+                  k3x::ReadCounters>);
     if (argc != 2 && argc != 3) return 2;
     k3x::ReaderOptions options;
     if (argc == 3) {
@@ -29,7 +34,17 @@ int main(int argc, char** argv) {
     constexpr std::size_t thread_count = 8;
     constexpr std::size_t reads_per_thread = 200;
     std::atomic<std::size_t> failures{};
+    std::atomic<bool> reads_complete{};
     std::vector<std::thread> threads;
+    std::thread observer([&] {
+        while (!reads_complete.load()) {
+            const auto snapshot = reader.value().counters();
+            if (snapshot.completed_bytes > snapshot.requested_bytes ||
+                snapshot.completions > snapshot.calls) {
+                ++failures;
+            }
+        }
+    });
     for (std::size_t thread = 0; thread < thread_count; ++thread) {
         threads.emplace_back([&] {
             for (std::size_t read = 0; read < reads_per_thread; ++read) {
@@ -41,9 +56,11 @@ int main(int argc, char** argv) {
         });
     }
     for (auto& thread : threads) thread.join();
+    reads_complete.store(true);
+    observer.join();
     require(failures == 0, "concurrent payload read failed");
     const auto expected = thread_count * reads_per_thread;
-    const auto& counters = reader.value().counters();
+    const auto counters = reader.value().counters();
     require(counters.calls == expected, "concurrent call count mismatch");
     require(counters.batch_submissions == expected,
             "concurrent batch count mismatch");

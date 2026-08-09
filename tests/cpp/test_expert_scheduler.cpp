@@ -210,5 +210,37 @@ int main() {
     }
     require(drained.load());
 
+    std::atomic<bool> idle_started{false};
+    std::atomic<bool> idle_returned{false};
+    bool release_idle = false;
+    k3x::DeadlineExpertLoader idle_scheduler(1);
+    auto idle_ticket = idle_scheduler.submit(
+        {Clock::now(), std::chrono::nanoseconds{0}, 1, false}, [&] {
+            idle_started.store(true);
+            condition.notify_all();
+            std::unique_lock lock(mutex);
+            condition.wait(lock, [&] { return release_idle; });
+            return k3x::Result<k3x::ExpertPayloadHandle>::success(payload());
+        });
+    require(static_cast<bool>(idle_ticket));
+    {
+        std::unique_lock lock(mutex);
+        condition.wait(lock, [&] { return idle_started.load(); });
+    }
+    std::thread idle_waiter([&] {
+        idle_scheduler.wait_idle();
+        idle_returned.store(true);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    require(!idle_returned.load());
+    {
+        std::lock_guard lock(mutex);
+        release_idle = true;
+    }
+    condition.notify_all();
+    idle_waiter.join();
+    require(idle_returned.load());
+    require(static_cast<bool>(idle_ticket.value().wait()));
+
     return 0;
 }

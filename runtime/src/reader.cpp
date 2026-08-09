@@ -734,6 +734,11 @@ Result<std::vector<std::vector<std::byte>>> Reader::read_extents(
     return results;
 }
 
+ReadCounters Reader::counters() const {
+    std::lock_guard lock(data_plane_->operation_mutex);
+    return counters_;
+}
+
 Result<std::vector<std::byte>> Reader::read_tensor(std::uint64_t tensor_id) const {
     const auto item = std::find_if(tensors_.begin(), tensors_.end(),
                                    [tensor_id](const auto& value) { return value.tensor_id == tensor_id; });

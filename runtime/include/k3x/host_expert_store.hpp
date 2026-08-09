@@ -63,7 +63,7 @@ public:
     Result<ExpertPayloadHandle> get_or_load(
         ExpertKey key, const ExpertPayloadLoader& loader);
     bool contains(ExpertKey key) const;
-    const L1ExpertCacheStats& stats() const noexcept { return stats_; }
+    L1ExpertCacheStats stats() const;
 
 private:
     struct KeyHash {

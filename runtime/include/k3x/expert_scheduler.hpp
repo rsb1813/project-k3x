@@ -69,6 +69,7 @@ public:
 
     Result<ExpertLoadTicket> submit(ExpertLoadMetadata metadata,
                                     ExpertLoadFunction loader);
+    void wait_idle();
     ExpertLoadSchedulerStats stats() const;
 
 private:

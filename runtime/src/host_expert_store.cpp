@@ -102,4 +102,9 @@ bool HostExpertStore::contains(ExpertKey key) const {
     std::lock_guard lock(mutex_);
     return entries_.contains(key);
 }
+
+L1ExpertCacheStats HostExpertStore::stats() const {
+    std::lock_guard lock(mutex_);
+    return stats_;
+}
 }

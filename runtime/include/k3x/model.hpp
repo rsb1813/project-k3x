@@ -35,7 +35,7 @@ public:
 
     const RuntimeOptions& options() const noexcept { return options_; }
     HostExpertStore& expert_store() noexcept { return expert_store_; }
-    const L1ExpertCacheStats& l1_expert_cache_stats() const noexcept {
+    L1ExpertCacheStats l1_expert_cache_stats() const {
         return expert_store_.stats();
     }
     DeadlineExpertLoader* expert_loader() noexcept {

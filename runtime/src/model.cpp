@@ -91,7 +91,7 @@ public:
     const std::vector<std::uint32_t>& routed_experts() const {
         return routed_experts_;
     }
-    const L1ExpertCacheStats& expert_cache_stats() const {
+    L1ExpertCacheStats expert_cache_stats() const {
         return expert_store_.stats();
     }
 
@@ -269,13 +269,9 @@ private:
 
     ExpertLoadTicket schedule_expert(std::size_t layer,
                                      std::size_t expert_id,
-                                     bool resident) {
+                                     bool resident,
+                                     std::chrono::nanoseconds estimate) {
         if (!expert_loader_) throw std::runtime_error("expert scheduler disabled");
-        const auto& counters = reader_.counters();
-        const auto estimate = counters.batch_submissions
-            ? std::chrono::nanoseconds{
-                  counters.storage_nanoseconds / counters.batch_submissions}
-            : std::chrono::nanoseconds{0};
         auto ticket = expert_loader_->submit(
             {std::chrono::steady_clock::now() + estimate, estimate,
              expert_payload_bytes(layer, expert_id),
@@ -606,6 +602,11 @@ private:
         }
         std::vector<ExpertLoadTicket> expert_tickets;
         if (expert_loader_) {
+            const auto counters = reader_.counters();
+            const auto estimate = counters.batch_submissions
+                ? std::chrono::nanoseconds{
+                      counters.storage_nanoseconds / counters.batch_submissions}
+                : std::chrono::nanoseconds{0};
             expert_tickets.resize(config_.top_k);
             std::vector<bool> resident(config_.top_k);
             for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
@@ -616,7 +617,7 @@ private:
                 for (std::size_t slot = 0; slot < config_.top_k; ++slot) {
                     if (resident[slot] == resident_pass) {
                         expert_tickets[slot] = schedule_expert(
-                            layer, order[slot], resident[slot]);
+                            layer, order[slot], resident[slot], estimate);
                     }
                 }
             }
@@ -798,12 +799,14 @@ Result<GenerationResult> generate_greedy(Reader& reader,
             result.decode_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - decode_start).count();
         }
+        if (auto* loader = session.expert_loader()) loader->wait_idle();
         result.per_layer_nanoseconds = engine.layer_nanoseconds();
         result.l1_expert_cache = engine.expert_cache_stats();
         result.expert_load_scheduler =
             session.expert_load_scheduler_stats();
         return Result<GenerationResult>::success(std::move(result));
     } catch (const std::exception& error) {
+        if (auto* loader = session.expert_loader()) loader->wait_idle();
         return Result<GenerationResult>::failure(ErrorCode::invalid_extent, error.what());
     }
 }
