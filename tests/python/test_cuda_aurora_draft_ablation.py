@@ -78,3 +78,58 @@ def test_cuda_aurora_draft_ablation_preserves_pairs_and_raw_evidence(
         "summary_csv_sha256"
     ]
     assert b"\r\n" not in summary_csv.read_bytes()
+
+
+def test_committed_b0019_evidence_is_self_consistent() -> None:
+    root = Path(__file__).resolve().parents[2]
+    output = root / "results" / "b0019-cuda-aurora-draft-wsl"
+    summary = json.loads(
+        (output / "summary.json").read_text(encoding="utf-8")
+    )
+    assert summary["benchmark"] == "B-0019"
+    assert summary["warmups"] == 3
+    assert summary["samples"] == 20
+    assert len(summary["records"]) == 9
+    assert len(tuple(output.glob("*.json"))) == 10
+    assert len(tuple(output.glob("*.csv"))) == 10
+    for record in summary["records"]:
+        for suffix, digest_key in (
+            ("json", "raw_json_sha256"),
+            ("csv", "raw_csv_sha256"),
+        ):
+            raw = output / f"{record['name']}.{suffix}"
+            assert hashlib.sha256(raw.read_bytes()).hexdigest() == record[
+                digest_key
+            ]
+        assert b"\r\n" not in (output / f"{record['name']}.csv").read_bytes()
+    summary_csv = output / "summary.csv"
+    assert hashlib.sha256(summary_csv.read_bytes()).hexdigest() == summary[
+        "summary_csv_sha256"
+    ]
+    assert b"\r\n" not in summary_csv.read_bytes()
+    aggregate = json.dumps(
+        summary["records"], sort_keys=True, separators=(",", ":")
+    ).encode()
+    assert hashlib.sha256(aggregate).hexdigest() == summary["aggregate_sha256"]
+    records = {record["name"]: record for record in summary["records"]}
+    baseline_decode = summary["records"][0]["decode_tokens_per_second"]
+    for record in summary["records"]:
+        assert record["decode_delta_percent"] == (
+            record["decode_tokens_per_second"] / baseline_decode - 1.0
+        ) * 100.0
+    for _, cpu_name, cuda_name in PAIRS:
+        cpu = records[cpu_name]
+        cuda = records[cuda_name]
+        assert cuda["paired_decode_delta_percent"] == (
+            cuda["decode_tokens_per_second"] / cpu["decode_tokens_per_second"]
+            - 1.0
+        ) * 100.0
+        assert cuda["paired_draft_kernel_nanoseconds"] == cuda[
+            "draft_kernel_nanoseconds"
+        ]
+        assert cuda["paired_draft_h2d_bytes"] == cuda[
+            "draft_host_to_device_bytes"
+        ]
+        assert cuda["paired_peak_draft_vram_bytes"] == cuda[
+            "draft_peak_vram_bytes"
+        ]
