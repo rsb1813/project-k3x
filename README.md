@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2013-passing-20a46b?style=flat-square)](#milestone-13--exact-speculative-verification-reference)
+[![Milestone](https://img.shields.io/badge/milestone%2014-measured-20a46b?style=flat-square)](#milestone-14--exact-expert-major-verification)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
 [![Format](https://img.shields.io/badge/format-K3X%20v1-6f42c1?style=flat-square)](K3X_FORMAT.md)
@@ -19,7 +19,7 @@
 
 Kimi K3 is a 2.8T-parameter sparse MoE model whose local inference problem is dominated by moving the right expert bytes at the right time. K3X starts from that constraint. It is not a fork of llama.cpp or vLLM, and it does not assume that the checkpoint fits in RAM or VRAM.
 
-The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Implemented milestones now cover the exact synthetic graph and format, explicit RTX 5080 CUDA baselines, bounded L0/L1 primitives, independent L2 Reader modes, a released-size expert storage slice, an opt-in exact current-layer deadline worker, runtime-switchable exact eviction, persistent runtime-only task/session routing profiles, experimental fixed/adaptive Top-K with exact selected-expert rescue, opt-in routed expert accumulation on CUDA, and a strict token-major speculative verification reference. Expert-major verification, cross-layer prediction, and the full three-tier pipeline remain future work.
+The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Implemented milestones now cover the exact synthetic graph and format, explicit RTX 5080 CUDA baselines, bounded L0/L1 primitives, independent L2 Reader modes, a released-size expert storage slice, an opt-in exact current-layer deadline worker, runtime-switchable exact eviction, persistent runtime-only task/session routing profiles, experimental fixed/adaptive Top-K with exact selected-expert rescue, opt-in routed expert accumulation on CUDA, strict token-major speculative verification, and an exact CPU expert-major block reference. Cross-layer prediction and the full three-tier pipeline remain future work.
 
 ```mermaid
 flowchart LR
@@ -34,6 +34,13 @@ flowchart LR
 
 > [!IMPORTANT]
 > The implemented milestones still use a tiny synthetic model. Their measurements validate correctness and isolate runtime boundaries; they are not full Kimi K3 throughput claims. No full checkpoint was downloaded and no paid cloud resource was provisioned.
+
+| Public milestone | GitHub status | Evidence |
+|---|---|---|
+| Milestone 11 | [PR #11 merged](https://github.com/rsb1813/project-k3x/pull/11) | B-0012 adaptive Top-K and exact rescue |
+| Milestone 12 | [PR #12 merged](https://github.com/rsb1813/project-k3x/pull/12) | B-0013 routed CUDA accumulation |
+| Milestone 13 | [PR #13 merged](https://github.com/rsb1813/project-k3x/pull/13) | B-0014 token-major verification |
+| Milestone 14 | Measured on the current development branch | B-0015 exact CPU expert-major verification; public integration pending |
 
 ## Why a dedicated engine
 
@@ -158,7 +165,15 @@ The runtime implements the first strict greedy, token-major speculative referenc
 
 Native tests cover perfect, partial, first-token, and empty proposals as well as invalid anchors, token IDs, proposal bounds, callback failures, exhausted providers, unused script records, output-count one, and non-incremental rejection. Runtime integration tests show exact parity with greedy generation for token IDs, final KDA/MLA state, complete routing/K traces, Reader calls and bytes, and L1 hits and misses.
 
-The CLI exposes only `none|scripted-reference` for deterministic verification. B-0014 measures greedy at 171.4333 tok/s, perfect block-2 at 174.0861 tok/s, and mixed block-2 at 173.2344 tok/s on the tiny WSL2 CPU fixture. All three execute five target decode forwards and read 665,616 bytes, so the 1.55% and 1.05% differences are not evidence of speculative acceleration. Expert-major execution, a learned DSpark drafter, AURORA, EcoSpec, MoE-Spec, and AcceptMoE remain unfinished.
+The CLI exposes only `none|scripted-reference` for deterministic drafting. B-0014 measures greedy at 171.4333 tok/s, perfect block-2 at 174.0861 tok/s, and mixed block-2 at 173.2344 tok/s on the tiny WSL2 CPU fixture. All three execute five target decode forwards and read 665,616 bytes, so the 1.55% and 1.05% differences are not evidence of speculative acceleration. Milestone 14 adds the separate expert-major verification switch; a learned DSpark drafter, AURORA, EcoSpec, MoE-Spec, and AcceptMoE remain unfinished.
+
+## Milestone 14 — exact expert-major verification
+
+`--speculative-verification expert-major` executes every position in one scripted proposal block layer by layer on the CPU. Each MoE layer computes natural routing for all positions, forms a stable first-use union, loads each unique native MXFP4 expert payload once, evaluates every assigned token, and accumulates results in the original per-token router-slot order. Position-specific KDA snapshots and temporary MLA prefixes let the verifier commit only the accepted prefix plus target bonus token. `token-major` remains the default.
+
+The first exact boundary is intentionally limited to CPU, incremental generation, natural routing, blocking L2, disabled L1, and no runtime profile observation. Unsupported combinations fail before Reader or output mutation. Greedy, token-major perfect/mixed, and expert-major perfect/mixed tests preserve generated tokens, final KDA/MLA state, and committed routing traces.
+
+B-0015 measures five rows with three warmups and twenty samples on the tiny warm WSL2 CPU fixture. Perfect expert-major verification reuses 6 of 30 expert assignments, reduces Reader bytes from 665,616 to 655,824 and calls from 428 to 392, and measures 201.5550 tok/s versus token-major's 160.1659. Mixed expert-major verification evaluates three rejected positions, raises Reader bytes to 680,304 and calls to 482, and measures 122.6010 tok/s versus 163.0028. This establishes the reuse-versus-rejection-cost boundary, not full-model or RTX 5080 performance, and does not justify changing the default.
 
 ## Quick start
 

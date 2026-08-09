@@ -153,8 +153,12 @@
 - [x] Self-review and commit the design specification.
 - [x] Write and commit the detailed TDD implementation plan.
 - [x] Implement the pure expert-major plan and block verifier through RED→GREEN.
-- [ ] Integrate exact block execution, CLI identity, telemetry, and failure atomicity.
-- [ ] Run B-0015, full verification, ledger update, review, and public integration.
+- [x] Integrate exact block execution, CLI identity, telemetry, and failure atomicity.
+- [x] Run B-0015 and independently cross-check raw JSON, CSV, summary, and checksums.
+- [x] Synchronize README and every TITAN Ledger document with the verified Milestone 11–14 public and development state.
+- [x] Run the full cross-backend and sanitizer verification matrix.
+- [x] Complete final diff, evidence, default-path, and failure-boundary review.
+- [ ] Complete public PR integration and post-merge CI verification.
 
 ## Milestone 8 — Deadline-aware exact expert loading
 

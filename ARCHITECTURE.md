@@ -266,6 +266,16 @@ B-0014 compares greedy, 100%-accepted block-2, and mismatch/empty mixed block-2 
 
 This boundary deliberately precedes expert-major execution. It provides no parallel target forward, unique-expert union, fetch amortization, learned DSpark drafter, confidence scheduling, EcoSpec, MoE-Spec, or AcceptMoE behavior. The normative design is in [`docs/superpowers/specs/2026-08-10-k3x-exact-speculative-verification-design.md`](docs/superpowers/specs/2026-08-10-k3x-exact-speculative-verification-design.md).
 
+## Milestone 14 experimental exact CPU expert-major verification
+
+Milestone 14 implements a second strict target-verification identity while retaining token-major execution as the default and reference. The expert-major path is deliberately narrow: CPU backend, incremental generation, natural routing, blocking L2, disabled L1, no runtime-profile observation, and the four-layer executable synthetic graph. CLI and library preflight reject unsupported combinations before Reader, provider, output-file, or recurrent-state mutation.
+
+For one proposal `[anchor, candidates...]`, the engine copies the accepted state and executes all block positions layer by layer. KDA state is snapshotted after every position. MLA appends into a temporary causal prefix and snapshots every position's resulting state. At each MoE layer, every position computes the unchanged natural routing decision; a stable token-then-router-slot planner groups assignments by first expert use. Each unique expert payload is loaded once for the layer/block, assignment outputs are stored by `(position, router slot)`, and each token accumulates contributions in its original stable router order. This changes scheduling and physical payload reuse without changing target routing or arithmetic order.
+
+The pure vector verifier receives all `C+1` target argmax values only after the complete block succeeds. It commits the longest matching candidate prefix plus one target bonus token. The session adopts the snapshot belonging to the final committed position and records only committed routing in the canonical trace; evaluated rejected-suffix routing is exported separately. Any block failure discards copied state and leaves the accepted session unchanged.
+
+B-0015 shows the boundary's intended tradeoff. A perfectly accepted block reuses 6 of 30 assignments, loads 24 unique payloads, reduces logical Reader traffic by 1.47%, and measures 25.84% higher decode throughput than token-major on the tiny warm WSL2 CPU fixture. The mixed trace evaluates eight positions but commits five; three discarded positions raise Reader traffic by 2.21% and measure 24.79% lower decode throughput. These measurements keep token-major as the default and make acceptance-aware block sizing the next speculative scheduling bottleneck. CUDA expert-major kernels, H2D unioning, learned drafting, EcoSpec, MoE-Spec, and AcceptMoE remain unimplemented. The normative design is in [`docs/superpowers/specs/2026-08-10-k3x-expert-major-verification-design.md`](docs/superpowers/specs/2026-08-10-k3x-expert-major-verification-design.md).
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

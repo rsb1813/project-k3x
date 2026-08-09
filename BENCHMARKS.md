@@ -570,6 +570,31 @@ Post-measurement verification passed CPU CTest 12/12 and pytest 245/44, liburing
 
 Public branch and PR correctness runs `31324378917` and `31324381376` succeeded at integration head `463e9ca`. PR #13 merged by fast-forward, and post-merge `main` correctness run `31324492327` also succeeded at that head.
 
+## B-0015 — Milestone 14 exact expert-major speculative verification
+
+- Date: 2026-08-10.
+- Commit: implementation `bdf4a66`; measurement tooling and results `1e73121`.
+- Hardware: AMD Ryzen 7 9800X3D host under WSL2 Linux; CPU backend only.
+- Model/checkpoint: synthetic executable `build-fixtures/synthetic.k3x`, SHA-256 `29f3fd10c95dcde9f2b012e10e36962363b5cdd79dfeda5f5e3bbaca0cb89b75`.
+- Mode: incremental natural Top-2, disabled L1, blocking `pread + buffered`, 4 prompt tokens, 6 generated tokens, 3 warmups, 20 measured samples.
+- Cases: greedy; token-major and expert-major perfect block-2; token-major and expert-major mixed block-2 with mismatch and empty proposals.
+
+| Case | Decode tok/s | Prefill tok/s | TTFT ms | Peak RSS | Acceptance | Evaluated / discarded | Unique loads / assignments | Reader calls | Reader bytes |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| greedy | 163.1535 | 93.5544 | 329.4235 | 5,656,576 | n/a | 0 / 0 | 0 / 0 | 428 | 665,616 |
+| token-major perfect-2 | 160.1659 | 93.5235 | 329.6131 | 5,791,744 | 1.00 | 0 / 0 | 0 / 0 | 428 | 665,616 |
+| expert-major perfect-2 | 201.5550 | 94.1396 | 328.2316 | 5,902,336 | 1.00 | 5 / 0 | 24 / 30 | 392 | 655,824 |
+| token-major mixed-2 | 163.0028 | 93.8157 | 328.5150 | 5,746,688 | 0.25 | 0 / 0 | 0 / 0 | 428 | 665,616 |
+| expert-major mixed-2 | 122.6010 | 93.7455 | 327.9867 | 5,713,920 | 0.25 | 8 / 3 | 39 / 48 | 482 | 680,304 |
+
+Every row generated the greedy sequence and matched final KDA/MLA state plus committed routed expert/K traces. Perfect expert-major execution reused six assignments, reduced Reader bytes by 1.47% and calls by 8.41%, and measured 25.84% higher decode than its token-major pair. Mixed expert-major execution evaluated three rejected positions, increased Reader bytes by 2.21% and calls by 12.62%, and measured 24.79% lower decode. No favorable latency or traffic direction was required for the mixed case.
+
+Average Top-K is 2 and L1 hits are zero in every row. H2D, D2H, kernel time, VRAM, and GPU utilization are zero or not applicable because this is the exact CPU boundary. Median Reader storage time ranges from 64.556 ms for expert-major perfect to 79.983 ms for expert-major mixed; blocking mode reports no separate asynchronous exposed-wait counter. Logical Reader bytes are not physical NVMe bytes. These results are not full-model, native-Linux P44 Pro, coding-quality, or RTX 5080 evidence and do not change the token-major default.
+
+Raw JSON/CSV, diagnostic JSON, and the independently cross-checked aggregate are under `results/b0015-expert-major-verification-wsl/`. The canonical aggregate-record SHA-256 is `cb95eff274713a21b821695d75ff2655da735513c99215ec5ec14f5ed995b813`; `summary.json` also records the SHA-256 of every raw JSON and CSV artifact. The focused ablation/schema cross-check passed 12 tests with 5 capability skips.
+
+Pre-publication verification passed CPU CTest 13/13 and pytest 253/44, liburing/direct CTest 14/14 and pytest 257/42, CUDA CTest 22/22 and pytest 291/8, plus ASan/UBSan liburing CTest 14/14 and targeted pytest 95/35. CUDA FFN Compute Sanitizer reported `ERROR SUMMARY: 0 errors`. Attempting Compute Sanitizer around the CPU-only expert-major CLI correctly produced no instrumented CUDA API call and is not reported as a sanitizer pass; that execution path is covered by ASan/UBSan instead.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
@@ -578,6 +603,6 @@ Public branch and PR correctness runs `31324378917` and `31324381376` succeeded 
 - Native-Linux repetition of B-0009 with representative multi-expert pressure and controlled warm/cold preparation before selecting any deadline policy.
 - Native-Linux repetition of B-0010 with a representative routing trace, full-size experts, and controlled warm/cold preparation before selecting any cache policy.
 - Native-Linux repetition of B-0011 with repository-duration sessions and controlled helpful, stale, and adversarial priors before selecting any profile policy.
-- Expert-major speculative verification with unique-expert union and physical traffic accounting before any speculative default claim.
+- Native-Linux and CUDA repetition of B-0015 with physical NVMe/H2D accounting and representative acceptance distributions before any speculative default claim.
 - Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.

@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 13 exact token-major speculative verification is complete, measured, fully verified, and publicly integrated. The next milestone is expert-major verification design and implementation.
+Milestone 14 exact CPU expert-major speculative verification is implemented, measured, verified across the applicable CPU/liburing/CUDA-compatibility/sanitizer matrix, and final-reviewed on the development branch. Public integration remains in progress. Token-major verification remains the default.
 
-State recorded on 2026-08-10 from public documentation synchronization head `4984728`. The active branch is `codex/milestone-thirteen-speculative-verification`. PR #11, PR #12, PR #13, and documentation PR #14 are merged; the Milestone 11–13 implementations, dedicated English README sections, measurements, and ledgers are public.
+State recorded on 2026-08-10 from development result head `1e73121` based on public `main` head `df263c2`. The active branch is `codex/milestone-fourteen-expert-major-verification`. PR #11, PR #12, PR #13, and documentation PR #14 are merged; their implementations, dedicated English README sections, measurements, and ledgers are public. Milestone 14 has not yet been merged.
 
 ## Completed work
 
@@ -62,13 +62,17 @@ State recorded on 2026-08-10 from public documentation synchronization head `498
 - Opt-in `none|routed-accumulate` CUDA MoE identity for `cuda-custom + ffn-block`, with ordered down-projection contribution scaling and device accumulation for synchronous and prepared-prefetch paths.
 - Fused-call/expert telemetry, strict contribution and prepared-token validation, FP32/BF16 scalar/grouped graph parity, and a CPU oracle for the routed expert-group contract.
 - B-0013 four-case synthetic natural Top-16 end-to-end ablation plus a bounded released-dimension repeated-view kernel/D2H ablation. Synthetic fusion improves decode, while the representative dimension regresses latency and therefore remains non-default.
+- Stable first-use expert-major assignment planning and complete-vector strict greedy verification with malformed-route, duplicate, non-finite, size, range, and callback failure coverage.
+- Exact CPU layer-major proposal execution with per-position KDA/MLA state snapshots, natural per-layer route unions, one payload load per unique expert, original router-slot accumulation order, and committed-only canonical routing/state adoption.
+- `token-major|expert-major` CLI and benchmark identity, evaluated-versus-committed routing telemetry, block/position/union/assignment/payload counters, and fail-closed CPU/L1/L2/routing/profile capability checks.
+- B-0015 five-case greedy/token-major/expert-major perfect/mixed ablation with exact token/state/committed-route parity and raw JSON/CSV/summary SHA-256 cross-checks.
 
 ## Work in progress
 
-- Milestone 12 implementation and B-0013 measurement are complete. `routed-accumulate` reduces intermediate D2H and improves the tiny synthetic graph, but the released 3,584-by-3,072 repeated-expert fixture is 8.01% slower in median latency. The mode remains experimental and `none` remains the default.
-- Milestone 13 design, pure proposal/verification/provider contract, separate incremental runtime entrypoint, scripted CLI, telemetry schema, and B-0014 runner are implemented. Strict greedy target verification accepts only successive argmax matches and commits one target bonus token.
-- B-0014 perfect and mixed proposal blocks preserve greedy token, final KDA/MLA state, complete routing/K, Reader, L1, and five target-forward behavior. Measured +1.55%/+1.05% decode deltas are not accepted as acceleration because target work and traffic are identical.
-- DSpark learned drafting, confidence scheduling, parallel target execution, expert-major scheduling, EcoSpec, MoE-Spec, and AcceptMoE remain unimplemented. The accepted interface is lifecycle-compatible, not checkpoint- or tensor-ABI compatible with DeepSpec.
+- Milestone 14 library/runtime execution, CLI identity, telemetry, B-0015, the full applicable verification matrix, and final evidence review are complete. Ledger commit, PR, merge, and post-merge CI gates remain in progress.
+- B-0015 perfect expert-major blocks reduce logical Reader traffic and improve tiny CPU decode, while the mixed row evaluates three rejected positions and regresses both traffic and decode. The evidence therefore supports exact reuse semantics but not a default change.
+- The current expert-major path is CPU-only and intentionally excludes L1 caching, deadline scheduling, reduced/adaptive routing, and profile observation. CUDA expert-major scheduling, H2D unioning, acceptance-aware block sizing, and cross-layer prediction remain unimplemented.
+- DSpark learned drafting, confidence scheduling, EcoSpec, MoE-Spec, and AcceptMoE remain unimplemented. The accepted interface is lifecycle-compatible, not checkpoint- or tensor-ABI compatible with DeepSpec.
 - Milestone 9 Terra high final review found one valid Important shared-session policy-context issue. Commit `fd05d95` serializes complete generation calls; re-review found no remaining Critical or Important issue and withdrew an initial collision interpretation concern after deterministic future-layer trace review.
 - Static, LRU, LFU, Least-Stale, profiled eviction, and all non-default L2 modes remain experimental and opt-in. Transition prediction and cross-layer asynchronous L2 scheduling remain unimplemented.
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
@@ -88,13 +92,13 @@ State recorded on 2026-08-10 from public documentation synchronization head `498
 - GPU utilization, GPU memory bandwidth, and physical NVMe GB/token remain unmeasured. Reader storage elapsed time, logical/aligned bytes, process `rchar/read_bytes`, and L1-to-L0 timing are measured under their stated scopes.
 - WSL2 `/mnt/c` is 9p/DrvFS and rejects direct alignment. liburing 2.5 and direct I/O were validated on WSL2 ext4 `/tmp`, which remains a correctness/capability environment rather than native P44 Pro performance authority.
 - ThreadSanitizer builds successfully but its runtime exits under WSL2 with `unexpected memory mapping`; no TSan execution result is claimed. ASan/UBSan and explicit concurrency regressions pass.
-- Full-model quality, coding/agentic quality, full-checkpoint adaptive Top-K and cold-rescue effectiveness, and speculative acceleration remain unmeasured. Exact token-major speculative verification is implemented and measured only on the synthetic fixture; expert-major verification, learned drafting, proxy, and pruning remain unimplemented.
+- Full-model quality, coding/agentic quality, full-checkpoint adaptive Top-K and cold-rescue effectiveness, and speculative acceleration remain unmeasured. Exact token-major and CPU expert-major verification are implemented and measured only on the synthetic fixture; learned drafting, CUDA expert-major execution, proxy, and pruning remain unimplemented.
 
 ## Next concrete tasks
 
-1. Design the expert-major verification execution boundary without changing the measured target routing or commit semantics.
-2. Define exact unique-expert-union, per-candidate routing, state commit, Reader, H2D, and fallback invariants before implementation.
-3. Implement the smallest synthetic expert-major reference with token-major mode retained as the switchable baseline.
+1. Commit the synchronized Milestone 14 TITAN Ledger.
+2. Publish and merge the verified Milestone 14 branch, confirm branch/PR/post-merge CI, and update the publication head.
+3. Design the next CUDA expert-major boundary around multi-token expert grouping, H2D union accounting, and acceptance-aware block sizing without changing target semantics.
 
 ## Hardware assumptions
 
@@ -111,11 +115,11 @@ State recorded on 2026-08-10 from public documentation synchronization head `498
 
 ## Latest measured bottleneck
 
-B-0014 shows that token-major speculative verification does not reduce target work or weight traffic. Greedy, perfect block-2, and mixed block-2 all perform five target decode forwards and read 665,616 bytes while preserving exact state/routing. The measured +1.55%/+1.05% decode deltas are fixture variation, not an accepted speedup.
+B-0015 shows that expert-major reuse is acceptance-sensitive. Perfect block-2 loads 24 unique expert payloads for 30 assignments, reduces Reader bytes from 665,616 to 655,824 and calls from 428 to 392, and measures 201.5550 tok/s versus token-major's 160.1659. Mixed block-2 evaluates eight positions but commits five, increasing Reader bytes to 680,304 and calls to 482 while measuring 122.6010 tok/s versus token-major's 163.0028.
 
 B-0013 remains the latest CUDA bottleneck evidence. Eliminating intermediate expert-result D2H improves the tiny natural Top-16 graph but the released 3,584-by-3,072 repeated-expert fixture is 8.01% slower because sequential expert launches and ordered accumulation dominate.
 
-The next speculative bottleneck is the absence of expert-major multi-token reuse. The immediate CUDA bottleneck remains sequential per-expert gate/up/down launch and ordered accumulation dependency at released dimensions, while KDA, MLA, routing, residual/state, and non-FFN orchestration remain CPU-driven.
+The next speculative bottleneck is avoiding rejected-suffix work through representative drafting and acceptance-aware block sizing before moving exact unioning to CUDA. The immediate CUDA bottleneck remains sequential per-expert gate/up/down launch and ordered accumulation dependency at released dimensions, while KDA, MLA, routing, residual/state, and non-FFN orchestration remain CPU-driven.
 
 The immediate result is to retain CUDA MoE fusion `none` alongside natural routing with `disabled + blocking + pread + buffered` as defaults. Native-Linux physical NVMe traffic, controlled warm/cold behavior, full-model locality, coding quality, GPU utilization, and memory bandwidth remain unknown.
 
@@ -123,7 +127,12 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- M13 implementation head `2cf50b4` provides the pure contract, incremental reference, scripted CLI, telemetry, and B-0014 tooling. CPU CTest 12/12 and Python 245 passed/44 skipped succeeded before measurement.
+- M14 exact block runtime head `862d401`, CLI/telemetry head `bdf4a66`, and B-0015 result head `1e73121` form the current development state.
+- Pre-publication verification passed CPU CTest 13/13 and Python 253/44, liburing/direct CTest 14/14 and Python 257/42, CUDA CTest 22/22 and Python 291/8, and ASan/UBSan liburing CTest 14/14 plus targeted Python 95/35. CUDA FFN Compute Sanitizer reported zero errors; the CPU-only expert-major CLI has no instrumented CUDA API and is covered by ASan/UBSan rather than a fabricated Compute Sanitizer result.
+- B-0015 artifact SHA-256 is `29f3fd10c95dcde9f2b012e10e36962363b5cdd79dfeda5f5e3bbaca0cb89b75`; canonical aggregate-record SHA-256 is `cb95eff274713a21b821695d75ff2655da735513c99215ec5ec14f5ed995b813`.
+- Independent evidence validation recomputed all ten raw JSON/CSV hashes, the aggregate hash, exact diagnostic parity, and the six headline percentage deltas. The report is ready to share with the stated synthetic/WSL2/logical-I/O caveats.
+- Public `main` remains `df263c2` before Milestone 14 publication. PR #11, PR #12, PR #13, and documentation PR #14 are merged.
+- M13 implementation head `2cf50b4` provides the pure contract, incremental reference, scripted CLI, telemetry, and B-0014 tooling.
 - B-0014 result/ledger commit: `e2e37bf`. Final self-review found no Critical or Important issue; default greedy behavior, proposal prevalidation, exact parity gates, and measured/proposed documentation boundaries remain intact.
 - Public M13 integration head `463e9ca`; branch/PR correctness runs `31324378917`/`31324381376` and post-merge main run `31324492327` succeeded. Publication head `f0641de` and publication-main run `31324647692` also succeeded. PR #13 is merged.
 - B-0014 summary JSON/CSV SHA-256: `7cd834b1c65d507367320170cdf72ca76aace9f6a743da85a0a9f0cca4a21062` / `9c5fdba84c547f93e2a0a7d4c0b76412181ffb2c635ffd969537a154950ce75b`; raw-summary and exact-parity cross-check passed.

@@ -112,13 +112,17 @@ The following values were measured on 2026-08-08 using the deterministic tiny sy
 
 Reproduce the record with the commands in [`README.md`](README.md). JSON and CSV are generated under an ignored `build-results/` directory so host-specific results are not mistaken for portable project data.
 
-## Milestone 13 speculative verification accounting
+## Milestone 13–14 speculative verification accounting
 
 The accepted token-major verifier is a correctness reference, not a traffic optimization. For a proposal with `p` candidate tokens and `a` accepted candidates, it performs `a + 1` target forwards and commits `a + 1` tokens, including the target bonus token. Rejected suffix candidates are never executed. Its target work and committed KDA/MLA state therefore match ordinary greedy decoding; proposal and lifecycle overhead can only make this reference equal or slower.
 
 B-0014 confirms this accounting on the synthetic CPU fixture. Greedy, perfect block-2, and mixed block-2 each perform five target decode forwards and read 665,616 logical bytes. Perfect acceptance is 1.0 and mixed acceptance is 0.25, but neither changes target work or traffic. Their measured +1.55% and +1.05% decode deltas are therefore treated as fixture variation rather than an amortization result.
 
-Future expert-major verification will be evaluated separately. For each MoE layer, its relevant traffic variable is the exact unique expert union across candidate-token routing decisions, not `block_tokens × Top-K` by assumption. Unique expert union and fetch amortization remain not applicable until expert-major execution exists.
+Milestone 14 now implements the first exact CPU expert-major reference. For each MoE layer, its relevant traffic variable is the exact unique expert union across candidate-token routing decisions, not `block_tokens × Top-K` by assumption. The runtime loads each union payload once and reports unique loads, assignments, evaluated positions, and discarded positions separately.
+
+B-0015 demonstrates why acceptance belongs in the traffic model. Perfect block-2 execution loads 24 unique payloads for 30 assignments, reuses six assignments, and reduces logical Reader bytes from 665,616 to 655,824 relative to token-major. The mixed trace loads 39 payloads for 48 assignments but evaluates eight positions to commit five, raising logical Reader bytes to 680,304. On this fixture the block traffic benefit is therefore the union reuse saved on committed work minus payloads spent on rejected suffix positions. These are logical synthetic Reader bytes, not physical P44 Pro or H2D measurements.
+
+The next model must use a measured acceptance distribution and per-layer union size to estimate expected bytes per committed token. A favorable perfect block is insufficient: the mixed row shows that rejection can erase reuse and add traffic. Token-major remains the default until representative drafting, native-Linux physical I/O, and CUDA H2D union evidence exist.
 
 ## Required production measurements
 
