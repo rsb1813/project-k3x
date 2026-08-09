@@ -134,6 +134,15 @@
 - [x] Runtime/CLI/telemetry integration.
 - [x] B-0010 ablation, full verification, review, ledger, public integration.
 
+## Milestone 10 — Task and session profiles
+
+- [x] Runtime-only metadata, persistent profile, and profiled eviction design.
+- [x] TDD implementation and evidence plan.
+- [ ] Bounded profile data model and crash-safe canonical persistence.
+- [ ] Opt-in profiled exact eviction with prior-to-live crossover.
+- [ ] Runtime/CLI integration and prompt/output non-interference proof.
+- [ ] B-0011, full verification, review, ledger, and public integration.
+
 ## Milestone 6 independent L2 reader
 
 - [x] 기존 Reader hot path와 Linux I/O capability 경계 조사.

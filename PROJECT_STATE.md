@@ -57,6 +57,7 @@ State recorded on 2026-08-09 at verified Milestone 9 integration head `185ae5d`.
 
 ## Work in progress
 
+- Milestone 10 task/session profile design is accepted locally on branch `codex/milestone-ten-task-session-profiles`. No profile runtime component is claimed implemented yet.
 - Milestone 9 Terra high final review found one valid Important shared-session policy-context issue. Commit `fd05d95` serializes complete generation calls; re-review found no remaining Critical or Important issue and withdrew an initial collision interpretation concern after deterministic future-layer trace review.
 - Static, LRU, LFU, Least-Stale, and all non-default L2 modes remain experimental and opt-in. Task/session priors, transition prediction, and cross-layer asynchronous L2 scheduling remain unimplemented.
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
@@ -81,7 +82,7 @@ State recorded on 2026-08-09 at verified Milestone 9 integration head `185ae5d`.
 ## Next concrete tasks
 
 1. Design Milestone 10 task/session profile metadata and persistence without injecting runtime-only headers into K3 prompt tokens.
-2. Add deterministic prior-to-observation weighting tests for expert frequency, transitions, hot-bank state, and repository-specific statistics.
+2. Implement RED tests and the bounded canonical profile model for expert frequency, transitions, hot-bank state, and repository-specific statistics.
 3. Add a bounded multi-expert or full-layer slice for representative cache pressure and locality evidence.
 4. Extend the current-layer worker only after a tested future-layer recall contract exists; do not claim ORBIT or N/N+1/N+2 before then.
 5. Run native-Linux P44 Pro warm/cold B-0008 through B-0010 only when that environment exists.
