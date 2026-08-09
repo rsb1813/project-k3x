@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2014-passing-20a46b?style=flat-square)](#milestone-14--exact-expert-major-verification)
+[![Milestone](https://img.shields.io/badge/milestone%2015-passing-20a46b?style=flat-square)](#milestone-15--exact-cuda-expert-major-execution)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -20,7 +20,7 @@
 
 Kimi K3 is a 2.8T-parameter sparse MoE model whose local inference problem is dominated by moving the right expert bytes at the right time. K3X starts from that constraint. It is not a fork of llama.cpp or vLLM, and it does not assume that the checkpoint fits in RAM or VRAM.
 
-The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Implemented milestones now cover the exact synthetic graph and format, explicit RTX 5080 CUDA baselines, bounded L0/L1 primitives, independent L2 Reader modes, a released-size expert storage slice, an opt-in exact current-layer deadline worker, runtime-switchable exact eviction, persistent runtime-only task/session routing profiles, experimental fixed/adaptive Top-K with exact selected-expert rescue, opt-in routed expert accumulation on CUDA, strict token-major speculative verification, and an exact CPU expert-major block reference. Cross-layer prediction and the full three-tier pipeline remain future work.
+The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Implemented milestones now cover the exact synthetic graph and format, explicit RTX 5080 CUDA baselines, bounded L0/L1 primitives, independent L2 Reader modes, a released-size expert storage slice, an opt-in exact current-layer deadline worker, runtime-switchable exact eviction, persistent runtime-only task/session routing profiles, experimental fixed/adaptive Top-K with exact selected-expert rescue, opt-in routed expert accumulation on CUDA, strict token-major speculative verification, an exact CPU expert-major block reference, and an exact CUDA single-expert multi-token batch path used by expert-major verification. Cross-layer prediction and the full three-tier pipeline remain future work.
 
 ```mermaid
 flowchart LR
@@ -42,6 +42,7 @@ flowchart LR
 | Milestone 12 | [PR #12 merged](https://github.com/rsb1813/project-k3x/pull/12) at `9e59a9db` | B-0013 routed CUDA accumulation |
 | Milestone 13 | [PR #13 merged](https://github.com/rsb1813/project-k3x/pull/13) | B-0014 token-major verification |
 | Milestone 14 | [PR #15 merged](https://github.com/rsb1813/project-k3x/pull/15) | B-0015 exact CPU expert-major verification |
+| Milestone 15 | Publication pending on `codex/milestone-fifteen-cuda-expert-major` | B-0016 exact CUDA expert-major execution |
 
 PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public documentation baseline is `46105f8`, whose `main` correctness run `31329200483` passed.
 
@@ -177,6 +178,27 @@ The CLI exposes only `none|scripted-reference` for deterministic drafting. B-001
 The first exact boundary is intentionally limited to CPU, incremental generation, natural routing, blocking L2, disabled L1, and no runtime profile observation. Unsupported combinations fail before Reader or output mutation. Greedy, token-major perfect/mixed, and expert-major perfect/mixed tests preserve generated tokens, final KDA/MLA state, and committed routing traces.
 
 B-0015 measures five rows with three warmups and twenty samples on the tiny warm WSL2 CPU fixture. Perfect expert-major verification reuses 6 of 30 expert assignments, reduces Reader bytes from 665,616 to 655,824 and calls from 428 to 392, and measures 201.5550 tok/s versus token-major's 160.1659. Mixed expert-major verification evaluates three rejected positions, raises Reader bytes to 680,304 and calls to 482, and measures 122.6010 tok/s versus 163.0028. This establishes the reuse-versus-rejection-cost boundary, not full-model or RTX 5080 performance, and does not justify changing the default.
+
+## Milestone 15 — exact CUDA expert-major execution
+
+The expert-major verifier now accepts the exact `cuda-custom + ffn-block + reused + transient + synchronous + fusion none` boundary. At each unique expert group it gathers token latents in stable assignment order, uploads one flat activation batch, transfers the expert's native MXFP4 gate/up/down payload once, launches the existing E2M1/E8M0 arithmetic over a two-dimensional `(row, token)` grid, and scatters the results back to their original token/router slots. Token-major remains the default, and CPU expert-major remains the portable exact oracle.
+
+The batch API validates shape, overflow, native-weight metadata, and SiTU parameters before allocation or profiler mutation. CLI capability gates reject unsupported backends, allocation modes, weight modes, transfer modes, fusion, L1, L2 scheduling, routing, and profile observation before output mutation. B-0016 preserves exact generated tokens, final recurrent state, and committed routing in all five CUDA graph rows.
+
+On the released 3,584-by-3,072 single-expert fixture, batching two tokens reduces measured weight H2D from 701,890,560 to 350,945,280 bytes over 20 iterations and median latency from 3.7948 ms to 1.8675 ms. Batching four tokens reduces weight H2D from 1,403,781,120 to 350,945,280 bytes and median latency from 7.4285 ms to 1.9993 ms. Activation H2D and D2H are unchanged, numerical error is zero, and Compute Sanitizer reports zero errors. This is a bounded single-expert kernel/traffic measurement without routing semantics, not full-model Kimi K3 throughput.
+
+Reproduce both evidence boundaries with one command after generating `artifacts/synthetic.k3x` and `artifacts/m12-bounded.k3x`.
+
+```bash
+python tools/ablate_cuda_expert_major.py \
+  --artifact artifacts/synthetic.k3x \
+  --runner build-cuda/k3x_run \
+  --released-artifact artifacts/m12-bounded.k3x \
+  --released-runner build-cuda/k3x_cuda_expert_batch_bench \
+  --warmup 3 \
+  --iterations 20 \
+  --output-dir build-results/b0016-cuda-expert-major
+```
 
 ## Quick start
 
@@ -464,7 +486,8 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Experimental adaptive/fixed Top-K with exact selected cold-expert rescue and B-0012 quality/traffic ablation.
 - [x] Exact token-major speculative block verification library/runtime reference with a DSpark-lifecycle-compatible external draft interface.
 - [x] Scripted CLI telemetry and B-0014 speculative correctness/overhead measurement.
-- [ ] Expert-major speculative verification and cost-aware experiments.
+- [x] Exact CPU/CUDA expert-major speculative verification with stable expert grouping, one-payload-per-group H2D reuse, and B-0015/B-0016 evidence.
+- [ ] Learned drafting, acceptance-aware block sizing, and cost-aware verification experiments.
 - [ ] Sensitivity-calibrated mixed trunk quantization.
 - [ ] SKYFORGE shard compiler for explicitly provisioned cloud jobs.
 - [ ] Full ablation and coding-quality suite.
@@ -492,7 +515,7 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - Reusable scratch, bounded static weight residency, and same-input grouping are implemented, but activations and results still cross the host/device boundary and asynchronous overlap is not implemented.
 - Static residency has no eviction and is not the future three-tier expert cache.
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
-- Exact token-major speculative verification, scripted CLI telemetry, and B-0014 are implemented. B-0014 preserves target work and traffic rather than accelerating them; there is no learned DSpark drafter, confidence scheduler, expert-major verifier, or speculative speedup claim.
+- Exact token-major plus CPU/CUDA expert-major verification, scripted CLI telemetry, and B-0014 through B-0016 are implemented. The CUDA boundary is synchronous, transient, single-expert grouped execution; there is no learned DSpark drafter, confidence scheduler, dynamic block sizing, multi-expert persistent kernel, or full-model speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
 - The converter has not processed the full Kimi K3 checkpoint.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.

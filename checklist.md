@@ -156,9 +156,10 @@
 - [x] Compare a single-expert multi-token primitive, temporary scalar residency, and a persistent multi-expert kernel.
 - [x] Write and self-review the accepted CUDA expert-major design.
 - [x] Write and self-review the detailed TDD implementation plan.
-- [ ] Implement the backend batch contract through witnessed RED and GREEN cycles.
-- [ ] Integrate the exact CUDA runtime, CLI capability gate, and telemetry.
-- [ ] Run B-0016, full verification, sanitizer, ledger, review, and public integration.
+- [x] Implement the backend batch contract through witnessed RED and GREEN cycles.
+- [x] Integrate the exact CUDA runtime, CLI capability gate, and telemetry.
+- [x] Run B-0016, full verification, sanitizer, and ledger synchronization.
+- [ ] Complete final review, public PR integration, and post-merge CI verification.
 - [x] Update the README milestone badge and current implementation summary.
 - [x] Correct the stale speculative-implementation statement and publication HEAD in `PROJECT_STATE.md`.
 - [x] Run documentation checks, commit, publish, and verify public `main`.

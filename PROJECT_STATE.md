@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 14 exact CPU expert-major speculative verification is implemented, measured, fully verified, final-reviewed, and publicly integrated. Token-major verification remains the default. Milestone 15 CUDA expert-major design preparation has started, but no Milestone 15 runtime implementation or benchmark is claimed yet.
+Milestone 15 exact CUDA expert-major execution is implemented, measured, and locally fully verified. The accepted boundary batches multiple token latents for one native MXFP4 expert while preserving the Milestone 14 state, routing, and commit semantics. Token-major remains the default, CPU expert-major remains the portable exact oracle, and Milestone 15 public PR integration is pending.
 
-State audited on 2026-08-10 against public documentation baseline `46105f8`. The active development branch is `codex/milestone-fifteen-cuda-expert-major`; this documentation reconciliation is isolated on `codex/docs-sync-m11-m14`. PR #11, PR #12, PR #13, documentation PR #14, and Milestone 14 PR #15 are merged; their implementations, dedicated English README sections, measurements, and ledgers are public.
+State audited on 2026-08-10 against public baseline `ea4b1e0`. The active development branch is `codex/milestone-fifteen-cuda-expert-major`. PR #11, PR #12, PR #13, documentation PR #14, Milestone 14 PR #15, and documentation reconciliation PR #16 are merged. Milestone 15 code and B-0016 evidence are local to the active branch until its public PR and post-merge CI complete.
 
 ## Completed work
 
@@ -66,13 +66,17 @@ State audited on 2026-08-10 against public documentation baseline `46105f8`. The
 - Exact CPU layer-major proposal execution with per-position KDA/MLA state snapshots, natural per-layer route unions, one payload load per unique expert, original router-slot accumulation order, and committed-only canonical routing/state adoption.
 - `token-major|expert-major` CLI and benchmark identity, evaluated-versus-committed routing telemetry, block/position/union/assignment/payload counters, and fail-closed CPU/L1/L2/routing/profile capability checks.
 - B-0015 five-case greedy/token-major/expert-major perfect/mixed ablation with exact token/state/committed-route parity and raw JSON/CSV/summary SHA-256 cross-checks.
+- Portable exact single-expert multi-token FFN contract with CPU scalar oracle, full prevalidation, and zero-default batch call/token telemetry.
+- Native MXFP4 CUDA batch launcher with a two-dimensional row/token grid, scalar batch-size-one parity, multi-token CPU-oracle parity, and unchanged E2M1/E8M0 semantics.
+- Synchronous transient CUDA batched expert FFN that uploads one activation batch and one gate/up/down expert payload, executes gate/up/SiTU/down for all grouped tokens, and returns one flat output batch.
+- Exact CUDA expert-major runtime gather/batch/scatter integration with strict capability preflight and unchanged token-major default, natural routing, expert union order, router-slot accumulation order, and committed-only state adoption.
+- B-0016 five-case CUDA graph ablation plus four-case released-dimension scalar/batch measurement with exact token/state/route parity, raw JSON/CSV digest 9/9, canonical aggregate verification, and released batch Compute Sanitizer coverage.
 
 ## Work in progress
 
-- Milestone 14 library/runtime execution, CLI identity, telemetry, B-0015, the full applicable verification matrix, final evidence review, PR, merge, and post-merge CI gates are complete.
-- Milestone 15 is at design preparation only. The intended exact CUDA expert-major boundary, multi-token grouping contract, and H2D union accounting have not yet been accepted, implemented, or measured.
-- B-0015 perfect expert-major blocks reduce logical Reader traffic and improve tiny CPU decode, while the mixed row evaluates three rejected positions and regresses both traffic and decode. The evidence therefore supports exact reuse semantics but not a default change.
-- The current expert-major path is CPU-only and intentionally excludes L1 caching, deadline scheduling, reduced/adaptive routing, and profile observation. CUDA expert-major scheduling, H2D unioning, acceptance-aware block sizing, and cross-layer prediction remain unimplemented.
+- Milestone 15 implementation, B-0016, complete CPU/CUDA verification, Compute Sanitizer, and TITAN Ledger synchronization are complete locally. Final read-only review, public PR integration, and post-merge CI remain.
+- B-0016 perfect CUDA expert-major blocks slightly reduce synthetic Reader/H2D traffic and improve tiny decode, while the mixed row evaluates three rejected positions and regresses traffic and decode. Released single-expert batching proves exact one-payload-per-group H2D reuse at batch sizes two and four. Neither result supports a default change.
+- The CUDA expert-major path intentionally excludes L1 caching, deadline scheduling, reduced/adaptive routing, profile observation, asynchronous transfer, and routed-accumulate fusion. Acceptance-aware block sizing, representative drafting, multi-expert persistent scheduling, and cross-layer prediction remain unimplemented.
 - DSpark learned drafting, confidence scheduling, EcoSpec, MoE-Spec, and AcceptMoE remain unimplemented. The accepted interface is lifecycle-compatible, not checkpoint- or tensor-ABI compatible with DeepSpec.
 - Milestone 9 Terra high final review found one valid Important shared-session policy-context issue. Commit `fd05d95` serializes complete generation calls; re-review found no remaining Critical or Important issue and withdrew an initial collision interpretation concern after deterministic future-layer trace review.
 - Static, LRU, LFU, Least-Stale, profiled eviction, and all non-default L2 modes remain experimental and opt-in. Transition prediction and cross-layer asynchronous L2 scheduling remain unimplemented.
@@ -93,13 +97,13 @@ State audited on 2026-08-10 against public documentation baseline `46105f8`. The
 - GPU utilization, GPU memory bandwidth, and physical NVMe GB/token remain unmeasured. Reader storage elapsed time, logical/aligned bytes, process `rchar/read_bytes`, and L1-to-L0 timing are measured under their stated scopes.
 - WSL2 `/mnt/c` is 9p/DrvFS and rejects direct alignment. liburing 2.5 and direct I/O were validated on WSL2 ext4 `/tmp`, which remains a correctness/capability environment rather than native P44 Pro performance authority.
 - ThreadSanitizer builds successfully but its runtime exits under WSL2 with `unexpected memory mapping`; no TSan execution result is claimed. ASan/UBSan and explicit concurrency regressions pass.
-- Full-model quality, coding/agentic quality, full-checkpoint adaptive Top-K and cold-rescue effectiveness, and speculative acceleration remain unmeasured. Exact token-major and CPU expert-major verification are implemented and measured only on the synthetic fixture; learned drafting, CUDA expert-major execution, proxy, and pruning remain unimplemented.
+- Full-model quality, coding/agentic quality, full-checkpoint adaptive Top-K and cold-rescue effectiveness, and speculative acceleration remain unmeasured. Exact token-major plus CPU/CUDA expert-major verification are implemented and measured only on the synthetic graph and bounded released single-expert fixture; learned drafting, proxy, and pruning remain unimplemented.
 
 ## Next concrete tasks
 
-1. Design the next CUDA expert-major boundary around multi-token expert grouping, H2D union accounting, and acceptance-aware block sizing without changing target semantics.
-2. Add representative learned or self-speculative acceptance traces before choosing a dynamic verification block policy.
-3. Preserve token-major as the default until native-Linux physical I/O, RTX 5080 execution, and quality evidence justify a change.
+1. Complete Milestone 15 final review, public PR integration, merge, and post-merge correctness CI.
+2. Add representative learned or self-speculative acceptance traces, then design acceptance-aware dynamic verification block sizing without changing target semantics.
+3. Measure multi-expert/full-layer CUDA grouping with GPU utilization, memory bandwidth, physical NVMe/H2D attribution, and native Linux before considering a persistent kernel or default change.
 
 ## Hardware assumptions
 
@@ -116,11 +120,11 @@ State audited on 2026-08-10 against public documentation baseline `46105f8`. The
 
 ## Latest measured bottleneck
 
-B-0015 shows that expert-major reuse is acceptance-sensitive. Perfect block-2 loads 24 unique expert payloads for 30 assignments, reduces Reader bytes from 665,616 to 655,824 and calls from 428 to 392, and measures 201.5550 tok/s versus token-major's 160.1659. Mixed block-2 evaluates eight positions but commits five, increasing Reader bytes to 680,304 and calls to 482 while measuring 122.6010 tok/s versus token-major's 163.0028.
+B-0016 proves the intended CUDA weight-reuse boundary. On the released 17,547,264-byte expert, batch-2 reduces weight H2D by 50% and median latency by 50.79%; batch-4 reduces weight H2D by 75% and latency by 73.09%. Activation H2D and D2H are unchanged, so remaining per-group cost is gate/up/down kernel work and token-proportional activation/result traffic. The fixture has no routing semantics and is not full-model TPS.
 
-B-0013 remains the latest CUDA bottleneck evidence. Eliminating intermediate expert-result D2H improves the tiny natural Top-16 graph but the released 3,584-by-3,072 repeated-expert fixture is 8.01% slower because sequential expert launches and ordered accumulation dominate.
+End-to-end reuse remains acceptance-sensitive. Perfect block-2 CUDA expert-major measures 66.1869 tok/s versus token-major 60.0987 with slightly lower Reader/H2D traffic. Mixed block-2 evaluates eight positions, discards three, raises H2D to 6,754,464 bytes, and falls to 39.9912 tok/s versus 59.4970. The next speculative bottleneck is avoiding rejected-suffix work through representative drafting and acceptance-aware block sizing.
 
-The next speculative bottleneck is avoiding rejected-suffix work through representative drafting and acceptance-aware block sizing before moving exact unioning to CUDA. The immediate CUDA bottleneck remains sequential per-expert gate/up/down launch and ordered accumulation dependency at released dimensions, while KDA, MLA, routing, residual/state, and non-FFN orchestration remain CPU-driven.
+The next CUDA systems bottleneck is extending one-expert batches to representative multi-expert/full-layer groups while KDA, MLA, routing, residual/state, and non-FFN orchestration remain CPU-driven. GPU utilization, memory bandwidth, physical NVMe, and overlap are still unmeasured for this boundary.
 
 The immediate result is to retain CUDA MoE fusion `none` alongside natural routing with `disabled + blocking + pread + buffered` as defaults. Native-Linux physical NVMe traffic, controlled warm/cold behavior, full-model locality, coding quality, GPU utilization, and memory bandwidth remain unknown.
 
@@ -128,9 +132,13 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Public documentation baseline `46105f8` includes the fully synchronized Milestone 14 README and TITAN Ledger. Its final `main` correctness run `31329200483` succeeded.
+- Public baseline `ea4b1e0` includes the synchronized Milestone 11–14 README and TITAN Ledger plus explicit PR #11/#12 merge provenance. Post-merge `main` correctness run `31329727859` succeeded.
+- M15 design/plan heads are `b54e4b5`/`f574a36`; portable batch, native launcher, CUDA FFN, and runtime heads are `b9b10dc`, `459303e`, `b0c1a96`, and `e99bbc0`; B-0016 tooling and direct CLI fix are `7899603` and `884a74e`.
+- Current full verification passes CPU CTest 13/13 and pytest 262 passed/47 skipped, CUDA CTest 22/22 and pytest 301 passed/8 skipped. The released batch-2 Compute Sanitizer run reports zero errors.
+- B-0016 executable artifact SHA-256 is `039d61ee9c2e13e27c9a2514bb476f8b122b8b37be0b7f85baf26c1a6611a2e9`; released artifact SHA-256 is `aab7aea48b03bdcd8e0b4d98c4780128ab689d2bba005089a49970eb0e326890`; canonical aggregate SHA-256 is `218bba0595002b6e0c40cd998ac611b929fd81c45a236bdeed732bc1a6311f0f`.
+- Independent evidence validation recomputed all nine raw JSON/CSV digest pairs and the aggregate. Results are under `results/b0016-cuda-expert-major-wsl/`; public integration and post-merge CI remain pending.
 - PR #11 merged at `edc6d605` and PR #12 merged at `9e59a9db`; both merge commits are ancestors of the audited public baseline. Their post-merge correctness runs `31318993688` and `31322191670` succeeded.
-- M14 exact block runtime head `862d401`, CLI/telemetry head `bdf4a66`, and B-0015 result head `1e73121` form the current development state.
+- M14 exact block runtime head `862d401`, CLI/telemetry head `bdf4a66`, and B-0015 result head `1e73121` remain the CPU reference lineage.
 - Pre-publication verification passed CPU CTest 13/13 and Python 253/44, liburing/direct CTest 14/14 and Python 257/42, CUDA CTest 22/22 and Python 291/8, and ASan/UBSan liburing CTest 14/14 plus targeted Python 95/35. CUDA FFN Compute Sanitizer reported zero errors; the CPU-only expert-major CLI has no instrumented CUDA API and is covered by ASan/UBSan rather than a fabricated Compute Sanitizer result.
 - B-0015 artifact SHA-256 is `29f3fd10c95dcde9f2b012e10e36962363b5cdd79dfeda5f5e3bbaca0cb89b75`; canonical aggregate-record SHA-256 is `cb95eff274713a21b821695d75ff2655da735513c99215ec5ec14f5ed995b813`.
 - Independent evidence validation recomputed all ten raw JSON/CSV hashes, the aggregate hash, exact diagnostic parity, and the six headline percentage deltas. The report is ready to share with the stated synthetic/WSL2/logical-I/O caveats.

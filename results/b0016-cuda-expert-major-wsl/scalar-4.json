@@ -1,0 +1,18 @@
+{
+  "activation_h2d_bytes": 1146880,
+  "artifact_kind": "released_dimension_single_expert",
+  "batch_size": 4,
+  "batched_expert_ffn_calls": 0,
+  "batched_expert_ffn_tokens": 0,
+  "device_to_host_bytes": 1146880,
+  "execution": "scalar",
+  "expert_payload_bytes": 17547264,
+  "iterations": 20,
+  "kernel_nanoseconds": 27230592,
+  "latency_nanoseconds_median": 7428474,
+  "maximum_absolute_error": 0,
+  "peak_vram_bytes": 5914624,
+  "routing_semantics": false,
+  "warmup": 3,
+  "weight_h2d_bytes": 1403781120
+}
