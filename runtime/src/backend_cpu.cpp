@@ -152,6 +152,41 @@ public:
             std::move(outputs));
     }
 
+    Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_batch(
+        std::span<const float> inputs, std::size_t batch_size,
+        Mxfp4MlpView expert, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) override {
+        if (batch_size == 0 || expert.gate.cols == 0 ||
+            batch_size > std::numeric_limits<std::size_t>::max() /
+                             expert.gate.cols ||
+            inputs.size() != batch_size * expert.gate.cols ||
+            !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
+            (situ_linear &&
+             (!std::isfinite(*situ_linear) || *situ_linear <= 0.0F)) ||
+            !valid_mxfp4_mlp(inputs.first(expert.gate.cols), expert)) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+
+        std::vector<std::vector<float>> outputs;
+        outputs.reserve(batch_size);
+        const std::span<const Mxfp4MlpView> one_expert(&expert, 1);
+        for (std::size_t row = 0; row < batch_size; ++row) {
+            const auto input = inputs.subspan(
+                row * expert.gate.cols, expert.gate.cols);
+            auto output = mxfp4_situ_mlp_group(
+                input, one_expert, situ_beta, situ_linear, layer, phase);
+            if (!output) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    output.error(), output.message());
+            }
+            outputs.push_back(std::move(output.value().front()));
+        }
+        return Result<std::vector<std::vector<float>>>::success(
+            std::move(outputs));
+    }
+
     Result<std::vector<float>> mxfp4_situ_moe(
         std::span<const float> input, std::span<const Mxfp4MlpView> experts,
         std::span<const float> contributions, float situ_beta,
