@@ -149,6 +149,9 @@ endif()
 add_executable(test_reader tests/cpp/test_reader.cpp)
 target_link_libraries(test_reader PRIVATE k3x_runtime)
 
+add_executable(test_reader_concurrency tests/cpp/test_reader_concurrency.cpp)
+target_link_libraries(test_reader_concurrency PRIVATE k3x_runtime)
+
 add_executable(test_reader_contract tests/cpp/test_reader_contract.cpp)
 target_link_libraries(test_reader_contract PRIVATE k3x_runtime)
 add_test(NAME reader_contract COMMAND test_reader_contract)

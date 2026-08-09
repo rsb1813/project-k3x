@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -72,5 +73,6 @@ private:
     std::size_t capacity_bytes_{};
     L1ExpertCacheStats stats_;
     std::unordered_map<ExpertKey, ExpertPayloadHandle, KeyHash> entries_;
+    mutable std::mutex mutex_;
 };
 }

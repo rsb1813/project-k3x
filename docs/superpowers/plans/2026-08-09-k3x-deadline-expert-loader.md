@@ -12,9 +12,9 @@ Implement and measure an opt-in, exact current-layer deadline-aware L2 expert lo
 
 ## Task 2 — Reader and L1 concurrency safety
 
-- [ ] Add failing concurrency regressions for Reader counter/data-plane serialization and L1 hit/admission safety.
-- [ ] Add only the synchronization required by the scheduler.
-- [ ] Run C++ tests under ThreadSanitizer where supported, otherwise record the unavailable tool and run ASan/UBSan.
+- [x] Add failing concurrency regressions for Reader counter/data-plane serialization and L1 hit/admission safety.
+- [x] Add only the synchronization required by the scheduler.
+- [x] Run C++ tests under ThreadSanitizer where supported, otherwise record the unavailable tool and run ASan/UBSan.
 
 ## Task 3 — Exact runtime integration
 

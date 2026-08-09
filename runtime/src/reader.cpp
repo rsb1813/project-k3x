@@ -14,6 +14,7 @@
 #include <cstring>
 #include <fstream>
 #include <limits>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <unordered_set>
@@ -101,6 +102,7 @@ TensorRecord decode_tensor(std::span<const std::byte> value) {
 }
 
 struct Reader::DataPlane {
+    mutable std::mutex operation_mutex;
     static Result<std::unique_ptr<DataPlane>> open_source(
         const std::filesystem::path& path, const ReaderOptions& options) {
         auto result = std::unique_ptr<DataPlane>(new DataPlane);
@@ -706,6 +708,7 @@ Result<std::vector<std::vector<std::byte>>> Reader::read_extents(
                 ErrorCode::invalid_extent);
         }
     }
+    std::lock_guard lock(data_plane_->operation_mutex);
     ++counters_.batch_submissions;
     for (const auto& request : requests) {
         ++counters_.calls;

@@ -35,6 +35,31 @@ def test_cpp_reader_keeps_one_linux_data_plane_descriptor(
     assert artifact.is_file()
 
 
+@pytest.mark.parametrize(
+    "mode",
+    [
+        None,
+        pytest.param(
+            "io-uring",
+            marks=pytest.mark.skipif(
+                os.environ.get("K3X_TEST_IO_URING") != "1",
+                reason="requires the optional liburing build",
+            ),
+        ),
+    ],
+)
+def test_cpp_reader_serializes_shared_data_plane_and_counters(
+    synthetic_source: Path, tmp_path: Path, mode: str | None
+) -> None:
+    artifact = tmp_path / "concurrent.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    arguments = [str(cpp_binary("test_reader_concurrency")), str(artifact)]
+    if mode is not None:
+        arguments.append(mode)
+    result = subprocess.run(arguments, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
 def test_cpp_reader_exposes_storage_fixture_optional_identity(
     tmp_path: Path,
 ) -> None:

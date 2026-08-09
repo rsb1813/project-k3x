@@ -118,7 +118,7 @@
 ## Milestone 8 — Deadline-aware exact expert loading
 
 - [x] Deadline scheduler contract와 deterministic unit tests.
-- [ ] Reader 및 L1 store concurrency safety.
+- [x] Reader 및 L1 store concurrency safety.
 - [ ] Blocking reference를 보존하는 exact current-layer runtime integration.
 - [ ] CLI, telemetry, B-0009 ablation.
 - [ ] 전체 verification, final review, TITAN Ledger, public integration.

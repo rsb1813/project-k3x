@@ -63,6 +63,7 @@ std::size_t HostExpertStore::KeyHash::operator()(
 
 Result<ExpertPayloadHandle> HostExpertStore::get_or_load(
     ExpertKey key, const ExpertPayloadLoader& loader) {
+    std::lock_guard lock(mutex_);
     if (mode_ == L1ExpertCacheMode::static_admission) {
         if (const auto found = entries_.find(key); found != entries_.end()) {
             ++stats_.hits;

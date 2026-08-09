@@ -1,10 +1,14 @@
 // 영속적 L1 expert store의 원자적 admission과 exact bypass 계약을 검증합니다.
 #include "k3x/host_expert_store.hpp"
 
+#include <atomic>
+#include <barrier>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -13,7 +17,9 @@
 #endif
 #define assert(condition)                                                        \
     do {                                                                         \
-        if (!(condition)) throw std::runtime_error("test requirement failed"); \
+        if (!(condition)) {                                                       \
+            throw std::runtime_error("test requirement failed: " #condition);   \
+        }                                                                        \
     } while (false)
 
 namespace {
@@ -127,6 +133,32 @@ int main() {
     assert(invalid.error() == ErrorCode::invalid_mxfp4);
     assert(failure_atomic.stats().misses == 0);
     assert(failure_atomic.stats().resident_bytes == 0);
+
+    constexpr std::size_t thread_count = 8;
+    HostExpertStore concurrent(L1ExpertCacheMode::static_admission, 3264);
+    std::atomic<std::size_t> concurrent_loads{};
+    std::barrier start(static_cast<std::ptrdiff_t>(thread_count));
+    std::vector<k3x::ExpertPayloadHandle> handles(thread_count);
+    std::vector<std::thread> threads;
+    for (std::size_t index = 0; index < thread_count; ++index) {
+        threads.emplace_back([&, index] {
+            start.arrive_and_wait();
+            auto result = concurrent.get_or_load({4, 7}, [&] {
+                ++concurrent_loads;
+                std::this_thread::sleep_for(std::chrono::milliseconds{20});
+                return Result<k3x::ExpertMlpPayload>::success(payload(70));
+            });
+            assert(result);
+            handles[index] = std::move(result.value());
+        });
+    }
+    for (auto& thread : threads) thread.join();
+    assert(concurrent_loads == 1);
+    assert(concurrent.stats().misses == 1);
+    assert(concurrent.stats().hits == thread_count - 1);
+    for (const auto& handle : handles) {
+        assert(handle.get() == handles.front().get());
+    }
 
     return 0;
 }
