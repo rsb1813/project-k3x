@@ -31,7 +31,10 @@ __global__ void mxfp4_matvec_kernel(
     std::size_t rows, std::size_t cols, float contribution,
     bool accumulate) {
     const auto row = static_cast<std::size_t>(blockIdx.x);
+    const auto token = static_cast<std::size_t>(blockIdx.y);
     if (row >= rows) return;
+    input += token * cols;
+    output += token * rows;
 
     float sum = 0.0F;
     for (std::size_t column = threadIdx.x; column < cols;
@@ -68,9 +71,25 @@ cudaError_t launch_mxfp4_matvec(
     const std::uint8_t* scales, float* output,
     std::size_t rows, std::size_t cols, cudaStream_t stream) {
     constexpr unsigned threads = 256;
-    mxfp4_matvec_kernel<<<static_cast<unsigned>(rows), threads,
+    mxfp4_matvec_kernel<<<dim3(static_cast<unsigned>(rows), 1), threads,
                            threads * sizeof(float), stream>>>(
         input, packed, scales, output, rows, cols, 1.0F, false);
+    return cudaGetLastError();
+}
+
+cudaError_t launch_mxfp4_matvec_batch(
+    const float* inputs, const std::uint8_t* packed,
+    const std::uint8_t* scales, float* outputs,
+    std::size_t rows, std::size_t cols, std::size_t batch_size,
+    cudaStream_t stream) {
+    if (batch_size == 0 || batch_size > 65535) {
+        return cudaErrorInvalidValue;
+    }
+    constexpr unsigned threads = 256;
+    mxfp4_matvec_kernel<<<dim3(static_cast<unsigned>(rows),
+                               static_cast<unsigned>(batch_size)),
+                           threads, threads * sizeof(float), stream>>>(
+        inputs, packed, scales, outputs, rows, cols, 1.0F, false);
     return cudaGetLastError();
 }
 
@@ -80,7 +99,7 @@ cudaError_t launch_mxfp4_matvec_accumulate(
     std::size_t rows, std::size_t cols, float contribution,
     bool accumulate, cudaStream_t stream) {
     constexpr unsigned threads = 256;
-    mxfp4_matvec_kernel<<<static_cast<unsigned>(rows), threads,
+    mxfp4_matvec_kernel<<<dim3(static_cast<unsigned>(rows), 1), threads,
                            threads * sizeof(float), stream>>>(
         input, packed, scales, output, rows, cols, contribution, accumulate);
     return cudaGetLastError();
