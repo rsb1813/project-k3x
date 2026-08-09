@@ -132,7 +132,7 @@ git commit -m "feat: accept canonical CUDA AURORA drafts"
 - Consumes: Task 1's canonical provider contract and `make_cuda_backend`.
 - Produces: parsed `aurora_draft_backend_name`, independent backend ownership, and JSON field `aurora_draft_backend` with values `none|cpu|cuda-custom`.
 
-- [ ] **Step 1: Write the failing CLI and integration tests**
+- [x] **Step 1: Write the failing CLI and integration tests**
 
 Extend `test_cpp_runner_rejects_invalid_speculative_options` with literal cases.
 
@@ -169,7 +169,7 @@ Create `tests/python/test_cuda_aurora_draft.py` beginning with.
 
 It skips unless `K3X_BUILD_DIR` is `build-cuda`, runs CPU-target persistent fixed and adaptive rows with CPU and CUDA draft backends, and asserts equal target tokens, state, routes, proposal/acceptance counts, and cursor lifecycle counters. Existing CPU persistent integration asserts omitted selection reports `cpu`; ordinary greedy reports `none`.
 
-- [ ] **Step 2: Build and witness RED**
+- [x] **Step 2: Build and witness RED**
 
 ```bash
 cmake --build build -j 8
@@ -183,7 +183,7 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 python -m pytest \
 
 Expected failure: unknown CLI option and missing `aurora_draft_backend` output.
 
-- [ ] **Step 3: Implement parser, preflight, and backend ownership**
+- [x] **Step 3: Implement parser, preflight, and backend ownership**
 
 Add state beside the existing AURORA options.
 
@@ -194,7 +194,7 @@ bool aurora_draft_backend_supplied = false;
 
 Parse and validate `cpu|cuda-custom`, include explicit selection in non-AURORA rejection, and reject replay plus CUDA. When persistent CUDA is selected, construct the exact fixed options from the design and call `make_cuda_backend(options, &aurora_profiler)`. Propagate creation failure without CPU fallback. Serialize `none` outside AURORA and the effective value inside AURORA.
 
-- [ ] **Step 4: Run GREEN and compatibility tests**
+- [x] **Step 4: Run GREEN and compatibility tests**
 
 ```bash
 cmake --build build -j 8
@@ -209,7 +209,7 @@ ctest --test-dir build --output-on-failure
 ctest --test-dir build-cuda --output-on-failure
 ```
 
-- [ ] **Step 5: Commit CLI execution**
+- [x] **Step 5: Commit CLI execution**
 
 ```bash
 git add runtime/src/main.cpp tests/python/test_cpp_parity.py \
