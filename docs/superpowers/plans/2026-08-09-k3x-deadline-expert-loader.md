@@ -25,9 +25,9 @@ Implement and measure an opt-in, exact current-layer deadline-aware L2 expert lo
 
 ## Task 4 — CLI and telemetry
 
-- [ ] Add stable CLI validation and JSON schema fields for scheduler mode and counters.
-- [ ] Add Python cross-language parity and invalid-option tests.
-- [ ] Document that multi-layer lookahead remains unimplemented.
+- [x] Add stable CLI validation and JSON schema fields for scheduler mode and counters.
+- [x] Add Python cross-language parity and invalid-option tests.
+- [x] Document that multi-layer lookahead remains unimplemented.
 
 ## Task 5 — B-0009 ablation
 

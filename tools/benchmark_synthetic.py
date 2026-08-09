@@ -87,6 +87,17 @@ class BenchmarkRecord:
     l1_expert_cache_bypasses: int = 0
     l1_expert_cache_resident_bytes: int = 0
     peak_l1_expert_cache_resident_bytes: int = 0
+    l2_expert_schedule: str = "blocking"
+    expert_load_submissions: int = 0
+    expert_load_inline_resident_hits: int = 0
+    expert_load_completions: int = 0
+    expert_load_ready_before_use: int = 0
+    expert_load_late_at_use: int = 0
+    expert_load_estimated_deadline_misses: int = 0
+    expert_load_requested_bytes: int = 0
+    expert_load_queue_high_water: int = 0
+    expert_load_worker_nanoseconds: int = 0
+    expert_load_exposed_wait_nanoseconds: int = 0
     reader_read_calls: int = 0
     reader_requested_bytes: int = 0
     reader_completed_bytes: int = 0
@@ -157,6 +168,7 @@ def _run_process(
     l2_io: str,
     l2_cache: str,
     l2_queue_depth: int,
+    l2_expert_schedule: str,
     diagnostics: bool = False,
 ) -> tuple[dict, int, float]:
     command = [
@@ -175,6 +187,7 @@ def _run_process(
         "--l2-io", l2_io,
         "--l2-cache", l2_cache,
         "--l2-queue-depth", str(l2_queue_depth),
+        "--l2-schedule", l2_expert_schedule,
     ]
     if diagnostics:
         command.extend(["--diagnostics", "true"])
@@ -262,6 +275,7 @@ def benchmark_once(
     l2_io: str = "pread",
     l2_cache: str = "buffered",
     l2_queue_depth: int = 8,
+    l2_expert_schedule: str = "blocking",
 ) -> BenchmarkRecord:
     if warmup < 0 or iterations <= 0:
         raise ValueError("warmup must be non-negative and iterations must be positive")
@@ -293,6 +307,7 @@ def benchmark_once(
                 l2_io=l2_io,
                 l2_cache=l2_cache,
                 l2_queue_depth=l2_queue_depth,
+                l2_expert_schedule=l2_expert_schedule,
             )
             _, ttft_peak, ttft = _run_process(
                 artifact,
@@ -313,6 +328,7 @@ def benchmark_once(
                 l2_io=l2_io,
                 l2_cache=l2_cache,
                 l2_queue_depth=l2_queue_depth,
+                l2_expert_schedule=l2_expert_schedule,
             )
             if index >= warmup:
                 samples.append(sample)
@@ -340,6 +356,7 @@ def benchmark_once(
                 l2_io=l2_io,
                 l2_cache=l2_cache,
                 l2_queue_depth=l2_queue_depth,
+                l2_expert_schedule=l2_expert_schedule,
                 diagnostics=True,
             )
             if diagnostic["token_ids"] != samples[0]["token_ids"]:
@@ -365,6 +382,7 @@ def benchmark_once(
                 l2_io=l2_io,
                 l2_cache=l2_cache,
                 l2_queue_depth=l2_queue_depth,
+                l2_expert_schedule=l2_expert_schedule,
                 diagnostics=True,
             )
             candidate, _, _ = _run_process(
@@ -386,6 +404,7 @@ def benchmark_once(
                 l2_io=l2_io,
                 l2_cache=l2_cache,
                 l2_queue_depth=l2_queue_depth,
+                l2_expert_schedule=l2_expert_schedule,
                 diagnostics=True,
             )
             max_absolute_error, max_relative_error = _numerical_errors(
@@ -410,6 +429,11 @@ def benchmark_once(
         "l1_expert_cache_bypasses",
         "l1_expert_cache_resident_bytes",
         "peak_l1_expert_cache_resident_bytes",
+        "l2_expert_schedule",
+        "expert_load_submissions",
+        "expert_load_inline_resident_hits",
+        "expert_load_completions",
+        "expert_load_requested_bytes",
         "reader_read_calls",
         "reader_requested_bytes",
         "reader_completed_bytes",
@@ -598,6 +622,31 @@ def benchmark_once(
         peak_l1_expert_cache_resident_bytes=samples[0][
             "peak_l1_expert_cache_resident_bytes"
         ],
+        l2_expert_schedule=samples[0]["l2_expert_schedule"],
+        expert_load_submissions=samples[0]["expert_load_submissions"],
+        expert_load_inline_resident_hits=samples[0][
+            "expert_load_inline_resident_hits"
+        ],
+        expert_load_completions=samples[0]["expert_load_completions"],
+        expert_load_ready_before_use=int(statistics.median(
+            item["expert_load_ready_before_use"] for item in samples
+        )),
+        expert_load_late_at_use=int(statistics.median(
+            item["expert_load_late_at_use"] for item in samples
+        )),
+        expert_load_estimated_deadline_misses=int(statistics.median(
+            item["expert_load_estimated_deadline_misses"] for item in samples
+        )),
+        expert_load_requested_bytes=samples[0]["expert_load_requested_bytes"],
+        expert_load_queue_high_water=int(statistics.median(
+            item["expert_load_queue_high_water"] for item in samples
+        )),
+        expert_load_worker_nanoseconds=int(statistics.median(
+            item["expert_load_worker_nanoseconds"] for item in samples
+        )),
+        expert_load_exposed_wait_nanoseconds=int(statistics.median(
+            item["expert_load_exposed_wait_nanoseconds"] for item in samples
+        )),
         reader_read_calls=samples[0]["reader_read_calls"],
         reader_requested_bytes=samples[0]["reader_requested_bytes"],
         reader_completed_bytes=samples[0]["reader_completed_bytes"],
@@ -665,6 +714,10 @@ def main() -> int:
     parser.add_argument("--l2-io", choices=("pread", "io-uring"), default="pread")
     parser.add_argument("--l2-cache", choices=("buffered", "direct"), default="buffered")
     parser.add_argument("--l2-queue-depth", type=int, default=8)
+    parser.add_argument(
+        "--l2-expert-schedule", choices=("blocking", "deadline"),
+        default="blocking",
+    )
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--csv", type=Path, required=True)
     args = parser.parse_args()
@@ -687,6 +740,7 @@ def main() -> int:
         l2_io=args.l2_io,
         l2_cache=args.l2_cache,
         l2_queue_depth=args.l2_queue_depth,
+        l2_expert_schedule=args.l2_expert_schedule,
     )
     write_results(result, args.json, args.csv)
     print(json.dumps(asdict(result), sort_keys=True, separators=(",", ":")))

@@ -151,6 +151,7 @@ def test_cpp_runner_accepts_static_l1_expert_cache_for_cpu() -> None:
     [
         (["--l2-io", "thread-pool"], "unknown L2 I/O engine: thread-pool"),
         (["--l2-cache", "mmap"], "unknown L2 cache mode: mmap"),
+        (["--l2-schedule", "fifo"], "unknown L2 expert schedule mode: fifo"),
         (["--l2-queue-depth", "0"], "L2 queue depth must be positive"),
         (["--l2-queue-depth", "-1"], "invalid L2 queue depth: -1"),
         (
@@ -181,6 +182,8 @@ def test_cpp_runner_accepts_default_l2_reader_options() -> None:
             "buffered",
             "--l2-queue-depth",
             "8",
+            "--l2-schedule",
+            "blocking",
         ],
         capture_output=True,
         text=True,
@@ -458,6 +461,61 @@ def test_runtime_session_reuses_l1_experts_across_generations(
         [str(cpp_binary("test_model_session")), str(artifact)],
         check=True,
     )
+
+
+def test_deadline_expert_schedule_preserves_exact_runtime_contract(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    artifact = tmp_path / "synthetic.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    records: dict[str, dict] = {}
+    for schedule in ("blocking", "deadline"):
+        output = tmp_path / f"{schedule}.json"
+        subprocess.run(
+            [
+                str(cpp_binary("k3x_run")),
+                "--model", str(artifact),
+                "--prompt-ids", "1,7,3,9",
+                "--generate", "6",
+                "--mode", "incremental",
+                "--diagnostics", "true",
+                "--l1-expert-cache", "static",
+                "--l1-expert-cache-bytes", "65536",
+                "--l2-schedule", schedule,
+                "--json", str(output),
+            ],
+            check=True,
+        )
+        records[schedule] = json.loads(output.read_text(encoding="utf-8"))
+
+    blocking = records["blocking"]
+    deadline = records["deadline"]
+    for field in (
+        "token_ids",
+        "prefill_routed_experts",
+        "l1_expert_cache_hits",
+        "l1_expert_cache_misses",
+        "reader_read_calls",
+        "reader_requested_bytes",
+        "reader_completed_bytes",
+    ):
+        assert deadline[field] == blocking[field]
+    assert blocking["l2_expert_schedule"] == "blocking"
+    assert blocking["expert_load_submissions"] == 0
+    assert blocking["expert_load_completions"] == 0
+    assert deadline["l2_expert_schedule"] == "deadline"
+    assert deadline["expert_load_submissions"] > 0
+    assert deadline["expert_load_inline_resident_hits"] > 0
+    assert deadline["expert_load_completions"] == deadline["expert_load_submissions"]
+    assert (
+        deadline["expert_load_ready_before_use"]
+        + deadline["expert_load_late_at_use"]
+        == deadline["expert_load_submissions"]
+    )
+    assert deadline["expert_load_requested_bytes"] > 0
+    assert deadline["expert_load_queue_high_water"] > 0
+    assert deadline["expert_load_worker_nanoseconds"] > 0
+    assert deadline["expert_load_exposed_wait_nanoseconds"] >= 0
 
 
 @pytest.mark.skipif(

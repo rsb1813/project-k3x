@@ -87,6 +87,7 @@ int main(int argc, char** argv) {
     std::string l2_io_name = "pread";
     std::string l2_cache_name = "buffered";
     std::string l2_queue_depth_text = "8";
+    std::string l2_schedule_name = "blocking";
     bool diagnostics = false;
     std::size_t count = 0;
     for (int index = 1; index + 1 < argc; index += 2) {
@@ -112,6 +113,7 @@ int main(int argc, char** argv) {
         else if (key == "--l2-io") l2_io_name = value;
         else if (key == "--l2-cache") l2_cache_name = value;
         else if (key == "--l2-queue-depth") l2_queue_depth_text = value;
+        else if (key == "--l2-schedule") l2_schedule_name = value;
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
     }
 
@@ -146,6 +148,17 @@ int main(int argc, char** argv) {
     if (runtime_options.l1_expert_cache == k3x::L1ExpertCacheMode::disabled &&
         runtime_options.l1_expert_cache_bytes != 0) {
         std::cerr << "disabled L1 expert cache requires a zero byte capacity\n";
+        return 2;
+    }
+    if (l2_schedule_name == "blocking") {
+        runtime_options.l2_expert_schedule =
+            k3x::L2ExpertScheduleMode::blocking;
+    } else if (l2_schedule_name == "deadline") {
+        runtime_options.l2_expert_schedule =
+            k3x::L2ExpertScheduleMode::deadline;
+    } else {
+        std::cerr << "unknown L2 expert schedule mode: "
+                  << l2_schedule_name << '\n';
         return 2;
     }
     if (l2_io_name == "pread") {
@@ -402,6 +415,29 @@ int main(int argc, char** argv) {
            << reader.value().direct_memory_alignment()
            << ",\"l2_direct_offset_alignment\":"
            << reader.value().direct_offset_alignment();
+    output << ",\"l2_expert_schedule\":";
+    write_json_string(output, l2_schedule_name);
+    const auto& expert_load = result.value().expert_load_scheduler;
+    output << ",\"expert_load_submissions\":"
+           << expert_load.submissions
+           << ",\"expert_load_inline_resident_hits\":"
+           << expert_load.inline_resident_hits
+           << ",\"expert_load_completions\":"
+           << expert_load.completions
+           << ",\"expert_load_ready_before_use\":"
+           << expert_load.ready_before_use
+           << ",\"expert_load_late_at_use\":"
+           << expert_load.late_at_use
+           << ",\"expert_load_estimated_deadline_misses\":"
+           << expert_load.estimated_deadline_misses
+           << ",\"expert_load_requested_bytes\":"
+           << expert_load.requested_bytes
+           << ",\"expert_load_queue_high_water\":"
+           << expert_load.queue_high_water
+           << ",\"expert_load_worker_nanoseconds\":"
+           << expert_load.worker_nanoseconds
+           << ",\"expert_load_exposed_wait_nanoseconds\":"
+           << expert_load.exposed_wait_nanoseconds;
     output << ",\"kernel_nanoseconds\":" << profile.device_nanoseconds
            << ",\"host_to_device_bytes\":" << profile.host_to_device_bytes
            << ",\"weight_h2d_bytes\":"

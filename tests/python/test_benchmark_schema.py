@@ -87,6 +87,9 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["l1_expert_cache_mode"] == "disabled"
     assert payload["l1_expert_cache_bytes"] == 0
     assert payload["l1_expert_cache_hits"] == 0
+    assert payload["l2_expert_schedule"] == "blocking"
+    assert payload["expert_load_submissions"] == 0
+    assert payload["expert_load_completions"] == 0
     assert payload["reader_read_calls"] == 0
     assert payload["reader_requested_bytes"] == 0
     assert payload["reader_completed_bytes"] == 0
