@@ -143,6 +143,11 @@ class BenchmarkRecord:
     routing_quality_escalated_decisions: int = 0
     cold_rescue_count: int = 0
     routed_k: tuple[int, ...] = ()
+    natural_token_parity: bool | None = None
+    first_decision_natural_prefix: bool | None = None
+    natural_routing_prefix_rate: float | None = None
+    natural_prefill_logits_max_abs_error: float | None = None
+    natural_prefill_state_max_abs_error: float | None = None
 
     def __post_init__(self) -> None:
         if self.scope not in {
