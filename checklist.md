@@ -77,3 +77,15 @@
 - [x] dense/MXFP4 grouped projection 구현과 독립 ablation.
 - [x] weight/activation H2D profiler 분리와 deterministic ablation runner 구현.
 - [x] 전체 correctness, memcheck, benchmark, TITAN Ledger 갱신.
+
+## Milestone 3 FFN block executor
+
+- [x] B-0003 병목을 기준으로 operation, generic device handle, full-layer 대안 비교.
+- [x] dependency-closed FFN block executor 설계 명세 작성과 self-review.
+- [ ] TDD 구현 계획 작성과 self-review.
+- [ ] `cuda-boundary` 옵션과 capability validation 구현.
+- [ ] strict FP32 SiTU-GLU CUDA kernel과 literal oracle 검증.
+- [ ] dense/shared FFN block 구현과 graph 연결.
+- [ ] exact native MXFP4 routed expert block group 구현과 graph 연결.
+- [ ] profiler/schema/ablation runner 확장.
+- [ ] 전체 correctness, sanitizer, B-0004, TITAN Ledger 갱신.

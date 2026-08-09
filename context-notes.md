@@ -101,3 +101,11 @@
 - Task 11 최종 검증은 CPU CTest 5/5와 pytest 65 passed/23 skipped, CUDA CTest 9/9와 pytest 87 passed/1 skipped, 네 CUDA test의 Compute Sanitizer 0 errors이다.
 - B-0003에서 FP32 `cuda-dense` reference/reuse/residency/grouped decode는 12.1261/17.4560/18.0041/17.9018 tok/s이고, `cuda-custom`은 12.2647/17.1425/17.2723/16.8348 tok/s이다. Grouping은 activation H2D와 synchronization을 줄였지만 scalar residency보다 느려 기본값으로 채택하지 않는다.
 - Fully-enabled BF16은 `cuda-dense` 17.6861 tok/s와 `cuda-custom` 17.0032 tok/s이며 최대 절대 오차 0.00402409와 exact token을 유지했다. FP32 scalar residency보다 빠르지 않고 일반 품질 benchmark가 없으므로 opt-in을 유지한다.
+
+## 2026-08-09 Milestone 3 설계
+
+- 사용자는 Cloud Run 및 유료 자원 단계 전까지 기존 헌장과 안전 범위 안의 단순 승인 작업은 별도 질문 없이 계속 진행하도록 승인했다. 비용, 파괴적 변경, 보안 경계 변경은 이 승인에 포함되지 않는다.
+- B-0003 이후 다음 경계로 generic device tensor와 full decoder layer 대신 dependency-closed FFN block을 선택했다. gate/up, strict FP32 SiTU-GLU, down을 한 CUDA call과 최종 synchronization 안에서 실행하며 기존 operation 경로를 reference로 유지한다.
+- `ffn-block` runtime mode는 `cuda-custom` 전용으로 제한한다. `cuda-dense`에서 routed MXFP4를 CPU로 내부 처리하면 advertised boundary 안에 silent CPU execution이 섞이므로 지원하지 않는다.
+- routed expert block은 선택된 Top-K triplet 전체를 한 group으로 받아 latent input을 한 번만 upload하고 expert 출력만 host로 반환한다. Router score, selection, output mixing은 CPU exact graph에 남는다.
+- Sol 읽기 전용 자문은 같은 경계를 권장했고 fast-math 금지, preflight validation, 기존 resident table 재사용, 최종 sync 뒤 event 집계가 핵심 불변식이라고 확인했다. 자문 전후 작업 트리에는 예상 밖 변경이 없었다.

@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 2 implementation, measurement, public merge, and Linux CI are complete. The next milestone is the wider layer/block GPU execution boundary.
+Milestone 2 implementation, measurement, public merge, and Linux CI are complete. Milestone 3 FFN block executor design is complete and its TDD implementation plan is in progress.
 
-State recorded on 2026-08-09 after public fast-forward merge at `f71238c` and successful Linux workflow `31291903865`.
+State recorded on 2026-08-09 on branch `codex/milestone-three-ffn-blocks` after selecting the dependency-closed CUDA FFN boundary.
 
 ## Completed work
 
@@ -22,7 +22,8 @@ State recorded on 2026-08-09 after public fast-forward merge at `f71238c` and su
 
 - The TITAN Ledger and README are synchronized with B-0003.
 - Public PR #2 is merged. Final read-only review found no Critical or Important issue, and the post-merge Linux workflow succeeded.
-- No Milestone 3 implementation has started. Its first design target is a wider GPU execution boundary that keeps intermediate activations on device.
+- Milestone 3 selects a `cuda-custom`-only FFN block boundary that keeps gate/up outputs and SiTU-GLU activations on device through the down projection. No Milestone 3 production code has been implemented yet.
+- The design specification is complete; the detailed TDD implementation plan is the next artifact.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; builds: `build-linux` and `build-cuda`.
 
@@ -38,10 +39,11 @@ State recorded on 2026-08-09 after public fast-forward merge at `f71238c` and su
 
 ## Next concrete tasks
 
-1. Design and measure a wider layer/block GPU execution boundary that keeps intermediate activations on device.
-2. Build the first asynchronous L0/L1 transfer pipeline only after the wider boundary exposes representative transfer deadlines.
-3. Add full-dimension bounded checkpoint slices before any full Kimi K3 throughput claim.
-4. Continue with expert cache policies, task/session profiles, adaptive Top-K, and exact rescue in charter order.
+1. Write and self-review the Milestone 3 TDD implementation plan.
+2. Implement and independently measure dense/shared and exact native MXFP4 FFN blocks while preserving the operation reference path.
+3. Build the first asynchronous L0/L1 transfer pipeline only after the wider boundary exposes representative transfer deadlines.
+4. Add full-dimension bounded checkpoint slices before any full Kimi K3 throughput claim.
+5. Continue with expert cache policies, task/session profiles, adaptive Top-K, and exact rescue in charter order.
 
 ## Hardware assumptions
 
