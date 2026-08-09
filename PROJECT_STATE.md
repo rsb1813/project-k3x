@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 9 runtime-switchable exact expert cache policies, non-authoritative WSL2 B-0010 measurement, final review, review fix, verification, and public integration are complete.
+Milestone 10 bounded task/session routing profiles, opt-in profiled eviction, non-authoritative WSL2 B-0011 measurement, self-review fixes, verification, and TITAN Ledger are complete locally. Public integration is pending.
 
-State recorded on 2026-08-09 at verified Milestone 9 integration head `185ae5d`. Public PR #9 is merged by fast-forward, post-merge main correctness run `31312852935` succeeded, and the preserved active branch is `codex/milestone-nine-expert-cache-policies`.
+State recorded on 2026-08-09 at verified Milestone 10 result head `308b0db`. Public main remains at Milestone 9 publication record `05af321`; the active branch is `codex/milestone-ten-task-session-profiles`.
 
 ## Completed work
 
@@ -54,15 +54,19 @@ State recorded on 2026-08-09 at verified Milestone 9 integration head `185ae5d`.
 - SpecMD Least-Stale paper reproduction with stale-before-current priority, processed-left-layer priority, upcoming-layer protection, and deterministic LRU collision 1 versus Least-Stale 0 trace coverage.
 - Session-wide generation serialization that prevents concurrent forwards from overwriting the store's active policy context while leaving independent sessions independent.
 - Thirteen-case B-0010 runner crossing disabled plus four policies at 2-, 8-, and 16-expert capacities with exact token/routing/numerical-error identity, raw JSON/CSV, and WSL2 ext4 3-warmup/20-sample measurements.
+- Bounded canonical `.k3xp` runtime profiles with validated metadata, prior/live expert frequency, adjacent-layer transitions, deterministic hot bank, CRC32C, and sibling temporary publication.
+- Opt-in exact `profiled` eviction with explicit prior strength and live-observation crossover; runtime metadata remains outside prompt IDs and default sessions do not observe profile state.
+- CLI profile load/save and metadata controls plus bytes/time/prior telemetry, exact resume parity, malformed-input rejection, bounded record behavior, and full-generation artifact-size evidence.
+- Five-case B-0011 runner comparing LFU, Least-Stale, cold profile, matching prior, and minimum-overlap alternate prior with exact token/routing/logit/state identity and WSL2 ext4 3-warmup/20-sample measurements.
 
 ## Work in progress
 
-- Milestone 10 Tasks 1–3 bounded runtime profile persistence, opt-in profiled exact eviction, RuntimeSession ownership, CLI integration, and prompt/output non-interference proof are implemented locally on branch `codex/milestone-ten-task-session-profiles`; B-0011 and full verification remain in progress.
+- Milestone 10 implementation, B-0011, full verification, and ledger are complete locally on branch `codex/milestone-ten-task-session-profiles`; public PR/main integration remains.
 - Milestone 9 Terra high final review found one valid Important shared-session policy-context issue. Commit `fd05d95` serializes complete generation calls; re-review found no remaining Critical or Important issue and withdrew an initial collision interpretation concern after deterministic future-layer trace review.
-- Static, LRU, LFU, Least-Stale, and all non-default L2 modes remain experimental and opt-in. Task/session priors, transition prediction, and cross-layer asynchronous L2 scheduling remain unimplemented.
+- Static, LRU, LFU, Least-Stale, profiled eviction, and all non-default L2 modes remain experimental and opt-in. Transition prediction and cross-layer asynchronous L2 scheduling remain unimplemented.
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
-- `pread + buffered`, blocking scheduling, and disabled L1 remain defaults because B-0007 through B-0010 are WSL2 ext4 evidence, not native P44 Pro or full-model evidence.
+- `pread + buffered`, blocking scheduling, and disabled L1 remain defaults because B-0007 through B-0011 are WSL2 ext4 evidence, not native P44 Pro or full-model evidence.
 - Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-one-runtime`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; builds: `build-cpu`, `build-uring`, and `build-cuda`.
 
@@ -71,7 +75,7 @@ State recorded on 2026-08-09 at verified Milestone 9 integration head `185ae5d`.
 - Windows Smart App Control still blocks unsigned `k3x_run.exe`; WSL2 is the verified local CUDA path and native Linux remains the final performance authority.
 - The executable checkpoint is synthetic and tiny. The full-dimension artifact contains only one non-executable expert. No full Kimi K3 weights have been downloaded, and B-0008 is neither token throughput nor a full-model claim.
 - The graph remains CPU-driven outside FFN blocks. KDA, MLA, routing, score mixing, residual work, state management, and non-FFN boundaries remain on the host.
-- L1 misses use ordered Reader batches into pageable host vectors. Deadline mode may run one such blocking batch on a worker, but there is no cross-layer asynchronous L2 pipeline, task/session prior, predictor, or N/N+1/N+2 triple buffering.
+- L1 misses use ordered Reader batches into pageable host vectors. Deadline mode may run one such blocking batch on a worker, but there is no cross-layer asynchronous L2 pipeline, transition predictor, or N/N+1/N+2 triple buffering.
 - Exact prefetch is single-flight and limited to `cuda-custom + ffn-block + reused + transient`; it is not combined with static residency.
 - `cuda-dense` intentionally keeps native MXFP4 on the CPU as its documented comparison identity. `cuda-custom` is the exact GPU MXFP4 path.
 - GPU utilization, GPU memory bandwidth, and physical NVMe GB/token remain unmeasured. Reader storage elapsed time, logical/aligned bytes, process `rchar/read_bytes`, and L1-to-L0 timing are measured under their stated scopes.
@@ -81,11 +85,11 @@ State recorded on 2026-08-09 at verified Milestone 9 integration head `185ae5d`.
 
 ## Next concrete tasks
 
-1. Design Milestone 10 task/session profile metadata and persistence without injecting runtime-only headers into K3 prompt tokens.
-2. Implement RED tests and the bounded canonical profile model for expert frequency, transitions, hot-bank state, and repository-specific statistics.
-3. Add a bounded multi-expert or full-layer slice for representative cache pressure and locality evidence.
-4. Extend the current-layer worker only after a tested future-layer recall contract exists; do not claim ORBIT or N/N+1/N+2 before then.
-5. Run native-Linux P44 Pro warm/cold B-0008 through B-0010 only when that environment exists.
+1. Publish Milestone 10 through a reviewed public PR, fast-forward `main`, and verify post-merge CI.
+2. Design Milestone 11 adaptive Top-K with natural Top-16 reference, per-token/layer policy telemetry, and exact cold-expert rescue separated from permanent pruning.
+3. Add RED tests for fixed K4/6/8/12/16, entropy/cumulative-mass selection, full 896-way score retention, high-score exact rescue, and quality escalation signals.
+4. Add a bounded multi-expert or full-layer slice for representative cache pressure and locality evidence.
+5. Run native-Linux P44 Pro warm/cold B-0008 through B-0011 only when that environment exists.
 
 ## Hardware assumptions
 
@@ -102,28 +106,28 @@ State recorded on 2026-08-09 at verified Milestone 9 integration head `185ae5d`.
 
 ## Latest measured bottleneck
 
-B-0010 shows that cache policy ranking changes with capacity. At the 8-expert synthetic capacity, Least-Stale records 23 hits, 31 misses, zero collisions, and 628,080 logical Reader bytes versus LRU 20/34/1/632,976 and LFU 19/35/7/634,608. At 16 experts, LFU instead records the best 36 hits, 18 misses, and 606,864 bytes while Least-Stale records 35/19/608,496.
+B-0011 shows that a matching task/session prior can equal Least-Stale traffic at the 8-expert synthetic capacity but does not improve timing. Matching prior and Least-Stale both record 23 hits, 31 misses, and 628,080 logical Reader bytes, while matching-prior decode is 5,006.701 tok/s versus 5,900.245 tok/s. The minimum-overlap alternate prior records 22/32/629,712 and 4,868.597 tok/s.
 
-The measured bottleneck is still expert miss traffic under constrained residency, but the tiny graph does not select one universal eviction policy. Decode differences are small relative to separate-process WSL2 noise, no controlled cold-cache preparation was used, and logical Reader bytes are not physical NVMe attribution.
+The measured bottleneck remains expert miss traffic under constrained residency, with profile bookkeeping and load/save overhead visible on the tiny graph. Helpful prior information did not reduce traffic below Least-Stale, and stale or mismatched priors can regress it. Separate-process WSL2 timing, uncontrolled cold-cache state, and logical Reader bytes cannot establish a native default.
 
-The immediate result is to retain `disabled + blocking + pread + buffered` as defaults. The next evidence gap is task/session prior behavior followed by representative full-size multi-expert pressure and a future-layer predictor with high recall. Native-Linux physical NVMe traffic, controlled cold/warm behavior, and full-model locality remain unknown. CPU-driven KDA/MLA, routing, residual/state, and non-FFN orchestration also remain visible bottlenecks.
+The immediate result is to retain `disabled + blocking + pread + buffered` as defaults and keep `profiled` opt-in. The next implementation gap is adaptive Top-K with exact rescue, followed by representative full-size multi-expert pressure and a future-layer predictor with high recall. Native-Linux physical NVMe traffic, controlled cold/warm behavior, and full-model locality remain unknown. CPU-driven KDA/MLA, routing, residual/state, and non-FFN orchestration also remain visible bottlenecks.
 
 The derived uncached full-model expert traffic remains 25.83 GB/token, but it is not a measured full-model value. Native-Linux NVMe traffic, cache reuse, and full Kimi K3 throughput remain unknown.
 
 ## Last known-good state
 
-- Public Milestone 9 integration head: `185ae5d8fb81cc881c04d16dee477db22f2ffbdc`; PR #9 branch/PR runs `31312742423` and `31312750299` succeeded, and post-merge main run `31312852935` succeeded.
-- Latest verified Milestone 9 review-fix commit: `fd05d95` (`fix: serialize shared cache policy context`).
-- Latest verified B-0010 result head: `ff65b5b`; measurement code is `fd05d95`.
-- B-0010 artifact SHA-256: `1d4a197a299493acf6eb39d8374a4f817ee58f6f570ad5f21f29fe9fe298d2de`; summary SHA-256: `f2ff111f08fd6e9bc2cee2df426aeef337dd08150663d4e6a71922ebf60c5b8b`.
-- CPU verification: CTest 9/9; pytest 194 passed and 41 skipped.
-- Liburing/direct verification: CTest 10/10; pytest 200 passed and 35 skipped.
-- ASan/UBSan liburing verification: CTest 10/10; targeted pytest 80 passed and 33 skipped.
-- CUDA verification: CTest 18/18; pytest 227 passed and 8 skipped.
+- Public Milestone 9 publication head: `05af321`; PR #9 and post-publication branch/main correctness runs succeeded.
+- Latest verified Milestone 10 code head: `5430074` (`fix: preserve bounded profile evidence`).
+- Latest verified B-0011 result head: `308b0db`; measurement code is `5430074`.
+- B-0011 synthetic K3X artifact SHA-256: `0dfe0fe7c64b364fc745fff5b6c9a1f06d1faf1dc140630a9240591540dd684d`; summary SHA-256: `029004e02a8484f281a332c09d49e7adc8eb1ed343ec692b030760288adbd94f`.
+- CPU verification: CTest 10/10; pytest 211 passed and 41 skipped.
+- Liburing/direct verification: CTest 11/11; pytest 213 passed and 39 skipped.
+- ASan/UBSan liburing verification: CTest 11/11; targeted pytest 82 passed and 33 skipped.
+- CUDA verification: CTest 19/19; pytest 244 passed and 8 skipped.
 - Compute Sanitizer: `test_cuda_device`, `test_cuda_dense`, `test_cuda_mxfp4`, `test_cuda_memory`, `test_cuda_pinned_memory`, `test_cuda_async_pipeline`, `test_cuda_residency`, `test_cuda_situ`, `test_cuda_ffn`, and `test_cuda_async_ffn` each report `ERROR SUMMARY: 0 errors`.
-- Existing executable-model exact generated tokens remain `[43, 32, 28, 49, 9, 28]` in all B-0010 rows.
-- B-0010 raw JSON/CSV and cross-checked summary: `results/b0010-expert-cache-policies-wsl/`.
-- Pre-publication ledger check: `git diff --check` passed, the dedicated B-0010 Python regression passed 12/12, and the recorded summary SHA-256 was reproduced.
+- Existing executable-model exact generated tokens remain `[43, 32, 28, 49, 9, 28]` in all B-0011 rows.
+- B-0011 raw JSON/CSV, profiles, and cross-checked summary: `results/b0011-task-session-profiles-wsl/`.
+- Pre-publication ledger check remains pending after the final documentation commit.
 
 ## Proposed component status
 

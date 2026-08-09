@@ -402,6 +402,48 @@ Raw JSON/CSV and the programmatically cross-checked summary are under `results/b
 
 Post-review verification passed CPU CTest 9/9 and pytest 194/41, liburing/direct CTest 10/10 and pytest 200/35, CUDA CTest 18/18 and pytest 227/8, plus ASan/UBSan liburing CTest 10/10 and targeted pytest 80/33. All ten CUDA Compute Sanitizer targets reported zero errors before the host-only session-serialization fix; their binaries and CUDA sources were unchanged by that fix. TSan rebuilt but its WSL2 runtime again terminated with `unexpected memory mapping`; no TSan execution result is claimed.
 
+## B-0011 — Milestone 10 task and session profiles
+
+| Field | Value |
+|---|---|
+| Evidence | measured WSL2 warm synthetic ablation; non-authoritative for native storage, full-model locality, repository-duration sessions, or policy defaults |
+| Date | 2026-08-09 |
+| Measurement code commit | `5430074` |
+| Result commit | `308b0db` |
+| Hardware | AMD Ryzen 7 9800X3D host; CPU execution; RTX 5080 unused |
+| Environment | WSL2 Ubuntu 24.04.4, Linux 6.18.33.2; artifact on WSL ext4 `/tmp`; buffered blocking `pread` |
+| Model/checkpoint | deterministic executable `synthetic-milestone-one`; K3X SHA-256 `0dfe0fe7c64b364fc745fff5b6c9a1f06d1faf1dc140630a9240591540dd684d`; no full Kimi K3 weights |
+| Mode | exact incremental CPU generation; blocking L2 schedule; LFU, Least-Stale, and opt-in `profiled` at 13,056 bytes |
+| Context / generated tokens | target prompt `[1, 7, 3, 9]`; 6 generated tokens `[43, 32, 28, 49, 9, 28]`; alternate seed prompt `[2, 2, 2, 2]` |
+| Warmup / samples | 3 / 20 separate process runs per row |
+| Quality result | exact tokens, 24-entry natural routing trace, logits, and recurrent-state parity in every row; maximum numerical error 0 |
+| Average Top-K | 2, fixed synthetic natural routing |
+| Peak system RSS | 5,394,432 to 5,595,136 bytes across rows |
+| NVMe GB/token | not measured; logical Reader bytes are not physical NVMe attribution |
+| H2D / VRAM / GPU utilization / memory bandwidth / kernel time | 0 or not applicable; CPU backend used |
+| Speculative acceptance / unique verification experts / cold rescue | not applicable; these features are not implemented |
+| Enabled optimizations | selected exact L1 policy and, for profiled rows, bounded runtime profile observation/persistence; no adaptive Top-K, proxy, pruning, prediction, or speculation |
+
+| Policy / prior | Decode tok/s | Prefill tok/s | TTFT ms | Hits / misses | Evictions / collisions | Logical Reader bytes |
+|---|---:|---:|---:|---:|---:|---:|
+| LFU / none | 5,757.937 | 4,164.324 | 14.466 | 19 / 35 | 27 / 7 | 634,608 |
+| Least-Stale / none | 5,900.245 | 4,192.314 | 14.412 | 23 / 31 | 23 / 0 | 628,080 |
+| profiled / cold | 5,924.595 | 4,169.559 | 14.720 | 21 / 33 | 25 / 6 | 631,344 |
+| profiled / matching prompt | 5,006.701 | 3,667.612 | 14.884 | 23 / 31 | 23 / 4 | 628,080 |
+| profiled / minimum-overlap alternate prompt | 4,868.597 | 3,263.086 | 15.755 | 22 / 32 | 24 / 7 | 629,712 |
+
+| Profiled row | Metadata | Live observations | Prior weight | Load bytes / ns | Save bytes / ns |
+|---|---:|---:|---:|---:|---:|
+| cold | 0 | 54 | 0 | 0 / 0 | 1,439 / 86,017 |
+| matching prompt | 0 | 54 | 0.0689655172 | 863 / 715,193 | 1,439 / 100,993 |
+| minimum-overlap alternate prompt | 0 | 54 | 0.0689655172 | 638 / 740,811 | 1,645 / 99,641 |
+
+The matching seed has a 12-expert hot bank. The selected minimum-overlap alternate seed has an 8-expert hot bank with 5 experts overlapping the target seed; it is not described as fully conflicting. The matching prior equals Least-Stale traffic at this capacity but adds enough bookkeeping and profile-I/O overhead to lose tiny-graph timing. The alternate prior is worse on both traffic and timing. No policy default changes.
+
+The materialized full-generation output profiles are exactly 1,439, 1,439, and 1,645 bytes, matching the raw save-byte telemetry. Raw JSON/CSV, seed profiles, materialized profiles, and the programmatically cross-checked summary are under `results/b0011-task-session-profiles-wsl/`. The final summary SHA-256 is `029004e02a8484f281a332c09d49e7adc8eb1ed343ec692b030760288adbd94f`; the synthetic K3X artifact SHA-256 is `0dfe0fe7c64b364fc745fff5b6c9a1f06d1faf1dc140630a9240591540dd684d`. Matching and alternate seed profile SHA-256 values are `897e872dc5d3832f95cbc8b68feb67fd17f706a830a876fad20bdcdb4ad69162` and `1d7987f1462bbb7421ec56896c3588a91622850e06d6d451ade85f14153b2575`.
+
+Post-review verification passed CPU CTest 10/10 and pytest 211/41, liburing/direct CTest 11/11 and pytest 213/39, CUDA CTest 19/19 and pytest 244/8, plus ASan/UBSan liburing CTest 11/11 and targeted pytest 82/33. All ten CUDA Compute Sanitizer targets reported zero errors. TSan was not rerun for this serialized host-only change; the prior WSL2 runtime limitation remains recorded in B-0010.
+
 ## Derived bottleneck model — not a benchmark
 
 The released dimensions imply 17,547,264 bytes per native MXFP4 routed expert. With no cache reuse, natural Top-16 across 92 MoE layers implies 25,829,572,608 expert bytes/token. Applying the P44 Pro published 7.0 GB/s sequential figure gives a derived expert-only ceiling of about 0.271 tok/s and implies roughly 94.6% expert NVMe-byte avoidance for a 5 tok/s target.
@@ -415,5 +457,6 @@ These values are capacity and traffic estimates. They are not inserted into B-00
 - Native-Linux repetition of B-0008 with disclosed warm/cold preparation before selecting an L2 default.
 - Native-Linux repetition of B-0009 with representative multi-expert pressure and controlled warm/cold preparation before selecting any deadline policy.
 - Native-Linux repetition of B-0010 with a representative routing trace, full-size experts, and controlled warm/cold preparation before selecting any cache policy.
+- Native-Linux repetition of B-0011 with repository-duration sessions and controlled helpful, stale, and adversarial priors before selecting any profile policy.
 - Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.

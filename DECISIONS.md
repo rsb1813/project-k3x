@@ -352,3 +352,25 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: B-0010 was replaced at measurement code `fd05d95` after the guard was added. All 13 rows retain exact tokens, routing, numerical-error identity, and cache/Reader accounting.
 - Reason: session serialization is the smallest correct contract for the current single-context cache and matches one agent session's sequential generation use. Per-forward policy contexts would add complexity before multi-request serving is in scope.
 - Revisit: when concurrent serving within one logical session becomes a requirement; then move cycle/layer/protection state into explicit forward-owned contexts.
+
+## D-032 — Keep task priors separate from live routing evidence
+
+- Date: 2026-08-09.
+- Status: accepted, implemented, and measured.
+- Decision: store loaded aggregate frequency as prior evidence and current-process routing as live evidence. Add an explicit opt-in `profiled` eviction policy using normalized frequency and `prior_strength / (prior_strength + live_observations)` rather than seeding LFU counters or preloading a hot bank.
+- Alternatives considered: force-load prior hot experts before generation; seed LFU counters from persisted counts; keep prior/live evidence separate behind a new policy.
+- Evidence: deterministic traces preserve a matching prior-hot expert, then reverse the victim after four conflicting live observations. Runtime integration keeps exact tokens, routing, logits, and recurrent state. B-0011 matching prior records 23 hits/31 misses/628,080 logical Reader bytes versus cold profile 21/33/631,344.
+- Benchmark result: matching-prior traffic equals Least-Stale at the tested 13,056-byte capacity, but matching and alternate profile decode are 5,006.701 and 4,868.597 tok/s versus Least-Stale 5,900.245 tok/s on the tiny warm WSL2 graph. No default changes.
+- Reason: separate evidence makes decay auditable and reversible without speculative L2 reads or hidden counter semantics. The measured bookkeeping cost and capacity-specific behavior require the mode to remain experimental.
+- Revisit: after native-Linux full-size routing traces, repository-duration sessions, transition prediction, and controlled profile load/save placement are measured.
+
+## D-033 — Observe and persist profiles only by explicit request
+
+- Date: 2026-08-09.
+- Status: accepted and implemented after self-review.
+- Decision: collect routing maps only for `profiled` mode or explicit metadata/profile I/O. Persist a bounded canonical v1 text profile with CRC32C and temporary-file rename. Claim process-interruption-safe atomic publication, not power-loss durability.
+- Alternatives considered: collect profiles for every runtime session; always persist to an implicit repository path; require explicit observation and explicit input/output paths.
+- Evidence: the disabled baseline reports zero metadata, live observations, load bytes, and save bytes. Malformed metadata, checksum damage, duplicate file records, count mismatch, and invalid prior strength are rejected. Canonical round-trip is byte-identical.
+- Benchmark result: B-0011 full-generation materialized profile sizes exactly match raw telemetry at 1,439, 1,439, and 1,645 bytes. A review fix prevents the final TTFT sample from overwriting those artifacts and prevents record-cap saturation from producing a self-rejected profile.
+- Reason: default-path observation would add unrequested maps and transition work to every token. Explicit paths avoid hidden filesystem state and keep evidence attributable.
+- Revisit: add file and parent-directory fsync plus an explicit multi-writer ownership protocol before claiming power-loss durability or concurrent profile writers.

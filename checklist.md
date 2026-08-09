@@ -141,7 +141,8 @@
 - [x] Bounded profile data model and atomic canonical publication.
 - [x] Opt-in profiled exact eviction with prior-to-live crossover.
 - [x] Runtime/CLI integration and prompt/output non-interference proof.
-- [ ] B-0011, full verification, review, ledger, and public integration.
+- [x] B-0011 measurement, full verification, self-review fixes, and TITAN Ledger update.
+- [ ] Public PR, main fast-forward integration, and post-merge CI verification.
 
 ## Milestone 6 independent L2 reader
 

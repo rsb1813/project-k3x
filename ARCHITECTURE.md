@@ -188,7 +188,7 @@ The runtime exposes `--l1-expert-cache disabled|static` and `--l1-expert-cache-b
 
 B-0006 admitted 18 synthetic experts into 29,376 bytes, recorded 36 hits and zero bypasses, and reduced logical Reader calls from 428 to 212 and completed bytes from 665,616 to 606,864. All FP32/BF16 synchronous/prefetch rows preserved exact tokens, routing, H2D, D2H, FFN counts, and synchronization. These logical read counters are not physical NVMe traffic, and the synthetic throughput gain is not a full-model projection.
 
-Milestone 5 itself implements no eviction. Exact runtime-switchable LRU, LFU, and Least-Stale eviction are added later by Milestone 9; task/session priors, prediction, asynchronous cross-layer L2 reads, and cold rescue remain unimplemented. The accepted Milestone 5 design and B-0006 matrix are in [`docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md`](docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md).
+Milestone 5 itself implements no eviction. Exact runtime-switchable LRU, LFU, and Least-Stale eviction are added later by Milestone 9, and bounded task/session priors by Milestone 10. Prediction, asynchronous cross-layer L2 reads, and cold rescue remain unimplemented. The accepted Milestone 5 design and B-0006 matrix are in [`docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md`](docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md).
 
 ## Milestone 6 experimental independent L2 reader
 
@@ -224,7 +224,17 @@ One token forward receives a session-monotonic cycle identity. Before any admiss
 
 The policy context is store-global, so a `RuntimeSession` serializes complete generation calls. Independent sessions remain independent. This closes concurrent active-cycle and selected-set interference without changing the single-generation data path.
 
-B-0010 crosses the four exact cache policies at 2-, 8-, and 16-expert synthetic capacities plus a disabled baseline. At the 8-expert point, Least-Stale records 23 hits, 31 misses, zero collision misses, and 628,080 logical Reader bytes; LRU records 20/34/1 and 632,976 bytes, while LFU records 19/35/7 and 634,608 bytes. At 16 experts LFU has the best traffic, so no dynamic policy becomes a default from this tiny warm WSL2 result. Task/session scoring, transition prediction, ORBIT, and full-model cache evidence remain unimplemented. The normative design is in [`docs/superpowers/specs/2026-08-09-k3x-expert-cache-policies-design.md`](docs/superpowers/specs/2026-08-09-k3x-expert-cache-policies-design.md).
+B-0010 crosses the four exact cache policies at 2-, 8-, and 16-expert synthetic capacities plus a disabled baseline. At the 8-expert point, Least-Stale records 23 hits, 31 misses, zero collision misses, and 628,080 logical Reader bytes; LRU records 20/34/1 and 632,976 bytes, while LFU records 19/35/7 and 634,608 bytes. At 16 experts LFU has the best traffic, so no dynamic policy becomes a default from this tiny warm WSL2 result. Milestone 10 later adds task/session scoring; transition prediction, ORBIT, and full-model cache evidence remain unimplemented. The normative design is in [`docs/superpowers/specs/2026-08-09-k3x-expert-cache-policies-design.md`](docs/superpowers/specs/2026-08-09-k3x-expert-cache-policies-design.md).
+
+## Milestone 10 experimental task and session profiles
+
+Milestone 10 adds a bounded, versioned `.k3xp` runtime profile that is separate from the model checkpoint. It stores validated runtime-only metadata, per-expert frequency, adjacent-layer transition counts, and a deterministic derived hot bank. Canonical records carry CRC32C and publish through a sibling temporary file plus rename. This is process-interruption-safe publication, not a power-loss durability claim because file and directory fsync are not implemented.
+
+`RuntimeSession` owns prior and live evidence separately. Natural Top-K access sets are observed only when `profiled` is selected or metadata/profile input/output is explicitly requested, so the default and legacy policy paths do not pay profile-map overhead. Runtime metadata never enters the prompt-token vector. Sufficient live observations reduce the prior weight by `prior_strength / (prior_strength + live_observations)`.
+
+The opt-in `profiled` eviction policy removes the lowest normalized prior/live usefulness, followed by recency and stable insertion order. It retains exact expert bytes, selected-set protection, natural routing, and transient exact bypass. Transition counts are persisted for a future predictor but do not affect eviction yet. Prefix/KDA payload reuse, learned prediction, and ORBIT remain unimplemented.
+
+B-0011 compares LFU, Least-Stale, profiled without a prior, a matching prompt prior, and the minimum-overlap alternate prompt prior at an eight-expert synthetic capacity. All rows preserve exact tokens, routing, and numerical parity. The matching prior reaches the same 23 hits, 31 misses, and 628,080 logical Reader bytes as Least-Stale, while its tiny-graph decode timing is lower and the alternate prior is worse. No policy default changes. The normative design is in [`docs/superpowers/specs/2026-08-09-k3x-task-session-profiles-design.md`](docs/superpowers/specs/2026-08-09-k3x-task-session-profiles-design.md).
 
 ## TITAN component registry
 
@@ -276,7 +286,7 @@ The production target is an asynchronous three-tier weight system.
 | Tier | Role | Current and planned behavior |
 |---|---|---|
 | L0: RTX 5080 VRAM | Active trunk tiles and immediately needed experts | Native CUDA compute and pinned asynchronous copies |
-| L1: 96 GB system RAM | Quantized trunk working set and warm expert bank | Experimental exact static/LRU/LFU/Least-Stale expert residency implemented; task/session priors and learned prediction planned |
+| L1: 96 GB system RAM | Quantized trunk working set and warm expert bank | Experimental exact static/LRU/LFU/Least-Stale/profiled residency and persistent task/session frequency priors implemented; learned prediction planned |
 | L2: P44 Pro NVMe | Complete cold storage | Large aligned reads and per-expert random access |
 
 The scheduler will assign every requested extent an estimated use deadline and fetch latency. While layer `N` computes, L1-to-L0 transfer for `N+1` and L2-to-L1 transfer for `N+2` can proceed concurrently. `io_uring`, `O_DIRECT`, CUDA Graphs, and persistent kernels are experiments, not assumptions; default paths will be selected by measured end-to-end results.
