@@ -117,6 +117,44 @@ def test_cpp_runner_accepts_static_l1_expert_cache_for_cpu() -> None:
 
 
 @pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (["--l2-io", "thread-pool"], "unknown L2 I/O engine: thread-pool"),
+        (["--l2-cache", "mmap"], "unknown L2 cache mode: mmap"),
+        (["--l2-queue-depth", "0"], "L2 queue depth must be positive"),
+        (["--l2-queue-depth", "-1"], "invalid L2 queue depth: -1"),
+    ],
+)
+def test_cpp_runner_rejects_invalid_l2_reader_options(
+    arguments: list[str], message: str
+) -> None:
+    result = subprocess.run(
+        [str(cpp_binary("k3x_run")), *arguments],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == message
+
+
+def test_cpp_runner_accepts_default_l2_reader_options() -> None:
+    result = subprocess.run(
+        [
+            str(cpp_binary("k3x_run")),
+            "--l2-io",
+            "pread",
+            "--l2-cache",
+            "buffered",
+            "--l2-queue-depth",
+            "8",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 3
+
+
+@pytest.mark.parametrize(
     "arguments",
     [
         ["--backend", "cpu", "--cuda-allocation", "reused"],

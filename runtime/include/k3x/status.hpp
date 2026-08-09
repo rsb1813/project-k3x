@@ -24,6 +24,7 @@ enum class ErrorCode {
     invalid_mxfp4,
     invalid_state,
     backend_unavailable,
+    storage_unavailable,
     unsupported_architecture,
 };
 
@@ -46,6 +47,7 @@ inline const char* error_code_name(ErrorCode code) {
         case ErrorCode::invalid_mxfp4: return "INVALID_MXFP4";
         case ErrorCode::invalid_state: return "INVALID_STATE";
         case ErrorCode::backend_unavailable: return "BACKEND_UNAVAILABLE";
+        case ErrorCode::storage_unavailable: return "STORAGE_UNAVAILABLE";
         case ErrorCode::unsupported_architecture: return "UNSUPPORTED_ARCHITECTURE";
     }
     return "UNKNOWN";

@@ -128,6 +128,10 @@ endif()
 add_executable(test_reader tests/cpp/test_reader.cpp)
 target_link_libraries(test_reader PRIVATE k3x_runtime)
 
+add_executable(test_reader_contract tests/cpp/test_reader_contract.cpp)
+target_link_libraries(test_reader_contract PRIVATE k3x_runtime)
+add_test(NAME reader_contract COMMAND test_reader_contract)
+
 add_executable(k3x_run runtime/src/main.cpp runtime/src/model.cpp)
 target_link_libraries(k3x_run PRIVATE k3x_runtime)
 

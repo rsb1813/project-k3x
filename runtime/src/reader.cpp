@@ -94,6 +94,22 @@ std::uint64_t fnv1a64(const char* value) {
 }
 
 Result<Reader> Reader::open(const std::filesystem::path& path, VerifyMode mode) {
+    ReaderOptions options;
+    options.verify = mode;
+    return open(path, options);
+}
+
+Result<Reader> Reader::open(const std::filesystem::path& path,
+                            ReaderOptions options) {
+    if (options.queue_depth == 0) {
+        return Result<Reader>::failure(ErrorCode::invalid_state,
+                                       "L2 queue depth must be positive");
+    }
+    if (options.io_engine != L2IoEngine::pread ||
+        options.cache_mode != L2CacheMode::buffered) {
+        return Result<Reader>::failure(ErrorCode::storage_unavailable,
+                                       "requested L2 mode is not built");
+    }
     std::error_code filesystem_error;
     const auto file_length = std::filesystem::file_size(path, filesystem_error);
     if (filesystem_error || file_length < superblock_bytes) {
@@ -122,6 +138,7 @@ Result<Reader> Reader::open(const std::filesystem::path& path, VerifyMode mode) 
     }
     Reader reader;
     reader.path_ = path;
+    reader.options_ = options;
     reader.superblock_.state = little<std::uint32_t>(block, 20);
     reader.superblock_.required_features = little<std::uint64_t>(block, 24);
     std::uint64_t* values[] = {&reader.superblock_.tensor_directory_offset,
@@ -291,7 +308,7 @@ Result<Reader> Reader::open(const std::filesystem::path& path, VerifyMode mode) 
         }
     }
     std::copy(config.value().begin(), config.value().end(), reader.model_config_.begin());
-    if (mode == VerifyMode::checksums) {
+    if (options.verify == VerifyMode::checksums) {
         for (const auto& record : reader.tensors_) {
             auto data = read_raw(path, record.data_offset, record.data_length);
             if (!data || crc32c(data.value()) != record.data_crc32c) {
@@ -347,22 +364,75 @@ Result<Reader> Reader::open(const std::filesystem::path& path, VerifyMode mode) 
 Result<std::vector<std::byte>> Reader::read_extent(std::uint64_t offset, std::uint64_t length) const {
     ++counters_.calls;
     counters_.requested_bytes += length;
+    counters_.storage_submitted_bytes += length;
     auto result = read_raw(path_, offset, length);
-    if (result) counters_.completed_bytes += result.value().size();
+    if (result) {
+        counters_.completed_bytes += result.value().size();
+        counters_.storage_completed_bytes += result.value().size();
+        ++counters_.completions;
+    } else {
+        if (result.error() == ErrorCode::truncated_file) ++counters_.short_reads;
+        ++counters_.failures;
+    }
     return result;
+}
+
+Result<std::vector<std::vector<std::byte>>> Reader::read_extents(
+    std::span<const ExtentRequest> requests) const {
+    if (requests.empty()) {
+        return Result<std::vector<std::vector<std::byte>>>::success({});
+    }
+    for (const auto& request : requests) {
+        if (!request.length ||
+            request.length > std::numeric_limits<std::size_t>::max() ||
+            !range_valid(request.offset, request.length,
+                         superblock_.file_length)) {
+            return Result<std::vector<std::vector<std::byte>>>::failure(
+                ErrorCode::invalid_extent);
+        }
+    }
+    ++counters_.batch_submissions;
+    std::vector<std::vector<std::byte>> results;
+    results.reserve(requests.size());
+    for (const auto& request : requests) {
+        auto result = read_extent(request.offset, request.length);
+        if (!result) {
+            return Result<std::vector<std::vector<std::byte>>>::failure(
+                result.error(), result.message());
+        }
+        results.push_back(std::move(result.value()));
+    }
+    return Result<std::vector<std::vector<std::byte>>>::success(
+        std::move(results));
 }
 
 Result<std::vector<std::byte>> Reader::read_tensor(std::uint64_t tensor_id) const {
     const auto item = std::find_if(tensors_.begin(), tensors_.end(),
                                    [tensor_id](const auto& value) { return value.tensor_id == tensor_id; });
     if (item == tensors_.end()) return Result<std::vector<std::byte>>::failure(ErrorCode::tensor_not_found);
-    return read_extent(item->data_offset, item->data_length);
+    const std::array request{
+        ExtentRequest{item->data_offset, item->data_length}};
+    auto result = read_extents(request);
+    if (!result) {
+        return Result<std::vector<std::byte>>::failure(
+            result.error(), result.message());
+    }
+    return Result<std::vector<std::byte>>::success(
+        std::move(result.value().front()));
 }
 
 Result<std::vector<std::byte>> Reader::read_auxiliary(std::uint64_t tensor_id) const {
     const auto item = std::find_if(tensors_.begin(), tensors_.end(),
                                    [tensor_id](const auto& value) { return value.tensor_id == tensor_id; });
     if (item == tensors_.end()) return Result<std::vector<std::byte>>::failure(ErrorCode::tensor_not_found);
-    return read_extent(item->auxiliary_offset, item->auxiliary_length);
+    const std::array request{
+        ExtentRequest{item->auxiliary_offset, item->auxiliary_length}};
+    auto result = read_extents(request);
+    if (!result) {
+        return Result<std::vector<std::byte>>::failure(
+            result.error(), result.message());
+    }
+    return Result<std::vector<std::byte>>::success(
+        std::move(result.value().front()));
 }
 }

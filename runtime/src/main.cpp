@@ -43,6 +43,9 @@ int main(int argc, char** argv) {
     std::string cuda_pinned_bytes_text = "0";
     std::string l1_expert_cache_name = "disabled";
     std::string l1_expert_cache_bytes_text = "0";
+    std::string l2_io_name = "pread";
+    std::string l2_cache_name = "buffered";
+    std::string l2_queue_depth_text = "8";
     bool diagnostics = false;
     std::size_t count = 0;
     for (int index = 1; index + 1 < argc; index += 2) {
@@ -65,11 +68,15 @@ int main(int argc, char** argv) {
         else if (key == "--cuda-pinned-bytes") cuda_pinned_bytes_text = value;
         else if (key == "--l1-expert-cache") l1_expert_cache_name = value;
         else if (key == "--l1-expert-cache-bytes") l1_expert_cache_bytes_text = value;
+        else if (key == "--l2-io") l2_io_name = value;
+        else if (key == "--l2-cache") l2_cache_name = value;
+        else if (key == "--l2-queue-depth") l2_queue_depth_text = value;
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
     }
 
     k3x::BackendOptions backend_options;
     k3x::RuntimeOptions runtime_options;
+    k3x::ReaderOptions reader_options;
     runtime_options.incremental = mode == "incremental";
     runtime_options.diagnostics = diagnostics;
     if (l1_expert_cache_name == "disabled") {
@@ -98,6 +105,35 @@ int main(int argc, char** argv) {
     if (runtime_options.l1_expert_cache == k3x::L1ExpertCacheMode::disabled &&
         runtime_options.l1_expert_cache_bytes != 0) {
         std::cerr << "disabled L1 expert cache requires a zero byte capacity\n";
+        return 2;
+    }
+    if (l2_io_name == "pread") {
+        reader_options.io_engine = k3x::L2IoEngine::pread;
+    } else if (l2_io_name == "io-uring") {
+        reader_options.io_engine = k3x::L2IoEngine::io_uring;
+    } else {
+        std::cerr << "unknown L2 I/O engine: " << l2_io_name << '\n';
+        return 2;
+    }
+    if (l2_cache_name == "buffered") {
+        reader_options.cache_mode = k3x::L2CacheMode::buffered;
+    } else if (l2_cache_name == "direct") {
+        reader_options.cache_mode = k3x::L2CacheMode::direct;
+    } else {
+        std::cerr << "unknown L2 cache mode: " << l2_cache_name << '\n';
+        return 2;
+    }
+    const auto* l2_queue_begin = l2_queue_depth_text.data();
+    const auto* l2_queue_end = l2_queue_begin + l2_queue_depth_text.size();
+    const auto l2_queue_parse = std::from_chars(
+        l2_queue_begin, l2_queue_end, reader_options.queue_depth);
+    if (l2_queue_depth_text.empty() || l2_queue_parse.ec != std::errc{} ||
+        l2_queue_parse.ptr != l2_queue_end) {
+        std::cerr << "invalid L2 queue depth: " << l2_queue_depth_text << '\n';
+        return 2;
+    }
+    if (reader_options.queue_depth == 0) {
+        std::cerr << "L2 queue depth must be positive\n";
         return 2;
     }
     if (backend_name == "cpu") {
@@ -255,7 +291,7 @@ int main(int argc, char** argv) {
     std::stringstream parser(prompt_text);
     std::string item;
     while (std::getline(parser, item, ',')) prompt.push_back(static_cast<std::uint32_t>(std::stoul(item)));
-    auto reader = k3x::Reader::open(model_path, k3x::VerifyMode::checksums);
+    auto reader = k3x::Reader::open(model_path, reader_options);
     if (!reader) {
         std::cerr << (reader.message().empty() ? k3x::error_code_name(reader.error())
                                                : reader.message()) << '\n';
