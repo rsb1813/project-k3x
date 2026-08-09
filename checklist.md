@@ -189,6 +189,18 @@
 - [x] Run B-0018, the full verification matrix, sanitizer coverage, and evidence cross-checks.
 - [x] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
 
+## Milestone 18 — Exact CUDA AURORA draft execution
+
+- [x] Re-read the public charter, architecture, current state, D-041, and B-0018 evidence.
+- [x] Reproduce and fix fresh-Windows-checkout benchmark digest instability without weakening byte-exact evidence.
+- [x] Compare exact transient CUDA draft execution, CUDA residency, and reduced precision as separate experiment axes.
+- [x] Write and self-review the exact CUDA draft design.
+- [ ] Write and self-review the detailed TDD implementation plan.
+- [ ] Implement draft backend preflight, ownership, and runtime validation through witnessed RED/GREEN cycles.
+- [ ] Add separated draft CUDA telemetry and benchmark schema coverage.
+- [ ] Run B-0019, the full verification matrix, sanitizer coverage, and evidence cross-checks.
+- [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
+
 ## Milestone 14 — Exact expert-major speculative verification
 
 - [x] Re-read the TITAN Ledger and current token-major/runtime boundaries.

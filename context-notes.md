@@ -343,3 +343,10 @@
 - Milestone 17 전체 9-commit branch를 공개 `codex/milestone-seventeen-persistent-aurora`에 push하고 ready PR #23을 열었다. README 공개 표는 PR 상태를 링크하며 merge/post-merge CI 완료 전에는 merged로 표시하지 않는다.
 - Milestone 17 branch/PR correctness run `31340338639`/`31340340063`이 통과했고 PR #23을 공개 integration head `30bbf7a8`로 rebase merge했다. 병합 후 `main` correctness run `31340476396`도 통과했다. 최종 read-only review는 B-0016 LF-stable CSV digest를 현재 blob과 다시 대조해 9/9 일치 및 새 Critical/Important 없음으로 종료했다.
 - GitHub Actions는 `actions/checkout@v4`와 `actions/setup-python@v5`의 Node.js 20 deprecation 경고를 냈지만 run은 성공했다. 이는 M17 correctness나 B-0018 수치를 바꾸지 않는 별도 CI 유지보수 항목이다.
+
+## 2026-08-10 Milestone 18 준비
+
+- 공개 `main` documentation head `808b64d`에서 `codex/milestone-eighteen-cuda-aurora-draft` 작업트리를 분리했다. 최초 Windows checkout은 전역 `core.autocrlf=true` 때문에 canonical LF인 `results/**/*.json|csv`를 CRLF로 materialize해 B-0018 raw digest 테스트 1개가 실패했다. Git blob과 기존 LF worktree의 SHA-256은 summary와 일치했고 줄바꿈 외 diff는 없었다.
+- `.gitattributes`에 `results/**/*.json text eol=lf`와 `results/**/*.csv text eol=lf`를 추가한 commit `cf4c8bd`의 새 checkout에서 실패하던 digest 테스트 1/1과 전체 Python 272 passed/47 skipped가 통과했다. 테스트 정규화나 CRLF digest 채택은 byte-exact evidence를 약화시키므로 기각했다.
+- B-0018의 다음 병목은 persistent CPU draft graph 자체다. 첫 GPU 실험은 target CPU·draft FP32 cuda-custom transient만 바꿔 placement 효과를 분리한다. CUDA residency를 동시에 켜면 placement와 cache 효과가 섞이고, BF16부터 시작하면 proposal/acceptance 품질 변화가 섞이므로 각각 후속 축으로 미뤘다.
+- Milestone 18은 `--aurora-draft-backend cpu|cuda-custom`을 추가하되 기본 CPU, replay CPU-only, persistent CUDA opt-in을 유지한다. CUDA draft identity는 reused·transient·grouped·ffn-block·synchronous·fusion-none으로 고정하고 draft profiler/memory/runtime counters를 target과 별도 직렬화한다.
