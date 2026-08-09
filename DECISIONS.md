@@ -330,3 +330,25 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: replacement B-0009 at `68b3e54` measured 3 warmups and 20 samples for eight WSL2 ext4 rows. Deadline reduced decode by 21.45% for buffered pread, 20.27% for buffered io_uring, 4.91% for direct pread, and 10.15% for direct io_uring. Every row retained exact tokens/routing, 606,864 logical Reader bytes, 212 completions, 36 L1 hits, and 18 misses.
 - Reason: the boundary proves exact ownership, scheduling, and telemetry contracts needed by later storage work, but the tiny current-layer overlap cannot amortize thread and synchronization cost. Measured regressions prohibit making it the default.
 - Revisit: with representative multi-expert cache pressure on native Linux, then after ORBIT-style future-layer recall and multiple outstanding L2 requests exist. Any future default still requires simultaneous correctness, traffic, and quality evidence.
+
+## D-030 — Keep exact cache policies runtime-switchable and non-default
+
+- Date: 2026-08-09.
+- Status: accepted, implemented, and measured.
+- Decision: preserve `disabled` as the public default and `static` as the no-eviction reference. Expose exact `lru`, `lfu`, and `least-stale` policies behind explicit runtime options. Reproduce SpecMD Least-Stale with stale-before-current priority, processed-left-layer priority, upcoming-layer protection, and a farthest-future exact fallback when capacity still requires a victim.
+- Alternatives considered: make LRU the general default; make Least-Stale the default from the paper result; retain static-only admission; expose all exact policies while withholding a default change.
+- Evidence: deterministic equal-size traces select the intended LRU/LFU victims, protect the complete current Top-K set, count a same-forward future-layer collision, and show LRU collision 1 versus Least-Stale 0. CLI, blocking, deadline, CPU, and CUDA parity tests retain exact tokens, routing, logits, and Reader semantics.
+- Benchmark result: B-0010 at the 8-expert synthetic capacity records Least-Stale 23 hits/31 misses/0 collisions/628,080 logical bytes, LRU 20/34/1/632,976, and LFU 19/35/7/634,608. At 16 experts LFU records 36 hits and 606,864 bytes, ahead of Least-Stale's 35 hits and 608,496 bytes. Tiny synthetic timing does not establish a universal winner.
+- Reason: runtime switches enable controlled evidence without conflating residency with pruning or changing routing. Policy rankings depend on capacity, and WSL2 warm synthetic evidence is insufficient for a production default.
+- Revisit: after native-Linux multi-layer or full-model routing traces, representative expert sizes, controlled warm/cold preparation, task/session priors, and physical NVMe/H2D attribution exist.
+
+## D-031 — Serialize generation within one runtime session
+
+- Date: 2026-08-09.
+- Status: accepted and implemented after final review.
+- Decision: allow only one active generation per `RuntimeSession`; hold a session mutex across the complete generation call. Independent sessions may execute independently.
+- Alternatives considered: leave concurrent callers to share one active policy context; attach a separate selected-set context to every forward and every asynchronous load; serialize one session at the generation boundary.
+- Evidence: the store owns one active cycle, layer, and protected set. Concurrent forwards could overwrite this context despite data-race-free mutex access. A regression holds the session guard, starts generation on another thread, proves it cannot finish before release, then verifies exact completion.
+- Benchmark result: B-0010 was replaced at measurement code `fd05d95` after the guard was added. All 13 rows retain exact tokens, routing, numerical-error identity, and cache/Reader accounting.
+- Reason: session serialization is the smallest correct contract for the current single-context cache and matches one agent session's sequential generation use. Per-forward policy contexts would add complexity before multi-request serving is in scope.
+- Revisit: when concurrent serving within one logical session becomes a requirement; then move cycle/layer/protection state into explicit forward-owned contexts.

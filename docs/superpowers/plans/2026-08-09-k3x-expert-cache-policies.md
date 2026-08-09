@@ -20,11 +20,11 @@ Reproduce SpecMD Least-Stale and compare it fairly with exact LRU/LFU policies w
 
 - [x] Export evictions and collision misses through C++ JSON and Python benchmark schema.
 - [x] Add a capacity/policy ablation with exact parity and capability-independent failures.
-- [ ] Record raw JSON/CSV and avoid native/full-model claims.
+- [x] Record raw JSON/CSV and avoid native/full-model claims.
 
 ## Task 4 — Verification and publication
 
-- [ ] Run CPU, liburing/direct, CUDA, sanitizer, and applicable Compute Sanitizer suites.
-- [ ] Complete one read-only final review and close Critical/Important findings.
-- [ ] Update TITAN Ledger with `PROJECT_STATE.md` last.
+- [x] Run CPU, liburing/direct, CUDA, sanitizer, and applicable Compute Sanitizer suites.
+- [x] Complete one read-only final review and close Critical/Important findings.
+- [x] Update TITAN Ledger with `PROJECT_STATE.md` last.
 - [ ] Publish through a public PR and verify branch/PR/main CI.

@@ -188,7 +188,7 @@ The runtime exposes `--l1-expert-cache disabled|static` and `--l1-expert-cache-b
 
 B-0006 admitted 18 synthetic experts into 29,376 bytes, recorded 36 hits and zero bypasses, and reduced logical Reader calls from 428 to 212 and completed bytes from 665,616 to 606,864. All FP32/BF16 synchronous/prefetch rows preserved exact tokens, routing, H2D, D2H, FFN counts, and synchronization. These logical read counters are not physical NVMe traffic, and the synthetic throughput gain is not a full-model projection.
 
-LRU, LFU, Least-Stale, task/session priors, eviction, prediction, asynchronous L2 reads, and cold rescue remain unimplemented. The accepted design and B-0006 matrix are in [`docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md`](docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md).
+Milestone 5 itself implements no eviction. Exact runtime-switchable LRU, LFU, and Least-Stale eviction are added later by Milestone 9; task/session priors, prediction, asynchronous cross-layer L2 reads, and cold rescue remain unimplemented. The accepted Milestone 5 design and B-0006 matrix are in [`docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md`](docs/superpowers/specs/2026-08-09-k3x-persistent-l1-expert-cache-design.md).
 
 ## Milestone 6 experimental independent L2 reader
 
@@ -215,6 +215,16 @@ Milestone 8 adds an opt-in `--l2-schedule deadline` path while retaining `blocki
 Reader and L1 statistics are mutex-protected value snapshots. A layer captures its storage-latency estimate before submitting any worker request, and both successful and exceptional generation exits wait for the queue and active job to become idle. This prevents telemetry races and ensures raw Reader/store references cannot outlive their generation boundary.
 
 B-0009 crosses `blocking|deadline`, `pread|io_uring`, and `buffered|direct` with a 65,536-byte static L1 cache. All eight WSL2 ext4 rows preserve exact tokens, routing, logical Reader traffic, 36 L1 hits, and 18 misses. Deadline is slower in every measured pair on the tiny warm synthetic graph, so it remains experimental and disabled by default. This milestone does not implement ORBIT, future-layer prediction, multiple storage workers, eviction, or the chartered triple-buffered N/N+1/N+2 pipeline. The normative design is in [`docs/superpowers/specs/2026-08-09-k3x-deadline-expert-loader-design.md`](docs/superpowers/specs/2026-08-09-k3x-deadline-expert-loader-design.md).
+
+## Milestone 9 experimental exact expert cache policies
+
+Milestone 9 extends the session-owned immutable L1 store with runtime-switchable `lru`, `lfu`, and `least-stale` policies while preserving `disabled` as the default and `static` as the no-eviction reference. Every miss still fetches the exact native MXFP4 gate/up/down payload. Residency changes neither natural Top-K routing nor expert contribution weights.
+
+One token forward receives a session-monotonic cycle identity. Before any admission in a MoE layer, the runtime marks the complete natural Top-K set as protected. LRU uses last access, LFU uses lifetime frequency followed by recency, and the SpecMD paper reproduction evicts prior-cycle entries before current entries, processed left layers before upcoming layers, and the farthest future layer first only when an exact capacity fallback is unavoidable. Evictions and same-forward collision misses are exported alongside the existing hit/miss/bypass and residency counters. A collision may occur when a future-layer expert retained from the prior token is evicted by an earlier layer in the current token and requested later in that same token.
+
+The policy context is store-global, so a `RuntimeSession` serializes complete generation calls. Independent sessions remain independent. This closes concurrent active-cycle and selected-set interference without changing the single-generation data path.
+
+B-0010 crosses the four exact cache policies at 2-, 8-, and 16-expert synthetic capacities plus a disabled baseline. At the 8-expert point, Least-Stale records 23 hits, 31 misses, zero collision misses, and 628,080 logical Reader bytes; LRU records 20/34/1 and 632,976 bytes, while LFU records 19/35/7 and 634,608 bytes. At 16 experts LFU has the best traffic, so no dynamic policy becomes a default from this tiny warm WSL2 result. Task/session scoring, transition prediction, ORBIT, and full-model cache evidence remain unimplemented. The normative design is in [`docs/superpowers/specs/2026-08-09-k3x-expert-cache-policies-design.md`](docs/superpowers/specs/2026-08-09-k3x-expert-cache-policies-design.md).
 
 ## TITAN component registry
 
@@ -266,7 +276,7 @@ The production target is an asynchronous three-tier weight system.
 | Tier | Role | Current and planned behavior |
 |---|---|---|
 | L0: RTX 5080 VRAM | Active trunk tiles and immediately needed experts | Native CUDA compute and pinned asynchronous copies |
-| L1: 96 GB system RAM | Quantized trunk working set and warm expert bank | Experimental exact static expert admission implemented; session/task-aware policies and eviction planned |
+| L1: 96 GB system RAM | Quantized trunk working set and warm expert bank | Experimental exact static/LRU/LFU/Least-Stale expert residency implemented; task/session priors and learned prediction planned |
 | L2: P44 Pro NVMe | Complete cold storage | Large aligned reads and per-expert random access |
 
 The scheduler will assign every requested extent an estimated use deadline and fetch latency. While layer `N` computes, L1-to-L0 transfer for `N+1` and L2-to-L1 transfer for `N+2` can proceed concurrently. `io_uring`, `O_DIRECT`, CUDA Graphs, and persistent kernels are experiments, not assumptions; default paths will be selected by measured end-to-end results.

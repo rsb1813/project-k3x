@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%208-passing-20a46b?style=flat-square)](#milestone-8--exact-current-layer-deadline-loading)
+[![Milestone](https://img.shields.io/badge/milestone%209-passing-20a46b?style=flat-square)](#milestone-9--exact-expert-cache-policies)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
 [![Format](https://img.shields.io/badge/format-K3X%20v1-6f42c1?style=flat-square)](K3X_FORMAT.md)
@@ -19,7 +19,7 @@
 
 Kimi K3 is a 2.8T-parameter sparse MoE model whose local inference problem is dominated by moving the right expert bytes at the right time. K3X starts from that constraint. It is not a fork of llama.cpp or vLLM, and it does not assume that the checkpoint fits in RAM or VRAM.
 
-The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Implemented milestones now cover the exact synthetic graph and format, explicit RTX 5080 CUDA baselines, bounded L0/L1 primitives, independent L2 Reader modes, a released-size expert storage slice, and an opt-in exact current-layer deadline worker. Cross-layer prediction and the full three-tier pipeline remain future work.
+The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Implemented milestones now cover the exact synthetic graph and format, explicit RTX 5080 CUDA baselines, bounded L0/L1 primitives, independent L2 Reader modes, a released-size expert storage slice, an opt-in exact current-layer deadline worker, and runtime-switchable exact expert eviction policies. Cross-layer prediction and the full three-tier pipeline remain future work.
 
 ```mermaid
 flowchart LR
@@ -108,7 +108,7 @@ This first boundary is deliberately limited to `cuda-custom + ffn-block + reused
 
 `--l1-expert-cache static --l1-expert-cache-bytes N` enables an exact, no-eviction whole-expert store in system RAM. A `RuntimeSession` retains that store across consecutive generation calls. One entry owns the native MXFP4 gate/up/down packed bytes and scales, validates the native group-32 representation before admission, admits atomically under a hard capacity, and returns an exact transient handle when it cannot fit. `disabled` remains the default.
 
-B-0006 validates the same handles across CPU operation execution, synchronous CUDA FFN blocks, and asynchronous prepared CUDA transfers. It does not implement LRU, LFU, Least-Stale, task/session profiles, prediction, asynchronous NVMe reads, or physical NVMe counters.
+B-0006 validates the same handles across CPU operation execution, synchronous CUDA FFN blocks, and asynchronous prepared CUDA transfers. Milestone 5 itself does not implement eviction; Milestone 9 later adds exact LRU, LFU, and Least-Stale. Task/session profiles, prediction, asynchronous NVMe reads, and physical NVMe counters remain future work.
 
 ## Milestone 6 — independent exact L2 reader
 
@@ -127,6 +127,12 @@ A streaming source generator now materializes one actual-size K3 routed expert: 
 `--l2-schedule deadline` submits the current layer's already-selected natural Top-K experts to one bounded latest-start-priority worker. Exact L1 hits complete inline while non-resident loads can overlap the routed-down and shared-expert computation. `blocking` remains the default, and generation drains outstanding work on both success and failure.
 
 B-0009 preserves exact tokens, routing, L1 counters, and logical Reader bytes across eight schedule/Reader combinations. Deadline decode was 4.91% to 21.45% slower than blocking on the tiny warm WSL2 graph, so the worker remains experimental. Future-layer prediction, ORBIT, eviction, multiple L2 workers, and N/N+1/N+2 triple buffering are not implemented.
+
+## Milestone 9 — exact expert cache policies
+
+`--l1-expert-cache lru|lfu|least-stale --l1-expert-cache-bytes N` adds exact bounded eviction while retaining `disabled` as the default and `static` as the no-eviction reference. Natural Top-K routing is marked before admission, every miss fetches the exact native MXFP4 expert, and the runtime records evictions plus same-forward collision misses. The SpecMD Least-Stale reproduction prioritizes stale processed layers while protecting upcoming layers.
+
+B-0010 crosses four policies at 2-, 8-, and 16-expert synthetic capacities. At 8 experts, Least-Stale records 23 hits, 31 misses, and zero collisions versus LRU's 20/34/1 and LFU's 19/35/7. At 16 experts LFU has the best traffic, so no policy becomes a default from this tiny warm WSL2 evidence. Task/session priors, transition prediction, ORBIT, and full-model cache evidence remain future work.
 
 ## Quick start
 
@@ -406,8 +412,9 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Independent exact `pread|io_uring` and `buffered|direct` L2 reader with ordered expert batches.
 - [x] Physically materialized full-dimension expert storage slice and exact four-mode B-0008 ablation.
 - [x] Opt-in exact current-layer deadline worker with failure-safe draining and B-0009 ablation.
+- [x] Runtime-switchable exact LRU, LFU, and SpecMD Least-Stale expert caches with B-0010 ablation.
 - [ ] Cross-layer asynchronous L2 prefetch and N/N+1/N+2 scheduling.
-- [ ] Least-Stale, task/session, and transition-aware expert caches.
+- [ ] Task/session and transition-aware expert cache scoring.
 - [ ] Adaptive Top-K with exact cold-expert rescue.
 - [ ] Expert-major speculative verification and cost-aware experiments.
 - [ ] Sensitivity-calibrated mixed trunk quantization.
@@ -436,7 +443,7 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - The runtime implements synthetic dimensions; the CUDA backend accelerates only dense and MXFP4 matrix operations while the graph remains host-driven.
 - Reusable scratch, bounded static weight residency, and same-input grouping are implemented, but activations and results still cross the host/device boundary and asynchronous overlap is not implemented.
 - Static residency has no eviction and is not the future three-tier expert cache.
-- The bounded io_uring batch reader and current-layer deadline worker are implemented, but there is no cross-layer asynchronous storage pipeline, future-layer predictor, eviction policy, adaptive Top-K, or speculative decoder yet.
+- The bounded io_uring batch reader, current-layer deadline worker, and exact expert eviction policies are implemented, but there is no cross-layer asynchronous storage pipeline, future-layer predictor, adaptive Top-K, or speculative decoder yet.
 - The converter has not processed the full Kimi K3 checkpoint.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.
 - No open-source license has been selected yet; public visibility does not itself grant reuse rights.

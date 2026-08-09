@@ -356,6 +356,52 @@ Raw JSON/CSV and the programmatically cross-checked summary are under `results/b
 
 Post-review verification passed CPU CTest 9/9 and pytest 175/41, liburing/direct CTest 10/10 and pytest 177/39, CUDA CTest 18/18 and pytest 208/8, plus ASan/UBSan liburing CTest 10/10 and targeted pytest 69/33. All ten CUDA Compute Sanitizer targets reported zero errors. TSan built but could not execute under WSL2 because its runtime terminated with `unexpected memory mapping`; no TSan result is claimed.
 
+## B-0010 — Milestone 9 exact expert cache policies
+
+| Field | Value |
+|---|---|
+| Evidence | measured WSL2 warm synthetic ablation; non-authoritative for native storage, full-model locality, or policy defaults |
+| Date | 2026-08-09 |
+| Measurement code commit | `fd05d95` |
+| Result commit | `ff65b5b` |
+| Hardware | AMD Ryzen 7 9800X3D host; CPU execution; RTX 5080 unused |
+| Environment | WSL2 Ubuntu 24.04.4, Linux 6.18.33.2; artifact on WSL ext4 `/tmp`; buffered `pread` |
+| Model/checkpoint | deterministic executable `synthetic-milestone-one`; K3X SHA-256 `1d4a197a299493acf6eb39d8374a4f817ee58f6f570ad5f21f29fe9fe298d2de`; no full Kimi K3 weights |
+| Mode | exact incremental CPU generation; blocking L2 schedule; `disabled` plus `static|lru|lfu|least-stale` at 3,264, 13,056, and 26,112 bytes |
+| Context / generated tokens | prompt `[1, 7, 3, 9]`; 6 generated tokens `[43, 32, 28, 49, 9, 28]` |
+| Warmup / samples | 3 / 20 separate process runs per row |
+| Quality result | exact tokens, 24-entry natural routing trace, and matched CPU numerical error in every row |
+| Average Top-K | 2, fixed synthetic natural routing |
+| Peak system RSS | 5,255,168 to 5,427,200 bytes across rows; per-row values are in raw JSON/CSV |
+| NVMe GB/token | not measured; logical Reader bytes are not physical NVMe attribution |
+| H2D / VRAM / GPU utilization / memory bandwidth / kernel time | 0 or not applicable; CPU backend used |
+| Speculative acceptance / unique verification experts / cold rescue | not applicable; these features are not implemented |
+| Enabled optimizations | selected exact L1 policy only; no deadline worker, adaptive Top-K, task prior, proxy, pruning, or speculation |
+
+| Policy / capacity bytes | Decode tok/s | Prefill tok/s | TTFT ms | Hits / misses | Evictions / collisions | Logical Reader bytes |
+|---|---:|---:|---:|---:|---:|---:|
+| disabled / 0 | 5,789.235 | 4,131.860 | 12.979 | 0 / 0 | 0 / 0 | 665,616 |
+| static / 3,264 | 5,820.041 | 4,093.596 | 12.887 | 6 / 48 | 0 / 0 | 655,824 |
+| LRU / 3,264 | 5,752.148 | 4,015.077 | 13.006 | 0 / 54 | 52 / 9 | 665,616 |
+| LFU / 3,264 | 5,800.326 | 4,047.418 | 12.930 | 0 / 54 | 52 / 9 | 665,616 |
+| Least-Stale / 3,264 | 5,672.468 | 4,017.756 | 12.917 | 0 / 54 | 52 / 9 | 665,616 |
+| static / 13,056 | 6,046.669 | 4,122.494 | 12.908 | 25 / 29 | 0 / 0 | 624,816 |
+| LRU / 13,056 | 5,844.559 | 4,138.837 | 12.927 | 20 / 34 | 26 / 1 | 632,976 |
+| LFU / 13,056 | 5,986.500 | 4,156.233 | 12.984 | 19 / 35 | 27 / 7 | 634,608 |
+| Least-Stale / 13,056 | 6,024.423 | 4,229.175 | 12.895 | 23 / 31 | 23 / 0 | 628,080 |
+| static / 26,112 | 6,269.919 | 4,145.694 | 12.970 | 35 / 19 | 0 / 0 | 608,496 |
+| LRU / 26,112 | 6,251.985 | 4,190.033 | 12.908 | 35 / 19 | 3 / 0 | 608,496 |
+| LFU / 26,112 | 6,439.747 | 4,195.814 | 12.910 | 36 / 18 | 2 / 0 | 606,864 |
+| Least-Stale / 26,112 | 6,153.479 | 4,121.591 | 12.992 | 35 / 19 | 3 / 0 | 608,496 |
+
+The 8-expert point distinguishes the policies: Least-Stale eliminates the one LRU and seven LFU collision misses, reduces misses by 3 versus LRU and 4 versus LFU, and reduces logical Reader traffic by 4,896 and 6,528 bytes respectively. The 16-expert point instead gives LFU the best hit and traffic result. Decode differences are small relative to process-level noise on this tiny warm graph, so no timing row selects a default.
+
+A collision is a same-token-forward re-request, including a prior-token future-layer entry evicted by an earlier current-token layer and requested when execution reaches its layer. The deterministic trace regression validates this path independently of B-0010.
+
+Raw JSON/CSV and the programmatically cross-checked summary are under `results/b0010-expert-cache-policies-wsl/`. The final summary SHA-256 is `f2ff111f08fd6e9bc2cee2df426aeef337dd08150663d4e6a71922ebf60c5b8b`.
+
+Post-review verification passed CPU CTest 9/9 and pytest 194/41, liburing/direct CTest 10/10 and pytest 200/35, CUDA CTest 18/18 and pytest 227/8, plus ASan/UBSan liburing CTest 10/10 and targeted pytest 80/33. All ten CUDA Compute Sanitizer targets reported zero errors before the host-only session-serialization fix; their binaries and CUDA sources were unchanged by that fix. TSan rebuilt but its WSL2 runtime again terminated with `unexpected memory mapping`; no TSan execution result is claimed.
+
 ## Derived bottleneck model — not a benchmark
 
 The released dimensions imply 17,547,264 bytes per native MXFP4 routed expert. With no cache reuse, natural Top-16 across 92 MoE layers implies 25,829,572,608 expert bytes/token. Applying the P44 Pro published 7.0 GB/s sequential figure gives a derived expert-only ceiling of about 0.271 tok/s and implies roughly 94.6% expert NVMe-byte avoidance for a 5 tok/s target.
@@ -368,5 +414,6 @@ These values are capacity and traffic estimates. They are not inserted into B-00
 - Native-Linux repetition of B-0004/B-0005/B-0006 and a larger KDA/MLA or decoder subgraph boundary.
 - Native-Linux repetition of B-0008 with disclosed warm/cold preparation before selecting an L2 default.
 - Native-Linux repetition of B-0009 with representative multi-expert pressure and controlled warm/cold preparation before selecting any deadline policy.
+- Native-Linux repetition of B-0010 with a representative routing trace, full-size experts, and controlled warm/cold preparation before selecting any cache policy.
 - Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.
