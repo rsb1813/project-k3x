@@ -64,6 +64,26 @@ def test_policy_matrix_crosses_four_policies_and_capacities() -> None:
     )
 
 
+def test_b0010_manifest_matches_all_measured_raw_records() -> None:
+    root = Path(__file__).parents[2]
+    result_dir = root / "results" / "b0010-expert-cache-policies-wsl"
+    summary = json.loads((result_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["benchmark_id"] == "B-0010"
+    assert summary["environment_label"] == "wsl2-ext4-warm-non-authoritative"
+    assert summary["capacities_bytes"] == [3264, 13056, 26112]
+    assert summary["supported_cases"] == 13
+    for case in summary["cases"]:
+        raw = json.loads(
+            (result_dir / f"{case['name']}.json").read_text(encoding="utf-8")
+        )
+        BenchmarkRecord(**raw)
+        assert case["status"] == "measured"
+        assert case["parity_status"] == "exact"
+        assert (result_dir / f"{case['name']}.csv").is_file()
+        for field, value in raw.items():
+            assert case[field] == value
+
+
 def test_b0010_writes_exact_policy_records(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
