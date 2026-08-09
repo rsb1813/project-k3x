@@ -151,7 +151,9 @@ def test_cuda_expert_major_ablation_cross_checks_released_evidence(
             raw_csv = output_dir / f"{name}.csv"
             raw_json.write_text(json.dumps(record) + "\n", encoding="utf-8")
             with raw_csv.open("w", newline="", encoding="utf-8") as stream:
-                writer = csv.DictWriter(stream, fieldnames=record.keys())
+                writer = csv.DictWriter(
+                    stream, fieldnames=record.keys(), lineterminator="\n"
+                )
                 writer.writeheader()
                 writer.writerow(record)
             record["raw_json_sha256"] = hashlib.sha256(raw_json.read_bytes()).hexdigest()
@@ -203,3 +205,5 @@ def test_cuda_expert_major_ablation_cross_checks_released_evidence(
     assert summary["aggregate_sha256"] == hashlib.sha256(aggregate).hexdigest()
     assert (tmp_path / "b0016" / "summary.json").is_file()
     assert (tmp_path / "b0016" / "summary.csv").is_file()
+    for csv_path in (tmp_path / "b0016").rglob("*.csv"):
+        assert b"\r\n" not in csv_path.read_bytes()

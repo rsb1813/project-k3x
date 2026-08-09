@@ -197,7 +197,9 @@ def _write_record(record: dict, json_path: Path, csv_path: Path) -> None:
         json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     with csv_path.open("w", newline="", encoding="utf-8") as stream:
-        writer = csv.DictWriter(stream, fieldnames=record.keys())
+        writer = csv.DictWriter(
+            stream, fieldnames=record.keys(), lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerow(record)
 
@@ -328,7 +330,9 @@ def run_cuda_expert_major_ablation(
     with (output_dir / "summary.csv").open(
         "w", newline="", encoding="utf-8"
     ) as stream:
-        writer = csv.DictWriter(stream, fieldnames=fieldnames)
+        writer = csv.DictWriter(
+            stream, fieldnames=fieldnames, lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerows(rows)
     return summary
