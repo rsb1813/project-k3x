@@ -228,3 +228,11 @@
 - B-0012 runner는 natural K16, fixed K4/8/12/16, adaptive threshold 세 가지, adaptive failure/critical, fixed-K escalation ladder, bounded LRU exact rescue를 교차한다. Smoke에서 reduced K의 첫 decision은 natural prefix지만 이후 hidden state divergence가 router 순서에도 전파됨을 확인했다. 따라서 첫-decision prefix를 invariant로 강제하고 전체 동일-position prefix rate를 품질 지표로 기록하며, residency 불변식은 fixed K4 cache-disabled와 rescue 실행의 token·전체 prefill route·quality error exact 비교로 검증한다. Top-16 synthetic smoke와 관련 pytest 17 passed/5 skipped가 통과했다.
 - B-0012 정식 3-warmup/20-sample WSL2 측정에서 fixed K4/K8/K12는 natural K16 대비 logical Reader bytes를 40.8%/27.2%/13.6% 줄이고 tiny CPU decode를 3.24x/1.92x/1.34x로 높였지만 token, logits, recurrent state가 모두 달라졌다. Fixed K16과 critical K16은 exact다. Nearly-uniform synthetic router 때문에 모든 adaptive 행은 K16을 선택했다. 6,528-byte LRU rescue는 fixed K4와 exact 동일한 실행을 유지하며 108 cold loads, 0 hits, 동일 traffic을 기록했다. Natural default를 유지한다. Final self-review는 Top-2 natural reference가 K8/K16 external floor를 오류로 처리하던 경계를 재현해 natural이 floor를 무시하도록 수정했다. 검증은 CPU 11/11·227/41, liburing/direct 12/12·233/35, CUDA 20/20·260/8, ASan/UBSan 12/12·101/34, Compute Sanitizer 10개 0 errors다.
 - Milestone 11 public integration head `edc6d60`은 branch/PR correctness run `31318880063`/`31318890885`를 통과했고 PR #11로 fast-forward merge되었다. Post-merge `main` run `31318993688`도 성공했다.
+
+## 2026-08-09 Milestone 12 설계
+
+- 공개 main과 동기화된 `dd80e53`에서 `codex/milestone-twelve-fused-cuda` 브랜치를 시작했다. 사용자의 Cloud Run 전 자율 진행 지시를 routine design gate의 승인으로 적용하되, 설계 문서와 self-review는 생략하지 않았다.
+- 현재 exact native-MXFP4 `ffn-block`은 gate/up/SiTU/down을 GPU에서 계산하지만 선택 expert마다 latent vector를 D2H 복사한 뒤 CPU에서 router scale과 합산한다. Natural Top-16에서는 이 경계가 Top-K에 비례한다.
+- 세 후보를 비교했다. 현재 row-parallel down kernel에 SiTU를 직접 넣으면 activation을 output row마다 재계산하므로 기각했다. Gate/up 단일 launch는 input upload가 이미 공유되어 우선효과가 작다. Down projection 결과에 router scale을 적용하고 stream order대로 한 device mixed vector에 누적하는 방식을 선택했다.
+- 선택안은 extra kernel 없이 expert별 down kernel이 첫 expert를 store하고 이후 expert를 FMA accumulate하며, 최종 mixed latent만 한 번 D2H 한다. 기존 unfused block은 reference/default로 남고 synchronous와 prepared-prefetch 양쪽을 독립적으로 검증한다.
+- FlashKDA 원 구현은 서로 다른 parallelism 축을 무리하게 단일 kernel로 합친 초기안보다 K1/K2 분리가 빠르다고 보고했다. 따라서 이번에는 KDA/MLA, CUDA Graph, persistent kernel을 함께 묶지 않고 별도 측정축으로 남겼다.
