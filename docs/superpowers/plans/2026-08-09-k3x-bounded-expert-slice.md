@@ -33,7 +33,7 @@
 - Produces: `write_bounded_expert_source(root: Path, *, seed: int = 20260809, chunk_bytes: int = 1 << 20, layer_id: int = 1, expert_id: int = 0) -> StorageSliceReport`.
 - Produces: source manifest format `k3-storage-slice-v1` with `artifact_kind=storage_fixture`, released model config, weight map, packed shapes, per-tensor SHA-256, and source SHA-256.
 
-- [ ] **Step 1: Write the failing source-shape and bounded-memory test.**
+- [x] **Step 1: Write the failing source-shape and bounded-memory test.**
 
 Create a real fixture in `tmp_path`, inspect it with `inspect_shard`, and assert these hand-derived values.
 
@@ -47,21 +47,21 @@ assert len(tensors) == 6
 
 Also assert that a second generation has identical manifest and shard SHA-256, that `chunk_bytes=0` fails before creating final files, and that the final shard contains no holes by comparing its size with header plus declared tensor lengths.
 
-- [ ] **Step 2: Run the test and verify RED.**
+- [x] **Step 2: Run the test and verify RED.**
 
 Run `K3X_BUILD_DIR=build-cpu python -m pytest tests/python/test_storage_fixture.py -q` in WSL. Expect import failure for `k3x_ref.storage_fixture`.
 
-- [ ] **Step 3: Implement the minimal streaming writer.**
+- [x] **Step 3: Implement the minimal streaming writer.**
 
 Use a sibling `.partial`, an 8-byte safetensors header length, compact padded JSON metadata, and a bounded pattern writer. The packed byte at absolute tensor position `p` is `(seed + matrix_index * 37 + p) & 0xff`; scale tensors use literal bytes 120, 121, and 122 for gate, up, and down. Update each tensor digest while writing, fsync, verify final size, and atomically replace the final shard and manifest.
 
 Every new Python source file starts with a one-line Korean role comment.
 
-- [ ] **Step 4: Verify GREEN and CLI behavior.**
+- [x] **Step 4: Verify GREEN and CLI behavior.**
 
 Run the targeted pytest, then run `python tools/generate_bounded_slice.py --output /tmp/k3x-bounded-source --chunk-bytes 1048576` and independently inspect all six tensor ranges with `inspect_shard`.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 Commit as `feat: stream full-dimension expert fixture`.
 

@@ -131,7 +131,7 @@
 - [x] 기존 storage boundary, released dimensions, format capability 조사.
 - [x] 실제 크기 expert-only storage fixture 설계와 대안 비교.
 - [x] 상세 TDD 구현 계획 작성.
-- [ ] Streaming safetensors source fixture와 manifest 구현.
+- [x] Streaming safetensors source fixture와 manifest 구현.
 - [ ] K3X optional storage-fixture identity와 converter round-trip 구현.
 - [ ] 전용 C++ expert-load benchmark와 B-0008 runner 구현.
 - [ ] 전체 correctness, sanitizer, B-0008 측정, TITAN Ledger 갱신.
