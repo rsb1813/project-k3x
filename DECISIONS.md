@@ -429,3 +429,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: B-0016 preserves exact tokens, final KDA/MLA state, and committed routes in all five CUDA graph rows. On the released 17,547,264-byte expert, batch size two reduces 20-iteration weight H2D from 701,890,560 to 350,945,280 bytes and median latency from 3,444,884 to 1,737,798 ns. Batch size four reduces weight H2D from 1,403,781,120 to 350,945,280 bytes and median latency from 6,705,324 to 2,631,900 ns. Activation H2D and D2H are unchanged within each pair, numerical error is zero, and Compute Sanitizer reports zero errors.
 - Reason: the primitive proves physical expert-weight reuse at released dimensions and integrates it with exact block state semantics without introducing cache-policy or lossy-routing ambiguity. The mixed graph row still evaluates rejected suffixes and regresses to 40.7627 tok/s, so neither expert-major verification nor a fixed block size becomes default.
 - Revisit: after representative learned or self-speculative acceptance traces exist, and after native-Linux full-layer measurements expose multi-expert group sizes, residency, GPU utilization, memory bandwidth, and physical NVMe/H2D costs. Compare dynamic block sizing and multi-expert persistent scheduling separately before considering a default change.
+
+## D-039 — Treat runtime-profile artifacts as canonical bytes in Git
+
+- Date: 2026-08-10.
+- Status: accepted and verified.
+- Decision: mark `*.k3xp` as `-text` in `.gitattributes` so Git never rewrites canonical runtime-profile bytes during checkout.
+- Alternatives considered: replace the recorded SHA-256 values with Windows checkout hashes; normalize line endings inside the hash test; preserve the committed bytes on every platform.
+- Evidence: the B-0011 summary hashes match the LF Git blobs, while Windows `core.autocrlf=true` changed those ASCII profile artifacts to CRLF and made the existing integrity test fail. With `-text`, all five profiles materialize as `i/lf w/lf`, and the recorded helpful/conflicting SHA-256 values match the working files.
+- Benchmark result: not applicable; this is artifact integrity. CPU CTest 13/13 and Python 262 passed/47 skipped after the correction.
+- Reason: `.k3xp` includes canonical checksummed content. Checkout-dependent byte rewriting invalidates evidence and is not a supported text-editing behavior.
+- Revisit: only if a future profile format defines a separate normalized textual representation whose checksum explicitly excludes transport line endings.

@@ -306,3 +306,7 @@
 - Compute Sanitizer는 native MXFP4, CUDA FFN, released batch-2, perfect/mixed expert-major CLI에서 모두 0 errors였다. Perfect/mixed 첫 직접 호출은 PowerShell/WSL 이중 파싱이 semicolon script를 잘라 유효 실행이 아니었고, 인자 배열을 전달하는 임시 Python helper로 교정 실행한 뒤 helper를 제거했다.
 - Milestone 15 branch/PR correctness run `31332732339`/`31332745907`이 통과했고 PR #17이 공개 integration head `c18df33`으로 rebase merge되었다. 병합 후 `main` correctness run `31332852551`도 통과해 B-0016 코드, 측정 증거, LF-stable digest 교정, 최종 리뷰가 공개 기준선에 포함되었다.
 - 문서 정합화 PR #18의 push/PR correctness run `31333096506`/`31333098541`이 통과했고 공개 문서 head `4052221`로 rebase merge되었다. 병합 후 `main` correctness run `31333233834`도 통과했다.
+
+## 2026-08-10 Milestone 16 준비
+
+- 새 Windows worktree의 첫 전체 baseline은 B-0011 profile SHA-256 한 건만 실패했다. Git blob과 summary는 LF bytes의 `897e872d…`로 일치했지만 `core.autocrlf=true`가 canonical ASCII `.k3xp`를 CRLF `940f0353…`로 바꾼 것이 원인이었다. `*.k3xp -text`를 추가하고 다섯 profile을 blob에서 재물질화한 뒤 CTest 13/13과 Python 262/47이 통과했다.
