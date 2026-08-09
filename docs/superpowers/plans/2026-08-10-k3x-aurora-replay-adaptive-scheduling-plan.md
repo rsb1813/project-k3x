@@ -32,7 +32,7 @@
 - Produces: `DraftProviderStats` and `DraftProvider::stats() const noexcept` with a default-zero implementation.
 - Preserves: the pure verifier determines committed tokens only and leaves all physical feedback zero.
 
-- [ ] **Step 1: Write the failing contract tests**
+- [x] **Step 1: Write the failing contract tests**
 
 Append assertions to every representative perfect, mismatch, and empty result in `tests/cpp/test_speculative.cpp` and add a provider with no `stats()` override.
 
@@ -56,7 +56,7 @@ assert(stats.proposal_calls == 0);
 assert(stats.selected_length_4 == 0);
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run:
 
@@ -66,7 +66,7 @@ cmake --build build --target test_speculative -j 8
 
 Expected: compilation fails because `DraftVerification` has no physical fields and `DraftProvider` has no `stats()` method.
 
-- [ ] **Step 3: Add the minimal contract**
+- [x] **Step 3: Add the minimal contract**
 
 Add these exact public fields in `runtime/include/k3x/speculative.hpp`.
 
@@ -106,7 +106,7 @@ public:
 
 Do not write these fields in `verify_greedy_draft` or `verify_greedy_target_block`; aggregate initialization must leave them zero.
 
-- [ ] **Step 4: Run focused GREEN**
+- [x] **Step 4: Run focused GREEN**
 
 Run:
 
@@ -117,7 +117,7 @@ ctest --test-dir build -R '^speculative$' --output-on-failure
 
 Expected: 1/1 speculative test passes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add runtime/include/k3x/speculative.hpp runtime/src/speculative.cpp tests/cpp/test_speculative.cpp
@@ -137,7 +137,7 @@ git commit -m "feat: expose speculative target feedback"
 - Produces: `AuroraBlockPolicy`, `AuroraSchedulerConfig`, and `AdaptiveDraftScheduler`.
 - Guarantees: no rung skip, request cap, rejection backoff, prefix-survival gate, and expert-cost gate.
 
-- [ ] **Step 1: Add the failing executable and wished-for API tests**
+- [x] **Step 1: Add the failing executable and wished-for API tests**
 
 Create `tests/cpp/test_aurora_scheduler.cpp` with a Korean first-line comment and literals equivalent to the following.
 
@@ -177,7 +177,7 @@ Add separate scopes for fixed policy, `select(0) == 0`, request caps, two fully 
 
 Register `runtime/src/aurora_scheduler.cpp` in `k3x_runtime` and register `test_aurora_scheduler` as CTest `aurora_scheduler`.
 
-- [ ] **Step 2: Run and verify RED**
+- [x] **Step 2: Run and verify RED**
 
 Run:
 
@@ -188,7 +188,7 @@ cmake --build build --target test_aurora_scheduler -j 8
 
 Expected: compilation fails because `k3x/aurora_scheduler.hpp` does not exist.
 
-- [ ] **Step 3: Implement the validated scheduler**
+- [x] **Step 3: Implement the validated scheduler**
 
 Create `runtime/include/k3x/aurora_scheduler.hpp` with a Korean first-line comment and this public surface.
 
@@ -216,17 +216,17 @@ private:
     std::array<std::uint64_t, 4> prefix_successes_{};
     std::array<std::uint64_t, 3> cost_loads_{};
     std::array<std::uint64_t, 3> cost_assignments_{};
-    std::size_t largest_observed_rung_{};
-    std::size_t rejection_cap_{4};
+    std::optional<std::size_t> largest_qualified_rung_;
+    std::optional<std::size_t> rejection_cap_;
     DraftProviderStats stats_{};
 };
 ```
 
-Implement a fixed ladder `constexpr std::array<std::size_t, 3>{1, 2, 4}`. `create` rejects unsupported maxima and non-finite/out-of-range thresholds. `select` returns zero for request zero without counters, uses `min(request_maximum, maximum_length)`, and chooses the longest eligible rung. Adaptive eligibility is limited to the smallest rung through at most one rung past `largest_observed_rung_`; observed rungs require final-position `(success+1)/(trials+2) >= minimum_prefix_survival`; observed expert feedback requires `loads/assignments <= maximum_unique_load_ratio`.
+Implement a fixed ladder `constexpr std::array<std::size_t, 3>{1, 2, 4}`. `create` rejects unsupported maxima and non-finite/out-of-range thresholds. `select` returns zero for request zero without counters, uses `min(request_maximum, maximum_length)`, and chooses the longest eligible rung. Adaptive eligibility is limited to length one before any observation, then through at most one rung past `largest_qualified_rung_`; observed rungs require final-position `(success+1)/(trials+2) >= minimum_prefix_survival`; observed expert feedback requires `loads/assignments <= maximum_unique_load_ratio`. If no rung is eligible, `select` returns zero so the target performs one ordinary step.
 
-`observe` rejects proposed lengths outside the ladder, accepted greater than proposed, discarded greater than evaluated, and nonzero loads with zero assignments. It updates every proposed prefix position, the exact-length cost bucket, and the observed frontier. A rejection sets `rejection_cap_` to the previous rung and increments backoffs. A fully accepted observation clears the cap and increments growth only when it enables the next rung.
+`observe` accepts an all-zero proposal as a state-preserving no-op. Otherwise it rejects proposed lengths outside the ladder, accepted greater than proposed, discarded greater than evaluated, and nonzero loads with zero assignments. It updates every proposed prefix position and the exact-length cost bucket. A rejection sets `rejection_cap_` to the previous rung, or zero after a length-one rejection, and increments backoffs. A fully accepted and gate-qualified observation clears the cap, advances the qualified frontier, and increments growth only when it enables the next rung.
 
-- [ ] **Step 4: Run focused GREEN and existing verifier tests**
+- [x] **Step 4: Run focused GREEN and existing verifier tests**
 
 Run:
 
@@ -237,7 +237,7 @@ ctest --test-dir build -R '^(aurora_scheduler|speculative)$' --output-on-failure
 
 Expected: 2/2 tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add CMakeLists.txt runtime/include/k3x/aurora_scheduler.hpp runtime/src/aurora_scheduler.cpp tests/cpp/test_aurora_scheduler.cpp
