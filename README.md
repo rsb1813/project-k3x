@@ -154,7 +154,7 @@ B-0013 improves tiny synthetic natural Top-16 decode by 11.33% with synchronous 
 
 ## Milestone 13 — exact speculative verification reference
 
-The current development branch implements the first strict greedy, token-major speculative reference behind a separate `generate_speculative` API. An external draft provider supplies the accepted anchor and a bounded candidate prefix. The target accepts only consecutive candidates equal to its own argmax, commits one target bonus token, and reports the exact commit back to the provider. Ordinary `generate_greedy` behavior is unchanged.
+The runtime implements the first strict greedy, token-major speculative reference behind a separate `generate_speculative` API. An external draft provider supplies the accepted anchor and a bounded candidate prefix. The target accepts only consecutive candidates equal to its own argmax, commits one target bonus token, and reports the exact commit back to the provider. Ordinary `generate_greedy` behavior is unchanged.
 
 Native tests cover perfect, partial, first-token, and empty proposals as well as invalid anchors, token IDs, proposal bounds, callback failures, exhausted providers, unused script records, output-count one, and non-incremental rejection. Runtime integration tests show exact parity with greedy generation for token IDs, final KDA/MLA state, complete routing/K traces, Reader calls and bytes, and L1 hits and misses.
 
@@ -474,7 +474,7 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - Reusable scratch, bounded static weight residency, and same-input grouping are implemented, but activations and results still cross the host/device boundary and asynchronous overlap is not implemented.
 - Static residency has no eviction and is not the future three-tier expert cache.
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
-- Exact token-major speculative verification, scripted CLI telemetry, and B-0014 are implemented on the development branch. B-0014 preserves target work and traffic rather than accelerating them; there is no learned DSpark drafter, confidence scheduler, expert-major verifier, or speculative speedup claim.
+- Exact token-major speculative verification, scripted CLI telemetry, and B-0014 are implemented. B-0014 preserves target work and traffic rather than accelerating them; there is no learned DSpark drafter, confidence scheduler, expert-major verifier, or speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
 - The converter has not processed the full Kimi K3 checkpoint.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.

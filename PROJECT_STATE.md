@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 13 exact token-major speculative verification, scripted CLI telemetry, B-0014, full local verification, and final self-review are complete. Public PR integration remains.
+Milestone 13 exact token-major speculative verification is complete, measured, fully verified, and publicly integrated. The next milestone is expert-major verification design and implementation.
 
-State recorded on 2026-08-10 from public documentation head `7748ca3` and M13 implementation head `2cf50b4`. The active branch is `codex/milestone-thirteen-speculative-verification`. PR #11 and PR #12 are merged, their README sections are public, and M13 remains on the development branch until final verification and publication gates complete.
+State recorded on 2026-08-10 from public M13 integration head `463e9ca`. The active branch is `codex/milestone-thirteen-speculative-verification`. PR #11, PR #12, and PR #13 are merged; their implementations, README sections, measurements, and ledgers are public.
 
 ## Completed work
 
@@ -92,9 +92,9 @@ State recorded on 2026-08-10 from public documentation head `7748ca3` and M13 im
 
 ## Next concrete tasks
 
-1. Publish Milestone 13 through a green branch/PR/main sequence.
-2. Record the public integration commit and CI runs in the ledger.
-3. Start expert-major scheduling without changing the measured target routing or commit semantics.
+1. Design the expert-major verification execution boundary without changing the measured target routing or commit semantics.
+2. Define exact unique-expert-union, per-candidate routing, state commit, Reader, H2D, and fallback invariants before implementation.
+3. Implement the smallest synthetic expert-major reference with token-major mode retained as the switchable baseline.
 
 ## Hardware assumptions
 
@@ -125,6 +125,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 - M13 implementation head `2cf50b4` provides the pure contract, incremental reference, scripted CLI, telemetry, and B-0014 tooling. CPU CTest 12/12 and Python 245 passed/44 skipped succeeded before measurement.
 - B-0014 result/ledger commit: `e2e37bf`. Final self-review found no Critical or Important issue; default greedy behavior, proposal prevalidation, exact parity gates, and measured/proposed documentation boundaries remain intact.
+- Public M13 integration head `463e9ca`; branch/PR correctness runs `31324378917`/`31324381376` and post-merge main run `31324492327` succeeded. PR #13 is merged.
 - B-0014 summary JSON/CSV SHA-256: `7cd834b1c65d507367320170cdf72ca76aace9f6a743da85a0a9f0cca4a21062` / `9c5fdba84c547f93e2a0a7d4c0b76412181ffb2c635ffd969537a154950ce75b`; raw-summary and exact-parity cross-check passed.
 - Post-measurement verification: CPU CTest 12/12 and pytest 245/44; liburing/direct CTest 13/13 and pytest 247/42; CUDA CTest 21/21 and pytest 281/8; ASan/UBSan CTest 13/13 and targeted pytest 26/3 with 104 deselected; perfect and mixed CUDA speculative Compute Sanitizer runs both 0 errors.
 - Public documentation head `7748ca3` includes dedicated English README sections for merged Milestones 11 and 12. Public `main` correctness run `31322913019` succeeded.

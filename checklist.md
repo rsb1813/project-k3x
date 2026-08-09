@@ -134,7 +134,7 @@
 - [x] Incremental runtime integration with greedy token/state/routing parity.
 - [x] Telemetry and deterministic scripted-draft end-to-end harness.
 - [x] B-0014 correctness and overhead measurement.
-- [ ] Full verification, sanitizer, ledger, review, and public integration.
+- [x] Full verification, sanitizer, ledger, review, and public integration.
 
 ## Milestone 8 — Deadline-aware exact expert loading
 

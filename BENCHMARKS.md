@@ -568,6 +568,8 @@ Raw and aggregate artifacts are under `results/b0014-speculative-verification-ws
 
 Post-measurement verification passed CPU CTest 12/12 and pytest 245/44, liburing/direct CTest 13/13 and pytest 247/42, CUDA CTest 21/21 and pytest 281/8, and ASan/UBSan liburing CTest 13/13 plus targeted pytest 26/3 with 104 deselected. Compute Sanitizer perfect and mixed CUDA speculative CLI runs each reported `ERROR SUMMARY: 0 errors`. The first liburing Python invocation omitted `K3X_TEST_IO_URING=1` and therefore selected the expected-unavailable test incorrectly; the corrected capability-aware run passed.
 
+Public branch and PR correctness runs `31324378917` and `31324381376` succeeded at integration head `463e9ca`. PR #13 merged by fast-forward, and post-merge `main` correctness run `31324492327` also succeeded at that head.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
