@@ -158,7 +158,7 @@
 - [x] Synchronize README and every TITAN Ledger document with the verified Milestone 11–14 public and development state.
 - [x] Run the full cross-backend and sanitizer verification matrix.
 - [x] Complete final diff, evidence, default-path, and failure-boundary review.
-- [ ] Complete public PR integration and post-merge CI verification.
+- [x] Complete public PR integration and post-merge CI verification.
 
 ## Milestone 8 — Deadline-aware exact expert loading
 

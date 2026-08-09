@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2014-measured-20a46b?style=flat-square)](#milestone-14--exact-expert-major-verification)
+[![Milestone](https://img.shields.io/badge/milestone%2014-passing-20a46b?style=flat-square)](#milestone-14--exact-expert-major-verification)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
 [![Format](https://img.shields.io/badge/format-K3X%20v1-6f42c1?style=flat-square)](K3X_FORMAT.md)
@@ -40,7 +40,7 @@ flowchart LR
 | Milestone 11 | [PR #11 merged](https://github.com/rsb1813/project-k3x/pull/11) | B-0012 adaptive Top-K and exact rescue |
 | Milestone 12 | [PR #12 merged](https://github.com/rsb1813/project-k3x/pull/12) | B-0013 routed CUDA accumulation |
 | Milestone 13 | [PR #13 merged](https://github.com/rsb1813/project-k3x/pull/13) | B-0014 token-major verification |
-| Milestone 14 | Measured on the current development branch | B-0015 exact CPU expert-major verification; public integration pending |
+| Milestone 14 | [PR #15 merged](https://github.com/rsb1813/project-k3x/pull/15) | B-0015 exact CPU expert-major verification |
 
 ## Why a dedicated engine
 

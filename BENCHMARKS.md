@@ -595,6 +595,8 @@ Raw JSON/CSV, diagnostic JSON, and the independently cross-checked aggregate are
 
 Pre-publication verification passed CPU CTest 13/13 and pytest 253/44, liburing/direct CTest 14/14 and pytest 257/42, CUDA CTest 22/22 and pytest 291/8, plus ASan/UBSan liburing CTest 14/14 and targeted pytest 95/35. CUDA FFN Compute Sanitizer reported `ERROR SUMMARY: 0 errors`. Attempting Compute Sanitizer around the CPU-only expert-major CLI correctly produced no instrumented CUDA API call and is not reported as a sanitizer pass; that execution path is covered by ASan/UBSan instead.
 
+Public branch and PR correctness runs `31328853375` and `31328869071` succeeded at integration head `012e598`. PR #15 merged by fast-forward, and post-merge `main` correctness run `31329045623` also succeeded at that head.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.

@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 14 exact CPU expert-major speculative verification is implemented, measured, verified across the applicable CPU/liburing/CUDA-compatibility/sanitizer matrix, and final-reviewed on the development branch. Public integration remains in progress. Token-major verification remains the default.
+Milestone 14 exact CPU expert-major speculative verification is implemented, measured, fully verified, final-reviewed, and publicly integrated. Token-major verification remains the default.
 
-State recorded on 2026-08-10 from development result head `1e73121` based on public `main` head `df263c2`. The active branch is `codex/milestone-fourteen-expert-major-verification`. PR #11, PR #12, PR #13, and documentation PR #14 are merged; their implementations, dedicated English README sections, measurements, and ledgers are public. Milestone 14 has not yet been merged.
+State recorded on 2026-08-10 from public Milestone 14 integration head `012e598`. The active branch is `codex/milestone-fourteen-expert-major-verification`. PR #11, PR #12, PR #13, documentation PR #14, and Milestone 14 PR #15 are merged; their implementations, dedicated English README sections, measurements, and ledgers are public.
 
 ## Completed work
 
@@ -69,7 +69,7 @@ State recorded on 2026-08-10 from development result head `1e73121` based on pub
 
 ## Work in progress
 
-- Milestone 14 library/runtime execution, CLI identity, telemetry, B-0015, the full applicable verification matrix, and final evidence review are complete. Ledger commit, PR, merge, and post-merge CI gates remain in progress.
+- Milestone 14 library/runtime execution, CLI identity, telemetry, B-0015, the full applicable verification matrix, final evidence review, PR, merge, and post-merge CI gates are complete.
 - B-0015 perfect expert-major blocks reduce logical Reader traffic and improve tiny CPU decode, while the mixed row evaluates three rejected positions and regresses both traffic and decode. The evidence therefore supports exact reuse semantics but not a default change.
 - The current expert-major path is CPU-only and intentionally excludes L1 caching, deadline scheduling, reduced/adaptive routing, and profile observation. CUDA expert-major scheduling, H2D unioning, acceptance-aware block sizing, and cross-layer prediction remain unimplemented.
 - DSpark learned drafting, confidence scheduling, EcoSpec, MoE-Spec, and AcceptMoE remain unimplemented. The accepted interface is lifecycle-compatible, not checkpoint- or tensor-ABI compatible with DeepSpec.
@@ -96,9 +96,9 @@ State recorded on 2026-08-10 from development result head `1e73121` based on pub
 
 ## Next concrete tasks
 
-1. Commit the synchronized Milestone 14 TITAN Ledger.
-2. Publish and merge the verified Milestone 14 branch, confirm branch/PR/post-merge CI, and update the publication head.
-3. Design the next CUDA expert-major boundary around multi-token expert grouping, H2D union accounting, and acceptance-aware block sizing without changing target semantics.
+1. Design the next CUDA expert-major boundary around multi-token expert grouping, H2D union accounting, and acceptance-aware block sizing without changing target semantics.
+2. Add representative learned or self-speculative acceptance traces before choosing a dynamic verification block policy.
+3. Preserve token-major as the default until native-Linux physical I/O, RTX 5080 execution, and quality evidence justify a change.
 
 ## Hardware assumptions
 
@@ -131,7 +131,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 - Pre-publication verification passed CPU CTest 13/13 and Python 253/44, liburing/direct CTest 14/14 and Python 257/42, CUDA CTest 22/22 and Python 291/8, and ASan/UBSan liburing CTest 14/14 plus targeted Python 95/35. CUDA FFN Compute Sanitizer reported zero errors; the CPU-only expert-major CLI has no instrumented CUDA API and is covered by ASan/UBSan rather than a fabricated Compute Sanitizer result.
 - B-0015 artifact SHA-256 is `29f3fd10c95dcde9f2b012e10e36962363b5cdd79dfeda5f5e3bbaca0cb89b75`; canonical aggregate-record SHA-256 is `cb95eff274713a21b821695d75ff2655da735513c99215ec5ec14f5ed995b813`.
 - Independent evidence validation recomputed all ten raw JSON/CSV hashes, the aggregate hash, exact diagnostic parity, and the six headline percentage deltas. The report is ready to share with the stated synthetic/WSL2/logical-I/O caveats.
-- Public `main` remains `df263c2` before Milestone 14 publication. PR #11, PR #12, PR #13, and documentation PR #14 are merged.
+- Public Milestone 14 integration head is `012e598`. Branch/PR correctness runs `31328853375`/`31328869071` and post-merge `main` correctness run `31329045623` succeeded. PR #15 is merged.
 - M13 implementation head `2cf50b4` provides the pure contract, incremental reference, scripted CLI, telemetry, and B-0014 tooling.
 - B-0014 result/ledger commit: `e2e37bf`. Final self-review found no Critical or Important issue; default greedy behavior, proposal prevalidation, exact parity gates, and measured/proposed documentation boundaries remain intact.
 - Public M13 integration head `463e9ca`; branch/PR correctness runs `31324378917`/`31324381376` and post-merge main run `31324492327` succeeded. Publication head `f0641de` and publication-main run `31324647692` also succeeded. PR #13 is merged.
