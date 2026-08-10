@@ -309,3 +309,48 @@ def test_verifier_rejects_consistently_rehashed_invalid_artifact_digest(
 
     with pytest.raises(K3XError, match="INVALID_OFFICIAL_EVIDENCE"):
         verify_summary(summary_json, summary_csv, strict_official=False)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda value: value.update(repository="other/model"),
+        lambda value: value.update(requested_revision="latest"),
+        lambda value: value.update(repository_bytes=1),
+        lambda value: value.update(snapshot_sha256="0" * 64),
+        lambda value: value["config"].update(git_blob_id="0" * 40),
+        lambda value: value["index"].update(tensor_count=1),
+        lambda value: value["expert"].update(shard_path="other.safetensors"),
+        lambda value: value["artifacts"].update(payload_sha256="0" * 64),
+        lambda value: value["artifacts"]["tensor_sha256"].update(
+            {"model.layers.1.feed_forward.experts.0.down.weight_packed": "0" * 64}
+        ),
+    ],
+)
+def test_strict_verifier_binds_official_snapshot_and_layout_identity(
+    tmp_path: Path, mutation
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    record = json.loads(
+        (root / "results/b0027-official-range/summary.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    mutation(record)
+    record.pop("record_sha256")
+    record.pop("summary_csv_sha256")
+    record["record_sha256"] = canonical_record_sha256(record)
+    summary_csv = tmp_path / "summary.csv"
+    with summary_csv.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=CSV_FIELDS, lineterminator="\n")
+        writer.writeheader()
+        writer.writerow(summary_csv_row(record))
+    record["summary_csv_sha256"] = hashlib.sha256(summary_csv.read_bytes()).hexdigest()
+    summary_json = tmp_path / "summary.json"
+    summary_json.write_text(
+        json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(K3XError, match="OFFICIAL_IDENTITY_MISMATCH"):
+        verify_summary(summary_json, summary_csv)
