@@ -469,7 +469,7 @@ git add README.md ARCHITECTURE.md PERFORMANCE_MODEL.md DECISIONS.md \
 git commit -m "docs: publish CUDA AURORA residency evidence"
 ```
 
-- [ ] **Step 6: Perform final self-review**
+- [x] **Step 6: Perform final self-review**
 
 Review `origin/main...HEAD` for default compatibility, replay CPU-only behavior, hard capacity, exact bypass, target/draft counter separation, proposal/target parity, raw-summary digests, measured-versus-proposed language, and accidental cloud/full-checkpoint work. Apply at most one focused correction batch and rerun affected checks.
 
