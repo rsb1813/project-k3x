@@ -3,13 +3,21 @@ from __future__ import annotations
 
 import json
 import hashlib
+import shutil
 import struct
 from types import MappingProxyType
 
 import pytest
 
 from k3x_converter.format import K3XError
+from k3x_converter.format import OPTIONAL_STORAGE_FIXTURE
+from k3x_converter.reader import K3XReader
+from k3x_converter.safetensors_reader import inspect_shard
+from k3x_converter.writer import convert
+import k3x_converter.official_source as official_source_module
+from k3x_ref.storage_fixture import write_bounded_expert_source
 from k3x_converter.official_source import (
+    OfficialConfig,
     OfficialFile,
     OfficialIndex,
     OfficialSnapshot,
@@ -17,6 +25,7 @@ from k3x_converter.official_source import (
     inspect_official_shard_header,
     load_official_config,
     load_official_index,
+    materialize_official_expert_slice,
     plan_official_expert,
 )
 from k3x_converter.official_transport import HttpResponse
@@ -583,3 +592,187 @@ def test_expert_plan_rejects_incomplete_ownership_or_shape_drift(failure: str) -
 
     with pytest.raises(K3XError, match="INVALID_OFFICIAL_EXPERT"):
         plan_official_expert(bad_index, bad_header, layer_id=1, expert_id=0)
+
+
+def _official_config_record() -> OfficialConfig:
+    return OfficialConfig(
+        "5" * 64,
+        "6" * 40,
+        7_168,
+        896,
+        16,
+        3_584,
+        3_072,
+    )
+
+
+def _payload_bytes() -> bytes:
+    length = _PAYLOAD_END - _PAYLOAD_START
+    cycle = bytes(range(256))
+    return (cycle * ((length + 255) // 256))[:length]
+
+
+class _MaterializeTransport(_RangeTransport):
+    def __init__(self, *, fail_payload: bool = False) -> None:
+        super().__init__()
+        self.payload = _payload_bytes()
+        self.fail_payload = fail_payload
+
+    def get(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+        max_bytes: int,
+        timeout_seconds: float,
+        expected_status: int = 200,
+    ) -> HttpResponse:
+        value = headers["Range"]
+        if value != f"bytes={_PAYLOAD_START}-{_PAYLOAD_END - 1}":
+            return super().get(
+                url,
+                headers=headers,
+                max_bytes=max_bytes,
+                timeout_seconds=timeout_seconds,
+                expected_status=expected_status,
+            )
+        self.calls.append(value)
+        if self.fail_payload:
+            raise K3XError("SIMULATED_PAYLOAD_FAILURE")
+        assert len(self.payload) <= max_bytes
+        return HttpResponse(
+            206,
+            url,
+            {
+                "content-range": (
+                    f"bytes {_PAYLOAD_START}-{_PAYLOAD_END - 1}/{_SHARD_SIZE}"
+                ),
+                "content-length": str(len(self.payload)),
+            },
+            self.payload,
+        )
+
+
+def _real_plan():
+    header = inspect_official_shard_header(
+        _range_snapshot(), _SHARD, _RangeTransport()
+    )
+    return plan_official_expert(_expert_index(), header, layer_id=1, expert_id=0)
+
+
+def test_materialize_official_expert_publishes_hashed_source_and_valid_k3x(
+    tmp_path,
+) -> None:
+    transport = _MaterializeTransport()
+
+    report = materialize_official_expert_slice(
+        _range_snapshot(),
+        _official_config_record(),
+        _real_plan(),
+        transport,
+        tmp_path / "official",
+        chunk_bytes=257 * 1024,
+    )
+
+    assert transport.calls == [f"bytes={_PAYLOAD_START}-{_PAYLOAD_END - 1}"]
+    assert report.payload_bytes == 17_547_264
+    assert report.maximum_chunk_bytes <= 257 * 1024
+    assert report.maximum_response_bytes == 17_547_264
+    assert report.microshard_path.name == f"{report.microshard_sha256}.safetensors"
+    assert hashlib.sha256(report.microshard_path.read_bytes()).hexdigest() == (
+        report.microshard_sha256
+    )
+    assert set(report.tensor_sha256) == {
+        tensor.canonical_name for tensor in _real_plan().tensors
+    }
+    tensors = inspect_shard(report.microshard_path)
+    assert tensors["model.layers.1.feed_forward.experts.0.gate.weight_packed"].shape == (
+        3072,
+        1792,
+    )
+    manifest = json.loads(report.manifest_path.read_text(encoding="utf-8"))
+    assert manifest["source_sha256"] == report.microshard_sha256
+    assert manifest["source_provenance"]["verification"] == "transport-pinned-range"
+    assert manifest["source_provenance"]["range"] == [
+        _PAYLOAD_START,
+        _PAYLOAD_END,
+    ]
+    reader = K3XReader.open(report.k3x_path)
+    assert reader.superblock.optional_features == OPTIONAL_STORAGE_FIXTURE
+    assert reader.superblock.root_sha256.hex() == report.k3x_root_sha256
+    assert len(reader.tensor_records) == 3
+    assert not list((tmp_path / "official").rglob("*.partial"))
+
+
+def test_materialize_payload_failure_leaves_no_artifact(tmp_path) -> None:
+    output = tmp_path / "failed"
+
+    with pytest.raises(K3XError, match="SIMULATED_PAYLOAD_FAILURE"):
+        materialize_official_expert_slice(
+            _range_snapshot(),
+            _official_config_record(),
+            _real_plan(),
+            _MaterializeTransport(fail_payload=True),
+            output,
+            chunk_bytes=257 * 1024,
+        )
+
+    assert not output.exists() or not list(output.iterdir())
+
+
+@pytest.mark.parametrize("failure_stage", ("manifest", "convert"))
+def test_materialize_publish_or_conversion_failure_cleans_invocation_files(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, failure_stage: str
+) -> None:
+    output = tmp_path / failure_stage
+
+    if failure_stage == "manifest":
+        def fail_manifest(path, value) -> None:
+            raise RuntimeError("manifest failure")
+
+        monkeypatch.setattr(official_source_module, "_write_json_atomic", fail_manifest)
+    else:
+        def fail_convert(source, artifact, **kwargs):
+            artifact.with_suffix(artifact.suffix + ".partial").write_bytes(b"partial")
+            raise RuntimeError("conversion failure")
+
+        monkeypatch.setattr(official_source_module, "convert", fail_convert)
+
+    with pytest.raises(RuntimeError, match=f"{failure_stage}|conversion"):
+        materialize_official_expert_slice(
+            _range_snapshot(),
+            _official_config_record(),
+            _real_plan(),
+            _MaterializeTransport(),
+            output,
+            chunk_bytes=257 * 1024,
+        )
+
+    assert not output.exists() or not list(output.iterdir())
+
+
+def test_materialize_rejects_valid_but_unbound_existing_k3x(tmp_path) -> None:
+    output = tmp_path / "official"
+    first = materialize_official_expert_slice(
+        _range_snapshot(),
+        _official_config_record(),
+        _real_plan(),
+        _MaterializeTransport(),
+        output,
+        chunk_bytes=257 * 1024,
+    )
+    unrelated_source = tmp_path / "unrelated-source"
+    write_bounded_expert_source(unrelated_source, seed=7, chunk_bytes=257 * 1024)
+    unrelated_k3x = tmp_path / "unrelated.k3x"
+    convert(unrelated_source, unrelated_k3x, chunk_bytes=257 * 1024)
+    shutil.copyfile(unrelated_k3x, first.k3x_path)
+
+    with pytest.raises(K3XError, match="OFFICIAL_OUTPUT_CONFLICT"):
+        materialize_official_expert_slice(
+            _range_snapshot(),
+            _official_config_record(),
+            _real_plan(),
+            _MaterializeTransport(),
+            output,
+            chunk_bytes=257 * 1024,
+        )

@@ -3,17 +3,21 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import struct
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Mapping, Protocol
 
-from .format import K3XError
+from .format import K3XError, OPTIONAL_STORAGE_FIXTURE
 from .official_transport import HttpResponse
+from .reader import K3XReader
 from .safetensors_reader import TensorMetadata, parse_safetensors_header
+from .writer import _fingerprint_source, convert
 
 
 OFFICIAL_REPOSITORY = "moonshotai/Kimi-K3"
@@ -109,7 +113,23 @@ class ExpertPlan:
     payload_start: int
     payload_end: int
     payload_bytes: int
+    index_sha256: str
     tensors: tuple[PlannedTensor, ...]
+
+
+@dataclass(frozen=True)
+class MaterializationReport:
+    source_directory: Path
+    manifest_path: Path
+    microshard_path: Path
+    k3x_path: Path
+    payload_bytes: int
+    maximum_chunk_bytes: int
+    maximum_response_bytes: int
+    payload_sha256: str
+    tensor_sha256: Mapping[str, str]
+    microshard_sha256: str
+    k3x_root_sha256: str
 
 
 def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -554,5 +574,248 @@ def plan_official_expert(
         payload_start,
         payload_end,
         payload_bytes,
+        index.sha256,
         tuple(planned),
     )
+
+
+def _released_storage_config() -> dict[str, object]:
+    layer_kinds = [
+        "mla" if (index < 92 and index % 4 == 3) or index == 92 else "kda"
+        for index in range(93)
+    ]
+    return {
+        "vocab_size": 163_840,
+        "hidden_size": 7_168,
+        "layer_kinds": layer_kinds,
+        "dense_layers": [0],
+        "kda_heads": 96,
+        "kda_head_dim": 128,
+        "short_conv_kernel_size": 4,
+        "mla_heads": 96,
+        "q_lora_rank": 1_536,
+        "kv_lora_rank": 512,
+        "qk_nope_head_dim": 128,
+        "qk_rope_head_dim": 64,
+        "v_head_dim": 128,
+        "mla_use_nope": True,
+        "mla_use_output_gate": True,
+        "num_experts": 896,
+        "top_k": 16,
+        "num_shared_experts": 2,
+        "routed_latent_size": 3_584,
+        "expert_intermediate_size": 3_072,
+        "dense_intermediate_size": 33_792,
+        "attn_res_block_size": 12,
+        "rms_norm_eps": 1.0e-5,
+        "kda_gate_lower_bound": -5.0,
+        "activation_situ_beta": 4.0,
+        "activation_situ_linear_beta": 25.0,
+        "routed_scaling_factor": 1.0,
+        "mxfp4_group_size": 32,
+    }
+
+
+def _write_json_atomic(path: Path, value: dict[str, object]) -> None:
+    partial = path.with_suffix(path.suffix + ".partial")
+    payload = json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n"
+    with partial.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write(payload)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(partial, path)
+
+
+def _sha256_file(path: Path, chunk_bytes: int) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(chunk_bytes):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _microshard_header(plan: ExpertPlan) -> bytes:
+    cursor = 0
+    header: dict[str, dict[str, object]] = {}
+    for tensor in plan.tensors:
+        header[tensor.canonical_name] = {
+            "dtype": tensor.dtype,
+            "shape": list(tensor.shape),
+            "data_offsets": [cursor, cursor + tensor.length],
+        }
+        cursor += tensor.length
+    encoded = json.dumps(header, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return encoded + b" " * ((-len(encoded)) % 8)
+
+
+def _materialization_manifest(
+    snapshot: OfficialSnapshot,
+    config: OfficialConfig,
+    plan: ExpertPlan,
+    shard_name: str,
+    source_sha256: str,
+    payload_sha256: str,
+    tensor_sha256: Mapping[str, str],
+) -> dict[str, object]:
+    base = f"model.layers.{plan.layer_id}.feed_forward.experts.{plan.expert_id}"
+    return {
+        "format": "k3-storage-slice-v1",
+        "artifact_kind": "storage_fixture",
+        "layer_id": plan.layer_id,
+        "expert_id": plan.expert_id,
+        "config": _released_storage_config(),
+        "packed_shapes": {
+            f"{base}.gate": [3072, 3584],
+            f"{base}.up": [3072, 3584],
+            f"{base}.down": [3584, 3072],
+        },
+        "weight_map": {
+            tensor.canonical_name: shard_name for tensor in plan.tensors
+        },
+        "tensor_sha256": dict(tensor_sha256),
+        "source_sha256": source_sha256,
+        "payload_bytes": plan.payload_bytes,
+        "source_provenance": {
+            "repository": snapshot.repository,
+            "requested_revision": snapshot.requested_revision,
+            "resolved_revision": snapshot.resolved_revision,
+            "snapshot_sha256": snapshot.canonical_sha256,
+            "index_sha256": plan.index_sha256,
+            "config_sha256": config.sha256,
+            "config_git_blob_id": config.git_blob_id,
+            "shard_path": plan.shard_path,
+            "shard_size": snapshot.files[plan.shard_path].size,
+            "shard_lfs_sha256": snapshot.files[plan.shard_path].lfs_sha256,
+            "range": [plan.payload_start, plan.payload_end],
+            "range_sha256": payload_sha256,
+            "verification": "transport-pinned-range",
+        },
+    }
+
+
+def materialize_official_expert_slice(
+    snapshot: OfficialSnapshot,
+    config: OfficialConfig,
+    plan: ExpertPlan,
+    transport: Transport,
+    output_dir: Path,
+    *,
+    chunk_bytes: int,
+) -> MaterializationReport:
+    if chunk_bytes <= 0:
+        raise K3XError("INVALID_CHUNK_SIZE")
+    if plan.payload_bytes > _PAYLOAD_LIMIT:
+        raise K3XError("OFFICIAL_BODY_LIMIT")
+    shard = snapshot.files.get(plan.shard_path)
+    if shard is None or shard.lfs_sha256 is None:
+        raise K3XError("INVALID_OFFICIAL_FILE")
+    payload = _fetch_exact_range(
+        snapshot,
+        shard,
+        transport,
+        plan.payload_start,
+        plan.payload_end - 1,
+    )
+    payload_digest = hashlib.sha256(payload).hexdigest()
+    view = memoryview(payload)
+    tensor_digests: dict[str, str] = {}
+    for tensor in plan.tensors:
+        start = tensor.offset - plan.payload_start
+        tensor_digests[tensor.canonical_name] = hashlib.sha256(
+            view[start:start + tensor.length]
+        ).hexdigest()
+
+    root = Path(output_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    header = _microshard_header(plan)
+    partial = root / f".{uuid.uuid4().hex}.safetensors.partial"
+    digest = hashlib.sha256()
+    maximum_chunk = 0
+    created_shard = False
+    created_manifest = False
+    created_k3x = False
+    manifest_path = root / "source-manifest.json"
+    k3x_path = root / f"expert-l{plan.layer_id}-e{plan.expert_id}.k3x"
+    try:
+        prefix = struct.pack("<Q", len(header)) + header
+        with partial.open("wb") as stream:
+            stream.write(prefix)
+            digest.update(prefix)
+            offset = 0
+            while offset < len(payload):
+                count = min(chunk_bytes, len(payload) - offset)
+                chunk = view[offset:offset + count]
+                stream.write(chunk)
+                digest.update(chunk)
+                maximum_chunk = max(maximum_chunk, count)
+                offset += count
+            stream.flush()
+            os.fsync(stream.fileno())
+        microshard_digest = digest.hexdigest()
+        microshard_path = root / f"{microshard_digest}.safetensors"
+        if microshard_path.exists():
+            if _sha256_file(microshard_path, chunk_bytes) != microshard_digest:
+                raise K3XError("OFFICIAL_OUTPUT_CONFLICT")
+            partial.unlink()
+        else:
+            os.replace(partial, microshard_path)
+            created_shard = True
+
+        manifest = _materialization_manifest(
+            snapshot,
+            config,
+            plan,
+            microshard_path.name,
+            microshard_digest,
+            payload_digest,
+            tensor_digests,
+        )
+        expected_manifest = (
+            json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n"
+        ).encode("utf-8")
+        if manifest_path.exists():
+            if manifest_path.read_bytes() != expected_manifest:
+                raise K3XError("OFFICIAL_OUTPUT_CONFLICT")
+        else:
+            _write_json_atomic(manifest_path, manifest)
+            created_manifest = True
+
+        if k3x_path.exists():
+            reader = K3XReader.open(k3x_path)
+            expected_source, _ = _fingerprint_source(root, manifest, chunk_bytes)
+            if (
+                reader.superblock.optional_features != OPTIONAL_STORAGE_FIXTURE
+                or reader.superblock.source_sha256 != expected_source
+            ):
+                raise K3XError("OFFICIAL_OUTPUT_CONFLICT")
+        else:
+            convert(root, k3x_path, chunk_bytes=chunk_bytes)
+            created_k3x = True
+            reader = K3XReader.open(k3x_path)
+        if reader.superblock.optional_features != OPTIONAL_STORAGE_FIXTURE:
+            raise K3XError("NON_EXECUTABLE_ARTIFACT_REQUIRED")
+        return MaterializationReport(
+            root,
+            manifest_path,
+            microshard_path,
+            k3x_path,
+            plan.payload_bytes,
+            maximum_chunk,
+            len(payload),
+            payload_digest,
+            MappingProxyType(tensor_digests),
+            microshard_digest,
+            reader.superblock.root_sha256.hex(),
+        )
+    except Exception:
+        partial.unlink(missing_ok=True)
+        manifest_path.with_suffix(manifest_path.suffix + ".partial").unlink(missing_ok=True)
+        k3x_path.with_suffix(k3x_path.suffix + ".partial").unlink(missing_ok=True)
+        k3x_path.with_suffix(k3x_path.suffix + ".resume.json").unlink(missing_ok=True)
+        if created_k3x:
+            k3x_path.unlink(missing_ok=True)
+        if created_manifest:
+            manifest_path.unlink(missing_ok=True)
+        if created_shard:
+            microshard_path.unlink(missing_ok=True)
+        raise

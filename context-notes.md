@@ -529,3 +529,10 @@
 - `config.json` is bound to its API-declared Git blob ID by recomputing the canonical Git blob SHA-1 before released-dimension validation.
 - Implementation order is bounded transport and snapshot identity, strict index/config/header planning, atomic one-expert materialization, then the sole opt-in live B-0027 payload request.
 - The live artifact remains untracked and non-executable; M27 owns the first real-weight CUDA layer execution.
+
+## 2026-08-10 — Milestone 26 local RED/GREEN implementation
+
+- Bounded HTTPS and snapshot discovery passed 15 focused tests; source/safetensors regressions passed 43 tests.
+- Shared safetensors metadata parsing plus strict index/config/header/expert planning passed 109 focused and regression tests.
+- Atomic released-size materialization, local content hashing, source-manifest provenance, K3X conversion, cleanup, and stale-artifact binding passed 50 Python storage/K3X tests.
+- The attempted C++ reader regression identified only a missing `build/test_reader` binary in this fresh worktree; that binary must be built before the final cross-language gate.
