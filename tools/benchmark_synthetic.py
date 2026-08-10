@@ -194,6 +194,8 @@ class BenchmarkRecord:
     draft_resident_grid_kernel_launches: int = 0
     draft_resident_grid_fallbacks: int = 0
     draft_resident_grid_descriptor_h2d_bytes: int = 0
+    draft_ffn_block_calls: int = 0
+    draft_ffn_block_experts: int = 0
     draft_proposal_calls: int = 0
     draft_candidate_tokens: int = 0
     draft_replayed_context_tokens: int = 0
@@ -893,6 +895,8 @@ def benchmark_once(
         "draft_resident_grid_kernel_launches",
         "draft_resident_grid_fallbacks",
         "draft_resident_grid_descriptor_h2d_bytes",
+        "draft_ffn_block_calls",
+        "draft_ffn_block_experts",
         "draft_proposal_calls",
         "draft_candidate_tokens",
         "draft_replayed_context_tokens",
@@ -1286,6 +1290,8 @@ def benchmark_once(
         draft_resident_grid_descriptor_h2d_bytes=samples[0][
             "draft_resident_grid_descriptor_h2d_bytes"
         ],
+        draft_ffn_block_calls=samples[0]["draft_ffn_block_calls"],
+        draft_ffn_block_experts=samples[0]["draft_ffn_block_experts"],
         draft_proposal_calls=samples[0]["draft_proposal_calls"],
         draft_candidate_tokens=samples[0]["draft_candidate_tokens"],
         draft_replayed_context_tokens=samples[0][

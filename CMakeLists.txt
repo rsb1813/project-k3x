@@ -229,6 +229,12 @@ if(K3X_ENABLE_CUDA)
         runtime/src/cuda_expert_batch_bench.cpp
     )
     target_link_libraries(k3x_cuda_expert_batch_bench PRIVATE k3x_runtime)
+
+    add_executable(
+        k3x_cuda_expert_grid_bench
+        runtime/src/cuda_expert_grid_bench.cpp
+    )
+    target_link_libraries(k3x_cuda_expert_grid_bench PRIVATE k3x_runtime)
 endif()
 
 add_executable(test_model_session tests/cpp/test_model_session.cpp)
