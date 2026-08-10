@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 18 exact transient CUDA AURORA drafting is implemented, measured, and fully verified on public PR #25 from `codex/milestone-eighteen-cuda-aurora-draft`; public integration is in progress. The path is opt-in, persistent-only, fail-closed, and exactly matches the CPU draft proposal/acceptance contract while keeping target and draft telemetry separate. B-0019 rejects this transient synchronous CUDA identity as a default because all four CPU/CUDA pairs regress decode by 96.22% to 97.00%. CPU drafting remains the default, replay remains CPU-only, and the natural strict target verifier remains authoritative.
+Milestone 18 exact transient CUDA AURORA drafting is implemented, measured, reviewed, and published on public `main` through merged PR #25 at integration head `7899a7ae`. The path is opt-in, persistent-only, fail-closed, and exactly matches the CPU draft proposal/acceptance contract while keeping target and draft telemetry separate. B-0019 rejects this transient synchronous CUDA identity as a default because all four CPU/CUDA pairs regress decode by 96.22% to 97.00%. CPU drafting remains the default, replay remains CPU-only, and the natural strict target verifier remains authoritative.
 
-State audited on 2026-08-10 against local verified head `5058369`, based on public `main` documentation head `808b64d3`. The current matrices pass CPU CTest 14/14 with Python 278/50, liburing/direct CTest 15/15 with Python 284/44, ASan/UBSan CTest 15/15, and CUDA CTest 23/23 with Python 319/9. Compute Sanitizer reports zero errors. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 against public integration head `7899a7ae` and post-merge correctness run `31343401178`. The current matrices pass CPU CTest 14/14 with Python 278/50, liburing/direct CTest 15/15 with Python 284/44, ASan/UBSan CTest 15/15, and CUDA CTest 23/23 with Python 319/9. Compute Sanitizer reports zero errors. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
@@ -85,7 +85,7 @@ State audited on 2026-08-10 against local verified head `5058369`, based on publ
 
 ## Work in progress
 
-- Milestone 18 implementation, B-0019, full verification, sanitizer coverage, and evidence cross-checks are complete; TITAN Ledger synchronization, final self-review, and public integration are in progress.
+- Milestone 18 implementation, B-0019, full verification, sanitizer coverage, evidence cross-checks, TITAN Ledger synchronization, final self-review, public integration, and post-merge CI are complete.
 - Exact transient CUDA drafting remains diagnostic-only. No default, draft precision, residency, scheduler threshold, routing rule, or target verifier changed in Milestone 18.
 - Complete-prefix `aurora-replay` remains executable as the required candidate/state oracle. Milestone 17 is complete and published through PR #23.
 - Milestone 16 implementation, B-0017, full verification, evidence cross-checks, final self-review, public integration, and documentation reconciliation are complete.
@@ -119,9 +119,8 @@ State audited on 2026-08-10 against local verified head `5058369`, based on publ
 
 ## Next concrete tasks
 
-1. Publish and merge Milestone 18, then verify branch, pull-request, and post-merge `main` correctness runs.
-2. Start one isolated bounded exact draft-residency milestone using the same FP32 proposal and target contracts; do not combine reduced precision with the first residency measurement.
-3. Update GitHub Actions dependencies to remove the observed Node.js 20 deprecation warning without changing the correctness workflow contract.
+1. Start one isolated bounded exact draft-residency milestone using the same FP32 proposal and target contracts; do not combine reduced precision with the first residency measurement.
+2. Update GitHub Actions dependencies to remove the observed Node.js 20 deprecation warning without changing the correctness workflow contract.
 
 ## Hardware assumptions
 
@@ -150,6 +149,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
+- Public Milestone 18 integration head `7899a7ae` includes the complete implementation, B-0019 evidence, English README, and synchronized TITAN Ledger. PR #25 push/PR correctness runs `31343260116`/`31343261633` and post-merge `main` correctness run `31343401178` succeeded.
 - Local Milestone 18 verified head `5058369` contains implementation through B-0019 plus the CUDA live-test capability gate. Evidence head `7257280` contains 9 rows and 20 result files under `results/b0019-cuda-aurora-draft-wsl/`.
 - Current full verification passes CPU CTest 14/14 and pytest 278/50, liburing/direct CTest 15/15 and pytest 284/44, ASan/UBSan liburing CTest 15/15, and CUDA CTest 23/23 with pytest 319/9. The exact CUDA draft Compute Sanitizer run reports zero errors.
 - B-0019 artifact SHA-256 is `6604d1ec65f8056f6d4f04d09fa357a442c7c2f7a46faf56899caf31671d2ca7`; runner SHA-256 is `fb7bded3cb3edd5b2f626801ec38edd246ba0c19a990e6301955e32d0642d52f`; canonical aggregate SHA-256 is `ce1a599eb04077f3b0c1b8350254b126a58f4dc311421bfc38fc8f7a78478c59`; summary JSON/CSV SHA-256 is `3750254294385cecf503f2efcd69f8d23953a7e982006fe969c4c9ac9ee2913f` / `1b6234889c8997486e5b268d277af3ca892b2b6c152489b4f85cea81717edd1f`.
