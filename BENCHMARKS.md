@@ -893,29 +893,29 @@ The measurement establishes repeated host validation as the dominant B-0023 wall
 
 | Trace | Mode | Median | Delta vs trace direct | Hits | Misses | Evictions | Update successes |
 |---|---|---:|---:|---:|---:|---:|---:|
-| stable-1 | disabled | 1,902,148 ns | 0% | 0 | 0 | 0 | 0 |
-| stable-1 | update-1 | 2,089,830 ns | +9.867% | 0 | 0 | 0 | 20 |
-| stable-1 | cache-1 | 2,025,378 ns | +6.478% | 20 | 0 | 0 | 0 |
-| stable-1 | cache-2 | 1,955,560 ns | +2.808% | 20 | 0 | 0 | 0 |
-| stable-1 | cache-4 | 2,008,826 ns | +5.608% | 20 | 0 | 0 | 0 |
-| alternating-2 | disabled | 1,995,395 ns | 0% | 0 | 0 | 0 | 0 |
-| alternating-2 | update-1 | 2,077,815 ns | +4.131% | 0 | 0 | 0 | 20 |
-| alternating-2 | cache-1 | 2,121,700 ns | +6.330% | 0 | 20 | 20 | 0 |
-| alternating-2 | cache-2 | 1,978,799 ns | -0.832% | 20 | 0 | 0 | 0 |
-| alternating-2 | cache-4 | 1,911,701 ns | -4.194% | 20 | 0 | 0 | 0 |
-| rotating-5 | disabled | 1,903,307 ns | 0% | 0 | 0 | 0 | 0 |
-| rotating-5 | update-1 | 2,047,679 ns | +7.585% | 0 | 0 | 0 | 20 |
-| rotating-5 | cache-1 | 2,115,963 ns | +11.173% | 0 | 20 | 20 | 0 |
-| rotating-5 | cache-2 | 2,205,244 ns | +15.864% | 0 | 20 | 20 | 0 |
-| rotating-5 | cache-4 | 2,107,248 ns | +10.715% | 0 | 20 | 20 | 0 |
+| stable-1 | disabled | 1,997,778 ns | 0% | 0 | 0 | 0 | 0 |
+| stable-1 | update-1 | 1,967,566 ns | -1.512% | 0 | 0 | 0 | 20 |
+| stable-1 | cache-1 | 1,964,179 ns | -1.682% | 20 | 0 | 0 | 0 |
+| stable-1 | cache-2 | 2,010,994 ns | +0.662% | 20 | 0 | 0 | 0 |
+| stable-1 | cache-4 | 2,035,124 ns | +1.869% | 20 | 0 | 0 | 0 |
+| alternating-2 | disabled | 2,067,525 ns | 0% | 0 | 0 | 0 | 0 |
+| alternating-2 | update-1 | 1,976,416 ns | -4.407% | 0 | 0 | 0 | 20 |
+| alternating-2 | cache-1 | 2,159,855 ns | +4.466% | 0 | 20 | 20 | 0 |
+| alternating-2 | cache-2 | 2,034,800 ns | -1.583% | 20 | 0 | 0 | 0 |
+| alternating-2 | cache-4 | 2,005,247 ns | -3.012% | 20 | 0 | 0 | 0 |
+| rotating-5 | disabled | 1,960,733 ns | 0% | 0 | 0 | 0 | 0 |
+| rotating-5 | update-1 | 2,093,936 ns | +6.794% | 0 | 0 | 0 | 20 |
+| rotating-5 | cache-1 | 2,099,426 ns | +7.074% | 0 | 20 | 20 | 0 |
+| rotating-5 | cache-2 | 2,080,154 ns | +6.091% | 0 | 20 | 20 | 0 |
+| rotating-5 | cache-4 | 2,187,663 ns | +11.574% | 0 | 20 | 20 | 0 |
 
 Every row records zero measured warm weight H2D, zero cache bypass, zero grid/layer fallback, 577,600 activation-H2D bytes, 573,440 D2H bytes, 20 synchronizations, 20 complete-layer calls, 80 expert-grid launches, and 260 logical MoE-layer kernel launches. Ordered permutation changes graph identity without changing resident tensor IDs, so cache churn is not confounded by weight admission. Update succeeds on all 20 measured calls after the pre-measurement executable is established.
 
-Raw JSON/CSV and summaries are under `results/b0025-cuda-graph-cache-wsl/`. Runner SHA-256 is `6e544dd0cc24d8bfcce6524b72a5f75bd7113392a7e0c71a64ca177a50b230bd`; canonical aggregate SHA-256 is `afac1037c613ff5dcf6f625ec1ca513865adc2f19ba490218d32f9296a64f3be`; summary JSON/CSV SHA-256 is `80703c8088be99b95794142ead4df90ae433011ea619cf6fd818671ea00e2f1f` / `e1c5e57062f24330859dc5845dfbb3bf167e5c60625d879313cbf2e88514d0fb`. The independent verifier recomputes every raw JSON/CSV digest, payload, graph formula, aggregate, summary CSV digest, case order, and artifact/runner digest. Staged Git blobs were separately checked for LF-only digest parity.
+Raw JSON/CSV and summaries are under `results/b0025-cuda-graph-cache-wsl/`. Runner SHA-256 is `60ee26df29b05a9f6638323477abd7c277f22802fe67866bdb4b647ec7f85c21`; canonical aggregate SHA-256 is `f65ab85eb8b750a69330f10146f50f1644b5205e60c6752abcaf0d1deffa3bd8`; summary JSON/CSV SHA-256 is `da6a0e8cd336c131231d42597971e0c12a803dbad5ca05ca7f826310af6cad99` / `a53482f9386eaeb292c263f921c165fd8fb931aa156f4ebd2ecee2f74672d2ad`. The independent verifier recomputes every raw JSON/CSV digest, payload, graph formula, aggregate, summary CSV digest, case order, and artifact/runner digest. Staged Git blobs are separately checked for LF-only digest parity.
 
 Fresh verification passes CPU CTest 15/15 with pytest 332 passed/70 skipped, liburing/direct CTest 16/16 with pytest 334 passed/68 skipped, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 386 passed/16 skipped. Compute Sanitizer reports `ERROR SUMMARY: 0 errors` for both a stable cache hit and an alternating capacity-one miss/eviction.
 
-The result retains direct execution as the default. Stable reuse does not overcome graph host/update overhead, and rotating churn is consistently slower. Alternating cache-four is favorable in this bounded trace, but real K3 routed-set reuse, native-Linux end-to-end token timing, dynamic residency interaction, utilization, physical traffic, and quality remain unmeasured.
+The result retains direct execution as the default. Stable and alternating deltas are small and mixed, while rotating churn is consistently slower. Real K3 routed-set reuse, native-Linux end-to-end token timing, dynamic residency interaction, utilization, physical traffic, and quality remain unmeasured.
 
 ## Pending benchmark gates
 

@@ -2363,11 +2363,18 @@ public:
                 ErrorCode::backend_unavailable,
                 "resident MoE graph launch failed");
         }
+        const auto graph_wait_start = std::chrono::steady_clock::now();
+        const auto graph_host_before_wait = graph_entry
+            ? static_cast<std::uint64_t>(std::chrono::duration_cast<
+                  std::chrono::nanoseconds>(graph_wait_start -
+                                           graph_host_start).count())
+            : 0;
         if (cudaStreamSynchronize(stream_) != cudaSuccess) {
             return Result<ResidentMoeLayerResult>::failure(
                 ErrorCode::backend_unavailable,
                 "resident MoE layer output or synchronization failed");
         }
+        const auto graph_wait_end = std::chrono::steady_clock::now();
         if (graph_entry) {
             ++runtime_stats_.cuda_graph_launches;
             std::memcpy(output.data(), host_output, hidden_bytes);
@@ -2410,9 +2417,10 @@ public:
                     runtime_stats_.cuda_graph_resident_entries);
             }
             runtime_stats_.cuda_graph_host_nanoseconds +=
-                static_cast<std::uint64_t>(std::chrono::duration_cast<
-                    std::chrono::nanoseconds>(std::chrono::steady_clock::now() -
-                                             graph_host_start).count());
+                graph_host_before_wait + static_cast<std::uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - graph_wait_end)
+                        .count());
         }
 
         std::array<std::uint64_t, 3> expert_logical_bytes{};
