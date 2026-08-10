@@ -302,6 +302,42 @@ public:
         return Result<std::vector<float>>::success(std::move(mixed));
     }
 
+    Result<ResidentMoeLayerResult> resident_mxfp4_moe_layer(
+        std::span<const float> input, ResidentMoeLayerView weights,
+        std::span<const Mxfp4MlpView> experts,
+        std::span<const float> contributions, float epsilon, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) override {
+        if (!valid_resident_moe_layer(input, weights, experts, contributions,
+                                      epsilon, situ_beta, situ_linear)) {
+            return Result<ResidentMoeLayerResult>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+
+        auto latent = dense_matvec(input, weights.routed_down, layer, phase);
+        auto expert_outputs = mxfp4_situ_mlp_group(
+            latent.value(), experts, situ_beta, situ_linear, layer, phase);
+        std::vector<float> mixed(weights.routed_norm.values.size(), 0.0F);
+        for (std::size_t slot = 0; slot < experts.size(); ++slot) {
+            for (std::size_t row = 0; row < mixed.size(); ++row) {
+                mixed[row] += contributions[slot] *
+                              expert_outputs.value()[slot][row];
+            }
+        }
+
+        std::vector<float> normalized(mixed.size());
+        rms_norm(normalized, mixed, weights.routed_norm.values, epsilon);
+        auto routed = dense_matvec(
+            normalized, weights.routed_up, layer, phase);
+        auto shared = dense_situ_mlp(
+            input, weights.shared, situ_beta, situ_linear, layer, phase);
+        for (std::size_t row = 0; row < routed.value().size(); ++row) {
+            routed.value()[row] += shared.value()[row];
+        }
+        return Result<ResidentMoeLayerResult>::success(
+            {true, std::move(routed.value())});
+    }
+
     Result<Mxfp4PrefetchToken> prefetch_mxfp4_situ_mlp_group(
         std::span<const Mxfp4MlpView>, std::uint64_t, std::uint32_t,
         ProfilePhase) override {
@@ -384,11 +420,85 @@ private:
     }
 
     static bool valid_mxfp4_mlp(std::span<const float> input,
-                                Mxfp4MlpView expert) {
-        return valid_mxfp4(input, expert.gate) &&
-               valid_mxfp4(input, expert.up) &&
+                                 Mxfp4MlpView expert) {
+        return valid_mxfp4_mlp(input.size(), expert);
+    }
+
+    static bool valid_mxfp4_mlp(std::size_t input_size,
+                                 Mxfp4MlpView expert) {
+        return valid_mxfp4(input_size, expert.gate) &&
+               valid_mxfp4(input_size, expert.up) &&
                expert.gate.rows == expert.up.rows &&
                valid_mxfp4(expert.gate.rows, expert.down);
+    }
+
+    static bool all_finite(std::span<const float> values) {
+        for (const auto value : values) {
+            if (!std::isfinite(value)) return false;
+        }
+        return true;
+    }
+
+    static bool valid_resident_moe_layer(
+        std::span<const float> input, ResidentMoeLayerView weights,
+        std::span<const Mxfp4MlpView> experts,
+        std::span<const float> contributions, float epsilon, float situ_beta,
+        std::optional<float> situ_linear) {
+        if (input.empty() || experts.empty() ||
+            experts.size() != contributions.size() ||
+            !std::isfinite(epsilon) || epsilon <= 0.0F ||
+            !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
+            (situ_linear &&
+             (!std::isfinite(*situ_linear) || *situ_linear <= 0.0F)) ||
+            !all_finite(input) || !all_finite(contributions) ||
+            !all_finite(weights.routed_down.values) ||
+            !all_finite(weights.routed_norm.values) ||
+            !all_finite(weights.routed_up.values) ||
+            !all_finite(weights.shared.gate.values) ||
+            !all_finite(weights.shared.up.values) ||
+            !all_finite(weights.shared.down.values) ||
+            !valid_dense(input, weights.routed_down) ||
+            !valid_dense_mlp(input, weights.shared)) {
+            return false;
+        }
+
+        const auto latent_width = weights.routed_down.rows;
+        const auto routed_width = experts.front().down.rows;
+        if (latent_width == 0 || routed_width == 0 ||
+            weights.routed_norm.values.size() != routed_width ||
+            !valid_dense_size(routed_width, weights.routed_up) ||
+            weights.routed_up.rows != input.size() ||
+            weights.shared.down.rows != input.size()) {
+            return false;
+        }
+
+        std::unordered_set<std::uint64_t> tensor_ids;
+        const auto insert_id = [&tensor_ids](std::uint64_t tensor_id) {
+            return tensor_id != 0 && tensor_ids.insert(tensor_id).second;
+        };
+        if (!insert_id(weights.routed_down.tensor_id) ||
+            !insert_id(weights.routed_norm.tensor_id) ||
+            !insert_id(weights.routed_up.tensor_id) ||
+            !insert_id(weights.shared.gate.tensor_id) ||
+            !insert_id(weights.shared.up.tensor_id) ||
+            !insert_id(weights.shared.down.tensor_id)) {
+            return false;
+        }
+        const auto intermediate_width = experts.front().gate.rows;
+        for (const auto& expert : experts) {
+            if (!valid_mxfp4_mlp(latent_width, expert) ||
+                expert.gate.rows != intermediate_width ||
+                expert.down.rows != routed_width ||
+                expert.gate.group_size != 32 ||
+                expert.up.group_size != 32 ||
+                expert.down.group_size != 32 ||
+                !insert_id(expert.gate.tensor_id) ||
+                !insert_id(expert.up.tensor_id) ||
+                !insert_id(expert.down.tensor_id)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     void record(ProfilePhase phase, ProfileOperation operation,

@@ -19,7 +19,7 @@ enum class DensePrecision { fp32, bf16_rounded };
 enum class CudaAllocationMode { per_operation, reused };
 enum class CudaWeightMode { transient, resident };
 enum class CudaBatchingMode { scalar, grouped, resident_grid };
-enum class CudaBoundaryMode { operation, ffn_block };
+enum class CudaBoundaryMode { operation, ffn_block, moe_layer };
 enum class CudaTransferMode { synchronous, prefetch };
 enum class CudaMoeFusionMode { none, routed_accumulate };
 
@@ -67,6 +67,11 @@ struct BackendRuntimeStats {
     std::uint64_t resident_grid_kernel_launches{};
     std::uint64_t resident_grid_fallbacks{};
     std::uint64_t resident_grid_descriptor_h2d_bytes{};
+    std::uint64_t resident_moe_layer_calls{};
+    std::uint64_t resident_moe_layer_experts{};
+    std::uint64_t resident_moe_layer_kernel_launches{};
+    std::uint64_t resident_moe_layer_fallbacks{};
+    std::uint64_t resident_moe_layer_contribution_h2d_bytes{};
     std::uint64_t fused_moe_calls{};
     std::uint64_t fused_moe_experts{};
     std::uint64_t pinned_host_bytes{};
@@ -103,6 +108,23 @@ struct DenseMlpView {
     DenseWeightView gate;
     DenseWeightView up;
     DenseWeightView down;
+};
+
+struct DenseVectorView {
+    std::uint64_t tensor_id;
+    std::span<const float> values;
+};
+
+struct ResidentMoeLayerView {
+    DenseWeightView routed_down;
+    DenseVectorView routed_norm;
+    DenseWeightView routed_up;
+    DenseMlpView shared;
+};
+
+struct ResidentMoeLayerResult {
+    bool executed{};
+    std::vector<float> output;
 };
 
 struct Mxfp4MlpView {
@@ -159,6 +181,13 @@ public:
         std::span<const float> contributions, float situ_beta,
         std::optional<float> situ_linear, std::uint32_t layer,
         ProfilePhase phase) = 0;
+    virtual Result<ResidentMoeLayerResult> resident_mxfp4_moe_layer(
+        std::span<const float>, ResidentMoeLayerView,
+        std::span<const Mxfp4MlpView>, std::span<const float>, float, float,
+        std::optional<float>, std::uint32_t, ProfilePhase) {
+        return Result<ResidentMoeLayerResult>::failure(
+            ErrorCode::backend_unavailable);
+    }
     virtual Result<Mxfp4PrefetchToken> prefetch_mxfp4_situ_mlp_group(
         std::span<const Mxfp4MlpView> experts, std::uint64_t use_sequence,
         std::uint32_t layer, ProfilePhase phase) = 0;
