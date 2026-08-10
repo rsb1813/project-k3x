@@ -324,11 +324,13 @@ B-0020 compares transient/resident pairs for fixed/adaptive token-major and expe
 
 This implementation is published on public `main` through PR #27 at integration head `c88456c0`. Its push, pull-request, and post-merge correctness runs all passed; publication does not promote bounded residency to a default.
 
-## Milestone 20 accepted resident expert-grid design
+## Milestone 20 experimental resident expert-grid execution
 
-Milestone 20 is accepted for implementation but is not yet implemented or benchmarked. The selected boundary adds an opt-in rectangular native-MXFP4 CUDA grid over resident experts and token inputs. One gate launch, one up launch, one SiTU launch, and one down launch produce separate expert/token outputs; the existing CPU router-slot loop retains exact contribution order. AURORA uses token count one because its candidates remain causally autoregressive, while direct backend tests exercise multiple tokens for later expert-major consumers.
+Milestone 20 implements the accepted rectangular native-MXFP4 CUDA grid over resident experts and token inputs. The low-level kernel maps `blockIdx.z` to expert, `blockIdx.y` to token, and `blockIdx.x` to output row. Gate and up consume one shared token-major input block, SiTU spans every expert-token intermediate, and down consumes expert-token-major activations. Four launches return separate expert/token outputs; the existing CPU router-slot loop retains exact contribution order.
 
-The identity requires `cuda-custom + ffn-block + reused + resident + synchronous + fusion-none`. A hard-cap miss falls back for the complete grid to the existing exact serial group path; CUDA failures do not silently fall back to CPU. CUDA Graphs, a cooperative persistent kernel, device-resident KDA/MLA/router state, reduced precision, and dynamic eviction remain separate later axes. The normative accepted design is in [`docs/superpowers/specs/2026-08-10-k3x-resident-expert-grid-design.md`](docs/superpowers/specs/2026-08-10-k3x-resident-expert-grid-design.md).
+The public backend contract validates token/expert counts, checked products, equal shapes, native group-32 payloads, unique nonzero tensor IDs, and finite SiTU parameters before CUDA mutation. The closed identity requires `cuda-custom + ffn-block + reused + resident + synchronous + fusion-none` with positive capacity. All gate/up/down weights are resolved before launch. If any acquisition bypasses the hard cap, the complete request runs through the existing exact serial FFN path and only the fallback counter changes among grid counters. CUDA errors remain failures.
+
+AURORA integrates the grid at token count one because draft candidates remain causally autoregressive. Direct backend and benchmark coverage exercises 1, 2, and 4 experts and tokens for later expert-major or multi-branch consumers. B-0021 preserves proposals, acceptance, target tokens, KDA/MLA state, committed routes, and Reader evidence in all four grouped/grid pairs. Grid execution reduces derived MoE launches by 75% and improves paired synthetic decode by 10.79% to 38.00%, with zero fallback at 8 MiB. It remains experimental and non-default because the graph is tiny and host-driven. CUDA Graphs, a cooperative persistent kernel, device-resident KDA/MLA/router state, reduced precision, and dynamic eviction remain separate axes.
 
 ## TITAN component registry
 
@@ -341,7 +343,7 @@ Status meanings are strict. `Implemented` requires code and passing tests. `Expe
 | CHRONOS | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
 | BLACKSTAR | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
 | PROMETHEUS-X | DSpark-compatible speculative decoding extended with MoE-aware expert-cost scheduling | Proposed |
-| AURORA | Self-speculative K3 fast-path drafter using reduced Top-K, reduced precision, and resident experts while retaining target verification | Experimental replay, persistent reduced-Top-K CPU state, exact transient CUDA draft, and bounded exact resident CUDA draft implemented; both CUDA identities remain non-default after B-0019/B-0020; reduced precision, eviction-capable residency, and learned drafting proposed |
+| AURORA | Self-speculative K3 fast-path drafter using reduced Top-K, reduced precision, and resident experts while retaining target verification | Experimental replay, persistent reduced-Top-K CPU state, exact transient CUDA draft, bounded exact residency, and resident expert-grid execution implemented; CUDA paths remain non-default after B-0019 through B-0021; reduced precision, eviction-capable residency, and learned drafting proposed |
 | ORBIT | Multi-layer lookahead expert residency and prefetch prediction | Proposed |
 | MERCURY | Dynamic CPU/GPU expert placement using predicted transfer-plus-compute latency | Proposed |
 | HELIOS | Automatic hardware/workload tuning for cache, Top-K, speculation, I/O, and placement parameters | Proposed |

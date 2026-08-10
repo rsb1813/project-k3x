@@ -140,6 +140,16 @@ Removing repeated weight transfer does not remove fine-grained execution. The fi
 
 A production performance model still needs eviction pressure under a realistic expert working set, expert union size across speculative blocks, target acceptance, native-Linux PCIe throughput, physical NVMe traffic, GPU utilization/memory bandwidth, and full-layer occupancy. Reduced precision remains deferred so traffic reduction is not conflated with quality divergence.
 
+## Milestone 20 resident-grid launch and traffic model
+
+The exact resident grid changes execution granularity, not weight precision or routed-expert demand. For `E` selected experts, each call uploads three 16-byte matrix descriptors per expert, or `48E` bytes. The synthetic Top-4 AURORA path therefore adds 192 descriptor bytes per grid call: 5,760 bytes across 30 fixed-policy calls and 6,336 bytes across 33 adaptive-policy calls.
+
+The grouped reference launches gate, up, SiTU, and down once per expert. The resident grid launches each operation once per complete expert set. B-0021 reduces measured MoE launches from 480 to 120 for fixed rows and from 528 to 132 for adaptive rows, exactly 75% in every matched pair. This is launch amortization, not a reduction in exact native-MXFP4 weight bytes: paired weight H2D remains 644,160 bytes fixed and 647,424 bytes adaptive.
+
+Activation and descriptor traffic make total draft H2D rise from 731,840 to 752,960 bytes in fixed rows and from 743,872 to 767,104 bytes in adaptive rows. Despite that increase, paired synthetic decode improves by 10.79% to 38.00%. The result isolates launch granularity on the tiny WSL2 graph; it does not establish that multi-token batching caused the gain because current AURORA calls the grid with one token, and it does not project full-model throughput.
+
+The next traffic boundary is keeping intermediate activations and non-FFN draft state on device. KDA, MLA, routing, residual/state work, descriptor copies, activation transfers, and synchronization remain outside the exact resident-weight saving.
+
 ## Required production measurements
 
 Before selecting a default storage or kernel path, the Linux target must record decode and prefill rates, TTFT, GPU utilization and memory bandwidth, VRAM and host RAM, NVMe and RAM-to-GPU GB/token, expert-cache hit rate, speculative acceptance, unique experts per block, adaptive Top-K, cold rescues, per-kernel time, and I/O stall time. Every result must carry an ablation configuration and quality mode.

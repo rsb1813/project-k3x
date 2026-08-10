@@ -765,6 +765,30 @@ Public push and pull-request correctness runs `31346575341` and `31346587586` pa
 - Instrumented host API totals: approximately 35.03 ms in `cudaLaunchKernel`, 71.55 ms in `cudaMemcpyAsync`, and 0.94 ms in `cudaStreamSynchronize`. These are diagnostic attribution values, not decode/prefill TPS or uninstrumented latency.
 - Interpretation: after exact weight residency, fine-grained launches and activation copies are a stronger next boundary than stream-wait duration alone. No full-model, native-Linux, utilization, bandwidth, physical PCIe, physical NVMe, or quality claim is made.
 
+## B-0021 — Milestone 20 resident CUDA expert grid
+
+- Date: 2026-08-10.
+- Commit: evidence head `331d33d`; implementation lineage ends at `efeba7b` before the evidence commit.
+- Hardware: AMD Ryzen 7 9800X3D and NVIDIA GeForce RTX 5080 16,303 MiB under WSL2 Ubuntu 24.04.4, CUDA 13.3 native `sm_120`.
+- Model/checkpoint: runner-generated synthetic natural Top-16 K3X artifact, SHA-256 `7e12595e5e400b4c26946c75927b37f39ed3a0bcb8f90ca72b1e8f7c6cb95cad`.
+- Mode: CPU natural Top-16 target; persistent exact resident CUDA Top-4 draft; grouped versus resident-grid draft batching; fixed block-2 and adaptive policies; token-major and CPU expert-major target verification; 4 prompt tokens; 6 generated tokens; 3 warmups and 20 measured samples.
+- Quality scope: exact synthetic target token, final KDA/MLA state, committed route, proposal, acceptance, Reader-byte, and resident-weight-H2D parity. Coding/agentic quality and full-model quality are unmeasured.
+
+| Pair | Grouped decode tok/s | Grid decode tok/s | Paired delta | MoE launches grouped → grid | Grid calls | Grid fallbacks | Total draft H2D grouped → grid |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| fixed-2 token-major | 27.5269 | 30.4982 | +10.794% | 480 → 120 | 30 | 0 | 731,840 → 752,960 B |
+| adaptive token-major | 23.1484 | 28.7238 | +24.086% | 528 → 132 | 33 | 0 | 743,872 → 767,104 B |
+| fixed-2 expert-major | 22.5699 | 31.1475 | +38.005% | 480 → 120 | 30 | 0 | 731,840 → 752,960 B |
+| adaptive expert-major | 23.0008 | 28.0281 | +21.857% | 528 → 132 | 33 | 0 | 743,872 → 767,104 B |
+
+Natural greedy measures 1171.6814 decode tok/s, 1072.0700 prefill tok/s, 81.0359 ms TTFT, and 237,002,752-byte peak RSS on the CPU tiny graph. It is an environment anchor, not a paired CUDA-draft baseline. Grid draft peak VRAM is 671,744 bytes fixed and 675,008 bytes adaptive; grouped values are 688,608 and 691,872 bytes. Fixed acceptance is 1.0 and adaptive acceptance is 0.5. Average target Top-K is 16 and draft Top-K is 4.
+
+Each grid call uses four MoE kernel launches. Descriptor H2D is 5,760 bytes across 30 fixed calls and 6,336 bytes across 33 adaptive calls. Exact resident weight H2D remains 644,160 bytes fixed and 647,424 bytes adaptive in both grouped and grid rows. The launch reduction is therefore not a weight-traffic reduction; activation and descriptor bytes increase total H2D slightly. Physical NVMe GB/token, GPU utilization, GPU memory bandwidth, PCIe counters, and I/O stall time are not measured. Reader bytes are logical runtime reads and WSL2 is not native-Linux performance authority.
+
+Raw JSON/CSV and summaries are under `results/b0021-cuda-aurora-grid-wsl/`. Runner SHA-256 is `0497a53a6ba6045d911dbb685e7155ee698a7e83946059e7b611202918bd4aa8`; canonical aggregate SHA-256 is `a628064544cdae0d06af7177539bc253f264946840f59651508121146af2edda`; summary JSON/CSV SHA-256 is `8586f6a1939dfe209813c504727c0952149730a757eb5600b05fb6a02021877f` / `b87b26c1403a2f3d30fa46b5550837f1f72db18a1d162710a907419da8d64401`.
+
+Fresh verification passes CPU CTest 14/14 with pytest 290 passed/55 skipped, liburing/direct CTest 15/15 with pytest 296 passed/49 skipped, ASan/UBSan liburing CTest 15/15, and CUDA CTest 24/24 with pytest 336 passed/9 skipped. Compute Sanitizer reports `ERROR SUMMARY: 0 errors` for the direct expert-grid test and 4x4 benchmark.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
