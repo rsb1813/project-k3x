@@ -581,7 +581,7 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-051 — Harden K3X v1 before bounded real-checkpoint discovery
 
 - Date: 2026-08-10.
-- Status: accepted, implemented, and measured locally; public integration pending.
+- Status: accepted, implemented, measured, and publicly integrated.
 - Decision: retain K3X v1 and harden its generic external-input boundary before discovering any official real shard. Enforce rooted source containment and exact tensor-to-shard ownership, bounded strict safetensors metadata, canonical resume-ledger schema, full committed-prefix validation, and exact truncation of uncommitted partial suffixes.
 - Alternatives considered: repeat the already implemented D-028 bounded-fixture hash checks; introduce signed manifests and a new provenance-bearing format immediately; harden the existing format narrowly and defer publisher authenticity until real-source discovery defines the required identity.
 - Evidence: D-028 already proves declared shard/tensor hashes, canonical extent-prefix reuse, source CRC, and partial CRC for the released-size bounded fixture. The remaining generic path accepted traversal and ambiguous ownership, parsed unbounded or structurally loose safetensors metadata, trusted loose ledger JSON, and left crash residue after the committed prefix.
@@ -589,4 +589,5 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: B-0026 completes fresh, clean-resume, and 8,192-byte orphan-resume scenarios with a 257-byte maximum individual source read and a Reader-valid 1,421,568-byte final artifact. Both resume cases reuse two verified extents; corruption tests remain fail-atomic.
 - Reason accepted: this is the smallest boundary that makes externally supplied shard discovery safe enough to begin without changing the on-disk format or claiming an unauthenticated publisher identity.
 - Rejected claims: the audit does not prove power-loss durability, signed supply-chain provenance, peak RSS, real-checkpoint compatibility, token throughput, GPU behavior, physical NVMe traffic, or model quality.
+- Publication: PR #42 was rebase-merged at public integration head `ca8c544e`; push and pull-request correctness runs `31379029215`/`31379074639`, pull-request CodeQL `31379074656`, and post-merge `main` correctness/CodeQL `31379311743`/`31379311695` passed.
 - Revisit: Milestone 26 must define content-addressed official-source discovery and publisher provenance before a bounded real shard is downloaded. Signed provenance or a format revision should be reconsidered from that evidence rather than guessed in advance.

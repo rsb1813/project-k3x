@@ -432,7 +432,7 @@ Expected: every suite passes. Re-run the unchanged stable CUDA Graph hit Compute
 
 Update `ARCHITECTURE.md`, D-051 in `DECISIONS.md`, B-0026 in `BENCHMARKS.md`, `README.md`, checklist, and context notes. Update `PROJECT_STATE.md` last. State that D-028 was already implemented, distinguish local integrity from publisher authenticity, and retain no-full-weight/no-cloud/no-tok/s caveats.
 
-- [ ] **Step 5: Review, publish, and merge**
+- [x] **Step 5: Review, publish, and merge**
 
 Run `rtk git diff --check`, committed-evidence verification, and a focused Critical/Important read-only review. Fix verified findings once, rerun affected gates, commit semantic units, push `codex/milestone-twenty-five-converter-integrity`, open a ready public PR, wait for correctness and CodeQL, rebase merge, and verify post-merge `main` gates. Reconcile public documentation if the PR number or integration head is not yet recorded.
 

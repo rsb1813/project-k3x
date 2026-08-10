@@ -501,9 +501,15 @@
 
 ## 2026-08-10 Milestone 25 구현과 검증
 
-- Source containment/ownership은 `4d2471f`와 non-standard constant 보정 `00fe36a`, safetensors header/metadata는 `b7b602b`와 `274c852`, resume schema는 `0eb8452`, exact orphan-suffix recovery는 `e59589d`로 각각 RED/GREEN 구현했다. D-028의 기존 bounded-fixture hash 검증은 중복하지 않았다.
-- B-0026 runner와 verifier는 `8686a41`에 추가했고, summary JSON도 LF-only final-newline으로 검증하도록 `70e71a7`에서 보정했다. Canonical evidence는 `cbc4d35`에 기록했다.
+- Source containment/ownership은 public commits `3947b87`와 non-standard constant 보정 `6f852bc`, safetensors header/metadata는 `9aa6882`와 `36ceded`, resume schema는 `d91d8b7`, exact orphan-suffix recovery는 `e4c5fd9`로 각각 RED/GREEN 구현했다. D-028의 기존 bounded-fixture hash 검증은 중복하지 않았다.
+- B-0026 runner와 verifier는 `98146bf`에 추가했고, summary JSON도 LF-only final-newline으로 검증하도록 `35e4419`에서 보정했다. Canonical evidence는 `cce5223`에 기록했다.
 - Canonical B-0026은 fresh/resume-clean/resume-orphan 세 시나리오에서 maximum source read 257 bytes와 final output 1,421,568 bytes를 기록했다. Resume 두 행은 20,736-byte committed prefix의 extent 2개를 재사용했고 orphan 행은 8,192-byte suffix를 검증 뒤 제거했다. RSS는 측정하지 않았고 token/GPU/NVMe/quality 필드는 내보내지 않았다.
 - 첫 canonical direct-module 실행은 shared venv의 editable `k3x_converter`가 오래된 milestone-one worktree를 가리켜 final output size가 달랐다. 결과 파일은 남지 않았다. Repository `pyproject.toml`의 pytest path와 일치하도록 direct tool invocation에 `PYTHONPATH=converter:reference`를 명시해 현재 worktree 코드를 사용했고, shared venv 자체는 변경하지 않았다.
 - Fresh full gates는 CPU CTest 15/15와 pytest 405 passed/70 skipped, liburing/direct CTest 16/16와 capability-aware `K3X_TEST_IO_URING=1 K3X_BUILD_DIR=build-liburing` pytest 407 passed/68 skipped, ASan/UBSan CTest 16/16, CUDA CTest 27/27와 pytest 459 passed/16 skipped를 통과했다. Released MoE-layer Compute Sanitizer regression은 `ERROR SUMMARY: 0 errors`였다.
 - B-0026은 converter correctness/recovery audit이다. 공식 weight, publisher authenticity, peak RSS, token throughput, GPU 성능, physical NVMe, cloud 실행은 아직 증명하지 않는다.
+
+## 2026-08-10 Milestone 25 공개 통합
+
+- Final Critical/Important review에서 설계 문서 한 줄의 stale `align_up` 표현을 확인했다. 구현과 계획이 사용하는 exact `last.offset + last.length`로 `ca8c544e`에서 정정했고 focused resume/audit 회귀 40개와 scoped re-review를 통과했다.
+- Public ready PR #42의 push/pull-request correctness `31379029215`/`31379074639`와 CodeQL `31379074656`이 통과했다. PR은 public integration head `ca8c544e`로 rebase merge됐다.
+- Post-merge `main` correctness `31379311743`과 CodeQL `31379311695`도 통과했다. GitHub Actions의 Node.js 20 및 CodeQL v3 deprecation annotation은 성공 결론을 바꾸지 않으며 별도 maintenance 대상이다.
