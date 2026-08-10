@@ -146,10 +146,12 @@ int main(int argc, char** argv) {
     std::string aurora_block_policy_name = "fixed";
     std::string aurora_draft_backend_name = "cpu";
     std::string aurora_draft_resident_bytes_text = "0";
+    std::string aurora_draft_batching_name = "grouped";
     bool aurora_draft_k_supplied = false;
     bool aurora_block_policy_supplied = false;
     bool aurora_draft_backend_supplied = false;
     bool aurora_draft_resident_bytes_supplied = false;
+    bool aurora_draft_batching_supplied = false;
     bool diagnostics = false;
     std::size_t count = 0;
     for (int index = 1; index + 1 < argc; index += 2) {
@@ -206,6 +208,10 @@ int main(int argc, char** argv) {
         else if (key == "--aurora-draft-resident-bytes") {
             aurora_draft_resident_bytes_text = value;
             aurora_draft_resident_bytes_supplied = true;
+        }
+        else if (key == "--aurora-draft-batching") {
+            aurora_draft_batching_name = value;
+            aurora_draft_batching_supplied = true;
         }
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
     }
@@ -282,6 +288,12 @@ int main(int argc, char** argv) {
                   << aurora_draft_backend_name << '\n';
         return 2;
     }
+    if (aurora_draft_batching_name != "grouped" &&
+        aurora_draft_batching_name != "resident-grid") {
+        std::cerr << "unknown AURORA draft batching mode: "
+                  << aurora_draft_batching_name << '\n';
+        return 2;
+    }
     if (speculative_verification_name == "token-major") {
         runtime_options.speculative_verification =
             k3x::SpeculativeVerificationMode::token_major;
@@ -307,14 +319,16 @@ int main(int argc, char** argv) {
     if (speculative_mode_name == "none" &&
         (aurora_draft_k_supplied || aurora_block_policy_supplied ||
          aurora_draft_backend_supplied ||
-         aurora_draft_resident_bytes_supplied)) {
+         aurora_draft_resident_bytes_supplied ||
+         aurora_draft_batching_supplied)) {
         std::cerr << "speculative mode none does not accept speculative options\n";
         return 2;
     }
     if (speculative_mode_name == "scripted-reference" &&
         (aurora_draft_k_supplied || aurora_block_policy_supplied ||
          aurora_draft_backend_supplied ||
-         aurora_draft_resident_bytes_supplied)) {
+         aurora_draft_resident_bytes_supplied ||
+         aurora_draft_batching_supplied)) {
         std::cerr << "scripted-reference does not accept AURORA options\n";
         return 2;
     }
@@ -322,6 +336,17 @@ int main(int argc, char** argv) {
         (speculative_mode_name != "aurora-persistent" ||
          aurora_draft_backend_name != "cuda-custom")) {
         std::cerr << "AURORA draft residency requires persistent cuda-custom draft backend\n";
+        return 2;
+    }
+    if (aurora_draft_batching_supplied &&
+        (speculative_mode_name != "aurora-persistent" ||
+         aurora_draft_backend_name != "cuda-custom")) {
+        std::cerr << "AURORA draft batching requires persistent cuda-custom draft backend\n";
+        return 2;
+    }
+    if (aurora_draft_batching_name == "resident-grid" &&
+        aurora_draft_resident_bytes == 0) {
+        std::cerr << "AURORA resident-grid draft batching requires positive residency\n";
         return 2;
     }
     if (speculative_mode_name == "aurora-replay" &&
@@ -616,6 +641,8 @@ int main(int argc, char** argv) {
         backend_options.cuda_batching = k3x::CudaBatchingMode::scalar;
     } else if (cuda_batching_name == "grouped") {
         backend_options.cuda_batching = k3x::CudaBatchingMode::grouped;
+    } else if (cuda_batching_name == "resident-grid") {
+        backend_options.cuda_batching = k3x::CudaBatchingMode::resident_grid;
     } else {
         std::cerr << "unknown CUDA batching mode: " << cuda_batching_name << '\n';
         return 2;
@@ -654,6 +681,19 @@ int main(int argc, char** argv) {
         resident_parse.ptr != resident_end) {
         std::cerr << "invalid CUDA resident byte capacity: "
                   << cuda_resident_bytes_text << '\n';
+        return 2;
+    }
+    if (backend_options.cuda_batching ==
+            k3x::CudaBatchingMode::resident_grid &&
+        (backend_options.kind != k3x::BackendKind::cuda_custom ||
+         backend_options.cuda_allocation != k3x::CudaAllocationMode::reused ||
+         backend_options.cuda_weights != k3x::CudaWeightMode::resident ||
+         backend_options.cuda_resident_bytes == 0 ||
+         backend_options.cuda_boundary != k3x::CudaBoundaryMode::ffn_block ||
+         backend_options.cuda_transfer !=
+             k3x::CudaTransferMode::synchronous ||
+         backend_options.cuda_moe_fusion != k3x::CudaMoeFusionMode::none)) {
+        std::cerr << "resident-grid batching requires resident cuda-custom ffn-block reused synchronous execution with fusion none\n";
         return 2;
     }
     const auto* pinned_begin = cuda_pinned_bytes_text.data();
@@ -901,7 +941,9 @@ int main(int argc, char** argv) {
                     ? k3x::CudaWeightMode::transient
                     : k3x::CudaWeightMode::resident;
             draft_backend_options.cuda_batching =
-                k3x::CudaBatchingMode::grouped;
+                aurora_draft_batching_name == "resident-grid"
+                    ? k3x::CudaBatchingMode::resident_grid
+                    : k3x::CudaBatchingMode::grouped;
             draft_backend_options.cuda_boundary =
                 k3x::CudaBoundaryMode::ffn_block;
             draft_backend_options.cuda_transfer =
@@ -1023,9 +1065,12 @@ int main(int argc, char** argv) {
             : "transient";
     const auto draft_batching_name =
         effective_draft_options.cuda_batching ==
-                k3x::CudaBatchingMode::grouped
-            ? "grouped"
-            : "scalar";
+                k3x::CudaBatchingMode::resident_grid
+            ? "resident-grid"
+            : effective_draft_options.cuda_batching ==
+                    k3x::CudaBatchingMode::grouped
+                ? "grouped"
+                : "scalar";
     const auto draft_boundary_name =
         effective_draft_options.cuda_boundary ==
                 k3x::CudaBoundaryMode::ffn_block

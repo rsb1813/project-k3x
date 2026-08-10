@@ -37,11 +37,16 @@ bool supported_persistent_backend(const ComputeBackend& backend) {
          options.cuda_resident_bytes == 0) ||
         (options.cuda_weights == CudaWeightMode::resident &&
          options.cuda_resident_bytes > 0);
+    const bool supported_batching =
+        options.cuda_batching == CudaBatchingMode::grouped ||
+        (options.cuda_batching == CudaBatchingMode::resident_grid &&
+         options.cuda_weights == CudaWeightMode::resident &&
+         options.cuda_resident_bytes > 0);
     return options.kind == BackendKind::cuda_custom &&
         options.dense_precision == DensePrecision::fp32 &&
         options.cuda_allocation == CudaAllocationMode::reused &&
         supported_weights &&
-        options.cuda_batching == CudaBatchingMode::grouped &&
+        supported_batching &&
         options.cuda_boundary == CudaBoundaryMode::ffn_block &&
         options.cuda_transfer == CudaTransferMode::synchronous &&
         options.cuda_moe_fusion == CudaMoeFusionMode::none &&

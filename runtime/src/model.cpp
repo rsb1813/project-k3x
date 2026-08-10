@@ -1057,10 +1057,16 @@ private:
                             config_.situ_linear,
                             static_cast<std::uint32_t>(layer), phase);
                 } else {
-                    expert_outputs = backend_.mxfp4_situ_mlp_group(
-                        latent, expert_views, config_.situ_beta,
-                        config_.situ_linear,
-                        static_cast<std::uint32_t>(layer), phase);
+                    expert_outputs = backend_.options().cuda_batching ==
+                            CudaBatchingMode::resident_grid
+                        ? backend_.mxfp4_situ_mlp_grid(
+                              latent, 1, expert_views, config_.situ_beta,
+                              config_.situ_linear,
+                              static_cast<std::uint32_t>(layer), phase)
+                        : backend_.mxfp4_situ_mlp_group(
+                              latent, expert_views, config_.situ_beta,
+                              config_.situ_linear,
+                              static_cast<std::uint32_t>(layer), phase);
                 }
                 if (!expert_outputs) {
                     throw std::runtime_error("expert FFN backend failure");
