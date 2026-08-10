@@ -133,7 +133,7 @@
 - [x] Inspect the split MoE runtime/backend path and current CUDA synchronization/traffic ownership.
 - [x] Compare resident MoE-layer execution, routed-set CUDA Graph caching, and a complete device token graph.
 - [x] Write and self-review the accepted dependency-closed design.
-- [ ] Write and self-review the detailed TDD implementation plan.
+- [x] Write and self-review the detailed TDD implementation plan.
 - [ ] Implement the CPU oracle and resident CUDA MoE-layer contract through witnessed RED/GREEN cycles.
 - [ ] Integrate runtime, AURORA, CLI, exact fallback, and target/draft telemetry.
 - [ ] Implement and run B-0022 plus the complete verification and sanitizer matrices.
