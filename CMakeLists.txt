@@ -14,6 +14,7 @@ enable_testing()
 
 add_library(k3x_runtime
     runtime/src/crc32c.cpp
+    runtime/src/cuda_graph_cache.cpp
     runtime/src/sha256.cpp
     runtime/src/direct_io.cpp
     runtime/src/reader.cpp
@@ -84,6 +85,10 @@ add_test(NAME profile COMMAND test_profile)
 add_executable(test_backend tests/cpp/test_backend.cpp)
 target_link_libraries(test_backend PRIVATE k3x_runtime)
 add_test(NAME backend COMMAND test_backend)
+
+add_executable(test_cuda_graph_cache tests/cpp/test_cuda_graph_cache.cpp)
+target_link_libraries(test_cuda_graph_cache PRIVATE k3x_runtime)
+add_test(NAME cuda_graph_cache COMMAND test_cuda_graph_cache)
 
 add_executable(test_host_expert_store tests/cpp/test_host_expert_store.cpp)
 target_link_libraries(test_host_expert_store PRIVATE k3x_runtime)
