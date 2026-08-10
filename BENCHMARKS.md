@@ -972,6 +972,8 @@ Fresh final-review verification passes CPU CTest 15/15 with pytest 462 passed/70
 
 The next bottleneck is not source compatibility or bounded conversion. It is the unimplemented dependency-closed real CUDA layer invocation. B-0027 makes no TPS or full-model performance claim.
 
+PR #44 was rebase-merged at public implementation head `5b6345db`. Both branch and pull-request correctness passed, all pull-request CodeQL checks passed, and post-merge `main` correctness `31386873905` and CodeQL `31386873928` succeeded. Node.js 20 and CodeQL Action v3 deprecation annotations did not change the successful conclusions and remain separate workflow maintenance.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
