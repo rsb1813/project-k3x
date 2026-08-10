@@ -290,11 +290,11 @@ git commit -m "bench: add released MoE layer ablation"
 **Interfaces:**
 - Produces: measured released-dimension boundary evidence, not token throughput.
 
-- [ ] **Step 1: Generate one bounded released artifact**
+- [x] **Step 1: Generate one bounded released artifact**
 
 Use `write_bounded_expert_source` and the streaming converter. Record its SHA-256 and reuse the same artifact for all six rows.
 
-- [ ] **Step 2: Run the formal matrix**
+- [x] **Step 2: Run the formal matrix**
 
 ```bash
 /home/jolib/.venvs/k3x-m1/bin/python \
@@ -305,11 +305,11 @@ Use `write_bounded_expert_source` and the streaming converter. Record its SHA-25
   --warmup 3 --iterations 20
 ```
 
-- [ ] **Step 3: Add committed-evidence verification**
+- [x] **Step 3: Add committed-evidence verification**
 
 Recompute every raw digest, canonical aggregate, summary CSV digest, pair gate, and reported percentage directly from committed bytes. Require exactly six raw JSON files, one summary JSON, and one summary CSV.
 
-- [ ] **Step 4: Run evidence tests and commit**
+- [x] **Step 4: Run evidence tests and commit**
 
 ```bash
 git add results/b0023-cuda-released-moe-layer-wsl \

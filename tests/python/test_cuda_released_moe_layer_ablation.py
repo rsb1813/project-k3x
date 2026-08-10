@@ -222,3 +222,79 @@ def test_live_cuda_released_moe_layer_ablation(tmp_path: Path) -> None:
         iterations=1,
     )
     assert len(summary["records"]) == 6
+
+
+def test_committed_b0023_evidence_is_self_consistent() -> None:
+    root = Path(__file__).resolve().parents[2]
+    output = root / "results" / "b0023-cuda-released-moe-layer-wsl"
+    if not output.exists():
+        pytest.skip("B-0023 evidence is committed in the measurement task")
+    summary_path = output / "summary.json"
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary["benchmark"] == "B-0023"
+    assert summary["scope"] == "released-dimension-repeated-view"
+    assert summary["evidence"] == "measured"
+    assert summary["warmup"] == 3
+    assert summary["iterations"] == 20
+    assert len(summary["records"]) == 6
+    assert len(tuple(output.glob("*.json"))) == 7
+    assert len(tuple(output.glob("*.csv"))) == 1
+
+    aggregate = json.dumps(
+        summary["records"], sort_keys=True, separators=(",", ":")
+    ).encode()
+    assert hashlib.sha256(aggregate).hexdigest() == summary[
+        "aggregate_sha256"
+    ]
+    records = {record["name"]: record for record in summary["records"]}
+    assert tuple(record["name"] for record in summary["records"]) == tuple(
+        case[0] for case in CASES
+    )
+    for name, boundary, experts in CASES:
+        record = records[name]
+        raw_path = output / f"{name}.json"
+        assert hashlib.sha256(raw_path.read_bytes()).hexdigest() == record[
+            "raw_json_sha256"
+        ]
+        raw = json.loads(raw_path.read_text(encoding="utf-8"))
+        for field, value in raw.items():
+            assert record[field] == value
+        assert record["boundary"] == boundary
+        assert record["experts"] == experts
+        assert record["routing_semantics"] is False
+        assert record["maximum_absolute_error"] <= 1.0e-5
+        assert record["weight_h2d_bytes"] == 0
+        assert record["weight_cache_bypasses"] == 0
+        assert record["resident_grid_fallbacks"] == 0
+        assert record["resident_moe_layer_fallbacks"] == 0
+
+    for _, split_name, layer_name in PAIRS:
+        split = records[split_name]
+        layer = records[layer_name]
+        assert split["stream_synchronization_count"] == 80
+        assert layer["stream_synchronization_count"] == 20
+        assert layer["paired_sync_reduction"] == 60
+        assert layer["resident_moe_layer_calls"] == 20
+        assert layer["resident_moe_layer_kernel_launches"] == 260
+        assert layer["paired_cold_weight_delta_bytes"] == 14_336
+        assert layer["paired_resident_weight_delta_bytes"] == 14_336
+        assert layer["activation_h2d_bytes"] < split["activation_h2d_bytes"]
+        assert layer["device_to_host_bytes"] < split["device_to_host_bytes"]
+        assert layer["paired_latency_delta_percent"] == (
+            layer["latency_nanoseconds_median"]
+            / split["latency_nanoseconds_median"]
+            - 1.0
+        ) * 100.0
+
+    forbidden_metric_fragments = ("tokens_per_second", "tok/s", "ttft")
+    assert not any(
+        fragment in field.lower()
+        for record in summary["records"]
+        for field in record
+        for fragment in forbidden_metric_fragments
+    )
+    summary_csv = output / "summary.csv"
+    assert b"\r\n" not in summary_csv.read_bytes()
+    assert hashlib.sha256(summary_csv.read_bytes()).hexdigest() == summary[
+        "summary_csv_sha256"
+    ]
