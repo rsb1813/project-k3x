@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2025-public-20a46b?style=flat-square)](#milestone-25--converter-trust-boundary)
+[![Milestone](https://img.shields.io/badge/milestone%2026-real%20expert-20a46b?style=flat-square)](#milestone-26--official-bounded-range-discovery)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -34,7 +34,7 @@ flowchart LR
 ```
 
 > [!IMPORTANT]
-> The implemented milestones still use a tiny synthetic model. Their measurements validate correctness and isolate runtime boundaries; they are not full Kimi K3 throughput claims. No full checkpoint was downloaded and no paid cloud resource was provisioned.
+> The executable graph still uses a tiny synthetic model, but Milestone 26 has now converted one exact 17,547,264-byte native-MXFP4 expert from the pinned official Kimi K3 checkpoint. That artifact is deliberately non-executable and is not a full-model throughput claim. No complete shard, full checkpoint, or paid cloud resource was used.
 
 | Public milestone | GitHub status | Evidence |
 |---|---|---|
@@ -53,6 +53,7 @@ flowchart LR
 | Milestone 23 | [PR #38 merged](https://github.com/rsb1813/project-k3x/pull/38) at `e24cac2` | B-0024 attributes the regression to repeated 469,776,384-byte validation and measures an exact admission-time fast path |
 | Milestone 24 | [PR #40 merged](https://github.com/rsb1813/project-k3x/pull/40) at `13a403f` | B-0025 measures direct, whole-update, and bounded ordered-set CUDA Graph behavior across stable, alternating, and rotating traces |
 | Milestone 25 | [PR #42 merged](https://github.com/rsb1813/project-k3x/pull/42) at `ca8c544e` | B-0026 validates bounded fresh/resume/orphan conversion and strict external-input rejection without real weights |
+| Milestone 26 | Local verification complete; public integration pending | B-0027 verifies one pinned official 17,547,264-byte expert range, content-addressed conversion, and the non-executable runtime guard |
 
 PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 25 integration head `ca8c544e`; its push and pull-request correctness runs `31379029215` and `31379074639` passed with CodeQL `31379074656`, followed by successful post-merge `main` correctness `31379311743` and CodeQL `31379311695`.
 
@@ -391,6 +392,24 @@ B-0026 exercises one fresh conversion, one clean two-extent resume, and one resu
 
 These are synthetic converter-integrity timings, not throughput targets. Peak RSS was not measured, no full Kimi K3 weight was downloaded, no cloud resource was provisioned, and no token, quality, GPU, PCIe, or physical NVMe claim is made.
 
+## Milestone 26 — official bounded range discovery
+
+K3X now resolves the public `moonshotai/Kimi-K3` repository to pinned commit `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`, verifies the 59,764,096-byte model index by its declared LFS SHA-256, recomputes the Git blob identity of `config.json`, and parses the exact safetensors header through HTTP ranges. Redirects, hosts, statuses, byte ceilings, `Content-Range`, object sizes, JSON structure, shard ownership, released dimensions, and w1/w2/w3 role mapping all fail closed.
+
+B-0027 materializes only layer 1, expert 0 from shard 2. The six official U8 tensors form the contiguous shard range `[1,268,562,960, 1,286,110,224)`, exactly 17,547,264 bytes. The payload is repacked into a content-addressed local microshard, hashed per tensor, converted through the unchanged K3X writer, reopened by the strict Reader, and marked `OPTIONAL_STORAGE_FIXTURE`. The C++ runtime rejects generation from the resulting real-weight artifact with exit code 4 and `NON_EXECUTABLE_ARTIFACT` before graph execution.
+
+| Evidence | Measured value |
+|---|---:|
+| Official files / repository bytes | 118 / 1,560,998,984,390 |
+| Index tensors / shards / tensor bytes | 497,220 / 96 / 1,560,860,324,864 |
+| Metadata + header bytes | 59,799,719 + 818,704 |
+| Tensor payload bytes | 17,547,264 |
+| Payload SHA-256 | `1d925fa7bd91331511783b7423204d20b6337cd672b403fd017b7b42f421c36c` |
+| Microshard SHA-256 | `ed3f07d595f37d90b1688de21ba0cdc012ee92c67dd92c460c0c73b2ef374a34` |
+| K3X root SHA-256 | `d585d283325e13e1316a0194c2d6274dd89ef75a28b96b02f02733290b7658be` |
+
+The evidence level is explicitly `transport-pinned-range`, not `full-shard-verified`: the complete 16.99 GB shard was not downloaded, so its full LFS digest was not recomputed. Real tensor and K3X bytes remain ignored below `artifacts/`; only canonical JSON/CSV identities and measurements are committed. M27 owns the first actual CUDA layer execution over these real bytes.
+
 ## Quick start
 
 ### 1. Create an environment
@@ -660,6 +679,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Independent exact C++20 synthetic runtime.
 - [x] Synthetic profiler and reproducible JSON/CSV output.
 - [x] Strict converter source, safetensors, resume-ledger, and orphan-suffix trust boundaries with B-0026 evidence.
+- [x] Pinned official index/config/header discovery and one exact real native-MXFP4 expert conversion with B-0027 evidence.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.
@@ -716,7 +736,7 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
 - Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0025 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; transient, bounded-resident, resident-grid, resident MoE-layer, admission-validation, and CUDA Graph paths are exact opt-in experiments. B-0025 finds mixed stable/alternating deltas and rotating churn 6.09%–11.57% slower, so no graph default changes. There is no learned DSpark drafter, reduced-precision draft path, eviction-capable draft residency, device-resident whole-token graph, or full-model speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
-- The converter trust boundary is hardened and measured on the synthetic checkpoint, but it has not yet processed an official real Kimi K3 shard or the full checkpoint. Publisher authenticity and signed source provenance remain separate future work.
+- The converter has processed one bounded official Kimi K3 expert range, but not a complete shard or the full checkpoint. Its evidence is transport-pinned range identity, not recomputed full-object LFS verification or signed publisher provenance.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.
 - No open-source license has been selected yet; public visibility does not itself grant reuse rights.
 

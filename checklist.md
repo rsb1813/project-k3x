@@ -204,7 +204,7 @@
 - [x] Write and self-review the detailed TDD implementation plan.
 - [x] Implement bounded snapshot/index/config discovery through witnessed RED/GREEN cycles.
 - [x] Implement exact expert planning and atomic range materialization through witnessed RED/GREEN cycles.
-- [ ] Convert and verify one live official expert slice without committing real bytes.
+- [x] Convert and verify one live official expert slice without committing real bytes.
 - [ ] Record B-0027, run the full verification matrix, complete Critical/Important review, synchronize documentation, publish, merge, and verify public `main`.
 
 ## Milestone 12 — Fused routed accumulation CUDA kernel
