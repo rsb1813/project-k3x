@@ -166,11 +166,11 @@ The bounded released-size fixture fixes hidden width 7,168, routed latent width 
 
 | Experts | Split median | Layer median | Layer delta | Kernel total split → layer | Activation H2D reduction | D2H reduction |
 |---:|---:|---:|---:|---:|---:|---:|
-| 1 | 1,215,986 ns | 19,252,393 ns | +1483.274% | 15,029,568 → 19,694,880 ns | 1,145,840 B | 1,146,880 B |
-| 4 | 2,151,240 ns | 20,301,321 ns | +843.703% | 24,182,720 → 27,700,864 ns | 1,142,720 B | 2,007,040 B |
-| 16 | 5,325,364 ns | 23,571,319 ns | +342.624% | 58,867,456 → 61,588,192 ns | 1,130,240 B | 5,447,680 B |
+| 1 | 1,227,823 ns | 20,487,750 ns | +1568.624% | 15,121,920 → 22,970,976 ns | 1,145,840 B | 1,146,880 B |
+| 4 | 2,370,565 ns | 20,953,689 ns | +783.911% | 24,506,720 → 27,692,480 ns | 1,142,720 B | 2,007,040 B |
+| 16 | 5,681,151 ns | 24,422,315 ns | +329.883% | 58,395,968 → 61,886,528 ns | 1,130,240 B | 5,447,680 B |
 
-Every row uses 20 measured iterations after three warmups. Split synchronization is 80 and layer synchronization is 20; measured warm weight H2D is zero; maximum error, capacity bypass, and fallback are zero. The table is a layer-boundary measurement and has no token, prefill, TTFT, physical PCIe, or NVMe interpretation.
+Every row uses 20 measured iterations after three warmups. Split synchronization is 80 and layer synchronization is 20; measured warm weight H2D is zero; maximum error, capacity bypass, and fallback are zero. The oracle backend is released before selected-backend construction, and reported peak VRAM is the larger of the sequential oracle and selected phases: 575,555,632, 628,336,832, and 839,518,976 bytes at 1, 4, and 16 experts. The table is a layer-boundary measurement and has no token, prefill, TTFT, physical PCIe, or NVMe interpretation.
 
 The layer wall regression is much larger than its aggregate kernel-time increase. Source inspection identifies one unamortized term: each complete-layer call performs finiteness scans across all 469,776,384 immutable dense/vector bytes before resident lookup and launch. This is an evidence-backed hypothesis for the next attribution benchmark, not a measured decomposition. Admission-time validation must retain the same malformed/non-finite rejection contract before repeated scans can be removed.
 
