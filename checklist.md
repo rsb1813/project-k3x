@@ -143,6 +143,17 @@
 - [x] Run the complete verification and sanitizer matrices.
 - [x] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
 
+## Milestone 22 — Released-dimension resident MoE-layer boundary
+
+- [x] Re-read the public charter, architecture, current state, D-046/D-047, and B-0022 evidence.
+- [x] Inspect the released storage fixture and existing CUDA expert benchmark interfaces.
+- [x] Compare released repeated-view, scaled synthetic, and executable-checkpoint approaches.
+- [x] Write and self-review the accepted released-dimension benchmark design.
+- [ ] Write and self-review the detailed TDD implementation plan.
+- [ ] Implement the released-dimension split/layer benchmark through witnessed RED/GREEN cycles.
+- [ ] Implement and run B-0023 with committed raw/summary evidence validation.
+- [ ] Run full verification, synchronize the TITAN Ledger and README, review, publish, merge, and verify public `main`.
+
 ## Milestone 12 — Fused routed accumulation CUDA kernel
 
 - [x] TITAN Ledger, 현재 CUDA 경계, 원 구현 근거 재확인.
