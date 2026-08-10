@@ -239,6 +239,39 @@ def test_cpp_runner_rejects_unknown_aurora_draft_boundary() -> None:
     assert result.stderr.strip() == "unknown AURORA draft boundary: warp"
 
 
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (
+            ["--aurora-draft-graph", "warp"],
+            "unknown AURORA draft graph mode: warp",
+        ),
+        (
+            [
+                "--speculative-mode", "aurora-persistent",
+                "--speculative-block-size", "2",
+                "--aurora-draft-k", "4",
+                "--aurora-draft-backend", "cuda-custom",
+                "--aurora-draft-resident-bytes", "8388608",
+                "--aurora-draft-graph", "cache",
+                "--aurora-draft-graph-entries", "1",
+            ],
+            "AURORA draft graph execution requires resident-grid moe-layer execution",
+        ),
+    ],
+)
+def test_cpp_runner_rejects_invalid_aurora_draft_graph_contract(
+    arguments: list[str], message: str
+) -> None:
+    result = subprocess.run(
+        [str(cpp_binary("k3x_run")), *arguments],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == message
+
+
 def test_cpp_runner_rejects_draft_boundary_without_persistent_cuda() -> None:
     result = subprocess.run(
         [

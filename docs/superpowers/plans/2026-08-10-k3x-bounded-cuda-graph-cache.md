@@ -290,11 +290,11 @@ git commit -m "runtime: bound CUDA Graph update and eviction"
 - Target options never implicitly enable draft graph mode.
 - JSON and CSV expose independent target/draft graph identities and counters.
 
-- [ ] **Step 1: Write RED ownership tests**
+- [x] **Step 1: Write RED ownership tests**
 
 Run an exact target with graph disabled and a CUDA AURORA MoE-layer draft with cache capacity one. Assert target graph counters remain zero while draft miss/hit/launch counters are positive. Add the inverse case and invalid draft-boundary rejection.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -306,11 +306,11 @@ K3X_BUILD_DIR=build-cuda python -m pytest -q \
 
 Expected: missing CLI fields or ownership assertions fail.
 
-- [ ] **Step 3: Implement explicit draft propagation and aggregation**
+- [x] **Step 3: Implement explicit draft propagation and aggregation**
 
 Parse draft graph settings separately, validate them with the existing AURORA ownership gates, assign them only to `draft_backend_options`, and serialize both option identities and runtime counters. Preserve zero defaults for ordinary greedy and CPU draft paths.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run the same pytest command and `ctest --test-dir build-cuda --output-on-failure`.
 

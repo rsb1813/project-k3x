@@ -317,6 +317,8 @@ def test_admission_validation_propagates_to_cuda_moe_layer_draft(
             "--aurora-draft-resident-bytes", "8388608",
             "--aurora-draft-batching", "resident-grid",
             "--aurora-draft-boundary", "moe-layer",
+            "--aurora-draft-graph", "cache",
+            "--aurora-draft-graph-entries", "4",
             "--json", str(output),
         ],
         capture_output=True,
@@ -326,7 +328,59 @@ def test_admission_validation_propagates_to_cuda_moe_layer_draft(
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["cuda_weight_validation"] == "admission"
     assert payload["draft_cuda_weight_validation"] == "admission"
+    assert payload["cuda_graph"] == "disabled"
+    assert payload["cuda_graph_launches"] == 0
+    assert payload["draft_cuda_graph"] == "cache"
+    assert payload["draft_cuda_graph_entries"] == 4
+    assert payload["draft_cuda_graph_cache_misses"] > 0
+    assert payload["draft_cuda_graph_launches"] > 0
     assert payload["immutable_validation_scans"] > 0
     assert payload["draft_immutable_validation_scans"] > 0
     assert payload["immutable_validation_hits"] > 0
     assert payload["draft_immutable_validation_hits"] > 0
+
+
+def test_target_graph_does_not_enable_cuda_moe_layer_draft_graph(
+    tmp_path: Path,
+) -> None:
+    if Path(os.environ.get("K3X_BUILD_DIR", "build")).name != "build-cuda":
+        pytest.skip("CUDA graph ownership requires build-cuda")
+    artifact = _top16_artifact(tmp_path)
+    output = tmp_path / "target-graph-only.json"
+    result = subprocess.run(
+        [
+            str(cpp_binary("k3x_run")),
+            "--model", str(artifact),
+            "--prompt-ids", "1,7,3,9",
+            "--generate", "6",
+            "--mode", "incremental",
+            "--backend", "cuda-custom",
+            "--cuda-allocation", "reused",
+            "--cuda-weights", "resident",
+            "--cuda-batching", "resident-grid",
+            "--cuda-boundary", "moe-layer",
+            "--cuda-resident-bytes", "8388608",
+            "--cuda-weight-validation", "admission",
+            "--cuda-graph", "cache",
+            "--cuda-graph-entries", "4",
+            "--speculative-mode", "aurora-persistent",
+            "--speculative-verification", "token-major",
+            "--speculative-block-size", "2",
+            "--aurora-draft-k", "4",
+            "--aurora-draft-backend", "cuda-custom",
+            "--aurora-draft-resident-bytes", "8388608",
+            "--aurora-draft-batching", "resident-grid",
+            "--aurora-draft-boundary", "moe-layer",
+            "--json", str(output),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["cuda_graph"] == "cache"
+    assert payload["cuda_graph_cache_misses"] > 0
+    assert payload["cuda_graph_launches"] > 0
+    assert payload["draft_cuda_graph"] == "disabled"
+    assert payload["draft_cuda_graph_entries"] == 0
+    assert payload["draft_cuda_graph_launches"] == 0

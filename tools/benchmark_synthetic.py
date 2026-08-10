@@ -363,6 +363,8 @@ def _run_process(
     aurora_draft_resident_bytes: int = 0,
     aurora_draft_batching: str = "grouped",
     aurora_draft_boundary: str = "ffn-block",
+    aurora_draft_graph: str = "disabled",
+    aurora_draft_graph_entries: int = 0,
     cuda_graph: str = "disabled",
     cuda_graph_entries: int = 0,
     diagnostics: bool = False,
@@ -418,6 +420,8 @@ def _run_process(
         command.extend([
             "--aurora-draft-batching", aurora_draft_batching,
             "--aurora-draft-boundary", aurora_draft_boundary,
+            "--aurora-draft-graph", aurora_draft_graph,
+            "--aurora-draft-graph-entries", str(aurora_draft_graph_entries),
         ])
     if runtime_metadata:
         command.extend(["--runtime-metadata", runtime_metadata])
@@ -536,6 +540,8 @@ def benchmark_once(
     aurora_draft_resident_bytes: int = 0,
     aurora_draft_batching: str = "grouped",
     aurora_draft_boundary: str = "ffn-block",
+    aurora_draft_graph: str = "disabled",
+    aurora_draft_graph_entries: int = 0,
 ) -> BenchmarkRecord:
     if warmup < 0 or iterations <= 0:
         raise ValueError("warmup must be non-negative and iterations must be positive")
@@ -598,6 +604,8 @@ def benchmark_once(
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
                 aurora_draft_batching=aurora_draft_batching,
                 aurora_draft_boundary=aurora_draft_boundary,
+                aurora_draft_graph=aurora_draft_graph,
+                aurora_draft_graph_entries=aurora_draft_graph_entries,
             )
             _, ttft_peak, ttft = _run_process(
                 artifact,
@@ -646,6 +654,8 @@ def benchmark_once(
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
                 aurora_draft_batching=aurora_draft_batching,
                 aurora_draft_boundary=aurora_draft_boundary,
+                aurora_draft_graph=aurora_draft_graph,
+                aurora_draft_graph_entries=aurora_draft_graph_entries,
             )
             if index >= warmup:
                 samples.append(sample)
@@ -692,6 +702,8 @@ def benchmark_once(
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
                 aurora_draft_batching=aurora_draft_batching,
                 aurora_draft_boundary=aurora_draft_boundary,
+                aurora_draft_graph=aurora_draft_graph,
+                aurora_draft_graph_entries=aurora_draft_graph_entries,
                 diagnostics=True,
             )
             if diagnostic["token_ids"] != samples[0]["token_ids"]:
@@ -741,6 +753,8 @@ def benchmark_once(
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
                 aurora_draft_batching=aurora_draft_batching,
                 aurora_draft_boundary=aurora_draft_boundary,
+                aurora_draft_graph=aurora_draft_graph,
+                aurora_draft_graph_entries=aurora_draft_graph_entries,
                 diagnostics=True,
             )
             candidate, _, _ = _run_process(
@@ -783,6 +797,8 @@ def benchmark_once(
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
                 aurora_draft_batching=aurora_draft_batching,
                 aurora_draft_boundary=aurora_draft_boundary,
+                aurora_draft_graph=aurora_draft_graph,
+                aurora_draft_graph_entries=aurora_draft_graph_entries,
                 diagnostics=True,
             )
             max_absolute_error, max_relative_error = _numerical_errors(
@@ -839,6 +855,8 @@ def benchmark_once(
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
                 aurora_draft_batching=aurora_draft_batching,
                 aurora_draft_boundary=aurora_draft_boundary,
+                aurora_draft_graph=aurora_draft_graph,
+                aurora_draft_graph_entries=aurora_draft_graph_entries,
             )
             if (
                 materialized["token_ids"] != samples[0]["token_ids"]
@@ -1101,6 +1119,14 @@ def benchmark_once(
         if speculative_mode == "aurora-persistent"
         and aurora_draft_backend == "cuda-custom"
         else "scalar",
+        aurora_draft_graph
+        if speculative_mode == "aurora-persistent"
+        and aurora_draft_backend == "cuda-custom"
+        else "disabled",
+        aurora_draft_graph_entries
+        if speculative_mode == "aurora-persistent"
+        and aurora_draft_backend == "cuda-custom"
+        else 0,
     )
     option_fields = (
         "backend",
@@ -1136,6 +1162,8 @@ def benchmark_once(
         "aurora_draft_backend",
         "draft_cuda_resident_bytes",
         "draft_cuda_batching",
+        "draft_cuda_graph",
+        "draft_cuda_graph_entries",
     )
     observed_options = tuple(samples[0][field] for field in option_fields)
     float_option_fields = {"routing_mass_target", "routing_min_boundary_gap"}
@@ -1671,6 +1699,11 @@ def main() -> int:
     parser.add_argument("--aurora-draft-resident-bytes", type=int, default=0)
     parser.add_argument("--aurora-draft-batching", default="grouped")
     parser.add_argument("--aurora-draft-boundary", default="ffn-block")
+    parser.add_argument(
+        "--aurora-draft-graph", choices=("disabled", "update", "cache"),
+        default="disabled",
+    )
+    parser.add_argument("--aurora-draft-graph-entries", type=int, default=0)
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--csv", type=Path, required=True)
     args = parser.parse_args()
@@ -1714,6 +1747,8 @@ def main() -> int:
         aurora_draft_resident_bytes=args.aurora_draft_resident_bytes,
         aurora_draft_batching=args.aurora_draft_batching,
         aurora_draft_boundary=args.aurora_draft_boundary,
+        aurora_draft_graph=args.aurora_draft_graph,
+        aurora_draft_graph_entries=args.aurora_draft_graph_entries,
     )
     write_results(result, args.json, args.csv)
     print(json.dumps(asdict(result), sort_keys=True, separators=(",", ":")))

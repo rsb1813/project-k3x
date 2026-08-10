@@ -176,8 +176,8 @@
 - [x] Compare a whole-token graph, one mutable superset graph, and reference/update/bounded ordered-set cache experiments.
 - [x] Write and self-review the accepted bounded CUDA Graph cache design.
 - [x] Write and self-review the detailed TDD implementation plan.
-- [ ] Implement graph identity, bounded cache, strict options, and telemetry through witnessed RED/GREEN cycles.
-- [ ] Integrate exact CUDA capture/update/cache execution and target/draft ownership.
+- [x] Implement graph identity, bounded cache, strict options, and telemetry through witnessed RED/GREEN cycles.
+- [x] Integrate exact CUDA capture/update/cache execution and target/draft ownership.
 - [ ] Add and run the canonical B-0025 trace ablation with digest-backed evidence.
 - [ ] Run the full CPU/liburing/ASan/CUDA/sanitizer verification matrix.
 - [ ] Complete Critical/Important review, synchronize README/TITAN Ledger, publish, merge, and verify public `main`.
