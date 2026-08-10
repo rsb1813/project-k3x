@@ -35,7 +35,7 @@
 - Produces `k3x::BoundedCudaGraphIndex::touch(const CudaGraphKey&)`, `erase`, `clear`, `contains`, `size`, and `peak_size`.
 - The CUDA backend later owns resources in a separate map keyed by `CudaGraphKey`; this index only chooses hits and victims.
 
-- [ ] **Step 1: Write the failing deterministic policy test**
+- [x] **Step 1: Write the failing deterministic policy test**
 
 ```cpp
 // CUDA Graph ordered identity와 bounded LRU index를 검증합니다.
@@ -57,7 +57,7 @@ int main() {
 }
 ```
 
-- [ ] **Step 2: Configure and run RED**
+- [x] **Step 2: Configure and run RED**
 
 Run:
 
@@ -68,11 +68,11 @@ cmake --build build-cpu -j2 --target test_cuda_graph_cache
 
 Expected: configuration or compilation fails because the target and header do not exist.
 
-- [ ] **Step 3: Implement the minimum portable index**
+- [x] **Step 3: Implement the minimum portable index**
 
 Use a monotonic `std::uint64_t sequence_` and `std::map<CudaGraphKey, std::uint64_t> last_use_`. Reject zero capacity in the constructor with `std::invalid_argument`. On a full miss, select the pair with minimum `(last_use, key)` and erase it before inserting the new key.
 
-- [ ] **Step 4: Run GREEN and the portable suite**
+- [x] **Step 4: Run GREEN and the portable suite**
 
 Run:
 
@@ -83,7 +83,7 @@ ctest --test-dir build-cpu --output-on-failure -R 'cuda_graph_cache|backend|ops'
 
 Expected: all selected tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add CMakeLists.txt runtime/include/k3x/cuda_graph_cache.hpp runtime/src/cuda_graph_cache.cpp tests/cpp/test_cuda_graph_cache.cpp
