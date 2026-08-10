@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2025-local%20verified-20a46b?style=flat-square)](#milestone-25--converter-trust-boundary)
+[![Milestone](https://img.shields.io/badge/milestone%2025-public-20a46b?style=flat-square)](#milestone-25--converter-trust-boundary)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -52,9 +52,9 @@ flowchart LR
 | Milestone 22 | [PR #36 merged](https://github.com/rsb1813/project-k3x/pull/36) at `e4820a18` | B-0023 released-dimension MoE boundary; exact traffic gates pass, complete layer latency is 4.30×–16.69× split |
 | Milestone 23 | [PR #38 merged](https://github.com/rsb1813/project-k3x/pull/38) at `e24cac2` | B-0024 attributes the regression to repeated 469,776,384-byte validation and measures an exact admission-time fast path |
 | Milestone 24 | [PR #40 merged](https://github.com/rsb1813/project-k3x/pull/40) at `13a403f` | B-0025 measures direct, whole-update, and bounded ordered-set CUDA Graph behavior across stable, alternating, and rotating traces |
-| Milestone 25 | Local verification complete; publication pending | B-0026 validates bounded fresh/resume/orphan conversion and strict external-input rejection without real weights |
+| Milestone 25 | [PR #42 merged](https://github.com/rsb1813/project-k3x/pull/42) at `ca8c544e` | B-0026 validates bounded fresh/resume/orphan conversion and strict external-input rejection without real weights |
 
-PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 24 integration head `13a403f`; its branch and pull-request correctness runs `31371133295` and `31371136825` passed with CodeQL `31371136804`, followed by successful post-merge `main` correctness `31371387067` and CodeQL `31371387081`.
+PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 25 integration head `ca8c544e`; its push and pull-request correctness runs `31379029215` and `31379074639` passed with CodeQL `31379074656`, followed by successful post-merge `main` correctness `31379311743` and CodeQL `31379311695`.
 
 ## Why a dedicated engine
 

@@ -922,7 +922,7 @@ The result retains direct execution as the default. Stable and alternating delta
 ## B-0026 — Milestone 25 converter integrity audit
 
 - Date: 2026-08-10.
-- Commit: canonical runner and implementation `70e71a7`; committed evidence `cbc4d35`.
+- Commit: public canonical runner and implementation `35e4419`; committed evidence `cce5223`.
 - Hardware: AMD Ryzen 7 9800X3D host under WSL2 Ubuntu 24.04.4. The RTX 5080 was present but unused. The audit used temporary filesystem storage and did not measure the P44 Pro as a physical device.
 - Model/checkpoint: deterministic synthetic K3-compatible source checkpoint and K3X v1 output; no official Kimi K3 weight.
 - Mode: `k3x-converter-integrity-audit-v1`, 257-byte source chunks, interruption after two committed extents, and an optional 8,192-byte orphan suffix.
@@ -940,6 +940,8 @@ Artifact SHA-256 values for fresh, clean-resume, and orphan-resume are `7abe2955
 Runner SHA-256 is `d292991ada21dd305078d2fe90116450d7a5184606962891bc1c383c47487ca0`; canonical aggregate SHA-256 is `4181e012dc0ccc1570f5ca18336ee3037327b32da63b8128bcc5423c0191100c`; summary JSON/CSV SHA-256 is `f78de6ef9bb3b47d1cb3d56af1969d1d3d465025a21ee0b25f2d97df27e38116` / `c98f12b39fdc7f76bd4cd824cb5fc9da9b44208dd27a954c958f6e3bf3b6ea6d`. The verifier checks schema, exact scenario order, aggregate and file digests, JSON/CSV parity, LF-only evidence, bounded reads, Reader validity, resume reuse, and absence of token/GPU/quality fields.
 
 Fresh verification passes CPU CTest 15/15 with pytest 405 passed/70 skipped; liburing/direct CTest 16/16 with capability-aware pytest 407 passed/68 skipped; ASan/UBSan CTest 16/16; and CUDA CTest 27/27 with pytest 459 passed/16 skipped. The unchanged released MoE-layer Compute Sanitizer regression reports `ERROR SUMMARY: 0 errors`. This CUDA gate does not extend parser coverage.
+
+PR #42 was rebase-merged at public integration head `ca8c544e`. Push and pull-request correctness runs `31379029215`/`31379074639` passed, as did pull-request CodeQL `31379074656`. Post-merge `main` correctness `31379311743` and CodeQL `31379311695` also passed.
 
 B-0026 is a correctness and recovery audit, not a performance forecast. It permits bounded official-source discovery to begin; it does not establish publisher authenticity, full-checkpoint conversion, cloud execution, token throughput, or a production memory ceiling.
 

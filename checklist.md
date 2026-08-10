@@ -193,7 +193,7 @@
 - [x] Harden safetensors metadata and resume-ledger schema through witnessed RED/GREEN cycles.
 - [x] Recover uncommitted partial suffixes without weakening committed-prefix validation.
 - [x] Run the full verification matrix and record measured resource/correctness evidence.
-- [ ] Complete Critical/Important review, synchronize README/TITAN Ledger, publish, merge, and verify public `main`.
+- [x] Complete Critical/Important review, synchronize README/TITAN Ledger, publish, merge, and verify public `main`.
 
 ## Milestone 12 — Fused routed accumulation CUDA kernel
 
