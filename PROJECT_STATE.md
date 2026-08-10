@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 27 official expert CUDA execution is the active engineering boundary. Its accepted design and detailed TDD plan hard-bind the B-0027 K3X file/root/ordered-expert identities, compare one exact layer-1 expert-0 FFN with the portable CPU backend, and measure transient versus resident RTX 5080 execution without weakening the storage-fixture generation guard. Implementation and B-0028 remain pending.
+Milestone 27 official expert CUDA execution is the active engineering boundary. The pure pinned root/ordered-expert identity contract is implemented and passes its mutation tests. The dedicated CUDA harness, B-0028 runner/verifier, formal transient/resident measurement, and public integration remain pending.
 
 State audited on 2026-08-10 after the M27 design and one explicitly non-benchmark exploratory CUDA smoke. Milestone 26 remains publicly integrated through PR #44 at `5b6345db`, with its publication update through PR #45 at `9c461a1`. One bounded official expert is present only under ignored `artifacts/`; no complete shard, full checkpoint, or paid cloud resource is in use.
 
@@ -108,7 +108,7 @@ State audited on 2026-08-10 after the M27 design and one explicitly non-benchmar
 
 ## Work in progress
 
-- Milestone 27 design and detailed TDD plan are accepted. The pinned identity helper, dedicated CUDA harness, B-0028 runner/verifier, formal measurement, full verification, and public integration remain.
+- Milestone 27 design, detailed TDD plan, and pure pinned identity helper are complete. The dedicated CUDA harness, B-0028 runner/verifier, formal measurement, full verification, and public integration remain.
 - Milestone 26 implementation, live dry-run, one exact official expert conversion, B-0027 verifier, full local verification, final Critical/Important review, README/TITAN Ledger synchronization, PR #44 merge, and post-merge CI are complete.
 - The actual official K3X storage fixture exits 4 with `NON_EXECUTABLE_ARTIFACT`; M27 must add a separate dependency-closed real CUDA layer path rather than weakening that guard.
 - Milestone 24 implementation, B-0025 measurement, committed-evidence validation, full local verification, final Critical/Important review, PR #40 merge, and post-merge correctness/CodeQL are complete.
@@ -160,9 +160,9 @@ State audited on 2026-08-10 after the M27 design and one explicitly non-benchmar
 
 ## Next concrete tasks
 
-1. Implement the pure pinned M27 identity contract through a witnessed RED/GREEN cycle.
-2. Implement the dedicated CUDA harness and compare the real expert with the independent CPU oracle before formal measurement.
-3. Implement and run strict B-0028, then use it to choose the smallest dependency-closed multi-expert or complete-layer slice for Milestone 28.
+1. Implement the dedicated CUDA harness and compare the real expert with the independent CPU oracle before formal measurement.
+2. Implement and run strict B-0028 with transient/resident traffic invariants.
+3. Use B-0028 to choose the smallest dependency-closed multi-expert or complete-layer slice for Milestone 28.
 
 ## Hardware assumptions
 
@@ -196,6 +196,7 @@ B-0027 closes the immediate official-source compatibility and bounded real-byte 
 - Public Milestone 26 implementation head `5b6345db` was rebase-merged through PR #44. Both branch and pull-request correctness passed, all pull-request CodeQL checks passed, and post-merge `main` correctness `31386873905` and CodeQL `31386873928` succeeded.
 - Milestone 26 publication PR #45 was rebase-merged at `9c461a1`; post-merge correctness `31387660188` and CodeQL `31387660250` succeeded.
 - The M27 exploratory official-artifact scalar FFN completed on RTX 5080 with 7,212,040 ns wall time, 1,962,624 ns kernel time, 17,547,264 weight-H2D bytes, and `3.0267983675e-9` maximum CPU-oracle error. It is feasibility evidence only and is not B-0028.
+- M27 Task 1 witnessed RED at missing identity implementation, then passed the exact/mutated pure identity contract and CPU CTest 16/16.
 - Public Milestone 25 evidence commit `cce5223` contains the B-0026 canonical summary JSON/CSV, and integration head `ca8c544e` contains strict source/safetensors/resume validation, exact orphan-suffix recovery, synchronized documentation, and the final committed-boundary correction. Runner/aggregate/summary JSON/CSV SHA-256 are `d292991ada21dd305078d2fe90116450d7a5184606962891bc1c383c47487ca0`, `4181e012dc0ccc1570f5ca18336ee3037327b32da63b8128bcc5423c0191100c`, `f78de6ef9bb3b47d1cb3d56af1969d1d3d465025a21ee0b25f2d97df27e38116`, and `c98f12b39fdc7f76bd4cd824cb5fc9da9b44208dd27a954c958f6e3bf3b6ea6d`.
 - Fresh Milestone 25 verification passes CPU CTest 15/15 with pytest 405 passed/70 skipped, liburing/direct CTest 16/16 with capability-aware pytest 407 passed/68 skipped, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 459 passed/16 skipped. The unchanged released MoE-layer Compute Sanitizer regression reports `ERROR SUMMARY: 0 errors`.
 - PR #42 push and pull-request correctness runs `31379029215`/`31379074639`, pull-request CodeQL `31379074656`, and post-merge `main` correctness/CodeQL `31379311743`/`31379311695` passed.

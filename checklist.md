@@ -215,7 +215,8 @@
 - [x] Compare unchanged reuse, mixed-schema extension, and a dedicated pinned official-expert harness.
 - [x] Write and self-review the accepted M27 design under the standing pre-Cloud-Run authorization.
 - [x] Write and self-review the detailed TDD implementation plan.
-- [ ] Implement pinned identity validation and the dedicated CUDA harness through witnessed RED/GREEN cycles.
+- [x] Implement pinned identity validation through a witnessed RED/GREEN cycle.
+- [ ] Implement the dedicated CUDA harness through witnessed RED/GREEN cycles.
 - [ ] Implement and verify the B-0028 two-mode runner and strict evidence verifier.
 - [ ] Run B-0028, the full verification matrix, final review, TITAN Ledger synchronization, and public integration.
 
