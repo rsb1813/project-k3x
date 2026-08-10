@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 22 released-dimension resident MoE-layer benchmarking is implemented, measured, documented, reviewed, and fully verified on branch `codex/milestone-twenty-two-released-moe-layer`; public integration remains. B-0023 compares split resident-grid with the complete resident layer at hidden 7,168, latent 3,584, expert-intermediate 3,072, and 1/4/16 repeated-view experts without a full checkpoint. The reviewed benchmark releases the split oracle before selected-backend construction and rejects a default or CUDA Graph decision because the complete boundary is 4.30×–16.69× slower despite lower synchronization and transfer traffic. Milestone 21 remains public through PR #31 at integration head `97eb3e4e`; publication metadata was reconciled through PR #35 at public head `feb17b5a`.
+Milestone 22 released-dimension resident MoE-layer benchmarking is implemented, measured, documented, reviewed, fully verified, and public through PR #36 at integration head `e4820a18`. B-0023 compares split resident-grid with the complete resident layer at hidden 7,168, latent 3,584, expert-intermediate 3,072, and 1/4/16 repeated-view experts without a full checkpoint. The reviewed benchmark releases the split oracle before selected-backend construction and rejects a default or CUDA Graph decision because the complete boundary is 4.30×–16.69× slower despite lower synchronization and transfer traffic. This follow-up reconciles the README and TITAN Ledger with that public state.
 
-State audited on 2026-08-10 at corrected local B-0023 evidence head `d0035ea` against public documentation head `feb17b5a`; public `main` correctness run `31356103605` passed. Pre-review Milestone 22 verification passed CPU CTest 14/14 with Python 305 passed/67 skipped, liburing/direct CTest 15/15 with Python 307 passed/65 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 26/26 with Python 362 passed/10 skipped. Post-correction publication gates pass CUDA CTest 26/26 and focused live/evidence Python 22/22. The released one-expert MoE-layer Compute Sanitizer run reports zero errors. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 at public Milestone 22 integration head `e4820a18`. Branch/PR correctness runs `31358991710`/`31359003481`, CodeQL `31359003436`, post-merge `main` correctness `31359158926`, and post-merge CodeQL `31359158878` passed. Pre-review Milestone 22 verification passed CPU CTest 14/14 with Python 305 passed/67 skipped, liburing/direct CTest 15/15 with Python 307 passed/65 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 26/26 with Python 362 passed/10 skipped. Post-correction publication gates pass CUDA CTest 26/26 and focused live/evidence Python 22/22. The released one-expert MoE-layer Compute Sanitizer run reports zero errors. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
@@ -98,7 +98,7 @@ State audited on 2026-08-10 at corrected local B-0023 evidence head `d0035ea` ag
 
 ## Work in progress
 
-- Milestone 22 design, implementation, corrected B-0023, committed evidence validation, performance model, README, TITAN Ledger synchronization, and final review are complete. Fresh publication gates and public integration remain.
+- Milestone 22 design, implementation, corrected B-0023, committed evidence validation, performance model, README, TITAN Ledger synchronization, final review, publication gates, PR #36 integration, and post-merge CI are complete.
 - B-0023 uses one existing released expert payload under 1/4/16 unique logical IDs plus deterministic released-size FP32 dense weights. It has `routing_semantics=false`, a 1 GiB hard resident capacity, and no token-throughput claim.
 - Source review identifies the per-call 469,776,384-byte immutable dense/vector finiteness scan as the strongest current wall/kernel-gap hypothesis. D-048 requires correctness-preserving admission-time validation and remeasurement before CUDA Graph or whole-token work.
 - Milestone 21 design, implementation, telemetry, B-0022 runner, formal evidence, digest checks, full local verification, final review, performance model, README, TITAN Ledger, PR #31 integration, and post-merge CI are complete.
@@ -145,10 +145,9 @@ State audited on 2026-08-10 at corrected local B-0023 evidence head `d0035ea` ag
 
 ## Next concrete tasks
 
-1. Complete final review, public PR integration, post-merge CI, and publication metadata reconciliation for Milestone 22.
-2. Design admission-time immutable-tensor validation with explicit non-finite and lifetime invalidation tests.
-3. Add profiler-on/off host attribution and rerun the released-dimension split/layer matrix before selecting CUDA Graphs or a larger device-resident token boundary.
-4. Keep dynamic eviction, reduced precision, and graph caching as separately attributable experiments.
+1. Design admission-time immutable-tensor validation with explicit non-finite and lifetime invalidation tests.
+2. Add profiler-on/off host attribution and rerun the released-dimension split/layer matrix before selecting CUDA Graphs or a larger device-resident token boundary.
+3. Keep dynamic eviction, reduced precision, and graph caching as separately attributable experiments.
 
 ## Hardware assumptions
 
@@ -177,10 +176,10 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Local Milestone 22 corrected evidence head `d0035ea` contains the released benchmark, B-0023 runner, six raw rows, summary CSV/JSON, oracle-lifetime regression coverage, and committed-evidence verification. Final review passed with its single Important finding fixed; public integration is pending.
+- Public Milestone 22 integration head `e4820a18` contains the released benchmark, corrected B-0023 runner, six raw rows, summary CSV/JSON, oracle-lifetime regression coverage, committed-evidence verification, synchronized architecture/performance/decision documents, and the English README. PR #36 is merged.
 - Fresh pre-review Milestone 22 verification passes CPU CTest 14/14 and pytest 305/67, liburing/direct CTest 15/15 and pytest 307/65, ASan/UBSan CTest 15/15, and CUDA CTest 26/26 with pytest 362/10. Post-correction publication gates pass CUDA CTest 26/26 and focused live/evidence pytest 22/22; the released one-expert complete-layer Compute Sanitizer reports zero errors.
 - Corrected B-0023 artifact/runner/aggregate/summary JSON/CSV SHA-256 are `e087ff78284e99760a7d113cf744562878537a6379e7a63be95585eec8b9f1be`, `3c2695fc31adc01040a992098180a83cb58947d85858412eab62282b66ec6baf`, `88c51b6a58340a4325b2b09faa0fb63d1bc5f4439542261383f6070dbe526ade`, `d67fe356735ddc38e238a9e86e7f46ec3729ef24bc27d1f286aacaaabf0af954`, and `4a95494381c87862aa6933811248f1fd2ff35a28d88e576917da57e50e87d621`.
-- Public Milestone 21 documentation head `feb17b5a` and post-merge `main` correctness run `31356103605` remain the public baseline until Milestone 22 is merged.
+- Public Milestone 22 post-merge `main` correctness run `31359158926` and CodeQL run `31359158878` passed at `e4820a18`.
 - Public documentation reconciliation head `7728acd0` records the Milestone 20 PR #29 publication across README and the TITAN Ledger. PR #30 push/PR correctness runs `31351873585`/`31351882562` and post-merge `main` run `31352046040` succeeded.
 - Public Milestone 20 integration head `90b20c87` includes the exact resident grid implementation, B-0021 evidence, English README, and synchronized TITAN Ledger. PR #29 push/PR correctness runs `31351465644`/`31351486146` and post-merge `main` correctness run `31351649761` succeeded.
 - Public Milestone 20 evidence head `8e85ff3` contains the B-0021 runner lineage, 9 rows, and 20 result files under `results/b0021-cuda-aurora-grid-wsl/`.

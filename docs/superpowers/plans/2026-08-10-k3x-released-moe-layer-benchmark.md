@@ -347,9 +347,11 @@ Run `git diff --check`, focused B-0023 digest tests, all `CudaBoundaryMode` sear
 
 Record measured latency, cold/warm traffic, synchronization, resident/VRAM footprint, error, and missing metrics. Accept or reject the next CUDA Graph/device-token boundary only from evidence. Update `PROJECT_STATE.md` last.
 
-- [ ] **Step 4: Review, publish, and merge**
+- [x] **Step 4: Review, publish, and merge**
 
 Commit docs, push the branch, open a ready PR, wait for correctness and CodeQL, rebase-merge, verify post-merge `main`, and reconcile public metadata in a small follow-up PR.
+
+PR #36 was rebase-merged at public integration head `e4820a18`. Branch/PR correctness, CodeQL, and post-merge `main` correctness/CodeQL all passed; publication metadata is reconciled in the follow-up branch.
 
 ---
 
