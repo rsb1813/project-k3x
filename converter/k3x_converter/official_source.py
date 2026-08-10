@@ -63,6 +63,7 @@ class OfficialSnapshot:
     file_count: int
     repository_bytes: int
     canonical_sha256: str
+    api_bytes: int = 0
 
 
 @dataclass(frozen=True)
@@ -304,6 +305,7 @@ def discover_official_snapshot(
         len(parsed),
         sum(item.size for item in parsed.values()),
         hashlib.sha256(canonical).hexdigest(),
+        len(response.body),
     )
 
 
