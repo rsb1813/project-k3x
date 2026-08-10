@@ -25,7 +25,7 @@
 
 ## File structure
 
-- Modify `runtime/include/k3x/backend.hpp` for `resident_grid`, six counters, and the rectangular backend method.
+- Modify `runtime/include/k3x/backend.hpp` for `resident_grid`, seven counters, and the rectangular backend method.
 - Modify `runtime/src/backend_cpu.cpp` for the exact expert-first/token-second oracle.
 - Modify `runtime/cuda/mxfp4.cuh` and `runtime/cuda/mxfp4.cu` for device matrix descriptors and two input layouts.
 - Modify `runtime/cuda/backend_cuda.cu` for full validation, resident resolution, grid execution, and resolved serial fallback.
@@ -50,9 +50,9 @@
 **Interfaces:**
 - Produces `CudaBatchingMode::resident_grid`.
 - Produces `ComputeBackend::mxfp4_situ_mlp_grid(inputs, token_count, experts, situ_beta, situ_linear, layer, phase)`.
-- Produces six zero-default `BackendRuntimeStats` fields named exactly as the design.
+- Produces seven zero-default `BackendRuntimeStats` fields named exactly as the design.
 
-- [ ] **Step 1: Write the CPU oracle failing tests**
+- [x] **Step 1: Write the CPU oracle failing tests**
 
 Add hand-derived two-expert, two-token native payload fixtures. Assert expert-major output shape and literal values, then add independent zero-token, empty-expert, mismatched-shape, duplicate-tensor-ID, invalid-group, and multiplication-overflow cases.
 
@@ -73,7 +73,7 @@ require(!backend->mxfp4_situ_mlp_grid({}, 0, experts, 1.0F,
 
 The expected literals must be calculated from fixture codes and scales in the test, not by calling production MXFP4 helpers.
 
-- [ ] **Step 2: Run the focused test and witness RED**
+- [x] **Step 2: Run the focused test and witness RED**
 
 Run:
 
@@ -84,7 +84,7 @@ ctest --test-dir build -R '^backend$' --output-on-failure
 
 Expected: compile failure because `mxfp4_situ_mlp_grid` and `resident_grid` do not exist.
 
-- [ ] **Step 3: Add the interface and minimal CPU oracle**
+- [x] **Step 3: Add the interface and minimal CPU oracle**
 
 Add the pure virtual method and implement validation before profiler mutation. Iterate expert first, then token, and append each token output into that expert's flat vector.
 
@@ -109,7 +109,7 @@ for (const auto& expert : experts) {
 }
 ```
 
-- [ ] **Step 4: Run focused and complete CPU tests**
+- [x] **Step 4: Run focused and complete CPU tests**
 
 Run:
 
@@ -121,7 +121,7 @@ ctest --test-dir build --output-on-failure
 
 Expected: backend and all 14 CPU CTests pass.
 
-- [ ] **Step 5: Commit the contract**
+- [x] **Step 5: Commit the contract**
 
 ```bash
 git add runtime/include/k3x/backend.hpp runtime/src/backend_cpu.cpp \
@@ -401,12 +401,12 @@ git commit -m "feat: route AURORA through resident expert grids"
 - Modify: `tests/python/test_cuda_aurora_draft.py`
 
 **Interfaces:**
-- Consumes the six Task 1 runtime counters.
+- Consumes the seven Task 1 runtime counters.
 - Produces matching C++ JSON and Python JSON/CSV fields, including `draft_` copies.
 
 - [ ] **Step 1: Add failing schema tests**
 
-Require ordinary CPU output to serialize all six target and draft fields as zero. Require full-fit CUDA draft output to report positive draft calls/experts/tokens/expert-tokens, `kernel_launches == calls * 4`, zero draft fallback, and zero target values. Require one-byte output to report positive draft fallback and zero successful draft calls.
+Require ordinary CPU output to serialize all seven target and draft fields as zero. Require full-fit CUDA draft output to report positive draft calls/experts/tokens/expert-tokens, `kernel_launches == calls * 4`, zero draft fallback, and zero target values. Require one-byte output to report positive draft fallback and zero successful draft calls.
 
 - [ ] **Step 2: Run schema tests and witness RED**
 
@@ -420,7 +420,7 @@ Expected: missing-key or dataclass-constructor failures.
 
 - [ ] **Step 3: Propagate fields without aggregation ambiguity**
 
-Add zero-default dataclass fields. Treat all six as deterministic identity counters: each measured sample must equal the first sample. Do not median, average, or sum across repetitions. Include `cuda_batching` and `aurora_draft_batching` in option consistency tuples.
+Add zero-default dataclass fields. Treat all seven as deterministic identity counters: each measured sample must equal the first sample. Do not median, average, or sum across repetitions. Include `cuda_batching` and `aurora_draft_batching` in option consistency tuples.
 
 - [ ] **Step 4: Run focused and complete CPU schema tests**
 

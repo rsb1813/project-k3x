@@ -18,7 +18,7 @@ enum class BackendKind { cpu, cuda_dense, cuda_custom };
 enum class DensePrecision { fp32, bf16_rounded };
 enum class CudaAllocationMode { per_operation, reused };
 enum class CudaWeightMode { transient, resident };
-enum class CudaBatchingMode { scalar, grouped };
+enum class CudaBatchingMode { scalar, grouped, resident_grid };
 enum class CudaBoundaryMode { operation, ffn_block };
 enum class CudaTransferMode { synchronous, prefetch };
 enum class CudaMoeFusionMode { none, routed_accumulate };
@@ -60,6 +60,13 @@ struct BackendRuntimeStats {
     std::uint64_t ffn_block_experts{};
     std::uint64_t batched_expert_ffn_calls{};
     std::uint64_t batched_expert_ffn_tokens{};
+    std::uint64_t resident_grid_calls{};
+    std::uint64_t resident_grid_experts{};
+    std::uint64_t resident_grid_tokens{};
+    std::uint64_t resident_grid_expert_tokens{};
+    std::uint64_t resident_grid_kernel_launches{};
+    std::uint64_t resident_grid_fallbacks{};
+    std::uint64_t resident_grid_descriptor_h2d_bytes{};
     std::uint64_t fused_moe_calls{};
     std::uint64_t fused_moe_experts{};
     std::uint64_t pinned_host_bytes{};
@@ -140,6 +147,13 @@ public:
         Mxfp4MlpView expert, float situ_beta,
         std::optional<float> situ_linear, std::uint32_t layer,
         ProfilePhase phase) = 0;
+    virtual Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_grid(
+        std::span<const float>, std::size_t,
+        std::span<const Mxfp4MlpView>, float,
+        std::optional<float>, std::uint32_t, ProfilePhase) {
+        return Result<std::vector<std::vector<float>>>::failure(
+            ErrorCode::backend_unavailable);
+    }
     virtual Result<std::vector<float>> mxfp4_situ_moe(
         std::span<const float> input, std::span<const Mxfp4MlpView> experts,
         std::span<const float> contributions, float situ_beta,
