@@ -407,11 +407,11 @@ rtk git commit -m "fix: truncate uncommitted resume suffix"
 - Records: wall nanoseconds, maximum source read bytes, output bytes, reused extent count, artifact validity/root digest, artifact/runner SHA-256, environment, and exact scenario identity.
 - Explicitly omits: decode tok/s, prefill tok/s, TTFT, Top-K, speculative acceptance, GPU metrics, physical NVMe, and quality claims.
 
-- [ ] **Step 1: Write audit-runner RED tests**
+- [x] **Step 1: Write audit-runner RED tests**
 
 Test exact three-scenario order, bounded `maximum_source_read_bytes`, equal final output lengths, nonzero reuse for resume cases, K3X reader validation, JSON/CSV parity, LF-only CSV, artifact/runner digests, and absence of token fields. The initial import must fail before the tool exists.
 
-- [ ] **Step 2: Implement and smoke the audit runner**
+- [x] **Step 2: Implement and smoke the audit runner**
 
 Use the existing deterministic synthetic source generator and converter. Do not add performance gates. Measure wall time with `time.perf_counter_ns()` and current/peak RSS with `psutil.Process().memory_info().rss` sampling only if the runner can do so without a background monitor; otherwise record RSS as not measured rather than inventing a peak.
 
