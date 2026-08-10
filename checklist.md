@@ -178,8 +178,8 @@
 - [x] Write and self-review the detailed TDD implementation plan.
 - [x] Implement graph identity, bounded cache, strict options, and telemetry through witnessed RED/GREEN cycles.
 - [x] Integrate exact CUDA capture/update/cache execution and target/draft ownership.
-- [ ] Add and run the canonical B-0025 trace ablation with digest-backed evidence.
-- [ ] Run the full CPU/liburing/ASan/CUDA/sanitizer verification matrix.
+- [x] Add and run the canonical B-0025 trace ablation with digest-backed evidence.
+- [x] Run the full CPU/liburing/ASan/CUDA/sanitizer verification matrix.
 - [ ] Complete Critical/Important review, synchronize README/TITAN Ledger, publish, merge, and verify public `main`.
 
 ## Milestone 12 — Fused routed accumulation CUDA kernel

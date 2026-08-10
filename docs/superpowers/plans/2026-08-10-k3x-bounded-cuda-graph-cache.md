@@ -314,7 +314,7 @@ Parse draft graph settings separately, validate them with the existing AURORA ow
 
 Run the same pytest command and `ctest --test-dir build-cuda --output-on-failure`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add runtime/src/main.cpp tools/benchmark_synthetic.py tests/python/test_cuda_aurora_draft.py tests/python/test_benchmark_schema.py
@@ -391,19 +391,19 @@ git commit -m "bench: add bounded CUDA Graph ablation"
 - B-0025 records only measured layer-boundary fields and explicit unavailable fields.
 - D-050 accepts or rejects graph modes from measured evidence without changing the default absent all design acceptance gates.
 
-- [ ] **Step 1: Run formal B-0025**
+- [x] **Step 1: Run formal B-0025**
 
 Run the canonical runner with 3 warmups and 20 iterations into `results/b0025-cuda-graph-cache-wsl/`. Do not reuse smoke artifacts.
 
-- [ ] **Step 2: Cross-check committed evidence**
+- [x] **Step 2: Cross-check committed evidence**
 
 Run the evidence verifier after `git add` so it reads canonical Git blobs, not a CRLF-materialized worktree view. Recompute every raw digest, aggregate, formula, and summary digest.
 
-- [ ] **Step 3: Run full verification**
+- [x] **Step 3: Run full verification**
 
 Run CPU CTest/pytest, liburing/direct CTest/pytest, ASan/UBSan CTest, CUDA CTest/pytest, focused evidence tests, and Compute Sanitizer for warm-hit plus eviction traces. Record exact pass/skip counts and sanitizer summaries.
 
-- [ ] **Step 4: Update documentation and state last**
+- [x] **Step 4: Update documentation and state last**
 
 Document measured values only. Mark graph modes experimental and opt-in unless representative native-Linux end-to-end evidence satisfies the design acceptance gate. Update `PROJECT_STATE.md` after every other ledger document.
 

@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 24 bounded CUDA Graph cache attribution is in progress on `codex/milestone-twenty-four-cuda-graph-cache`. The accepted design keeps the exact resident MoE-layer direct path as `disabled`, separates whole-graph `update` from a hard-capped ordered-set `cache`, and requires strict failure, lifecycle, traffic, and target/draft ownership evidence before any default decision. No production graph code or B-0025 measurement is claimed yet.
+Milestone 24 bounded CUDA Graph cache attribution is locally complete on `codex/milestone-twenty-four-cuda-graph-cache`; final Critical/Important review and public integration remain. The exact resident MoE-layer direct path stays `disabled` by default. Whole-graph `update` and hard-capped ordered-set `cache` are implemented as experimental opt-in paths with independent target/draft ownership, strict lifecycle invalidation, fail-closed CUDA behavior, and B-0025 evidence.
 
-State audited on 2026-08-10 at Milestone 24 design head `f41b93b` plus the current implementation plan. The isolated CUDA 13.3.73 native `sm_120` baseline passes CTest 26/26. Milestone 23 remains the latest measured public implementation at `e24cac2`, and publication reconciliation is on public `main` `08b769c`. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 at local evidence head `708e555` with the complete README/TITAN Ledger documentation step synchronized. Fresh CPU, liburing/direct, ASan/UBSan, CUDA, and two Compute Sanitizer gates pass. Milestone 23 remains the latest public implementation at `e24cac2`; Milestone 24 publication is pending. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
@@ -98,12 +98,15 @@ State audited on 2026-08-10 at Milestone 24 design head `f41b93b` plus the curre
 - Transactional backend-local immutable-weight registry with explicit `per-call|admission` modes, six-view all-or-nothing preflight, tensor-ID/pointer/length/shape identity conflicts, and unchanged `per-call` default.
 - Target/draft validation scan, hit, byte, and host-time telemetry plus profiler-independent runtime D2H accounting.
 - B-0024 18-row profiler on/off and validation attribution with exact committed evidence, maximum error 0, zero warm weight H2D, zero fallback/bypass, LF-only summary CSV, and no token/TPS/TTFT fields.
+- Portable ordered CUDA Graph identity/index, bounded LRU cache, whole-executable update experiment, fixed pinned staging, capture topology instrumentation, scratch invalidation, RAII graph ownership, and strict option/capability gates with unchanged direct default.
+- Independent target and persistent CUDA AURORA draft graph ownership and 12 graph counters across runtime JSON and benchmark JSON/CSV.
+- B-0025 15-row stable/alternating/rotating trace measurement with exact output, zero warm weight H2D, zero fallback/bypass, formula-checked hit/miss/eviction/update counters, LF raw JSON/CSV, staged-blob digest verification, and no token-throughput claim.
 
 ## Work in progress
 
-- Milestone 23 implementation, B-0024 measurement, committed-evidence validation, full local verification, final review and correction, README/TITAN Ledger synchronization, PR #38 integration, and post-merge correctness/CodeQL are complete.
-- B-0024 proves the former per-call 469,776,384-byte scan dominated the released complete-layer wall path. Admission rows retain six cold scans but report zero warm scan bytes and 120 identity hits across 20 calls.
-- Admission remains opt-in because unchanged-pointer in-place mutation is outside its caller contract. The K3X runtime's model-owned checkpoint buffers are immutable, but the general backend API still accepts external spans.
+- Milestone 24 implementation, B-0025 measurement, committed-evidence validation, full local verification, README, ARCHITECTURE, DECISIONS, BENCHMARKS, checklist, context notes, and this state update are complete. Critical/Important review, publication, and post-merge CI remain.
+- B-0025 shows stable cache reuse remains 2.808%–6.478% slower than direct and rotating churn remains 10.715%–15.864% slower. Alternating cache-four improves 4.194% in isolation, which is insufficient for a default change without real routing and native-Linux end-to-end evidence.
+- Direct execution, `per-call` validation, CPU AURORA draft, natural routing, blocking `pread + buffered`, and disabled L1 remain defaults. Admission and CUDA Graph modes are explicit experimental opt-ins.
 - Milestone 21 design, implementation, telemetry, B-0022 runner, formal evidence, digest checks, full local verification, final review, performance model, README, TITAN Ledger, PR #31 integration, and post-merge CI are complete.
 - `moe-layer` now has executable full-fit and one-byte bypass runtime coverage. The exact FP32/native-MXFP4 backend performs all weight acquisition before scratch/events/kernel launch, returns `executed=false` on hard-cap bypass, and never converts CUDA errors into fallback. Focused CPU ownership/parity tests pass 104/35, CUDA ownership/parity tests pass 133/6, CPU schema coverage passes 13/8, and live CUDA schema coverage passes 19/2. CUDA Graph caching and a complete device-resident token graph remain deferred alternatives.
 - B-0022 paired decode is mixed at +5.619%, -2.753%, -1.216%, and +3.933%. Fixed/adaptive layer paths reduce synchronizations by 90/99, total H2D by 14,496/15,984 bytes, and D2H by 26,880/29,568 bytes while adding exactly 384 norm-weight/resident bytes. The boundary remains experimental and non-default.
@@ -126,8 +129,8 @@ State audited on 2026-08-10 at Milestone 24 design head `f41b93b` plus the curre
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Current publication reconciliation branch: `codex/milestone-twenty-three-publication` from public `main` head `e24cac2`.
-- Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build-cpu`, `build-uring`, `build-asan`, and `build-cuda`.
+- Current implementation branch: `codex/milestone-twenty-four-cuda-graph-cache` from public `main` head `08b769c`.
+- Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build-cpu`, `build-liburing`, `build-asan`, and `build-cuda`.
 
 ## Known failures and blockers
 
@@ -144,13 +147,14 @@ State audited on 2026-08-10 at Milestone 24 design head `f41b93b` plus the curre
 - B-0020 removes most repeated draft weight H2D but leaves 410 to 451 synchronous waits and fine-grained launches. One adaptive token pair regresses by 2.56% while the other three improve, so bounded static residency is measured capability evidence rather than a default or a full-model speedup claim.
 - B-0021 reduces MoE launches by 75% and improves all four paired synthetic decode rows, but total draft H2D rises slightly and AURORA currently supplies one token per grid call. It is not evidence of full-model throughput, coding quality, or true speculative multi-token CUDA concurrency.
 - B-0022 removes exactly three synchronizations per successful MoE-layer call and lowers activation/total H2D and D2H, but two of four paired decode rows regress. The latest measured bottleneck is therefore host-driven execution outside the MoE layer plus tiny-kernel/orchestration variance; representative dimensions and native Linux are required before choosing CUDA Graph caching or a larger device-resident token boundary.
-- B-0024 attributes the B-0023 regression to repeated immutable validation: profiler-off complete-layer medians fall from 19.570/20.729/24.519 ms to 1.247/1.940/5.221 ms at 1/4/16 experts when the warm scan is replaced by exact identity hits. CUDA Graph and larger device-token work remain deferred pending routed-set reuse and bounded graph-cache evidence.
+- B-0024 attributes the B-0023 regression to repeated immutable validation: profiler-off complete-layer medians fall from 19.570/20.729/24.519 ms to 1.247/1.940/5.221 ms at 1/4/16 experts when the warm scan is replaced by exact identity hits.
+- B-0025 resolves the bounded graph-cache attribution gate but not the end-to-end decision. Stable graph reuse is slower than direct, whole-update is slower in every trace, and cache churn is materially slower. Real K3 routed-set reuse, dynamic L0 residency interaction, native-Linux token timing, utilization, physical traffic, and quality remain blockers for reconsidering a graph default.
 
 ## Next concrete tasks
 
-1. Write the bounded routed-set reuse and CUDA Graph attribution design before changing the runtime default.
-2. Measure graph update/re-instantiation cost and a hard-cap graph-cache policy against the exact non-graph reference.
-3. Keep dynamic eviction, reduced precision, and a larger device-token boundary as separate decisions with independent quality and traffic gates.
+1. Complete Critical/Important review, publish Milestone 24, and verify pull-request plus post-merge correctness/CodeQL.
+2. Fix converter source/ledger integrity gaps before trusting externally supplied shards, including manifest hash verification and canonical resume-extent validation.
+3. Add a bounded real Kimi K3 shard discovery/conversion smoke milestone without downloading the full checkpoint, then use that evidence to prepare the first local real out-of-core layer/runtime execution.
 
 ## Hardware assumptions
 
@@ -167,9 +171,9 @@ State audited on 2026-08-10 at Milestone 24 design head `f41b93b` plus the curre
 
 ## Latest measured bottleneck
 
-B-0024 closes the B-0023 attribution question. Per-call validation reads 9,395,527,680 host bytes over 20 released complete-layer calls and spends 368.7–382.8 ms in validation. Admission performs the same 469,776,384-byte check once, then records zero warm scan bytes and six identity hits per call. Profiler-off medians improve by 78.7%–93.6% while maximum error, warm weight H2D, fallback, bypass, synchronization, launch, and physical traffic gates remain exact.
+B-0025 closes the bounded CUDA Graph attribution question. At four resident expert views, direct medians are 1.902–1.995 ms. Stable cache reuse is 2.808%–6.478% slower, update is 4.131%–9.867% slower, and rotating cache churn is 10.715%–15.864% slower. Alternating cache-two/four improve 0.832%/4.194%, but this one deterministic layer trace is not sufficient to select a default.
 
-After removing that host scan, the remaining boundary latency scales from 1.247 ms at one repeated-view expert to 5.221 ms at sixteen. The next isolated systems question is therefore CUDA execution/orchestration reuse for stable ordered routed sets, including graph update or re-instantiation cost and a bounded cache. CUDA Graphs are not yet selected, and a whole-token graph remains broader than the evidence.
+The measured bottleneck is no longer an unidentified validation scan. It is host graph management/update overhead when identity is stable and capture/instantiation/eviction overhead when ordered identities churn. A useful graph policy now requires real routing reuse and a larger device-resident boundary that amortizes host work; that broader boundary remains unimplemented.
 
 The immediate result is to retain CUDA MoE fusion `none` alongside natural routing with `disabled + blocking + pread + buffered` as defaults. Native-Linux physical NVMe traffic, controlled warm/cold behavior, full-model locality, coding quality, GPU utilization, and memory bandwidth remain unknown.
 
@@ -177,6 +181,9 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
+- Local Milestone 24 evidence head `708e555` contains the bounded graph runner/verifier and 15-row B-0025 raw/summary evidence. Artifact/runner/aggregate/summary CSV SHA-256 are `e087ff78284e99760a7d113cf744562878537a6379e7a63be95585eec8b9f1be`, `6e544dd0cc24d8bfcce6524b72a5f75bd7113392a7e0c71a64ca177a50b230bd`, `afac1037c613ff5dcf6f625ec1ca513865adc2f19ba490218d32f9296a64f3be`, and `e1c5e57062f24330859dc5845dfbb3bf167e5c60625d879313cbf2e88514d0fb`.
+- Fresh Milestone 24 verification passes CPU CTest 15/15 with pytest 332/70, liburing/direct CTest 16/16 with pytest 334/68, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 386/16. Stable-hit and capacity-one eviction Compute Sanitizer runs both report `ERROR SUMMARY: 0 errors`.
+- Milestone 24 remains unpublished at this state checkpoint. The latest public known-good implementation is still Milestone 23 integration head `e24cac2` with its recorded post-merge correctness and CodeQL runs.
 - Public Milestone 23 integration head `e24cac2` contains atomic admission validation, profiler-independent physical telemetry, the canonical 18-row B-0024 matrix, 18 raw JSON records, one LF summary CSV, committed-evidence verification, and the final CUDA AURORA draft ownership correction.
 - Fresh Milestone 23 verification passes CPU CTest 14/14 with pytest 311/68, liburing/direct CTest 15/15 with pytest 313/66, ASan/UBSan CTest 15/15, and CUDA CTest 26/26 with pytest 369/10. Both requested Compute Sanitizer paths report `ERROR SUMMARY: 0 errors`.
 - B-0024 artifact/runner/aggregate/summary JSON/CSV SHA-256 are `e087ff78284e99760a7d113cf744562878537a6379e7a63be95585eec8b9f1be`, `952fd739d7654b8a4685e62c045d5727955b792244519dd09667f1e7acff441b`, `0747d22f6e409c81ab788cb936b65c9a75a13ed2f37255d6f468c7899f3026d1`, `4c4af570602d3322120ac445ad881c00f96ac0f63f3a39dc45a8032620cc8c82`, and `a49614469b71f01b9d86ff93bf996937cb0d9e93ed272044a136491d6575b68f`.
@@ -240,4 +247,4 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Proposed component status
 
-AURORA's replay reference, persistent reduced-Top-K CPU state, adaptive scheduler, exact transient CUDA draft, bounded exact resident CUDA draft, exact resident expert grid, resident MoE-layer execution, admission validation, target feedback, CLI, separated telemetry, and B-0017 through B-0024 are implemented and measured as experimental non-default paths. Transient CUDA is rejected as a default; bounded residency, the resident grid, the resident MoE layer, and admission validation remain opt-in. B-0024 resolves repeated immutable validation but does not select CUDA Graphs without routed-set reuse and bounded graph-cache evidence. Reduced precision, eviction-capable residency, a complete device-resident token graph, and learned drafting remain proposed. APOLLO, TITAN COUNCIL, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None of the proposed-only components is claimed as implemented or benchmarked.
+AURORA's replay reference, persistent reduced-Top-K CPU state, adaptive scheduler, exact transient CUDA draft, bounded exact resident CUDA draft, exact resident expert grid, resident MoE-layer execution, admission validation, independent target/draft CUDA Graph ownership, target feedback, CLI, separated telemetry, and B-0017 through B-0025 are implemented and measured as experimental non-default paths. Transient CUDA is rejected as a default; bounded residency, the resident grid, the resident MoE layer, admission validation, and CUDA Graph modes remain opt-in. B-0025 rejects a graph default on current evidence. Reduced precision, eviction-capable residency, a complete device-resident token graph, and learned drafting remain proposed. APOLLO, TITAN COUNCIL, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None of the proposed-only components is claimed as implemented or benchmarked.
