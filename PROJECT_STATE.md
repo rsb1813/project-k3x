@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 22 released-dimension resident MoE-layer benchmarking is in design on branch `codex/milestone-twenty-two-released-moe-layer`. It will compare the existing split resident-grid path with the complete resident layer at hidden 7,168, latent 3,584, expert-intermediate 3,072, and 1/4/16 repeated-view experts without constructing a full checkpoint. Milestone 21 is complete and public through PR #31 at integration head `97eb3e4e`; publication metadata was reconciled through PR #35 at public head `feb17b5a`.
+Milestone 22 released-dimension resident MoE-layer benchmarking is in implementation on branch `codex/milestone-twenty-two-released-moe-layer`. The accepted design and detailed TDD plan compare the existing split resident-grid path with the complete resident layer at hidden 7,168, latent 3,584, expert-intermediate 3,072, and 1/4/16 repeated-view experts without constructing a full checkpoint. Milestone 21 is complete and public through PR #31 at integration head `97eb3e4e`; publication metadata was reconciled through PR #35 at public head `feb17b5a`.
 
 State audited on 2026-08-10 against public documentation head `feb17b5a`; its post-merge `main` correctness run `31356103605` passed. Milestone 21 branch/pull-request correctness runs `31355460022`/`31355471896`, CodeQL run `31355471922`, and implementation post-merge run `31355678835` also passed. Fresh Milestone 21 local verification passes CPU CTest 14/14 with Python 295 passed/56 skipped, liburing/direct CTest 15/15 with Python 301 passed/50 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 26/26 with Python 341 passed/10 skipped. Both MoE-layer Compute Sanitizer targets report zero errors. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
@@ -96,7 +96,7 @@ State audited on 2026-08-10 against public documentation head `feb17b5a`; its po
 
 ## Work in progress
 
-- Milestone 22 context inspection, alternative comparison, released-shape memory accounting, accepted design, checklist, and context notes are complete. Detailed TDD planning, implementation, B-0023, verification, and publication remain.
+- Milestone 22 context inspection, alternative comparison, released-shape memory accounting, accepted design, detailed TDD plan, checklist, and context notes are complete. Implementation, B-0023, verification, and publication remain.
 - The accepted B-0023 boundary uses one existing released expert payload under 1/4/16 unique logical IDs plus deterministic released-size FP32 dense weights. It has `routing_semantics=false`, a 1 GiB hard resident capacity, and no token-throughput claim.
 - Milestone 21 design, implementation, telemetry, B-0022 runner, formal evidence, digest checks, full local verification, final review, performance model, README, TITAN Ledger, PR #31 integration, and post-merge CI are complete.
 - `moe-layer` now has executable full-fit and one-byte bypass runtime coverage. The exact FP32/native-MXFP4 backend performs all weight acquisition before scratch/events/kernel launch, returns `executed=false` on hard-cap bypass, and never converts CUDA errors into fallback. Focused CPU ownership/parity tests pass 104/35, CUDA ownership/parity tests pass 133/6, CPU schema coverage passes 13/8, and live CUDA schema coverage passes 19/2. CUDA Graph caching and a complete device-resident token graph remain deferred alternatives.
@@ -141,10 +141,9 @@ State audited on 2026-08-10 against public documentation head `feb17b5a`; its po
 
 ## Next concrete tasks
 
-1. Write and self-review the detailed Milestone 22 TDD implementation plan.
-2. Implement the released-dimension split/layer benchmark with exact cold-versus-warm telemetry.
-3. Run B-0023 before choosing a stable MoE-layer CUDA Graph or a larger device-resident token boundary.
-4. Keep dynamic eviction, reduced precision, and graph caching as separately attributable experiments.
+1. Implement the released-dimension split/layer benchmark with exact cold-versus-warm telemetry through witnessed RED/GREEN cycles.
+2. Run B-0023 before choosing a stable MoE-layer CUDA Graph or a larger device-resident token boundary.
+3. Keep dynamic eviction, reduced precision, and graph caching as separately attributable experiments.
 
 ## Hardware assumptions
 
