@@ -151,12 +151,16 @@ int main(int argc, char** argv) {
     std::string aurora_draft_resident_bytes_text = "0";
     std::string aurora_draft_batching_name = "grouped";
     std::string aurora_draft_boundary_name = "ffn-block";
+    std::string aurora_draft_graph_name = "disabled";
+    std::string aurora_draft_graph_entries_text = "0";
     bool aurora_draft_k_supplied = false;
     bool aurora_block_policy_supplied = false;
     bool aurora_draft_backend_supplied = false;
     bool aurora_draft_resident_bytes_supplied = false;
     bool aurora_draft_batching_supplied = false;
     bool aurora_draft_boundary_supplied = false;
+    bool aurora_draft_graph_supplied = false;
+    bool aurora_draft_graph_entries_supplied = false;
     bool diagnostics = false;
     std::size_t count = 0;
     for (int index = 1; index + 1 < argc; index += 2) {
@@ -224,6 +228,14 @@ int main(int argc, char** argv) {
         else if (key == "--aurora-draft-boundary") {
             aurora_draft_boundary_name = value;
             aurora_draft_boundary_supplied = true;
+        }
+        else if (key == "--aurora-draft-graph") {
+            aurora_draft_graph_name = value;
+            aurora_draft_graph_supplied = true;
+        }
+        else if (key == "--aurora-draft-graph-entries") {
+            aurora_draft_graph_entries_text = value;
+            aurora_draft_graph_entries_supplied = true;
         }
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
     }
@@ -312,6 +324,32 @@ int main(int argc, char** argv) {
                   << aurora_draft_boundary_name << '\n';
         return 2;
     }
+    k3x::CudaGraphMode aurora_draft_graph = k3x::CudaGraphMode::disabled;
+    if (aurora_draft_graph_name == "update") {
+        aurora_draft_graph = k3x::CudaGraphMode::update;
+    } else if (aurora_draft_graph_name == "cache") {
+        aurora_draft_graph = k3x::CudaGraphMode::cache;
+    } else if (aurora_draft_graph_name != "disabled") {
+        std::cerr << "unknown AURORA draft graph mode: "
+                  << aurora_draft_graph_name << '\n';
+        return 2;
+    }
+    std::size_t aurora_draft_graph_entries = 0;
+    if (!parse_size(aurora_draft_graph_entries_text,
+                    aurora_draft_graph_entries)) {
+        std::cerr << "invalid AURORA draft graph entry capacity: "
+                  << aurora_draft_graph_entries_text << '\n';
+        return 2;
+    }
+    if ((aurora_draft_graph == k3x::CudaGraphMode::disabled &&
+         aurora_draft_graph_entries != 0) ||
+        (aurora_draft_graph == k3x::CudaGraphMode::update &&
+         aurora_draft_graph_entries != 1) ||
+        (aurora_draft_graph == k3x::CudaGraphMode::cache &&
+         aurora_draft_graph_entries == 0)) {
+        std::cerr << "invalid AURORA draft graph entry capacity\n";
+        return 2;
+    }
     if (speculative_verification_name == "token-major") {
         runtime_options.speculative_verification =
             k3x::SpeculativeVerificationMode::token_major;
@@ -339,7 +377,8 @@ int main(int argc, char** argv) {
          aurora_draft_backend_supplied ||
          aurora_draft_resident_bytes_supplied ||
          aurora_draft_batching_supplied ||
-         aurora_draft_boundary_supplied)) {
+         aurora_draft_boundary_supplied || aurora_draft_graph_supplied ||
+         aurora_draft_graph_entries_supplied)) {
         std::cerr << "speculative mode none does not accept speculative options\n";
         return 2;
     }
@@ -348,7 +387,8 @@ int main(int argc, char** argv) {
          aurora_draft_backend_supplied ||
          aurora_draft_resident_bytes_supplied ||
          aurora_draft_batching_supplied ||
-         aurora_draft_boundary_supplied)) {
+         aurora_draft_boundary_supplied || aurora_draft_graph_supplied ||
+         aurora_draft_graph_entries_supplied)) {
         std::cerr << "scripted-reference does not accept AURORA options\n";
         return 2;
     }
@@ -368,6 +408,20 @@ int main(int argc, char** argv) {
         (speculative_mode_name != "aurora-persistent" ||
          aurora_draft_backend_name != "cuda-custom")) {
         std::cerr << "AURORA draft boundary requires persistent cuda-custom draft backend\n";
+        return 2;
+    }
+    if ((aurora_draft_graph_supplied ||
+         aurora_draft_graph_entries_supplied) &&
+        (speculative_mode_name != "aurora-persistent" ||
+         aurora_draft_backend_name != "cuda-custom")) {
+        std::cerr << "AURORA draft graph requires persistent cuda-custom draft backend\n";
+        return 2;
+    }
+    if (aurora_draft_graph != k3x::CudaGraphMode::disabled &&
+        (aurora_draft_boundary_name != "moe-layer" ||
+         aurora_draft_batching_name != "resident-grid" ||
+         aurora_draft_resident_bytes == 0)) {
+        std::cerr << "AURORA draft graph execution requires resident-grid moe-layer execution\n";
         return 2;
     }
     if (aurora_draft_boundary_name == "moe-layer" &&
@@ -1087,8 +1141,13 @@ int main(int argc, char** argv) {
             if (draft_backend_options.cuda_boundary ==
                 k3x::CudaBoundaryMode::moe_layer) {
                 draft_backend_options.cuda_weight_validation =
-                    backend_options.cuda_weight_validation;
+                    aurora_draft_graph == k3x::CudaGraphMode::disabled
+                        ? backend_options.cuda_weight_validation
+                        : k3x::CudaWeightValidationMode::admission;
             }
+            draft_backend_options.cuda_graph = aurora_draft_graph;
+            draft_backend_options.cuda_graph_entries =
+                aurora_draft_graph_entries;
             draft_backend_options.cuda_resident_bytes =
                 aurora_draft_resident_bytes;
             auto created_backend = k3x::make_cuda_backend(

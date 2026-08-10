@@ -652,6 +652,10 @@ def test_benchmark_once_collects_resident_cuda_aurora_draft_telemetry(
         aurora_block_policy="fixed",
         aurora_draft_backend="cuda-custom",
         aurora_draft_resident_bytes=8388608,
+        aurora_draft_batching="resident-grid",
+        aurora_draft_boundary="moe-layer",
+        aurora_draft_graph="cache",
+        aurora_draft_graph_entries=4,
     )
     assert record.draft_cuda_weights == "resident"
     assert record.draft_cuda_resident_bytes == 8388608
@@ -664,6 +668,12 @@ def test_benchmark_once_collects_resident_cuda_aurora_draft_telemetry(
     assert record.draft_weight_cache_hits > 0
     assert record.draft_weight_cache_misses > 0
     assert record.draft_weight_cache_bypasses == 0
+    assert record.cuda_graph == "disabled"
+    assert record.cuda_graph_launches == 0
+    assert record.draft_cuda_graph == "cache"
+    assert record.draft_cuda_graph_entries == 4
+    assert record.draft_cuda_graph_cache_misses > 0
+    assert record.draft_cuda_graph_launches > 0
     assert record.resident_weight_bytes == 0
     assert record.peak_resident_weight_bytes == 0
 
