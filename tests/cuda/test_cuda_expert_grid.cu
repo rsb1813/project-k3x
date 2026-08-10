@@ -1,5 +1,6 @@
 // 여러 토큰과 여러 MXFP4 전문가를 함께 계산하는 CUDA 그리드 계약을 검증합니다.
 #include "mxfp4.cuh"
+#include "k3x/backend.hpp"
 
 #include <cuda_runtime_api.h>
 
@@ -7,6 +8,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <iostream>
 #include <vector>
 
 namespace {
@@ -106,6 +108,120 @@ int run_grid(std::size_t expert_count, std::size_t token_count,
     return 0;
 }
 
+int test_backend_grid_and_fallback() {
+    constexpr std::size_t expert_count = 4;
+    constexpr std::size_t token_count = 4;
+    constexpr std::size_t input_width = 32;
+    constexpr std::size_t intermediate_width = 32;
+    constexpr std::size_t output_width = 1;
+    std::array<std::array<std::byte, intermediate_width * input_width / 2>,
+               expert_count> gate_packed{};
+    std::array<std::array<std::byte, intermediate_width * input_width / 2>,
+               expert_count> up_packed{};
+    std::array<std::array<std::byte, output_width * intermediate_width / 2>,
+               expert_count> down_packed{};
+    std::array<std::array<std::byte, intermediate_width * input_width / 32>,
+               expert_count> gate_scales{};
+    std::array<std::array<std::byte, intermediate_width * input_width / 32>,
+               expert_count> up_scales{};
+    std::array<std::array<std::byte, output_width * intermediate_width / 32>,
+               expert_count> down_scales{};
+    std::array<k3x::Mxfp4MlpView, expert_count> experts{};
+    for (std::size_t expert = 0; expert < expert_count; ++expert) {
+        gate_packed[expert][0] = std::byte{0x10};
+        up_packed[expert][0] = std::byte{0x20};
+        down_packed[expert][0] = std::byte{0x01};
+        gate_scales[expert].fill(std::byte{127});
+        up_scales[expert].fill(std::byte{127});
+        down_scales[expert].fill(std::byte{127});
+        experts[expert] = {
+            {100 + expert * 3, gate_packed[expert], gate_scales[expert],
+             intermediate_width, input_width, 32},
+            {101 + expert * 3, up_packed[expert], up_scales[expert],
+             intermediate_width, input_width, 32},
+            {102 + expert * 3, down_packed[expert], down_scales[expert],
+             output_width, intermediate_width, 32},
+        };
+    }
+    std::array<float, token_count * input_width> inputs{};
+    inputs[1] = 1.0F;
+    inputs[input_width + 1] = -2.0F;
+    inputs[2 * input_width + 1] = 3.0F;
+    inputs[3 * input_width + 1] = -4.0F;
+
+    auto cpu = k3x::make_cpu_backend();
+    if (!cpu) return 10;
+    const auto expected = cpu->mxfp4_situ_mlp_grid(
+        inputs, token_count, experts, 1.0F, std::nullopt, 3,
+        k3x::ProfilePhase::decode);
+    if (!expected) return 11;
+
+    const auto make_grid_backend = [](std::size_t capacity) {
+        k3x::BackendOptions options;
+        options.kind = k3x::BackendKind::cuda_custom;
+        options.cuda_boundary = k3x::CudaBoundaryMode::ffn_block;
+        options.cuda_allocation = k3x::CudaAllocationMode::reused;
+        options.cuda_weights = k3x::CudaWeightMode::resident;
+        options.cuda_transfer = k3x::CudaTransferMode::synchronous;
+        options.cuda_batching = k3x::CudaBatchingMode::resident_grid;
+        options.cuda_moe_fusion = k3x::CudaMoeFusionMode::none;
+        options.cuda_resident_bytes = capacity;
+        return k3x::make_cuda_backend(options);
+    };
+    auto full = make_grid_backend(8U * 1024U * 1024U);
+    auto bypass = make_grid_backend(1);
+    if (!full || !bypass) return 12;
+    const auto full_output = full.value()->mxfp4_situ_mlp_grid(
+        inputs, token_count, experts, 1.0F, std::nullopt, 3,
+        k3x::ProfilePhase::decode);
+    const auto bypass_output = bypass.value()->mxfp4_situ_mlp_grid(
+        inputs, token_count, experts, 1.0F, std::nullopt, 3,
+        k3x::ProfilePhase::decode);
+    if (!full_output || !bypass_output) {
+        std::cerr << "full=" << static_cast<int>(full_output.error())
+                  << " " << full_output.message()
+                  << " bypass=" << static_cast<int>(bypass_output.error())
+                  << " " << bypass_output.message() << '\n';
+        return 13;
+    }
+    if (full_output.value().size() != expected.value().size() ||
+        bypass_output.value().size() != expected.value().size()) return 13;
+    for (std::size_t expert = 0; expert < expert_count; ++expert) {
+        if (full_output.value()[expert].size() !=
+                expected.value()[expert].size() ||
+            bypass_output.value()[expert].size() !=
+                expected.value()[expert].size()) {
+            return 14;
+        }
+        for (std::size_t token = 0; token < token_count; ++token) {
+            const auto wanted = expected.value()[expert][token];
+            if (!close(full_output.value()[expert][token], wanted) ||
+                !close(bypass_output.value()[expert][token], wanted)) {
+                return 15;
+            }
+        }
+    }
+    const auto full_stats = full.value()->runtime_stats();
+    const auto bypass_stats = bypass.value()->runtime_stats();
+    if (full_stats.resident_grid_calls != 1 ||
+        full_stats.resident_grid_experts != expert_count ||
+        full_stats.resident_grid_tokens != token_count ||
+        full_stats.resident_grid_expert_tokens != expert_count * token_count ||
+        full_stats.resident_grid_kernel_launches != 4 ||
+        full_stats.resident_grid_fallbacks != 0 ||
+        full_stats.stream_synchronization_count != 1 ||
+        full_stats.resident_grid_descriptor_h2d_bytes !=
+            3 * expert_count * sizeof(k3x::cuda::Mxfp4DeviceMatrix) ||
+        full_stats.weight_cache_misses != 3 * expert_count ||
+        full_stats.weight_cache_hits != 0 ||
+        bypass_stats.resident_grid_calls != 0 ||
+        bypass_stats.resident_grid_fallbacks != 1 ||
+        bypass_stats.weight_cache_bypasses == 0) {
+        return 16;
+    }
+    return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -144,5 +260,5 @@ int main() {
             nullptr) != cudaErrorInvalidValue) {
         return 5;
     }
-    return 0;
+    return test_backend_grid_and_fallback();
 }

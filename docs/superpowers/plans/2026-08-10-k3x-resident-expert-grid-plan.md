@@ -221,7 +221,7 @@ git commit -m "feat: add native MXFP4 expert grid kernel"
 - Consumes the Task 1 backend contract and Task 2 launcher.
 - Produces a successful four-launch resident path and one resolved serial fallback path.
 
-- [ ] **Step 1: Extend the CUDA test with backend-level RED cases**
+- [x] **Step 1: Extend the CUDA test with backend-level RED cases**
 
 Create two backends with identical `resident_grid` options and capacities 8 MiB and one byte. Use four distinct experts and four tokens. Require exact CPU-oracle parity, one synchronization, four grid launches, one successful grid call, sixteen expert-token pairs, positive resident hits/misses, and zero fallback for 8 MiB. For one byte, require exact parity, one fallback, zero successful grid calls, and positive bypasses.
 
@@ -239,7 +239,7 @@ require(full_stats.resident_grid_fallbacks == 0);
 
 Mutation caught: selecting the grid after a bypass, counting a fallback as success, reordering outputs, or launching once per expert fails this test.
 
-- [ ] **Step 2: Run and witness RED**
+- [x] **Step 2: Run and witness RED**
 
 Run:
 
@@ -250,9 +250,9 @@ ctest --test-dir build-cuda -R '^cuda_expert_grid$' --output-on-failure
 
 Expected: test fails because CUDA backend returns unavailable for the new method or has zero grid counters.
 
-- [ ] **Step 3: Refactor one resolved expert representation**
+- [x] **Step 3: Resolve one resident grid descriptor representation**
 
-Inside `backend_cuda.cu`, introduce a private resolved member containing each view, device packed/scales pointers, and uploaded bytes. Resolve every gate/up/down acquisition exactly once. Keep the vector alive through either grid or serial execution.
+Inside `backend_cuda.cu`, build one private descriptor representation containing stable device packed/scales pointers and uploaded bytes. Resolve every gate/up/down acquisition before selecting the grid. Keep the descriptors alive through grid execution.
 
 ```cpp
 struct ResolvedWeight {
@@ -266,7 +266,7 @@ struct ResolvedWeight {
 
 Do not add this internal type to public headers.
 
-- [ ] **Step 4: Implement full-resident four-launch execution**
+- [x] **Step 4: Implement full-resident four-launch execution**
 
 Reserve grow-only input, descriptor, gate, up, activation, and output buffers using checked products. Reuse eight backend-owned timing events. Upload descriptors once per call, launch gate/up/grid-wide SiTU/down, copy one expert-major block, synchronize once, and split outputs.
 
@@ -279,11 +279,11 @@ runtime_stats_.resident_grid_kernel_launches += 4;
 runtime_stats_.resident_grid_descriptor_h2d_bytes += descriptor_bytes;
 ```
 
-- [ ] **Step 5: Implement resolved serial fallback**
+- [x] **Step 5: Reuse the exact serial fallback**
 
-If any `ResolvedWeight::bypass` is true, execute expert first and token second using the already resolved resident pointers or transient scratch for bypassed weights. Preserve existing kernel order and output layout. Increment only `resident_grid_fallbacks` among grid counters; existing FFN, H2D, D2H, synchronization, and cache counters still record the actual serial work.
+If any acquisition bypasses, execute the complete request token by token through the existing exact serial FFN implementation. Preserve its kernel order, profiler behavior, and output layout rather than duplicating that machinery inside the grid method. Increment only `resident_grid_fallbacks` among grid counters, and separately account for bytes admitted during the all-resident probe before entering the serial path.
 
-- [ ] **Step 6: Run CUDA tests and sanitizer**
+- [x] **Step 6: Run CUDA tests and sanitizer**
 
 Run:
 
@@ -297,7 +297,7 @@ ctest --test-dir build-cuda -R 'cuda_(expert_grid|residency|ffn)$' \
 
 Expected: all focused tests pass and sanitizer reports zero errors.
 
-- [ ] **Step 7: Commit backend execution**
+- [x] **Step 7: Commit backend execution**
 
 ```bash
 git add runtime/cuda/backend_cuda.cu tests/cuda/test_cuda_expert_grid.cu
