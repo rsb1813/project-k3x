@@ -93,6 +93,11 @@ class BenchmarkRecord:
     resident_grid_kernel_launches: int = 0
     resident_grid_fallbacks: int = 0
     resident_grid_descriptor_h2d_bytes: int = 0
+    resident_moe_layer_calls: int = 0
+    resident_moe_layer_experts: int = 0
+    resident_moe_layer_kernel_launches: int = 0
+    resident_moe_layer_fallbacks: int = 0
+    resident_moe_layer_contribution_h2d_bytes: int = 0
     l1_expert_cache_mode: str = "disabled"
     l1_expert_cache_bytes: int = 0
     l1_expert_cache_hits: int = 0
@@ -194,6 +199,11 @@ class BenchmarkRecord:
     draft_resident_grid_kernel_launches: int = 0
     draft_resident_grid_fallbacks: int = 0
     draft_resident_grid_descriptor_h2d_bytes: int = 0
+    draft_resident_moe_layer_calls: int = 0
+    draft_resident_moe_layer_experts: int = 0
+    draft_resident_moe_layer_kernel_launches: int = 0
+    draft_resident_moe_layer_fallbacks: int = 0
+    draft_resident_moe_layer_contribution_h2d_bytes: int = 0
     draft_ffn_block_calls: int = 0
     draft_ffn_block_experts: int = 0
     draft_proposal_calls: int = 0
@@ -848,6 +858,11 @@ def benchmark_once(
         "resident_grid_kernel_launches",
         "resident_grid_fallbacks",
         "resident_grid_descriptor_h2d_bytes",
+        "resident_moe_layer_calls",
+        "resident_moe_layer_experts",
+        "resident_moe_layer_kernel_launches",
+        "resident_moe_layer_fallbacks",
+        "resident_moe_layer_contribution_h2d_bytes",
         "ffn_block_calls",
         "ffn_block_experts",
         "cuda_moe_fusion",
@@ -895,6 +910,11 @@ def benchmark_once(
         "draft_resident_grid_kernel_launches",
         "draft_resident_grid_fallbacks",
         "draft_resident_grid_descriptor_h2d_bytes",
+        "draft_resident_moe_layer_calls",
+        "draft_resident_moe_layer_experts",
+        "draft_resident_moe_layer_kernel_launches",
+        "draft_resident_moe_layer_fallbacks",
+        "draft_resident_moe_layer_contribution_h2d_bytes",
         "draft_ffn_block_calls",
         "draft_ffn_block_experts",
         "draft_proposal_calls",
@@ -1089,6 +1109,17 @@ def benchmark_once(
         resident_grid_fallbacks=samples[0]["resident_grid_fallbacks"],
         resident_grid_descriptor_h2d_bytes=samples[0][
             "resident_grid_descriptor_h2d_bytes"
+        ],
+        resident_moe_layer_calls=samples[0]["resident_moe_layer_calls"],
+        resident_moe_layer_experts=samples[0]["resident_moe_layer_experts"],
+        resident_moe_layer_kernel_launches=samples[0][
+            "resident_moe_layer_kernel_launches"
+        ],
+        resident_moe_layer_fallbacks=samples[0][
+            "resident_moe_layer_fallbacks"
+        ],
+        resident_moe_layer_contribution_h2d_bytes=samples[0][
+            "resident_moe_layer_contribution_h2d_bytes"
         ],
         ffn_block_calls=samples[0]["ffn_block_calls"],
         ffn_block_experts=samples[0]["ffn_block_experts"],
@@ -1289,6 +1320,21 @@ def benchmark_once(
         ],
         draft_resident_grid_descriptor_h2d_bytes=samples[0][
             "draft_resident_grid_descriptor_h2d_bytes"
+        ],
+        draft_resident_moe_layer_calls=samples[0][
+            "draft_resident_moe_layer_calls"
+        ],
+        draft_resident_moe_layer_experts=samples[0][
+            "draft_resident_moe_layer_experts"
+        ],
+        draft_resident_moe_layer_kernel_launches=samples[0][
+            "draft_resident_moe_layer_kernel_launches"
+        ],
+        draft_resident_moe_layer_fallbacks=samples[0][
+            "draft_resident_moe_layer_fallbacks"
+        ],
+        draft_resident_moe_layer_contribution_h2d_bytes=samples[0][
+            "draft_resident_moe_layer_contribution_h2d_bytes"
         ],
         draft_ffn_block_calls=samples[0]["draft_ffn_block_calls"],
         draft_ffn_block_experts=samples[0]["draft_ffn_block_experts"],

@@ -226,6 +226,18 @@ def test_cuda_draft_matches_cpu_persistent_target_execution(
         assert moe_layer["draft_resident_grid_fallbacks"] == 0
         assert moe_layer_bypass["draft_resident_grid_calls"] == 0
         assert moe_layer_bypass["draft_resident_grid_fallbacks"] > 0
+        assert moe_layer["draft_resident_moe_layer_calls"] > 0
+        assert moe_layer["draft_resident_moe_layer_kernel_launches"] == (
+            moe_layer["draft_resident_moe_layer_calls"] * 13
+        )
+        assert moe_layer["draft_resident_moe_layer_fallbacks"] == 0
+        assert moe_layer["draft_resident_moe_layer_experts"] > 0
+        assert moe_layer[
+            "draft_resident_moe_layer_contribution_h2d_bytes"
+        ] > 0
+        assert moe_layer["resident_moe_layer_calls"] == 0
+        assert moe_layer_bypass["draft_resident_moe_layer_calls"] == 0
+        assert moe_layer_bypass["draft_resident_moe_layer_fallbacks"] > 0
         assert (
             moe_layer["draft_stream_synchronization_count"]
             < resident_grid["draft_stream_synchronization_count"]
