@@ -497,3 +497,4 @@
 - 세 접근을 비교했다. D-028만 반복하는 no-op은 실제 진전이 없어 기각했고, signed manifest v2는 M26 real checkpoint discovery보다 앞서 형식을 고정하므로 보류했다. 기존 K3X v1과 source format을 유지하는 narrow trust-boundary hardening을 선택했다.
 - M25 구현 계획은 source containment/ownership, safetensors metadata, resume schema, committed-prefix recovery, audit/ledger/publication의 다섯 독립 TDD 단위로 고정했다. 사용자의 자율 진행 지침에 따라 inline executing-plans 경로를 사용하며 각 production 변경 전에 실제 RED를 목격한다.
 - 공식 safetensors 형식과 구현을 다시 대조해 header DoS 경계를 정정했다. M25 reader는 payload나 declared header를 할당하기 전에 upstream 기본값인 100 MB 초과를 거부하며, 이는 K3 shard 측정에 기반한 임의 제한이 아니라 외부 입력 안전 경계다.
+- Resume crash 경계를 실제 synthetic stop 1~8로 측정했다. stop 2의 정상 partial은 20,736 bytes이고 다음 aligned boundary는 24,576 bytes여서, 정렬 끝을 committed로 간주하면 정상 중단을 손상으로 오판한다. Ledger가 CRC로 보증하는 마지막 extent의 정확한 `offset + length`만 committed boundary로 채택하고 다음 padding은 재개 시 다시 생성한다.
