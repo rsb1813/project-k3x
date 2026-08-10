@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 24 bounded CUDA Graph cache attribution is locally complete on `codex/milestone-twenty-four-cuda-graph-cache`; final Critical/Important review and public integration remain. The exact resident MoE-layer direct path stays `disabled` by default. Whole-graph `update` and hard-capped ordered-set `cache` are implemented as experimental opt-in paths with independent target/draft ownership, strict lifecycle invalidation, fail-closed CUDA behavior, and B-0025 evidence.
+Milestone 24 bounded CUDA Graph cache attribution is locally complete at `27feced` on `codex/milestone-twenty-four-cuda-graph-cache`; final Critical/Important review found no issue and public PR #40 is open. The exact resident MoE-layer direct path stays `disabled` by default. Whole-graph `update` and hard-capped ordered-set `cache` are implemented as experimental opt-in paths with independent target/draft ownership, strict lifecycle invalidation, fail-closed CUDA behavior, and B-0025 evidence.
 
-State audited on 2026-08-10 at local evidence head `708e555` with the complete README/TITAN Ledger documentation step synchronized. Fresh CPU, liburing/direct, ASan/UBSan, CUDA, and two Compute Sanitizer gates pass. Milestone 23 remains the latest public implementation at `e24cac2`; Milestone 24 publication is pending. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 at review head `27feced` with the complete README/TITAN Ledger documentation step synchronized. Fresh CPU, liburing/direct, ASan/UBSan, CUDA, and two Compute Sanitizer gates pass. Milestone 23 remains the latest merged implementation at `e24cac2`; Milestone 24 is under public review in PR #40. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
@@ -104,7 +104,7 @@ State audited on 2026-08-10 at local evidence head `708e555` with the complete R
 
 ## Work in progress
 
-- Milestone 24 implementation, B-0025 measurement, committed-evidence validation, full local verification, README, ARCHITECTURE, DECISIONS, BENCHMARKS, checklist, context notes, and this state update are complete. Critical/Important review, publication, and post-merge CI remain.
+- Milestone 24 implementation, B-0025 measurement, committed-evidence validation, full local verification, README, ARCHITECTURE, DECISIONS, BENCHMARKS, checklist, context notes, and final Critical/Important review are complete. PR #40 publication and post-merge CI remain.
 - B-0025 shows stable/alternating deltas are mixed from -4.407% to +4.466%, while rotating cache churn remains 6.091%–11.574% slower. This is insufficient for a default change without real routing and native-Linux end-to-end evidence.
 - Direct execution, `per-call` validation, CPU AURORA draft, natural routing, blocking `pread + buffered`, and disabled L1 remain defaults. Admission and CUDA Graph modes are explicit experimental opt-ins.
 - Milestone 21 design, implementation, telemetry, B-0022 runner, formal evidence, digest checks, full local verification, final review, performance model, README, TITAN Ledger, PR #31 integration, and post-merge CI are complete.
@@ -152,7 +152,7 @@ State audited on 2026-08-10 at local evidence head `708e555` with the complete R
 
 ## Next concrete tasks
 
-1. Complete Critical/Important review, publish Milestone 24, and verify pull-request plus post-merge correctness/CodeQL.
+1. Complete PR #40 checks, merge Milestone 24, and verify post-merge correctness/CodeQL.
 2. Fix converter source/ledger integrity gaps before trusting externally supplied shards, including manifest hash verification and canonical resume-extent validation.
 3. Add a bounded real Kimi K3 shard discovery/conversion smoke milestone without downloading the full checkpoint, then use that evidence to prepare the first local real out-of-core layer/runtime execution.
 
@@ -181,9 +181,9 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Local Milestone 24 evidence lineage through `708e555` plus the host-time correction contains the bounded graph runner/verifier and remeasured 15-row B-0025 raw/summary evidence. Artifact/runner/aggregate/summary CSV SHA-256 are `e087ff78284e99760a7d113cf744562878537a6379e7a63be95585eec8b9f1be`, `60ee26df29b05a9f6638323477abd7c277f22802fe67866bdb4b647ec7f85c21`, `f65ab85eb8b750a69330f10146f50f1644b5205e60c6752abcaf0d1deffa3bd8`, and `a53482f9386eaeb292c263f921c165fd8fb931aa156f4ebd2ecee2f74672d2ad`.
+- Local Milestone 24 review head `27feced` contains the bounded graph runner/verifier, corrected host-time attribution, and remeasured 15-row B-0025 raw/summary evidence. Artifact/runner/aggregate/summary CSV SHA-256 are `e087ff78284e99760a7d113cf744562878537a6379e7a63be95585eec8b9f1be`, `60ee26df29b05a9f6638323477abd7c277f22802fe67866bdb4b647ec7f85c21`, `f65ab85eb8b750a69330f10146f50f1644b5205e60c6752abcaf0d1deffa3bd8`, and `a53482f9386eaeb292c263f921c165fd8fb931aa156f4ebd2ecee2f74672d2ad`.
 - Fresh Milestone 24 verification passes CPU CTest 15/15 with pytest 332/70, liburing/direct CTest 16/16 with pytest 334/68, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 386/16. Stable-hit and capacity-one eviction Compute Sanitizer runs both report `ERROR SUMMARY: 0 errors`.
-- Milestone 24 remains unpublished at this state checkpoint. The latest public known-good implementation is still Milestone 23 integration head `e24cac2` with its recorded post-merge correctness and CodeQL runs.
+- Milestone 24 is published for review as PR #40 but remains unmerged at this state checkpoint. The latest merged known-good implementation is still Milestone 23 integration head `e24cac2` with its recorded post-merge correctness and CodeQL runs.
 - Public Milestone 23 integration head `e24cac2` contains atomic admission validation, profiler-independent physical telemetry, the canonical 18-row B-0024 matrix, 18 raw JSON records, one LF summary CSV, committed-evidence verification, and the final CUDA AURORA draft ownership correction.
 - Fresh Milestone 23 verification passes CPU CTest 14/14 with pytest 311/68, liburing/direct CTest 15/15 with pytest 313/66, ASan/UBSan CTest 15/15, and CUDA CTest 26/26 with pytest 369/10. Both requested Compute Sanitizer paths report `ERROR SUMMARY: 0 errors`.
 - B-0024 artifact/runner/aggregate/summary JSON/CSV SHA-256 are `e087ff78284e99760a7d113cf744562878537a6379e7a63be95585eec8b9f1be`, `952fd739d7654b8a4685e62c045d5727955b792244519dd09667f1e7acff441b`, `0747d22f6e409c81ab788cb936b65c9a75a13ed2f37255d6f468c7899f3026d1`, `4c4af570602d3322120ac445ad881c00f96ac0f63f3a39dc45a8032620cc8c82`, and `a49614469b71f01b9d86ff93bf996937cb0d9e93ed272044a136491d6575b68f`.
