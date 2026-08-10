@@ -181,7 +181,7 @@ git commit -m "feat: add resident MoE layer oracle"
 - Produces: `launch_vector_add(...)`.
 - Produces: profile labels `moe_mix`, `rms_norm`, and `residual_add` whose device time participates in the unchanged profiler total.
 
-- [ ] **Step 1: Write literal low-level tests and wire the target**
+- [x] **Step 1: Write literal low-level tests and wire the target**
 
 The new test uploads this fixed expert-major matrix and contribution vector.
 
@@ -198,7 +198,7 @@ Assert ordered mix values, strict CPU `rms_norm` parity within `1e-6`, final add
 
 Add `runtime/cuda/moe_layer.cu` to `k3x_runtime`, and add `test_cuda_moe_layer_ops` with `CUDA_ARCHITECTURES "120-real"` and `runtime/cuda` include access.
 
-- [ ] **Step 2: Run RED and witness missing launcher/header failure**
+- [x] **Step 2: Run RED and witness missing launcher/header failure**
 
 Run:
 
@@ -209,7 +209,7 @@ cmake --build build-cuda -j 12 --target test_cuda_moe_layer_ops
 
 Expected: compile failure because `moe_layer.cuh` or its launch functions do not exist.
 
-- [ ] **Step 3: Implement ordered mix and final add**
+- [x] **Step 3: Implement ordered mix and final add**
 
 Use one thread per output row and loop experts in slot order.
 
@@ -230,7 +230,7 @@ __global__ void ordered_expert_mix_kernel(
 
 The add kernel writes `output[row] = routed[row] + shared[row]`. Launchers validate all pointers/counts and return `cudaGetLastError()`.
 
-- [ ] **Step 4: Implement strict RMSNorm**
+- [x] **Step 4: Implement strict RMSNorm**
 
 Launch one block. Thread zero accumulates squares in `double` in increasing index order and publishes one FP32 inverse through shared memory; all threads scale independent rows.
 
@@ -252,7 +252,7 @@ for (std::size_t row = threadIdx.x; row < width; row += blockDim.x) {
 
 Use 256 threads and reject widths that do not fit the backend's checked products before this launcher is reached.
 
-- [ ] **Step 5: Run GREEN and Compute Sanitizer**
+- [x] **Step 5: Run GREEN and Compute Sanitizer**
 
 Run:
 
@@ -264,7 +264,7 @@ compute-sanitizer --tool memcheck --error-exitcode 99 build-cuda/test_cuda_moe_l
 
 Expected: CTest passes and sanitizer reports `ERROR SUMMARY: 0 errors`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add CMakeLists.txt runtime/include/k3x/profile.hpp runtime/cuda/moe_layer.cuh runtime/cuda/moe_layer.cu tests/cuda/test_cuda_moe_layer_ops.cu

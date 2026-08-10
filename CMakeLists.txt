@@ -39,6 +39,7 @@ if(K3X_ENABLE_CUDA)
         runtime/cuda/backend_cuda.cu
         runtime/cuda/device_memory.cu
         runtime/cuda/mxfp4.cu
+        runtime/cuda/moe_layer.cu
         runtime/cuda/pinned_memory.cu
         runtime/cuda/resident_weights.cu
         runtime/cuda/situ.cu
@@ -174,6 +175,12 @@ else()
     target_include_directories(test_cuda_situ PRIVATE runtime/cuda)
     set_target_properties(test_cuda_situ PROPERTIES CUDA_ARCHITECTURES "120-real")
     add_test(NAME cuda_situ COMMAND test_cuda_situ)
+
+    add_executable(test_cuda_moe_layer_ops tests/cuda/test_cuda_moe_layer_ops.cu)
+    target_link_libraries(test_cuda_moe_layer_ops PRIVATE k3x_runtime)
+    target_include_directories(test_cuda_moe_layer_ops PRIVATE runtime/cuda)
+    set_target_properties(test_cuda_moe_layer_ops PROPERTIES CUDA_ARCHITECTURES "120-real")
+    add_test(NAME cuda_moe_layer_ops COMMAND test_cuda_moe_layer_ops)
 
     add_executable(test_cuda_ffn tests/cuda/test_cuda_ffn.cu)
     target_link_libraries(test_cuda_ffn PRIVATE k3x_runtime)
