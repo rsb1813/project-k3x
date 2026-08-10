@@ -497,7 +497,7 @@ git commit -m "feat: route AURORA through resident MoE layers"
 - Produces: five target JSON fields and five `draft_` JSON fields.
 - Produces: `BenchmarkRecord` JSON/CSV fields with literal zero defaults.
 
-- [ ] **Step 1: Write failing zero-default and live-counter tests**
+- [x] **Step 1: Write failing zero-default and live-counter tests**
 
 Extend the ordinary CPU schema case with exact zeros for all ten fields. Extend the live layer case with these identities.
 
@@ -512,7 +512,7 @@ assert result["resident_moe_layer_calls"] == 0
 
 The one-byte case requires draft calls zero and fallback positive.
 
-- [ ] **Step 2: Run RED and witness missing JSON/record fields**
+- [x] **Step 2: Run RED and witness missing JSON/record fields**
 
 Run:
 
@@ -524,13 +524,13 @@ Run:
 
 Expected: key or dataclass-constructor failures naming `resident_moe_layer_calls`.
 
-- [ ] **Step 3: Propagate counters without aggregation reinterpretation**
+- [x] **Step 3: Propagate counters without aggregation reinterpretation**
 
 Add the five target fields from the target backend snapshot and the five draft fields from the independent draft backend snapshot in `main.cpp`. Add matching integer dataclass fields in `BenchmarkRecord`, parsing in `run_case`, JSON serialization, and CSV field order in `benchmark_synthetic.py`.
 
 For repeated samples, retain the existing first-sample deterministic-counter rule. Do not median, sum, or subtract these per-run values.
 
-- [ ] **Step 4: Run GREEN and schema regression**
+- [x] **Step 4: Run GREEN and schema regression**
 
 Run:
 
@@ -542,7 +542,7 @@ Run:
 
 Expected: schema and live-counter tests pass; existing records remain backward-compatible through zero defaults.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add runtime/src/main.cpp tools/benchmark_synthetic.py tests/python/test_benchmark_schema.py tests/python/test_cuda_aurora_draft.py

@@ -138,7 +138,7 @@
 - [x] Implement ordered mix, strict RMSNorm, and final-add CUDA primitives through a witnessed RED/GREEN cycle and Compute Sanitizer.
 - [x] Implement the complete resident CUDA MoE-layer backend through a witnessed RED/GREEN cycle and Compute Sanitizer.
 - [x] Integrate runtime, AURORA, CLI, and exact split fallback.
-- [ ] Propagate target/draft MoE-layer telemetry through runtime JSON and benchmark schemas.
+- [x] Propagate target/draft MoE-layer telemetry through runtime JSON and benchmark schemas.
 - [ ] Implement and run B-0022 plus the complete verification and sanitizer matrices.
 - [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
 

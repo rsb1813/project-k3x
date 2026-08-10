@@ -1251,6 +1251,16 @@ int main(int argc, char** argv) {
            << draft_runtime.resident_grid_fallbacks
            << ",\"draft_resident_grid_descriptor_h2d_bytes\":"
            << draft_runtime.resident_grid_descriptor_h2d_bytes
+           << ",\"draft_resident_moe_layer_calls\":"
+           << draft_runtime.resident_moe_layer_calls
+           << ",\"draft_resident_moe_layer_experts\":"
+           << draft_runtime.resident_moe_layer_experts
+           << ",\"draft_resident_moe_layer_kernel_launches\":"
+           << draft_runtime.resident_moe_layer_kernel_launches
+           << ",\"draft_resident_moe_layer_fallbacks\":"
+           << draft_runtime.resident_moe_layer_fallbacks
+           << ",\"draft_resident_moe_layer_contribution_h2d_bytes\":"
+           << draft_runtime.resident_moe_layer_contribution_h2d_bytes
            << ",\"draft_ffn_block_calls\":"
            << draft_runtime.ffn_block_calls
            << ",\"draft_ffn_block_experts\":"
@@ -1443,6 +1453,16 @@ int main(int argc, char** argv) {
            << runtime.resident_grid_fallbacks
            << ",\"resident_grid_descriptor_h2d_bytes\":"
            << runtime.resident_grid_descriptor_h2d_bytes
+           << ",\"resident_moe_layer_calls\":"
+           << runtime.resident_moe_layer_calls
+           << ",\"resident_moe_layer_experts\":"
+           << runtime.resident_moe_layer_experts
+           << ",\"resident_moe_layer_kernel_launches\":"
+           << runtime.resident_moe_layer_kernel_launches
+           << ",\"resident_moe_layer_fallbacks\":"
+           << runtime.resident_moe_layer_fallbacks
+           << ",\"resident_moe_layer_contribution_h2d_bytes\":"
+           << runtime.resident_moe_layer_contribution_h2d_bytes
            << ",\"ffn_block_calls\":" << runtime.ffn_block_calls
            << ",\"ffn_block_experts\":" << runtime.ffn_block_experts
            << ",\"batched_expert_ffn_calls\":"
