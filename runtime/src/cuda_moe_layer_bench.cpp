@@ -465,8 +465,8 @@ int main(int argc, char** argv) {
               << runtime_after.activation_h2d_bytes -
                      runtime_before.activation_h2d_bytes
               << ",\"device_to_host_bytes\":"
-              << profile_after.device_to_host_bytes -
-                     profile_before.device_to_host_bytes
+              << runtime_after.device_to_host_bytes -
+                     runtime_before.device_to_host_bytes
               << ",\"weight_h2d_bytes\":"
               << runtime_after.weight_h2d_bytes -
                      runtime_before.weight_h2d_bytes

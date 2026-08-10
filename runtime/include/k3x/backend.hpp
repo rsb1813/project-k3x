@@ -61,6 +61,7 @@ struct BackendRuntimeStats {
     std::uint64_t peak_scratch_bytes{};
     std::uint64_t weight_h2d_bytes{};
     std::uint64_t activation_h2d_bytes{};
+    std::uint64_t device_to_host_bytes{};
     std::uint64_t grouped_projection_calls{};
     std::uint64_t grouped_projection_members{};
     std::uint64_t ffn_block_calls{};
