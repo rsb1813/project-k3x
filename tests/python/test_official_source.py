@@ -279,6 +279,18 @@ def test_index_binds_lfs_digest_and_all_96_declared_shards() -> None:
             "INVALID_OFFICIAL_INDEX",
         ),
         (
+            lambda value: value["weight_map"].update(
+                bad="nested//model-00001-of-000096.safetensors"
+            ),
+            "INVALID_OFFICIAL_INDEX",
+        ),
+        (
+            lambda value: value["weight_map"].update(
+                bad="nested/./model-00001-of-000096.safetensors"
+            ),
+            "INVALID_OFFICIAL_INDEX",
+        ),
+        (
             lambda value: value["weight_map"].pop("unused.95"),
             "OFFICIAL_SHARD_SET_MISMATCH",
         ),
