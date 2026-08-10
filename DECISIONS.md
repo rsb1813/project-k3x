@@ -518,21 +518,24 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-046 — Join the exact resident MoE layer before graph caching
 
 - Date: 2026-08-10.
-- Status: accepted and implemented as an opt-in runtime boundary; benchmark pending.
+- Status: accepted, implemented, and measured as a non-default experimental boundary.
 - Decision: add an opt-in `moe-layer` CUDA boundary that keeps CPU routing unchanged but executes routed-down, resident expert grid, ordered contribution mixing, RMSNorm, routed-up, shared SiTU MLP, and final addition on one stream with one final result copy and synchronization.
 - Alternatives considered: cache CUDA Graphs keyed by ordered routed expert set; move the complete KDA/MLA/router/argmax token graph to the device; first join only the dependency-closed MoE feed-forward layer.
 - Evidence: B-0021 fixed grid rows record 30 grid calls, 470 draft stream synchronizations, 108,800 activation-H2D bytes, and 102,880 D2H bytes after exact weight residency. Adaptive rows record 33 calls and 517 synchronizations. The previous model executed routed-down, shared MLP, expert grid, CPU mix/norm, and routed-up as separate subcalls. The implemented runtime now dispatches one complete resident layer before those split computations and reuses the same routing decision, payloads, and contributions on exact hard-cap fallback. Focused CPU ownership/parity tests pass 104/35 and CUDA ownership/parity tests pass 133/6. Independent target/draft runtime and benchmark telemetry passes CPU schema coverage 13/8 and live CUDA coverage 19/2. NVIDIA's CUDA Graph documentation requires explicit definition/instantiation/execution and distinguishes parameter update from topology-changing re-instantiation.
 - Reason accepted: the selected boundary directly removes three synchronization and intermediate-copy boundaries per successful MoE call without changing recurrent attention, router selection, proposal lifecycle, or target verification.
 - Reason graph cache deferred: ordered expert-set reuse, pointer-update cost, graph count, and bounded eviction are unmeasured. Combining those policies with a new execution boundary would prevent clean attribution.
 - Reason whole-token graph deferred: KDA/MLA state, residuals, routing, logits, argmax, and rollback would all change at once.
+- Benchmark result: B-0022 records exactly three fewer synchronizations per successful layer call, 14,880/16,368 fewer activation-H2D bytes, 26,880/29,568 fewer D2H bytes, and 14,496/15,984 fewer total-H2D bytes for fixed/adaptive rows. Paired decode changes are +5.619%, -2.753%, -1.216%, and +3.933%.
+- Reason not promoted to default: throughput is mixed, the graph is tiny and WSL2-bound, and representative dimensions, native-Linux timing, physical PCIe traffic, and coding quality remain unmeasured.
 - Revisit: use B-0022 to decide whether the next boundary should be a CUDA Graph over the stable MoE layer or a larger device-resident token graph. Do not combine reduced precision or dynamic eviction with the first layer measurement.
 
 ## D-047 — Account for the routed norm as a real L0 weight
 
 - Date: 2026-08-10.
-- Status: accepted implementation correction; benchmark pending.
+- Status: accepted implementation correction and measured.
 - Decision: admit the routed RMSNorm vector through the resident weight table and count its uploaded bytes as weight H2D. Compare the layer-minus-split weight-H2D delta with the resident-weight-byte delta, and gate B-0022 on lower total H2D rather than equal weight H2D.
 - Alternatives considered: exclude the norm upload from weight telemetry; classify it as activation traffic; force the split path to upload an unused norm vector; record the physical cold admission honestly.
 - Evidence: the split path executes routed RMSNorm on CPU, while exact layer execution consumes the norm on GPU. Therefore only the layer path requires the norm in L0, and equal weight H2D cannot be true on a cold process.
 - Reason accepted: reclassifying or hiding the upload would corrupt the physical traffic model, and adding an unused split upload would distort the reference merely to satisfy a benchmark gate.
+- Benchmark result: B-0022 measures a positive 384-byte layer-minus-split weight-H2D delta and the same 384-byte resident-weight delta in all four pairs. Activation savings exceed this admission, so total H2D still decreases.
 - Revisit: B-0022 must confirm the positive weight delta equals the positive resident-byte delta and that activation savings still reduce total H2D. Warm-session measurements may later separate first-admission and steady-state traffic.

@@ -791,6 +791,34 @@ Fresh verification passes CPU CTest 14/14 with pytest 290 passed/55 skipped, lib
 
 Public push and pull-request correctness runs `31351465644` and `31351486146` passed. PR #29 was rebase-merged at public integration head `90b20c87`, and post-merge `main` correctness run `31351649761` passed.
 
+## B-0022 — Milestone 21 resident CUDA MoE layer
+
+- Date: 2026-08-10.
+- Commit: runner and schema head `6921ee1`; committed evidence head `78a7022`.
+- Hardware: AMD Ryzen 7 9800X3D and NVIDIA GeForce RTX 5080 16,303 MiB under WSL2 Ubuntu 24.04.4, CUDA 13.3 native `sm_120`.
+- Model/checkpoint: runner-generated synthetic natural Top-16 K3X artifact, SHA-256 `af52a83307f0c0ee9caf8d2e5662de45c3757cd7a294a2465aaa1146854f15b4`.
+- Mode: CPU natural Top-16 target; persistent exact resident CUDA Top-4 draft; split resident-grid versus complete resident MoE-layer boundary; fixed block-2 and adaptive policies; token-major and CPU expert-major target verification; 4 prompt tokens; 6 generated tokens; 3 warmups and 20 measured samples.
+- Quality scope: exact synthetic target token, final KDA/MLA state, committed route, proposal, acceptance, Reader-byte, and selected-expert parity. Coding/agentic quality and full-model quality are unmeasured.
+
+| Pair | Grid decode tok/s | Layer decode tok/s | Paired delta | Sync grid → layer | Activation H2D grid → layer | D2H grid → layer | Total H2D grid → layer |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| fixed-2 token-major | 27.3311 | 28.8668 | +5.619% | 470 → 380 | 108,800 → 93,920 B | 102,880 → 76,000 B | 752,960 → 738,464 B |
+| adaptive token-major | 28.2119 | 27.4351 | -2.753% | 517 → 418 | 119,680 → 103,312 B | 113,168 → 83,600 B | 767,104 → 751,120 B |
+| fixed-2 expert-major | 28.1488 | 27.8065 | -1.216% | 470 → 380 | 108,800 → 93,920 B | 102,880 → 76,000 B | 752,960 → 738,464 B |
+| adaptive expert-major | 26.9613 | 28.0216 | +3.933% | 517 → 418 | 119,680 → 103,312 B | 113,168 → 83,600 B | 767,104 → 751,120 B |
+
+Every fixed layer row executes 30 complete layer calls and every adaptive layer row executes 33. The measured synchronization deltas are exactly three per successful call: 90 and 99. Each call records thirteen layer operations, for 390 and 429 layer launches, with zero layer or grid fallback. Contribution H2D is 480 bytes fixed and 528 bytes adaptive.
+
+The layer path admits one routed RMSNorm vector absent from the split CPU norm path. Weight H2D and resident-weight occupancy both rise by exactly 384 bytes in every pair, from 644,160 to 644,544 bytes fixed and 647,424 to 647,808 bytes adaptive. Activation savings are 14,880 or 16,368 bytes, so total H2D still falls by 14,496 or 15,984 bytes. D2H falls by 26,880 or 29,568 bytes. This validates the physical accounting correction in D-047 rather than hiding the new norm upload.
+
+Natural greedy measures 1172.6645 decode tok/s, 854.6167 prefill tok/s, 84.7403 ms TTFT, and 236,945,408-byte peak RSS on the CPU tiny graph. Layer draft peak VRAM is 675,344 bytes fixed and 678,608 bytes adaptive. Fixed acceptance is 1.0 and adaptive acceptance is 0.5. These are process/runtime counters under WSL2, not native-Linux full-model or physical PCIe/NVMe measurements. GPU utilization, GPU memory bandwidth, physical NVMe GB/token, and coding quality remain unmeasured.
+
+Raw JSON/CSV and summaries are under `results/b0022-cuda-aurora-moe-layer-wsl/`. Runner SHA-256 is `745fde3f062bcc886997ec1811e636dd1e5a19d3642c04869971855d441bce16`; canonical aggregate SHA-256 is `404064335dcf2adf6c580b7f99812627cb357693aa6d9bcd414f4d51b2b19a9b`; summary JSON/CSV SHA-256 is `46db38afb586a0a3807f98a69ee387bec377ba2d8b0fd9036af18b6ee5dbf8df` / `5852eeb4ee0c792524f31df92566bc8052212877a1be92f5367872a34b7e5e4d`.
+
+The exact layer boundary remains opt-in. Two paired decode rows improve and two regress slightly, so the traffic and synchronization result does not justify a default change. The next execution-boundary decision must use representative dimensions and native Linux; CUDA Graph caching is not selected from this synthetic result alone.
+
+Fresh verification passes CPU CTest 14/14 with pytest 295 passed/56 skipped, liburing/direct CTest 15/15 with pytest 301 passed/50 skipped, ASan/UBSan liburing CTest 15/15, and CUDA CTest 26/26 with pytest 341 passed/10 skipped. Compute Sanitizer reports `ERROR SUMMARY: 0 errors` for both the low-level MoE-layer operations and the complete resident layer. Focused B-0022 evidence plus CLI ownership verification passes 103/33.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
@@ -802,5 +830,6 @@ Public push and pull-request correctness runs `31351465644` and `31351486146` pa
 - Native-Linux repetition of B-0016 with physical NVMe accounting, GPU utilization, memory bandwidth, multi-expert/full-layer groups, and representative acceptance distributions before any speculative default claim.
 - Representative native-Linux persistent AURORA measurement with physical I/O, realistic acceptance, coding quality, and resident-expert pressure before any self-speculative default claim.
 - Persistent multi-token/multi-expert CUDA execution after B-0020 removes most repeated weight H2D; keep dynamic eviction/prediction and reduced precision as separate policy and quality axes.
+- Native-Linux and representative-dimension repetition of B-0022 before selecting a MoE-layer boundary or CUDA Graph strategy as a default.
 - Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.

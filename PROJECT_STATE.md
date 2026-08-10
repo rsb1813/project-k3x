@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 21 exact resident MoE-layer CUDA execution is partially implemented on branch `codex/milestone-twenty-one-resident-moe-layer`; implementation and B-0022 tooling are complete, while the formal 3-warmup/20-sample evidence run remains pending. The backend keeps routing on CPU but joins routed-down, resident expert grid, ordered contribution mixing, RMSNorm, routed-up, shared SiTU MLP, and final addition into thirteen timed operations on one stream with one result synchronization. Milestone 20 remains the latest fully measured and public milestone through PR #29 at integration head `90b20c87`.
+Milestone 21 exact resident MoE-layer CUDA execution and B-0022 measurement are complete on branch `codex/milestone-twenty-one-resident-moe-layer`; complete verification, final review, and public integration remain. The backend keeps routing on CPU but joins routed-down, resident expert grid, ordered contribution mixing, RMSNorm, routed-up, shared SiTU MLP, and final addition into thirteen timed operations on one stream with one result synchronization. Milestone 20 remains the latest public milestone through PR #29 at integration head `90b20c87`; Milestone 21 is not yet public or merged.
 
-State audited on 2026-08-10 against public documentation head `7728acd0`; its post-merge `main` correctness run `31352046040` passed. The unchanged Milestone 20 implementation previously passed CPU CTest 14/14 with Python 290 passed/55 skipped, liburing/direct CTest 15/15 with Python 296 passed/49 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 24/24 with Python 336 passed/9 skipped. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 against local evidence head `78a7022` and public documentation baseline `7728acd0`; the public baseline's post-merge `main` correctness run `31352046040` passed. Fresh Milestone 21 verification passes CPU CTest 14/14 with Python 295 passed/56 skipped, liburing/direct CTest 15/15 with Python 301 passed/50 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 26/26 with Python 341 passed/10 skipped. Both MoE-layer Compute Sanitizer targets report zero errors. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
@@ -92,11 +92,13 @@ State audited on 2026-08-10 against public documentation head `7728acd0`; its po
 - Portable exact whole-MoE-layer API and CPU oracle, ordered mix/strict RMSNorm/final-add CUDA primitives, and complete thirteen-operation resident CUDA backend with launch-free hard-cap bypass.
 - Independent target/draft `moe-layer` CLI ownership, persistent AURORA capability gate, one-decision model dispatch, and exact M20 split-path fallback without rerouting or expert reload.
 - Five resident MoE-layer counters independently exported for target and draft through runtime JSON and benchmark JSON/CSV, with zero defaults and first-sample deterministic-counter preservation.
+- B-0022 nine-case natural/split-grid/layer measurement with four exact matched pairs, 18 raw digest checks, canonical aggregate verification, exact three-sync-per-call reduction, lower H2D/D2H, and zero layer fallback.
 
 ## Work in progress
 
-- Milestone 21 runtime/backend inspection, official CUDA Graph constraint review, alternative comparison, accepted design, D-046/D-047, detailed TDD plan, portable API, exact CPU oracle, CUDA primitives, resident backend, runtime/AURORA/CLI integration, telemetry schemas, and B-0022 runner are complete. The formal B-0022 evidence, full verification, and publication remain.
+- Milestone 21 design, implementation, telemetry, B-0022 runner, formal evidence, digest checks, full local verification, performance model, README, and TITAN Ledger measurement entries are complete. Final review and publication remain.
 - `moe-layer` now has executable full-fit and one-byte bypass runtime coverage. The exact FP32/native-MXFP4 backend performs all weight acquisition before scratch/events/kernel launch, returns `executed=false` on hard-cap bypass, and never converts CUDA errors into fallback. Focused CPU ownership/parity tests pass 104/35, CUDA ownership/parity tests pass 133/6, CPU schema coverage passes 13/8, and live CUDA schema coverage passes 19/2. CUDA Graph caching and a complete device-resident token graph remain deferred alternatives.
+- B-0022 paired decode is mixed at +5.619%, -2.753%, -1.216%, and +3.933%. Fixed/adaptive layer paths reduce synchronizations by 90/99, total H2D by 14,496/15,984 bytes, and D2H by 26,880/29,568 bytes while adding exactly 384 norm-weight/resident bytes. The boundary remains experimental and non-default.
 - Milestone 20 design, implementation, B-0021, full verification, sanitizer coverage, evidence cross-checks, final review, public PR integration, post-merge CI, README, and TITAN Ledger synchronization are complete.
 - `resident-grid` remains exact, opt-in, and non-default. CUDA Graph caching, a cooperative persistent kernel, device-resident KDA/MLA/router state, reduced precision, and dynamic eviction remain outside this milestone.
 - Milestone 19 implementation, B-0020, full verification, sanitizer coverage, evidence cross-checks, final self-review, public PR integration, post-merge CI, and TITAN Ledger synchronization are complete.
@@ -133,12 +135,13 @@ State audited on 2026-08-10 against public documentation head `7728acd0`; its po
 - Full-model quality, coding/agentic quality, full-checkpoint adaptive Top-K and cold-rescue effectiveness, and speculative acceleration remain unmeasured. Exact token-major plus CPU/CUDA expert-major verification are implemented and measured only on the synthetic graph and bounded released single-expert fixture; learned drafting, proxy, and pruning remain unimplemented.
 - B-0020 removes most repeated draft weight H2D but leaves 410 to 451 synchronous waits and fine-grained launches. One adaptive token pair regresses by 2.56% while the other three improve, so bounded static residency is measured capability evidence rather than a default or a full-model speedup claim.
 - B-0021 reduces MoE launches by 75% and improves all four paired synthetic decode rows, but total draft H2D rises slightly and AURORA currently supplies one token per grid call. It is not evidence of full-model throughput, coding quality, or true speculative multi-token CUDA concurrency.
+- B-0022 removes exactly three synchronizations per successful MoE-layer call and lowers activation/total H2D and D2H, but two of four paired decode rows regress. The latest measured bottleneck is therefore host-driven execution outside the MoE layer plus tiny-kernel/orchestration variance; representative dimensions and native Linux are required before choosing CUDA Graph caching or a larger device-resident token boundary.
 
 ## Next concrete tasks
 
-1. Run the nine-row B-0022 split/layer paired ablation with three warmups and twenty samples.
-2. Verify and commit every raw/summary digest and pair invariant before deciding whether CUDA Graph caching or a larger device token graph is the next boundary.
-3. Run the complete CPU, liburing/direct, sanitizer, and CUDA verification matrices and synchronize the public README/TITAN Ledger.
+1. Perform final diff/evidence review and resolve any Critical or Important finding.
+2. Publish the branch, open and merge the public pull request after CI, then verify post-merge `main` and synchronize public status fields.
+3. Decide the next measured boundary only after representative-dimension/native-Linux evidence; do not infer CUDA Graph selection from B-0022 alone.
 4. Update GitHub Actions dependencies to remove the observed Node.js 20 deprecation warning without changing the correctness workflow contract.
 
 ## Hardware assumptions

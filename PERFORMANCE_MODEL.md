@@ -146,11 +146,19 @@ The exact resident grid changes execution granularity, not weight precision or r
 
 The grouped reference launches gate, up, SiTU, and down once per expert. The resident grid launches each operation once per complete expert set. B-0021 reduces measured MoE launches from 480 to 120 for fixed rows and from 528 to 132 for adaptive rows, exactly 75% in every matched pair. This is launch amortization, not a reduction in exact native-MXFP4 weight bytes: paired weight H2D remains 644,160 bytes fixed and 647,424 bytes adaptive.
 
-Milestone 21's layer boundary adds one real cold L0 weight absent from the split path: the routed RMSNorm vector, or `latent_width * sizeof(float)` bytes in FP32 per distinct layer admitted. It should increase both weight H2D and resident-weight bytes by the same amount on a cold process. Hidden inputs, expert descriptors, and router contributions remain activation traffic. B-0022 will measure whether eliminating intermediate uploads/downloads produces a net reduction in total H2D after this norm-weight cost; no reduction is claimed before measurement.
+Milestone 21's layer boundary adds one real cold L0 weight absent from the split path: the routed RMSNorm vector, or `latent_width * sizeof(float)` bytes in FP32 per distinct layer admitted. Hidden inputs, expert descriptors, and router contributions remain activation traffic. B-0022 measures exactly 384 additional weight-H2D and resident bytes in every matched pair, confirming that the norm is accounted as a physical cold L0 admission.
 
 Activation and descriptor traffic make total draft H2D rise from 731,840 to 752,960 bytes in fixed rows and from 743,872 to 767,104 bytes in adaptive rows. Despite that increase, paired synthetic decode improves by 10.79% to 38.00%. The result isolates launch granularity on the tiny WSL2 graph; it does not establish that multi-token batching caused the gain because current AURORA calls the grid with one token, and it does not project full-model throughput.
 
 The next traffic boundary is keeping intermediate activations and non-FFN draft state on device. KDA, MLA, routing, residual/state work, descriptor copies, activation transfers, and synchronization remain outside the exact resident-weight saving.
+
+## Milestone 21 resident MoE-layer traffic model
+
+For `C` successful MoE-layer calls, the split path performs four synchronizations per call that the complete layer can collapse to one. B-0022 observes the exact identity `sync_split - sync_layer = 3C`: 90 fewer waits for 30 fixed calls and 99 fewer for 33 adaptive calls.
+
+The complete layer reduces activation H2D by 496 bytes per call on this fixture and D2H by 896 bytes per call. After the one-time 384-byte norm admission, total H2D falls by 14,496 bytes fixed and 15,984 bytes adaptive. This is a measured synthetic traffic identity, not a full-dimension extrapolation. The full model still needs representative hidden/latent widths, resident pressure, PCIe counters, and native-Linux timing before the same ratios can be used for capacity planning.
+
+Paired decode changes are mixed from -2.75% to +5.62%. Therefore reduced traffic and synchronization are established, while a throughput default is not. The next model must distinguish host orchestration/launch overhead from transfer savings at representative dimensions rather than projecting a TPS gain from bytes alone.
 
 ## Required production measurements
 
