@@ -540,3 +540,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: reclassifying or hiding the upload would corrupt the physical traffic model, and adding an unused split upload would distort the reference merely to satisfy a benchmark gate.
 - Benchmark result: B-0022 measures a positive 384-byte layer-minus-split weight-H2D delta and the same 384-byte resident-weight delta in all four pairs. Activation savings exceed this admission, so total H2D still decreases.
 - Revisit: B-0022 must confirm the positive weight delta equals the positive resident-byte delta and that activation savings still reduce total H2D. Warm-session measurements may later separate first-admission and steady-state traffic.
+
+## D-048 — Remove repeated immutable-weight validation before graph selection
+
+- Date: 2026-08-10.
+- Status: accepted next boundary; implementation pending.
+- Decision: keep `moe-layer` experimental and non-default, defer CUDA Graph and larger device-token work, and first move immutable dense/vector finiteness validation out of the per-call hot path into a correctness-preserving admission or construction boundary. Rerun the same released-dimension matrix before selecting another execution boundary.
+- Alternatives considered: accept the complete layer because it reduces synchronization and transfer traffic; immediately cache a thirteen-operation CUDA Graph; skip directly to a device-resident KDA/MLA/router token graph; attribute and remove the repeated host validation cost first.
+- Evidence: B-0023 uses released hidden 7,168, latent 3,584, intermediate 3,072, and 1/4/16 native expert views under a 1 GiB hard cap. All physical gates pass, yet layer median latency is 19.252/20.301/23.571 ms versus split 1.216/2.151/5.325 ms, or +1483.274%/+843.703%/+342.624%. Aggregate kernel time over 20 iterations rises much less, from 15.030/24.183/58.867 ms to 19.695/27.701/61.588 ms. The complete-layer preflight currently scans 469,776,384 immutable dense/vector bytes for finite values on every call before resident lookup and launch.
+- Benchmark result: every pair has maximum error 0, zero fallback/bypass, zero warm weight H2D, synchronization 80→20, lower activation H2D and D2H, and exact 14,336-byte cold/resident norm delta. Traffic savings do not compensate for the current host-side path.
+- Reason accepted: graph caching would optimize launches while leaving a larger unamortized O(weight-bytes) host operation in place, and a whole-token graph would broaden the correctness surface before the isolated layer boundary is sound.
+- Correctness invariant: malformed dimensions, duplicate IDs, non-finite parameters, non-finite immutable tensors, invalid MXFP4 payloads, and hard-cap behavior must still fail or bypass exactly as documented before any CUDA mutation. Validation may be cached only against immutable tensor identity and lifetime.
+- Revisit: after admission-time validation is implemented, rerun B-0023 as a new benchmark with profiler-on/off attribution. Consider CUDA Graphs only if host validation is no longer dominant and ordered routed-set reuse plus bounded graph-cache policy are measured.
