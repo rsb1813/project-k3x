@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 21 exact resident MoE-layer CUDA execution is partially implemented on branch `codex/milestone-twenty-one-resident-moe-layer`; the portable contract, exact CPU oracle, low-level kernels, and complete resident CUDA backend are complete, while runtime dispatch and B-0022 remain pending. The implemented backend keeps routing on CPU but joins routed-down, resident expert grid, ordered contribution mixing, RMSNorm, routed-up, shared SiTU MLP, and final addition into thirteen timed operations on one stream with one result synchronization. Milestone 20 remains the latest fully integrated runtime and is public through PR #29 at integration head `90b20c87`.
+Milestone 21 exact resident MoE-layer CUDA execution is partially implemented on branch `codex/milestone-twenty-one-resident-moe-layer`; the portable contract, exact CPU oracle, low-level kernels, complete resident CUDA backend, runtime dispatch, AURORA ownership, CLI gates, and exact split fallback are complete, while telemetry-schema propagation and B-0022 remain pending. The implemented backend keeps routing on CPU but joins routed-down, resident expert grid, ordered contribution mixing, RMSNorm, routed-up, shared SiTU MLP, and final addition into thirteen timed operations on one stream with one result synchronization. Milestone 20 remains the latest fully measured and public milestone through PR #29 at integration head `90b20c87`.
 
 State audited on 2026-08-10 against public documentation head `7728acd0`; its post-merge `main` correctness run `31352046040` passed. The unchanged Milestone 20 implementation previously passed CPU CTest 14/14 with Python 290 passed/55 skipped, liburing/direct CTest 15/15 with Python 296 passed/49 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 24/24 with Python 336 passed/9 skipped. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
@@ -89,11 +89,13 @@ State audited on 2026-08-10 against public documentation head `7728acd0`; its po
 - Exact resident CUDA expert-grid backend with all-resident preflight, three descriptor tables, four grid-wide gate/up/SiTU/down launches, stable separate outputs, and whole-request exact serial fallback on any residency bypass.
 - Closed `resident-grid` target/AURORA capability identity, independent target/draft telemetry, JSON/CSV benchmark schema, and unchanged grouped/CPU defaults.
 - B-0021 nine-case natural/grouped/grid measurement with four exact matched pairs, 18 raw digest checks, canonical aggregate verification, 75% MoE launch reduction, zero grid fallbacks, and full target token/state/route/acceptance/Reader parity.
+- Portable exact whole-MoE-layer API and CPU oracle, ordered mix/strict RMSNorm/final-add CUDA primitives, and complete thirteen-operation resident CUDA backend with launch-free hard-cap bypass.
+- Independent target/draft `moe-layer` CLI ownership, persistent AURORA capability gate, one-decision model dispatch, and exact M20 split-path fallback without rerouting or expert reload.
 
 ## Work in progress
 
-- Milestone 21 runtime/backend inspection, official CUDA Graph constraint review, alternative comparison, accepted design, D-046/D-047, detailed TDD plan, portable API, exact CPU oracle, CUDA primitives, and complete resident backend are complete. Runtime/AURORA/CLI integration, telemetry schema, B-0022, full verification, and publication remain.
-- `moe-layer` now has full-fit and one-byte bypass backend coverage but no executable runtime switch yet. The exact FP32/native-MXFP4 backend performs all weight acquisition before scratch/events/kernel launch, returns `executed=false` on hard-cap bypass, and never converts CUDA errors into fallback. CUDA Graph caching and a complete device-resident token graph remain deferred alternatives.
+- Milestone 21 runtime/backend inspection, official CUDA Graph constraint review, alternative comparison, accepted design, D-046/D-047, detailed TDD plan, portable API, exact CPU oracle, CUDA primitives, resident backend, and runtime/AURORA/CLI integration are complete. Telemetry schema, B-0022, full verification, and publication remain.
+- `moe-layer` now has executable full-fit and one-byte bypass runtime coverage. The exact FP32/native-MXFP4 backend performs all weight acquisition before scratch/events/kernel launch, returns `executed=false` on hard-cap bypass, and never converts CUDA errors into fallback. Focused CPU ownership/parity tests pass 104/35 and CUDA ownership/parity tests pass 133/6. CUDA Graph caching and a complete device-resident token graph remain deferred alternatives.
 - Milestone 20 design, implementation, B-0021, full verification, sanitizer coverage, evidence cross-checks, final review, public PR integration, post-merge CI, README, and TITAN Ledger synchronization are complete.
 - `resident-grid` remains exact, opt-in, and non-default. CUDA Graph caching, a cooperative persistent kernel, device-resident KDA/MLA/router state, reduced precision, and dynamic eviction remain outside this milestone.
 - Milestone 19 implementation, B-0020, full verification, sanitizer coverage, evidence cross-checks, final self-review, public PR integration, post-merge CI, and TITAN Ledger synchronization are complete.
@@ -133,9 +135,9 @@ State audited on 2026-08-10 against public documentation head `7728acd0`; its po
 
 ## Next concrete tasks
 
-1. Implement the CPU oracle and CUDA layer kernels through witnessed RED/GREEN cycles.
-2. Connect exact runtime fallback, AURORA ownership, CLI, and telemetry through focused tests.
-3. Implement and run B-0022 before deciding whether CUDA Graph caching or a larger device token graph is the next boundary.
+1. Propagate the five resident MoE-layer counters independently through target/draft runtime JSON and benchmark JSON/CSV schemas with zero-default regressions.
+2. Implement and run B-0022 before deciding whether CUDA Graph caching or a larger device token graph is the next boundary.
+3. Run the complete CPU, liburing/direct, sanitizer, and CUDA verification matrices and synchronize the public README/TITAN Ledger.
 4. Update GitHub Actions dependencies to remove the observed Node.js 20 deprecation warning without changing the correctness workflow contract.
 
 ## Hardware assumptions

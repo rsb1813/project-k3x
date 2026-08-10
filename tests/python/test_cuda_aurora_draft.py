@@ -52,6 +52,41 @@ def test_cpu_build_rejects_cuda_draft_without_fallback(
     assert not output.exists()
 
 
+def test_cpu_build_rejects_cuda_moe_layer_target_without_fallback(
+    tmp_path: Path,
+) -> None:
+    if Path(os.environ.get("K3X_BUILD_DIR", "build")).name == "build-cuda":
+        pytest.skip("CPU unavailable behavior is exercised against build")
+    artifact = _top16_artifact(tmp_path)
+    output = tmp_path / "unexpected-target-fallback.json"
+    result = subprocess.run(
+        [
+            str(cpp_binary("k3x_run")),
+            "--model", str(artifact),
+            "--prompt-ids", "1,7,3,9",
+            "--generate", "2",
+            "--mode", "incremental",
+            "--backend", "cuda-custom",
+            "--dense-precision", "fp32",
+            "--cuda-boundary", "moe-layer",
+            "--cuda-allocation", "reused",
+            "--cuda-weights", "resident",
+            "--cuda-resident-bytes", "8388608",
+            "--cuda-batching", "resident-grid",
+            "--cuda-transfer", "synchronous",
+            "--cuda-moe-fusion", "none",
+            "--json", str(output),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 4
+    assert result.stderr.strip() == (
+        "BACKEND_UNAVAILABLE: CUDA backend is disabled at build time"
+    )
+    assert not output.exists()
+
+
 @pytest.mark.parametrize("verification", ["token-major", "expert-major"])
 def test_cuda_draft_matches_cpu_persistent_target_execution(
     verification: str,
@@ -100,6 +135,24 @@ def test_cuda_draft_matches_cpu_persistent_target_execution(
                     "--aurora-draft-batching", "resident-grid",
                 ],
             ),
+            (
+                "moe-layer",
+                "cuda-custom",
+                [
+                    "--aurora-draft-resident-bytes", "8388608",
+                    "--aurora-draft-batching", "resident-grid",
+                    "--aurora-draft-boundary", "moe-layer",
+                ],
+            ),
+            (
+                "moe-layer-bypass",
+                "cuda-custom",
+                [
+                    "--aurora-draft-resident-bytes", "1",
+                    "--aurora-draft-batching", "resident-grid",
+                    "--aurora-draft-boundary", "moe-layer",
+                ],
+            ),
         )
         for identity, draft_backend, extra in identities:
             output = tmp_path / f"{verification}-{policy}-{identity}.json"
@@ -121,6 +174,8 @@ def test_cuda_draft_matches_cpu_persistent_target_execution(
         resident = results["resident"]
         resident_grid = results["resident-grid"]
         resident_grid_bypass = results["resident-grid-bypass"]
+        moe_layer = results["moe-layer"]
+        moe_layer_bypass = results["moe-layer-bypass"]
         assert cpu["aurora_draft_backend"] == "cpu"
         assert cuda["aurora_draft_backend"] == "cuda-custom"
         assert cpu["draft_device"] == "CPU"
@@ -165,6 +220,24 @@ def test_cuda_draft_matches_cpu_persistent_target_execution(
         assert resident_grid_bypass["draft_resident_grid_calls"] == 0
         assert resident_grid_bypass["draft_resident_grid_fallbacks"] > 0
         assert resident_grid["resident_grid_calls"] == 0
+        assert moe_layer["draft_cuda_boundary"] == "moe-layer"
+        assert moe_layer_bypass["draft_cuda_boundary"] == "moe-layer"
+        assert moe_layer["draft_resident_grid_calls"] > 0
+        assert moe_layer["draft_resident_grid_fallbacks"] == 0
+        assert moe_layer_bypass["draft_resident_grid_calls"] == 0
+        assert moe_layer_bypass["draft_resident_grid_fallbacks"] > 0
+        assert (
+            moe_layer["draft_stream_synchronization_count"]
+            < resident_grid["draft_stream_synchronization_count"]
+        )
+        assert (
+            moe_layer["draft_activation_h2d_bytes"]
+            < resident_grid["draft_activation_h2d_bytes"]
+        )
+        assert (
+            moe_layer["draft_device_to_host_bytes"]
+            < resident_grid["draft_device_to_host_bytes"]
+        )
         assert cuda["draft_cuda_boundary"] == "ffn-block"
         assert cuda["draft_cuda_transfer"] == "synchronous"
         assert cuda["draft_cuda_moe_fusion"] == "none"
@@ -199,3 +272,5 @@ def test_cuda_draft_matches_cpu_persistent_target_execution(
             assert resident[field] == cpu[field]
             assert resident_grid[field] == cpu[field]
             assert resident_grid_bypass[field] == cpu[field]
+            assert moe_layer[field] == cpu[field]
+            assert moe_layer_bypass[field] == cpu[field]

@@ -135,7 +135,8 @@ def test_cpp_runner_rejects_open_resident_grid_contract(
     )
     assert result.returncode == 2
     assert result.stderr.strip() == (
-        "resident-grid batching requires resident cuda-custom ffn-block "
+        "resident-grid batching requires resident cuda-custom ffn-block or "
+        "moe-layer "
         "reused synchronous execution with fusion none"
     )
 
@@ -152,6 +153,37 @@ def test_cpp_runner_rejects_draft_batching_without_persistent_aurora() -> None:
     assert result.returncode == 2
     assert result.stderr.strip() == (
         "speculative mode none does not accept speculative options"
+    )
+
+
+def test_cpp_runner_rejects_unknown_aurora_draft_boundary() -> None:
+    result = subprocess.run(
+        [
+            str(cpp_binary("k3x_run")),
+            "--aurora-draft-boundary", "warp",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == "unknown AURORA draft boundary: warp"
+
+
+def test_cpp_runner_rejects_draft_boundary_without_persistent_cuda() -> None:
+    result = subprocess.run(
+        [
+            str(cpp_binary("k3x_run")),
+            "--speculative-mode", "aurora-persistent",
+            "--speculative-block-size", "2",
+            "--aurora-draft-k", "4",
+            "--aurora-draft-boundary", "moe-layer",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == (
+        "AURORA draft boundary requires persistent cuda-custom draft backend"
     )
 
 
