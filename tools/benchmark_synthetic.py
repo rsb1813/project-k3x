@@ -323,6 +323,7 @@ def _run_process(
     aurora_draft_backend: str = "cpu",
     aurora_draft_resident_bytes: int = 0,
     aurora_draft_batching: str = "grouped",
+    aurora_draft_boundary: str = "ffn-block",
     diagnostics: bool = False,
 ) -> tuple[dict, int, float]:
     command = [
@@ -370,7 +371,10 @@ def _run_process(
         speculative_mode == "aurora-persistent"
         and aurora_draft_backend == "cuda-custom"
     ):
-        command.extend(["--aurora-draft-batching", aurora_draft_batching])
+        command.extend([
+            "--aurora-draft-batching", aurora_draft_batching,
+            "--aurora-draft-boundary", aurora_draft_boundary,
+        ])
     if runtime_metadata:
         command.extend(["--runtime-metadata", runtime_metadata])
     if runtime_profile_in is not None:
@@ -484,6 +488,7 @@ def benchmark_once(
     aurora_draft_backend: str = "cpu",
     aurora_draft_resident_bytes: int = 0,
     aurora_draft_batching: str = "grouped",
+    aurora_draft_boundary: str = "ffn-block",
 ) -> BenchmarkRecord:
     if warmup < 0 or iterations <= 0:
         raise ValueError("warmup must be non-negative and iterations must be positive")
@@ -542,6 +547,7 @@ def benchmark_once(
                 aurora_draft_backend=aurora_draft_backend,
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
                 aurora_draft_batching=aurora_draft_batching,
+                aurora_draft_boundary=aurora_draft_boundary,
             )
             _, ttft_peak, ttft = _run_process(
                 artifact,
@@ -586,6 +592,7 @@ def benchmark_once(
                 aurora_draft_backend=aurora_draft_backend,
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
                 aurora_draft_batching=aurora_draft_batching,
+                aurora_draft_boundary=aurora_draft_boundary,
             )
             if index >= warmup:
                 samples.append(sample)
@@ -630,6 +637,7 @@ def benchmark_once(
                 aurora_draft_backend=aurora_draft_backend,
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
                 aurora_draft_batching=aurora_draft_batching,
+                aurora_draft_boundary=aurora_draft_boundary,
                 diagnostics=True,
             )
             if diagnostic["token_ids"] != samples[0]["token_ids"]:
@@ -677,6 +685,7 @@ def benchmark_once(
                 aurora_draft_backend=aurora_draft_backend,
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
                 aurora_draft_batching=aurora_draft_batching,
+                aurora_draft_boundary=aurora_draft_boundary,
                 diagnostics=True,
             )
             candidate, _, _ = _run_process(
@@ -715,6 +724,7 @@ def benchmark_once(
                 aurora_draft_backend=aurora_draft_backend,
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
                 aurora_draft_batching=aurora_draft_batching,
+                aurora_draft_boundary=aurora_draft_boundary,
                 diagnostics=True,
             )
             max_absolute_error, max_relative_error = _numerical_errors(
@@ -767,6 +777,7 @@ def benchmark_once(
                 aurora_draft_backend=aurora_draft_backend,
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
                 aurora_draft_batching=aurora_draft_batching,
+                aurora_draft_boundary=aurora_draft_boundary,
             )
             if (
                 materialized["token_ids"] != samples[0]["token_ids"]
@@ -1493,6 +1504,7 @@ def main() -> int:
     )
     parser.add_argument("--aurora-draft-resident-bytes", type=int, default=0)
     parser.add_argument("--aurora-draft-batching", default="grouped")
+    parser.add_argument("--aurora-draft-boundary", default="ffn-block")
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--csv", type=Path, required=True)
     args = parser.parse_args()
@@ -1532,6 +1544,7 @@ def main() -> int:
         aurora_draft_backend=args.aurora_draft_backend,
         aurora_draft_resident_bytes=args.aurora_draft_resident_bytes,
         aurora_draft_batching=args.aurora_draft_batching,
+        aurora_draft_boundary=args.aurora_draft_boundary,
     )
     write_results(result, args.json, args.csv)
     print(json.dumps(asdict(result), sort_keys=True, separators=(",", ":")))
