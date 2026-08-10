@@ -86,6 +86,11 @@ def test_cpp_runner_rejects_unknown_backend_values(
             ["--cuda-weight-validation", "cached"],
             "unknown CUDA weight validation mode: cached",
         ),
+        (["--cuda-graph", "warp"], "unknown CUDA graph mode: warp"),
+        (
+            ["--cuda-graph-entries", "-1"],
+            "invalid CUDA graph entry capacity: -1",
+        ),
         (
             ["--cuda-resident-bytes", "-1"],
             "invalid CUDA resident byte capacity: -1",
@@ -119,6 +124,54 @@ def test_cpp_runner_rejects_admission_validation_without_resident_moe_layer() ->
         "admission CUDA weight validation requires resident cuda-custom "
         "moe-layer execution"
     )
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (
+            ["--cuda-graph-entries", "1"],
+            "CUDA graph disabled requires zero entry capacity",
+        ),
+        (
+            ["--cuda-graph", "update", "--cuda-graph-entries", "2"],
+            "CUDA graph update requires exactly one entry",
+        ),
+        (
+            ["--cuda-graph", "cache"],
+            "CUDA graph cache requires positive entry capacity",
+        ),
+        (
+            ["--cuda-graph", "cache", "--cuda-graph-entries", "1"],
+            "CUDA graph execution requires admission-validated resident "
+            "cuda-custom moe-layer execution",
+        ),
+        (
+            [
+                "--backend", "cuda-custom",
+                "--cuda-allocation", "reused",
+                "--cuda-weights", "resident",
+                "--cuda-batching", "resident-grid",
+                "--cuda-boundary", "moe-layer",
+                "--cuda-resident-bytes", "8388608",
+                "--cuda-graph", "cache",
+                "--cuda-graph-entries", "1",
+            ],
+            "CUDA graph execution requires admission-validated resident "
+            "cuda-custom moe-layer execution",
+        ),
+    ],
+)
+def test_cpp_runner_rejects_invalid_cuda_graph_contract(
+    arguments: list[str], message: str
+) -> None:
+    result = subprocess.run(
+        [str(cpp_binary("k3x_run")), *arguments],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == message
 
 
 @pytest.mark.parametrize(

@@ -3330,6 +3330,35 @@ Result<std::unique_ptr<ComputeBackend>> make_cuda_backend(
             ErrorCode::backend_unavailable,
             "synchronous CUDA transfer cannot allocate pinned staging");
     }
+    if ((options.cuda_graph == CudaGraphMode::disabled &&
+         options.cuda_graph_entries != 0) ||
+        (options.cuda_graph == CudaGraphMode::update &&
+         options.cuda_graph_entries != 1) ||
+        (options.cuda_graph == CudaGraphMode::cache &&
+         options.cuda_graph_entries == 0)) {
+        return cuda_failure(ErrorCode::backend_unavailable,
+                            "invalid CUDA graph capacity contract");
+    }
+    if (options.cuda_graph != CudaGraphMode::disabled &&
+        (options.kind != BackendKind::cuda_custom ||
+         options.dense_precision != DensePrecision::fp32 ||
+         options.cuda_allocation != CudaAllocationMode::reused ||
+         options.cuda_weights != CudaWeightMode::resident ||
+         options.cuda_batching != CudaBatchingMode::resident_grid ||
+         options.cuda_boundary != CudaBoundaryMode::moe_layer ||
+         options.cuda_transfer != CudaTransferMode::synchronous ||
+         options.cuda_moe_fusion != CudaMoeFusionMode::none ||
+         options.cuda_weight_validation !=
+             CudaWeightValidationMode::admission ||
+         options.cuda_resident_bytes == 0)) {
+        return cuda_failure(
+            ErrorCode::backend_unavailable,
+            "CUDA graph execution requires admission-validated resident cuda-custom moe-layer execution");
+    }
+    if (options.cuda_graph != CudaGraphMode::disabled) {
+        return cuda_failure(ErrorCode::backend_unavailable,
+                            "CUDA graph execution is not implemented");
+    }
 
     int device = -1;
     if (cudaGetDevice(&device) != cudaSuccess) {
