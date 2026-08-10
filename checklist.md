@@ -195,6 +195,18 @@
 - [x] Run the full verification matrix and record measured resource/correctness evidence.
 - [x] Complete Critical/Important review, synchronize README/TITAN Ledger, publish, merge, and verify public `main`.
 
+## Milestone 26 — Official bounded range discovery
+
+- [x] Re-read the charter, architecture, project state, D-028/D-051, B-0008/B-0026, current source manifest, safetensors reader, and storage fixture.
+- [x] Resolve the official public snapshot and inspect API, index, shard 2 header, exact expert ranges, and w1/w2/w3 roles without tensor-payload download.
+- [x] Compare API-only, full-shard-first, and pinned exact-range approaches.
+- [x] Write and self-review the accepted official range-discovery design under the standing pre-Cloud-Run approval.
+- [ ] Write and self-review the detailed TDD implementation plan.
+- [ ] Implement bounded snapshot/index/config discovery through witnessed RED/GREEN cycles.
+- [ ] Implement exact expert planning and atomic range materialization through witnessed RED/GREEN cycles.
+- [ ] Convert and verify one live official expert slice without committing real bytes.
+- [ ] Record B-0027, run the full verification matrix, complete Critical/Important review, synchronize documentation, publish, merge, and verify public `main`.
+
 ## Milestone 12 — Fused routed accumulation CUDA kernel
 
 - [x] TITAN Ledger, 현재 CUDA 경계, 원 구현 근거 재확인.
