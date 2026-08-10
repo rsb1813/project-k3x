@@ -488,3 +488,4 @@
 - 최종 자체 리뷰에서 `cuda_graph_host_nanoseconds`가 설계와 달리 stream wait를 포함한 Important를 발견했다. Wait 전후 host 구간만 합산하도록 교정했고 stable 20-call smoke에서 32.1 ms 수준이 7.7 ms로 분리됐다. 모델 출력과 wall latency 정의는 바뀌지 않았지만 runner digest와 raw evidence는 폐기 후 전체 재측정했다.
 - Host-time 교정 후 CUDA CTest 27/27과 pytest 386 passed/16 skipped를 다시 통과했고 stable hit 및 capacity-one eviction Compute Sanitizer가 모두 0 errors를 보고했다. Focused final review는 `3292524..27feced`에서 Critical/Important를 발견하지 않았고 raw JSON/CSV 30개, aggregate, summary와 문서 digest parity를 확인했다.
 - Review head `27feced`를 공개 branch에 push하고 ready PR #40을 열었다. Merge 및 pull-request/post-merge correctness/CodeQL은 아직 완료로 기록하지 않는다.
+- 문서 동기화 head의 branch/pull-request correctness `31371133295`/`31371136825`와 pull-request CodeQL `31371136804`가 통과했다. PR #40은 public integration head `13a403f`로 rebase merge됐고 post-merge `main` correctness `31371387067`과 CodeQL `31371387081`도 통과했다.
