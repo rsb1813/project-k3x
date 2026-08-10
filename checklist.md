@@ -151,7 +151,7 @@
 - [x] Write and self-review the accepted released-dimension benchmark design.
 - [x] Write and self-review the detailed TDD implementation plan.
 - [x] Implement the released-dimension split/layer benchmark through witnessed RED/GREEN cycles.
-- [ ] Implement and run B-0023 with committed raw/summary evidence validation.
+- [x] Implement and run B-0023 with committed raw/summary evidence validation.
 - [ ] Run full verification, synchronize the TITAN Ledger and README, review, publish, merge, and verify public `main`.
 
 ## Milestone 12 — Fused routed accumulation CUDA kernel
