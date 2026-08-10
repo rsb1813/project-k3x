@@ -231,13 +231,15 @@ Run:
 rtk .\.venv\Scripts\python.exe -m pytest tests/python/test_safetensors_integrity.py -q
 ```
 
-Expected: length, duplicate-key, negative-shape, and gap cases pass incorrectly or leak generic exceptions.
+Also declare a header length above the official safetensors 100 MB default without materializing that payload and prove it fails before any header-sized allocation or read.
+
+Expected: length, duplicate-key, negative-shape, gap, and oversized-header cases pass incorrectly or leak generic exceptions.
 
 - [ ] **Step 3: Implement structural validation**
 
 In `safetensors_reader.py`, parse with a duplicate-key rejecting hook that translates all syntax/schema failures to `INVALID_SOURCE_HEADER`. Require exact tensor metadata keys, string dtype, list shape, two-item offset list, and non-boolean integers. For `F32` and `U8`, compute expected bytes with checked multiplication and require exact agreement with `end - start`. Sort ranges and require exact contiguous coverage from `data_start` through `size`; overlap or holes raise `INVALID_SOURCE_EXTENT` except overlap retains `OVERLAPPING_SOURCE_EXTENT`.
 
-Do not read payload bytes and do not add an arbitrary header-size cap.
+Do not read payload bytes. Reject a declared header larger than the official safetensors 100 MB default before allocating or reading it; do not invent a smaller project-specific cap.
 
 - [ ] **Step 4: Run Task 2 GREEN and source regressions**
 
