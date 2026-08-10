@@ -43,8 +43,8 @@ Add an invalid CLI case expecting `unknown CUDA weight validation mode: cached`.
 - [ ] **Step 2: Run the focused tests and witness RED**
 
 ```bash
-K3X_BUILD_DIR=build-wsl /home/jolib/.venvs/k3x-m1/bin/python -m pytest 
-  tests/python/test_cpp_parity.py tests/python/test_benchmark_schema.py 
+K3X_BUILD_DIR=build-wsl /home/jolib/.venvs/k3x-m1/bin/python -m pytest
+  tests/python/test_cpp_parity.py tests/python/test_benchmark_schema.py
   -k 'weight_validation or default_runtime or benchmark_record' -q
 ```
 
@@ -59,15 +59,15 @@ Add the enum, option, and counters. Parse only `per-call` and `admission`. Rejec
 ```bash
 cmake -S . -B build-wsl -G Ninja -DCMAKE_BUILD_TYPE=Release -DK3X_ENABLE_CUDA=OFF
 cmake --build build-wsl -j2
-K3X_BUILD_DIR=build-wsl /home/jolib/.venvs/k3x-m1/bin/python -m pytest 
+K3X_BUILD_DIR=build-wsl /home/jolib/.venvs/k3x-m1/bin/python -m pytest
   tests/python/test_cpp_parity.py tests/python/test_benchmark_schema.py -q
 ```
 
 - [ ] **Step 5: Commit the public contract**
 
 ```bash
-git add runtime/include/k3x/backend.hpp runtime/src/main.cpp 
-  tools/benchmark_synthetic.py tests/python/test_cpp_parity.py 
+git add runtime/include/k3x/backend.hpp runtime/src/main.cpp
+  tools/benchmark_synthetic.py tests/python/test_cpp_parity.py
   tests/python/test_benchmark_schema.py
 git commit -m "runtime: add CUDA validation modes"
 ```
@@ -96,7 +96,7 @@ Add an identity-conflict test that first admits a valid layer, then supplies the
 - [ ] **Step 2: Build the CUDA test and witness RED**
 
 ```bash
-cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release 
+cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release
   -DK3X_ENABLE_CUDA=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-13.3/bin/nvcc
 cmake --build build-cuda --target test_cuda_moe_layer -j2
 ctest --test-dir build-cuda -R '^cuda_moe_layer$' --output-on-failure
@@ -113,7 +113,7 @@ Define the identity with `const float* data`, `size`, `rows`, and `cols`. In per
 ```bash
 cmake --build build-cuda --target test_cuda_moe_layer test_cuda_residency -j2
 ctest --test-dir build-cuda -R 'cuda_moe_layer|cuda_residency' --output-on-failure
-/usr/local/cuda-13.3/compute-sanitizer/compute-sanitizer 
+/usr/local/cuda-13.3/compute-sanitizer/compute-sanitizer
   --tool memcheck --error-exitcode 99 build-cuda/test_cuda_moe_layer
 ```
 
@@ -144,8 +144,8 @@ Parameterize the existing test over both validation modes and profiler states fo
 - [ ] **Step 2: Run the focused live test and witness RED**
 
 ```bash
-K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 
-  /home/jolib/.venvs/k3x-m1/bin/python -m pytest 
+K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1
+  /home/jolib/.venvs/k3x-m1/bin/python -m pytest
   tests/python/test_cuda_released_moe_layer.py -q
 ```
 
@@ -159,15 +159,15 @@ Pass `CudaWeightValidationMode` into selected backend options. Construct a `Prof
 
 ```bash
 cmake --build build-cuda --target k3x_cuda_moe_layer_bench -j2
-K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 
-  /home/jolib/.venvs/k3x-m1/bin/python -m pytest 
+K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1
+  /home/jolib/.venvs/k3x-m1/bin/python -m pytest
   tests/python/test_cuda_released_moe_layer.py -q
 ```
 
 - [ ] **Step 5: Commit the benchmark contract**
 
 ```bash
-git add runtime/src/cuda_moe_layer_bench.cpp 
+git add runtime/src/cuda_moe_layer_bench.cpp
   tests/python/test_cuda_released_moe_layer.py
 git commit -m "bench: expose validation attribution"
 ```
@@ -192,7 +192,7 @@ Create literal fake rows for split, per-call layer, and admission layer with pro
 - [ ] **Step 2: Run the unit test and witness RED**
 
 ```bash
-/home/jolib/.venvs/k3x-m1/bin/python -m pytest 
+/home/jolib/.venvs/k3x-m1/bin/python -m pytest
   tests/python/test_cuda_admission_validation_ablation.py -q
 ```
 
@@ -205,15 +205,15 @@ Start the new Python file with `# B-0024 admission validation과 profiler attrib
 - [ ] **Step 4: Verify unit and one-sample live matrices**
 
 ```bash
-K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 
-  /home/jolib/.venvs/k3x-m1/bin/python -m pytest 
+K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1
+  /home/jolib/.venvs/k3x-m1/bin/python -m pytest
   tests/python/test_cuda_admission_validation_ablation.py -q
 ```
 
 - [ ] **Step 5: Commit the ablation tooling**
 
 ```bash
-git add tools/ablate_cuda_admission_validation.py 
+git add tools/ablate_cuda_admission_validation.py
   tests/python/test_cuda_admission_validation_ablation.py
 git commit -m "bench: add admission validation ablation"
 ```
@@ -237,10 +237,10 @@ Verify `build-fixtures/released-expert.k3x` has SHA-256 `e087ff78284e99760a7d113
 - [ ] **Step 2: Run the formal matrix**
 
 ```bash
-/home/jolib/.venvs/k3x-m1/bin/python -m tools.ablate_cuda_admission_validation 
-  --artifact build-fixtures/released-expert.k3x 
-  --runner build-cuda/k3x_cuda_moe_layer_bench 
-  --output-dir results/b0024-cuda-admission-validation-wsl 
+/home/jolib/.venvs/k3x-m1/bin/python -m tools.ablate_cuda_admission_validation
+  --artifact build-fixtures/released-expert.k3x
+  --runner build-cuda/k3x_cuda_moe_layer_bench
+  --output-dir results/b0024-cuda-admission-validation-wsl
   --warmup 3 --iterations 20
 ```
 
@@ -251,9 +251,9 @@ Recompute all eighteen raw hashes, exact case order, canonical aggregate, summar
 - [ ] **Step 4: Run evidence verification and commit**
 
 ```bash
-/home/jolib/.venvs/k3x-m1/bin/python -m pytest 
+/home/jolib/.venvs/k3x-m1/bin/python -m pytest
   tests/python/test_cuda_admission_validation_ablation.py -q
-git add results/b0024-cuda-admission-validation-wsl 
+git add results/b0024-cuda-admission-validation-wsl
   tests/python/test_cuda_admission_validation_ablation.py
 git commit -m "bench: measure admission validation"
 ```
@@ -304,4 +304,3 @@ Push a ready PR, wait for correctness and CodeQL, rebase-merge, verify post-merg
 - All symbols are introduced before later tasks consume them.
 - The plan preserves per-call reference mode and does not preselect a default result.
 - There are no placeholder implementation steps or unbounded adjacent refactors.
-
