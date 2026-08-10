@@ -25,6 +25,19 @@ CASES = tuple(
     for experts in (1, 4, 16)
     for profiler_name in ("off", "on")
 )
+GROUPS = tuple(
+    (
+        f"{kind}-{experts}-{validation}",
+        f"{kind}-{experts}-{validation}-profiler-off",
+        f"{kind}-{experts}-{validation}-profiler-on",
+    )
+    for kind, validation in (
+        ("split", "per-call"),
+        ("layer", "per-call"),
+        ("layer", "admission"),
+    )
+    for experts in (1, 4, 16)
+)
 
 _IMMUTABLE_BYTES = 469_776_384
 
@@ -121,6 +134,44 @@ def _validate_record(
     ):
         if record.get(field) != 0:
             raise RuntimeError(f"{name} {field} is nonzero")
+    if any(
+        marker in key.lower()
+        for key in record
+        for marker in ("token", "prefill", "ttft")
+    ):
+        raise RuntimeError(f"{name} contains token-like telemetry")
+
+    split = boundary == "ffn-block"
+    expected_activation = iterations * (
+        86_016 if split else 28_672 + experts * 52
+    )
+    expected_d2h = iterations * (
+        57_344 + experts * 28_672 if split else 28_672
+    )
+    expected_sync = iterations * (4 if split else 1)
+    if (
+        record.get("activation_h2d_bytes") != expected_activation
+        or record.get("device_to_host_bytes") != expected_d2h
+        or record.get("stream_synchronization_count") != expected_sync
+        or record.get("resident_grid_calls") != iterations
+        or record.get("resident_grid_kernel_launches") != iterations * 4
+    ):
+        raise RuntimeError(f"{name} physical traffic accounting diverged")
+    if split:
+        expected_layer = (0, 0, 0, 0)
+    else:
+        expected_layer = (
+            iterations, experts * iterations, iterations * 13,
+            experts * 4 * iterations,
+        )
+    observed_layer = (
+        record.get("resident_moe_layer_calls"),
+        record.get("resident_moe_layer_experts"),
+        record.get("resident_moe_layer_kernel_launches"),
+        record.get("resident_moe_layer_contribution_h2d_bytes"),
+    )
+    if observed_layer != expected_layer:
+        raise RuntimeError(f"{name} MoE-layer accounting diverged")
 
     layer = boundary == "moe-layer"
     cold_scans = 6 if layer else 0
@@ -187,6 +238,42 @@ def run_ablation(
             "raw_json_sha256": _sha256(json_path),
             "raw_csv_sha256": _sha256(csv_path),
         })
+    by_name = {record["name"]: record for record in records}
+    parity_fields = (
+        "maximum_absolute_error", "activation_h2d_bytes",
+        "device_to_host_bytes", "weight_h2d_bytes",
+        "cold_weight_h2d_bytes", "resident_weight_bytes",
+        "peak_resident_weight_bytes", "stream_synchronization_count",
+        "resident_grid_calls", "resident_grid_kernel_launches",
+        "resident_moe_layer_calls", "resident_moe_layer_experts",
+        "resident_moe_layer_kernel_launches",
+        "resident_moe_layer_contribution_h2d_bytes",
+        "cold_immutable_validation_scans",
+        "cold_immutable_validation_bytes", "immutable_validation_scans",
+        "immutable_validation_hits", "immutable_validation_bytes",
+    )
+    for group, off_name, on_name in GROUPS:
+        off, on = by_name[off_name], by_name[on_name]
+        if any(off.get(field) != on.get(field) for field in parity_fields):
+            raise RuntimeError(f"{group} profiler physical parity diverged")
+        off["paired_profiler_latency_delta_percent"] = 0.0
+        on["paired_profiler_latency_delta_percent"] = (
+            on["latency_nanoseconds_median"]
+            / off["latency_nanoseconds_median"] - 1.0
+        ) * 100.0
+    for experts in (1, 4, 16):
+        for profiler_name in ("off", "on"):
+            per_call = by_name[
+                f"layer-{experts}-per-call-profiler-{profiler_name}"
+            ]
+            admission = by_name[
+                f"layer-{experts}-admission-profiler-{profiler_name}"
+            ]
+            admission["paired_admission_latency_delta_percent"] = (
+                admission["latency_nanoseconds_median"]
+                / per_call["latency_nanoseconds_median"] - 1.0
+            ) * 100.0
+            per_call["paired_admission_latency_delta_percent"] = 0.0
     aggregate = json.dumps(
         records, sort_keys=True, separators=(",", ":")
     ).encode()
@@ -212,14 +299,15 @@ def run_ablation(
         )
         writer.writeheader()
         writer.writerows(records)
+    summary["summary_csv_sha256"] = _sha256(output_dir / "summary.csv")
     _write_json(output_dir / "summary.json", summary)
     return summary
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("artifact", type=Path)
-    parser.add_argument("runner", type=Path)
+    parser.add_argument("--artifact", type=Path, required=True)
+    parser.add_argument("--runner", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--warmup", type=int, default=2)
     parser.add_argument("--iterations", type=int, default=10)

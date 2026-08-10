@@ -30,9 +30,26 @@ def _payload(boundary: str, experts: int, validation: str, profiler: bool) -> di
         "kernel_nanoseconds": 500 if profiler else None,
         "weight_h2d_bytes": 0,
         "cold_weight_h2d_bytes": 1,
+        "activation_h2d_bytes": iterations * (
+            86_016 if not layer else 28_672 + experts * 52
+        ),
+        "device_to_host_bytes": iterations * (
+            57_344 + experts * 28_672 if not layer else 28_672
+        ),
+        "stream_synchronization_count": iterations * (1 if layer else 4),
+        "resident_weight_bytes": 100,
+        "peak_resident_weight_bytes": 100,
         "weight_cache_bypasses": 0,
+        "resident_grid_calls": iterations,
+        "resident_grid_kernel_launches": iterations * 4,
         "resident_grid_fallbacks": 0,
+        "resident_moe_layer_calls": iterations if layer else 0,
+        "resident_moe_layer_experts": experts * iterations if layer else 0,
+        "resident_moe_layer_kernel_launches": iterations * 13 if layer else 0,
         "resident_moe_layer_fallbacks": 0,
+        "resident_moe_layer_contribution_h2d_bytes": (
+            experts * 4 * iterations if layer else 0
+        ),
         "cold_immutable_validation_scans": 6 if layer else 0,
         "cold_immutable_validation_bytes": 469_776_384 if layer else 0,
         "immutable_validation_scans": iterations * 6 if layer and not admission else 0,
@@ -76,6 +93,7 @@ def test_admission_validation_ablation_cross_checks_all_rows(
     assert (output / "summary.csv").is_file()
     written = json.loads((output / "summary.json").read_text(encoding="utf-8"))
     assert written["aggregate_sha256"] == summary["aggregate_sha256"]
+    assert written["summary_csv_sha256"] == summary["summary_csv_sha256"]
     for record in summary["records"]:
         assert len(record["raw_json_sha256"]) == 64
         assert len(record["raw_csv_sha256"]) == 64
