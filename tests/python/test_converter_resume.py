@@ -1,11 +1,13 @@
 # K3X 변환 중단 뒤 검증된 extent만 재사용하는지 검증합니다.
+import hashlib
 import json
+import shutil
 from pathlib import Path
 
 import google_crc32c
 import pytest
 
-from k3x_converter.format import K3XError
+from k3x_converter.format import SUPERBLOCK_BYTES, K3XError
 from k3x_converter.resume import read_resume_manifest
 from k3x_converter.writer import convert
 from k3x_ref.storage_fixture import write_bounded_expert_source
@@ -29,6 +31,15 @@ def _assert_schema_rejected_without_mutation(source: Path, output: Path) -> None
 
     assert partial.read_bytes() == partial_before
     assert resume.read_bytes() == resume_before
+
+
+def _copy_interrupted_state(source: Path, target: Path) -> None:
+    for suffix in (".partial", ".resume.json"):
+        shutil.copy2(source.with_suffix(source.suffix + suffix), target.with_suffix(target.suffix + suffix))
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 @pytest.mark.parametrize(
@@ -113,6 +124,74 @@ def test_conversion_resumes_without_rewriting_completed_extents(
     assert second.maximum_source_read_bytes <= 257
     assert output.exists()
     assert not output.with_suffix(".k3x.partial").exists()
+
+
+def test_resume_truncates_orphan_suffix_to_exact_last_extent_end(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    clean = tmp_path / "clean.k3x"
+    orphan = tmp_path / "orphan.k3x"
+    convert(synthetic_source, clean, chunk_bytes=257, stop_after_extents=2)
+    ledger = read_resume_manifest(clean.with_suffix(".k3x.resume.json"))
+    boundary = ledger.completed[-1].offset + ledger.completed[-1].length
+    assert boundary % 4096 != 0
+    assert clean.with_suffix(".k3x.partial").stat().st_size == boundary
+    _copy_interrupted_state(clean, orphan)
+    with orphan.with_suffix(".k3x.partial").open("ab") as stream:
+        stream.write(b"orphan-suffix" * 701)
+
+    convert(synthetic_source, clean, chunk_bytes=257)
+    convert(synthetic_source, orphan, chunk_bytes=257)
+
+    assert clean.read_bytes() == orphan.read_bytes()
+    assert _sha256(clean) == _sha256(orphan)
+
+
+def test_resume_rejects_committed_corruption_with_suffix_without_mutation(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    output = tmp_path / "corrupt.k3x"
+    convert(synthetic_source, output, chunk_bytes=257, stop_after_extents=2)
+    partial = output.with_suffix(".k3x.partial")
+    resume = output.with_suffix(".k3x.resume.json")
+    item = read_resume_manifest(resume).completed[-1]
+    with partial.open("r+b") as stream:
+        stream.seek(item.offset)
+        original = stream.read(1)
+        stream.seek(item.offset)
+        stream.write(bytes([original[0] ^ 1]))
+        stream.seek(0, 2)
+        stream.write(b"orphan-suffix" * 701)
+    partial_before = partial.read_bytes()
+    resume_before = resume.read_bytes()
+
+    with pytest.raises(K3XError, match="RESUME_EXTENT_CRC_MISMATCH"):
+        convert(synthetic_source, output, chunk_bytes=257)
+
+    assert partial.read_bytes() == partial_before
+    assert resume.read_bytes() == resume_before
+
+
+def test_resume_truncates_empty_committed_prefix_before_replay(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    clean = tmp_path / "empty-clean.k3x"
+    orphan = tmp_path / "empty-orphan.k3x"
+    convert(synthetic_source, clean, chunk_bytes=257, stop_after_extents=2)
+    resume = clean.with_suffix(".k3x.resume.json")
+    ledger = json.loads(resume.read_text(encoding="utf-8"))
+    ledger["completed"] = []
+    resume.write_text(json.dumps(ledger), encoding="utf-8")
+    assert clean.with_suffix(".k3x.partial").stat().st_size > SUPERBLOCK_BYTES
+    _copy_interrupted_state(clean, orphan)
+    with orphan.with_suffix(".k3x.partial").open("ab") as stream:
+        stream.write(b"orphan-suffix" * 701)
+
+    convert(synthetic_source, clean, chunk_bytes=257)
+    convert(synthetic_source, orphan, chunk_bytes=257)
+
+    assert clean.read_bytes() == orphan.read_bytes()
+    assert _sha256(clean) == _sha256(orphan)
 
 
 def test_resume_rejects_changed_source(

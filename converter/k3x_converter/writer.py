@@ -8,6 +8,7 @@ import struct
 import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Sequence
 
 import google_crc32c
 
@@ -262,6 +263,12 @@ def _validate_resume_extents(
         expected_offset = align_up(item.offset + item.length)
 
 
+def _committed_partial_length(completed: Sequence[CompletedExtent]) -> int:
+    if not completed:
+        return SUPERBLOCK_BYTES
+    return completed[-1].offset + completed[-1].length
+
+
 def _configuration_bytes(config: dict) -> bytes:
     integers = (
         config["vocab_size"], config["hidden_size"], len(config["layer_kinds"]),
@@ -401,6 +408,14 @@ def convert(
                     raise K3XError("RESUME_EXTENT_CRC_MISMATCH")
                 completed.append(item)
                 reused.append(item.extent_id)
+            if stream.seek(0, os.SEEK_END) < _committed_partial_length(ledger.completed):
+                raise K3XError("TRUNCATED_FILE")
+        committed_length = _committed_partial_length(ledger.completed)
+        if partial.stat().st_size > committed_length:
+            with partial.open("r+b") as stream:
+                stream.truncate(committed_length)
+                stream.flush()
+                os.fsync(stream.fileno())
     else:
         file_uuid = uuid.uuid4().bytes
         with partial.open("wb") as stream:

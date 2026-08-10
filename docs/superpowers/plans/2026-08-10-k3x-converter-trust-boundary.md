@@ -339,7 +339,7 @@ rtk git commit -m "fix: validate resume ledger schema"
 - Preserves conversion and report public signatures.
 - Guarantees truncation only after source identity, ledger schema, source extent CRCs, and partial extent CRCs pass.
 
-- [ ] **Step 1: Write orphan-suffix RED tests**
+- [x] **Step 1: Write orphan-suffix RED tests**
 
 ```python
 def test_resume_discards_uncommitted_partial_suffix(
@@ -358,7 +358,7 @@ def test_resume_discards_uncommitted_partial_suffix(
 
 Add a second test that corrupts one committed byte, appends a suffix, captures the entire partial/ledger bytes, expects `RESUME_EXTENT_CRC_MISMATCH`, and proves neither file changed.
 
-- [ ] **Step 2: Run Task 4 RED**
+- [x] **Step 2: Run Task 4 RED**
 
 ```powershell
 rtk .\.venv\Scripts\python.exe -m pytest tests/python/test_converter_resume.py -q
@@ -366,11 +366,11 @@ rtk .\.venv\Scripts\python.exe -m pytest tests/python/test_converter_resume.py -
 
 Expected: the valid orphan-suffix output is larger than clean output; committed corruption already fails and remains unchanged.
 
-- [ ] **Step 3: Implement post-validation truncation**
+- [x] **Step 3: Implement post-validation truncation**
 
 After the existing loop verifies every committed partial CRC, compute the exact `offset + length` of the last completed extent or `SUPERBLOCK_BYTES` for an empty prefix. This exact byte is the ledger-committed boundary; alignment padding for the next extent is uncommitted and will be regenerated. Reject a partial shorter than that boundary. If it is longer, open it `r+b`, `truncate(boundary)`, `flush()`, and `os.fsync()`. Seek subsequent new writes from that boundary. Do not truncate before all validation loops finish.
 
-- [ ] **Step 4: Run Task 4 GREEN and full converter tests**
+- [x] **Step 4: Run Task 4 GREEN and full converter tests**
 
 ```powershell
 rtk .\.venv\Scripts\python.exe -m pytest tests/python/test_converter_resume.py tests/python/test_source_manifest_integrity.py tests/python/test_safetensors_integrity.py tests/python/test_k3x_format.py tests/python/test_storage_fixture.py -q
@@ -378,7 +378,7 @@ rtk .\.venv\Scripts\python.exe -m pytest tests/python/test_converter_resume.py t
 
 Expected: all pass; clean and recovered output lengths match; corruption is fail-atomic.
 
-- [ ] **Step 5: Commit Task 4**
+- [x] **Step 5: Commit Task 4**
 
 ```powershell
 rtk git add converter/k3x_converter/writer.py tests/python/test_converter_resume.py
