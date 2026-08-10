@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 27 official expert CUDA execution is the active engineering boundary. Its accepted design hard-binds the B-0027 K3X root and ordered expert digest, compares one exact layer-1 expert-0 FFN with the portable CPU backend, and measures transient versus resident RTX 5080 execution without weakening the storage-fixture generation guard. Implementation and B-0028 remain pending.
+Milestone 27 official expert CUDA execution is the active engineering boundary. Its accepted design and detailed TDD plan hard-bind the B-0027 K3X file/root/ordered-expert identities, compare one exact layer-1 expert-0 FFN with the portable CPU backend, and measure transient versus resident RTX 5080 execution without weakening the storage-fixture generation guard. Implementation and B-0028 remain pending.
 
 State audited on 2026-08-10 after the M27 design and one explicitly non-benchmark exploratory CUDA smoke. Milestone 26 remains publicly integrated through PR #44 at `5b6345db`, with its publication update through PR #45 at `9c461a1`. One bounded official expert is present only under ignored `artifacts/`; no complete shard, full checkpoint, or paid cloud resource is in use.
 
@@ -108,7 +108,7 @@ State audited on 2026-08-10 after the M27 design and one explicitly non-benchmar
 
 ## Work in progress
 
-- Milestone 27 design is accepted. The implementation plan, pinned identity helper, dedicated CUDA harness, B-0028 runner/verifier, formal measurement, full verification, and public integration remain.
+- Milestone 27 design and detailed TDD plan are accepted. The pinned identity helper, dedicated CUDA harness, B-0028 runner/verifier, formal measurement, full verification, and public integration remain.
 - Milestone 26 implementation, live dry-run, one exact official expert conversion, B-0027 verifier, full local verification, final Critical/Important review, README/TITAN Ledger synchronization, PR #44 merge, and post-merge CI are complete.
 - The actual official K3X storage fixture exits 4 with `NON_EXECUTABLE_ARTIFACT`; M27 must add a separate dependency-closed real CUDA layer path rather than weakening that guard.
 - Milestone 24 implementation, B-0025 measurement, committed-evidence validation, full local verification, final Critical/Important review, PR #40 merge, and post-merge correctness/CodeQL are complete.
@@ -160,9 +160,9 @@ State audited on 2026-08-10 after the M27 design and one explicitly non-benchmar
 
 ## Next concrete tasks
 
-1. Write the detailed M27 TDD plan for pinned identity validation, the dedicated official-expert CUDA harness, and B-0028 evidence.
-2. Implement and compare the real expert with the independent CPU oracle, then measure exact H2D, VRAM, kernel, and wall time without making token-throughput claims.
-3. Use B-0028 to choose the smallest dependency-closed multi-expert or complete-layer slice for Milestone 28.
+1. Implement the pure pinned M27 identity contract through a witnessed RED/GREEN cycle.
+2. Implement the dedicated CUDA harness and compare the real expert with the independent CPU oracle before formal measurement.
+3. Implement and run strict B-0028, then use it to choose the smallest dependency-closed multi-expert or complete-layer slice for Milestone 28.
 
 ## Hardware assumptions
 
