@@ -332,6 +332,14 @@ The public backend contract validates token/expert counts, checked products, equ
 
 AURORA integrates the grid at token count one because draft candidates remain causally autoregressive. Direct backend and benchmark coverage exercises 1, 2, and 4 experts and tokens for later expert-major or multi-branch consumers. B-0021 preserves proposals, acceptance, target tokens, KDA/MLA state, committed routes, and Reader evidence in all four grouped/grid pairs. Grid execution reduces derived MoE launches by 75% and improves paired synthetic decode by 10.79% to 38.00%, with zero fallback at 8 MiB. It remains experimental and non-default because the graph is tiny and host-driven. CUDA Graphs, a cooperative persistent kernel, device-resident KDA/MLA/router state, reduced precision, and dynamic eviction remain separate axes.
 
+## Milestone 21 accepted resident MoE-layer design
+
+Milestone 21 is accepted for implementation but is not yet implemented or benchmarked. The selected `moe-layer` boundary keeps routing and target authority on the CPU while joining routed-down projection, the exact resident expert grid, router-slot ordered weighting, RMSNorm, routed-up projection, the shared SiTU MLP, and routed-plus-shared addition on one CUDA stream. A successful call uploads one hidden input plus contributions/descriptors, returns one hidden-width result, and synchronizes once.
+
+The boundary is restricted to FP32 `cuda-custom + reused + resident + resident-grid + synchronous + fusion-none` with positive hard capacity. All six dense/vector tensors and all native MXFP4 expert matrices are acquired before launch. A hard-cap bypass returns an explicit non-error `executed=false` result and the runtime executes the existing Milestone 20 split CUDA path; validation, acquisition, and CUDA errors remain failures. CPU drafting and `ffn-block` remain defaults.
+
+The design intentionally does not move KDA, MLA, Attention Residual, router selection, logits, argmax, or speculative rollback to the GPU. B-0022 will compare four matched split/layer AURORA pairs and requires exact target behavior, equal weight traffic, lower activation H2D/D2H, and three fewer synchronizations per successful MoE-layer call before recording throughput. CUDA Graph caching remains deferred until ordered routed-set reuse and a bounded graph-cache policy are measured. The normative design is in [`docs/superpowers/specs/2026-08-10-k3x-resident-moe-layer-design.md`](docs/superpowers/specs/2026-08-10-k3x-resident-moe-layer-design.md).
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

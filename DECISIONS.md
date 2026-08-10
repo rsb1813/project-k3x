@@ -514,3 +514,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason not promoted to default: AURORA currently supplies one token per grid call, total draft H2D increases slightly, host orchestration and activation round trips remain, and the benchmark is a tiny synthetic WSL2 workload without coding-quality or full-model evidence.
 - Revisit: repeat on native Linux and representative layer dimensions, then compare a device-resident layer/token graph against routed-set CUDA Graph caching. Keep dynamic eviction and reduced precision as separate policy and quality experiments.
 - Publication: PR #29 was rebase-merged at public integration head `90b20c87`; push, pull-request, and post-merge correctness runs `31351465644`, `31351486146`, and `31351649761` passed.
+
+## D-046 — Join the exact resident MoE layer before graph caching
+
+- Date: 2026-08-10.
+- Status: accepted design; not yet implemented or benchmarked.
+- Decision: add an opt-in `moe-layer` CUDA boundary that keeps CPU routing unchanged but executes routed-down, resident expert grid, ordered contribution mixing, RMSNorm, routed-up, shared SiTU MLP, and final addition on one stream with one final result copy and synchronization.
+- Alternatives considered: cache CUDA Graphs keyed by ordered routed expert set; move the complete KDA/MLA/router/argmax token graph to the device; first join only the dependency-closed MoE feed-forward layer.
+- Evidence: B-0021 fixed grid rows record 30 grid calls, 470 draft stream synchronizations, 108,800 activation-H2D bytes, and 102,880 D2H bytes after exact weight residency. Adaptive rows record 33 calls and 517 synchronizations. The current model executes routed-down, shared MLP, expert grid, CPU mix/norm, and routed-up as separate subcalls. NVIDIA's CUDA Graph documentation requires explicit definition/instantiation/execution and distinguishes parameter update from topology-changing re-instantiation.
+- Reason accepted: the selected boundary directly removes three synchronization and intermediate-copy boundaries per successful MoE call without changing recurrent attention, router selection, proposal lifecycle, or target verification.
+- Reason graph cache deferred: ordered expert-set reuse, pointer-update cost, graph count, and bounded eviction are unmeasured. Combining those policies with a new execution boundary would prevent clean attribution.
+- Reason whole-token graph deferred: KDA/MLA state, residuals, routing, logits, argmax, and rollback would all change at once.
+- Revisit: use B-0022 to decide whether the next boundary should be a CUDA Graph over the stable MoE layer or a larger device-resident token graph. Do not combine reduced precision or dynamic eviction with the first layer measurement.

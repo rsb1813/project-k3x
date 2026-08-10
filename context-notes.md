@@ -393,3 +393,11 @@
 - M20 최종 검증은 CPU CTest 14/14·pytest 290/55, liburing/direct CTest 15/15·pytest 296/49, ASan/UBSan CTest 15/15, CUDA CTest 24/24·pytest 336/9를 통과했다. Direct grid와 4x4 benchmark의 Compute Sanitizer는 모두 오류 0건이다.
 - 문서 동기화에서 M11·M12의 공개 PR #11/#12 병합 상태와 전용 README 설명을 유지하고, M20의 구현·B-0021·한계·비기본 상태를 README와 TITAN Ledger 전체에 반영했다. Grid는 launch를 줄였지만 exact weight H2D를 줄이지 않았고 total draft H2D는 소폭 증가했으므로 full-model 또는 coding-quality 성능으로 확대 해석하지 않는다.
 - Milestone 20 push/PR correctness run `31351465644`/`31351486146`이 통과했고 PR #29를 공개 integration head `90b20c87`로 rebase merge했다. 병합 후 `main` correctness run `31351649761`도 통과했다. README와 원장은 M11·M12를 포함한 실제 공개 상태와 M20 PR 링크를 기준으로 다시 동기화한다.
+
+## 2026-08-10 Milestone 21 준비
+
+- 공개 문서 reconciliation head `7728acd0`에서 `codex/milestone-twenty-one-resident-moe-layer` 브랜치를 시작했다. 사용자의 Cloud Run 전 상시 승인에 따라 별도 승인 질문 없이 다음 측정 가능한 correctness boundary로 진행한다.
+- B-0021 fixed grid row는 30 MoE grid call, 470 draft stream synchronization, 108,800 activation H2D bytes, 102,880 D2H bytes를 기록한다. Adaptive row는 33 call과 517 synchronization을 기록한다. Weight H2D는 이미 644,160~647,424 bytes로 bounded이므로 다음 병목은 split MoE subcall 사이의 host round trip이다.
+- 선택안은 router를 CPU에 유지하면서 routed-down, resident expert grid, router-slot ordered sum, RMSNorm, routed-up, shared SiTU MLP, final add를 한 stream과 한 최종 synchronization으로 묶는 `moe-layer` boundary다. CUDA Graph cache는 ordered expert-set reuse와 bounded cache policy가 미측정이라 보류하고, 전체 token graph는 KDA/MLA/router/rollback을 동시에 바꾸므로 후속 단계로 남긴다.
+- NVIDIA CUDA Programming Guide는 graph topology의 definition/instantiation/execution을 분리하고 parameter update와 topology-changing re-instantiation을 구분한다. 이 제약 때문에 이번 milestone에서 graph caching을 실행 경계와 함께 도입하지 않는다.
+- M21은 exact FP32/native-MXFP4 resident-only opt-in으로 제한한다. Hard-cap bypass는 launch 전 `executed=false`로 반환해 M20 split CUDA path 전체를 재사용하고, CUDA 오류는 fallback하지 않는다. B-0022는 sync/H2D/D2H 감소를 gate로 삼되 TPS 방향은 강제하지 않는다.
