@@ -36,7 +36,7 @@
 - Consumes: `inspect_shard(path: Path) -> dict[str, SourceTensor]`.
 - Preserves: `_load_plans(source: Path) -> tuple[dict, list[_TensorPlan]]` for writer callers.
 
-- [ ] **Step 1: Write path and ownership RED tests**
+- [x] **Step 1: Write path and ownership RED tests**
 
 Create the test file with the required Korean header and real synthetic shards. Mutate only the copied manifest or copied shard.
 
@@ -93,7 +93,7 @@ def test_converter_rejects_tensor_mapped_to_wrong_referenced_shard(
 
 Add separate tests for an absolute path, duplicate tensor physically present in two referenced shards, undeclared tensor, duplicate manifest JSON key, non-dictionary `weight_map`, empty tensor/shard names, and a symlink resolving outside the source directory where the platform permits symlink creation.
 
-- [ ] **Step 2: Run Task 1 RED**
+- [x] **Step 2: Run Task 1 RED**
 
 Run:
 
@@ -103,7 +103,7 @@ rtk .\.venv\Scripts\python.exe -m pytest tests/python/test_source_manifest_integ
 
 Expected: traversal and ownership cases fail because current `_load_plans()` joins raw paths and merges shard dictionaries with `dict.update()`; schema cases leak non-`K3XError` exceptions or pass.
 
-- [ ] **Step 3: Implement the minimal source boundary**
+- [x] **Step 3: Implement the minimal source boundary**
 
 Create `source_manifest.py` with this public shape.
 
@@ -160,7 +160,7 @@ def inspect_manifest_tensors(
 
 Implement `_resolve_source_shard()` so POSIX and Windows absolute forms, `..`, non-canonical separators, non-files, and resolved paths outside `source.resolve()` raise `SOURCE_SHARD_PATH_ESCAPE`. Validate source format, `config`, `packed_shapes`, and non-empty string `weight_map` entries before resolving any path. Change `_load_plans()` to call these two functions and remove the raw `json.loads`, raw path join, and `dict.update()` path.
 
-- [ ] **Step 4: Run Task 1 GREEN and regression tests**
+- [x] **Step 4: Run Task 1 GREEN and regression tests**
 
 Run:
 
@@ -170,7 +170,7 @@ rtk .\.venv\Scripts\python.exe -m pytest tests/python/test_source_manifest_integ
 
 Expected: all pass; malformed cases leave output, `.partial`, and `.resume.json` absent.
 
-- [ ] **Step 5: Commit Task 1**
+- [x] **Step 5: Commit Task 1**
 
 ```powershell
 rtk git add converter/k3x_converter/source_manifest.py converter/k3x_converter/writer.py tests/python/test_source_manifest_integrity.py

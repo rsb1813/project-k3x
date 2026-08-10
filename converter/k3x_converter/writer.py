@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import re
 import struct
@@ -32,7 +31,12 @@ from .format import (
     root_sha256,
 )
 from .resume import CompletedExtent, ResumeManifest, read_resume_manifest, write_resume_manifest
-from .safetensors_reader import SourceTensor, inspect_shard, iter_tensor_chunks
+from .safetensors_reader import SourceTensor, iter_tensor_chunks
+from .source_manifest import (
+    _resolve_source_shard,
+    inspect_manifest_tensors,
+    load_source_manifest,
+)
 
 CONVERTER_VERSION = "k3x-converter-0.1.0"
 _LAYER_RE = re.compile(r"^model\.layers\.(\d+)\.")
@@ -65,7 +69,10 @@ def _fingerprint_source(
     digest = hashlib.sha256()
     maximum = 0
     shard_names = sorted(set(manifest["weight_map"].values()))
-    paths = [source / "source-manifest.json", *(source / name for name in shard_names)]
+    paths = [
+        source / "source-manifest.json",
+        *(_resolve_source_shard(source, name) for name in shard_names),
+    ]
     for path in paths:
         digest.update(path.name.encode("utf-8") + b"\0")
         with path.open("rb") as stream:
@@ -102,17 +109,8 @@ def _crc_tensor(tensor: SourceTensor, chunk_bytes: int) -> int:
 
 
 def _load_plans(source: Path) -> tuple[dict, list[_TensorPlan]]:
-    manifest = json.loads((source / "source-manifest.json").read_text(encoding="utf-8"))
-    if manifest.get("format") not in (
-        "synthetic-k3-source-v1",
-        "k3-storage-slice-v1",
-    ):
-        raise K3XError("UNSUPPORTED_SOURCE_FORMAT")
-    tensors: dict[str, SourceTensor] = {}
-    for shard_name in sorted(set(manifest["weight_map"].values())):
-        tensors.update(inspect_shard(source / shard_name))
-    if set(tensors) != set(manifest["weight_map"]):
-        raise K3XError("SOURCE_MANIFEST_MISMATCH")
+    manifest = load_source_manifest(source)
+    tensors = inspect_manifest_tensors(source, manifest)
     plans: list[_TensorPlan] = []
     consumed: set[str] = set()
     for name in sorted(tensors):
@@ -212,7 +210,9 @@ def _validate_storage_fixture_hashes(
     shard_names = set(manifest["weight_map"].values())
     if len(shard_names) != 1:
         raise K3XError("INVALID_STORAGE_FIXTURE_SHARD_SET")
-    shard_digest, maximum = _sha256_path(source / next(iter(shard_names)), chunk_bytes)
+    shard_digest, maximum = _sha256_path(
+        _resolve_source_shard(source, next(iter(shard_names))), chunk_bytes
+    )
     if manifest.get("source_sha256") != shard_digest:
         raise K3XError("SOURCE_SHARD_SHA256_MISMATCH")
 
