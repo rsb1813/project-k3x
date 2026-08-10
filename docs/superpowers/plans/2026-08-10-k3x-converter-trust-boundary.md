@@ -269,7 +269,7 @@ rtk git commit -m "fix: validate safetensors metadata structure"
 - Changes: `read_resume_manifest(path: Path) -> ResumeManifest` now raises only `K3XError("INVALID_RESUME_MANIFEST")` for syntax/schema failures.
 - Preserves: `write_resume_manifest(path: Path, manifest: ResumeManifest) -> None` canonical LF JSON publication.
 
-- [ ] **Step 1: Write ledger schema RED tests**
+- [x] **Step 1: Write ledger schema RED tests**
 
 Append parameterized corruptions after producing a one-extent interrupted conversion.
 
@@ -299,7 +299,7 @@ def test_resume_rejects_noncanonical_manifest_schema(
 
 Add raw duplicate-key and malformed-JSON cases. Assert the partial and ledger bytes are unchanged after every rejection.
 
-- [ ] **Step 2: Run Task 3 RED**
+- [x] **Step 2: Run Task 3 RED**
 
 ```powershell
 rtk .\.venv\Scripts\python.exe -m pytest tests/python/test_converter_resume.py -q
@@ -307,11 +307,11 @@ rtk .\.venv\Scripts\python.exe -m pytest tests/python/test_converter_resume.py -
 
 Expected: cases leak `KeyError`, `TypeError`, `ValueError`, or are accepted.
 
-- [ ] **Step 3: Implement strict ledger parsing**
+- [x] **Step 3: Implement strict ledger parsing**
 
 Validate the exact five top-level keys and exact four extent keys. Require `source_fingerprint` and `configuration_fingerprint` to match `[0-9a-f]{64}`, `file_uuid` to match `[0-9a-f]{32}`, `converter_version` to be a non-empty string, `completed` to be a list, extent IDs to match `[0-9a-f]{16}:(data|auxiliary)`, and offset/length/crc32c to be non-boolean integers in unsigned ranges. Catch JSON, Unicode, OS, type, key, and value errors and raise `K3XError("INVALID_RESUME_MANIFEST")` from the original error.
 
-- [ ] **Step 4: Run Task 3 GREEN**
+- [x] **Step 4: Run Task 3 GREEN**
 
 ```powershell
 rtk .\.venv\Scripts\python.exe -m pytest tests/python/test_converter_resume.py tests/python/test_k3x_format.py -q
@@ -319,7 +319,7 @@ rtk .\.venv\Scripts\python.exe -m pytest tests/python/test_converter_resume.py t
 
 Expected: all pass and the canonical writer output round-trips byte-identically.
 
-- [ ] **Step 5: Commit Task 3**
+- [x] **Step 5: Commit Task 3**
 
 ```powershell
 rtk git add converter/k3x_converter/resume.py tests/python/test_converter_resume.py

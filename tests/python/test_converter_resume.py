@@ -11,6 +11,94 @@ from k3x_converter.writer import convert
 from k3x_ref.storage_fixture import write_bounded_expert_source
 
 
+def _interrupted_output(synthetic_source: Path, tmp_path: Path) -> Path:
+    output = tmp_path / "interrupted.k3x"
+    report = convert(synthetic_source, output, chunk_bytes=257, stop_after_extents=1)
+    assert report.completed is False
+    return output
+
+
+def _assert_schema_rejected_without_mutation(source: Path, output: Path) -> None:
+    partial = output.with_suffix(".k3x.partial")
+    resume = output.with_suffix(".k3x.resume.json")
+    partial_before = partial.read_bytes()
+    resume_before = resume.read_bytes()
+
+    with pytest.raises(K3XError, match="INVALID_RESUME_MANIFEST"):
+        convert(source, output, chunk_bytes=257)
+
+    assert partial.read_bytes() == partial_before
+    assert resume.read_bytes() == resume_before
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    (
+        lambda value: value.pop("file_uuid"),
+        lambda value: value.__setitem__("unexpected", 1),
+        lambda value: value.__setitem__("source_fingerprint", "0" * 63),
+        lambda value: value.__setitem__("configuration_fingerprint", "G" * 64),
+        lambda value: value.__setitem__("file_uuid", value["file_uuid"].upper()),
+        lambda value: value.__setitem__("converter_version", ""),
+        lambda value: value.__setitem__("completed", {}),
+        lambda value: value.__setitem__("completed", [[]]),
+        lambda value: value["completed"][0].pop("crc32c"),
+        lambda value: value["completed"][0].__setitem__("unexpected", 1),
+        lambda value: value["completed"][0].__setitem__("extent_id", "bad"),
+        lambda value: value["completed"][0].__setitem__("offset", True),
+        lambda value: value["completed"][0].__setitem__("length", -1),
+        lambda value: value["completed"][0].__setitem__("length", 2**64),
+        lambda value: value["completed"][0].__setitem__("crc32c", True),
+        lambda value: value["completed"][0].__setitem__("crc32c", 2**32),
+    ),
+)
+def test_resume_rejects_invalid_ledger_schema_without_mutating_files(
+    synthetic_source: Path, tmp_path: Path, mutate
+) -> None:
+    output = _interrupted_output(synthetic_source, tmp_path)
+    resume = output.with_suffix(".k3x.resume.json")
+    ledger = json.loads(resume.read_text(encoding="utf-8"))
+    mutate(ledger)
+    resume.write_text(json.dumps(ledger), encoding="utf-8")
+
+    _assert_schema_rejected_without_mutation(synthetic_source, output)
+
+
+@pytest.mark.parametrize("constant", ("NaN", "Infinity", "-Infinity"))
+def test_resume_rejects_non_standard_json_constant_without_mutating_files(
+    synthetic_source: Path, tmp_path: Path, constant: str
+) -> None:
+    output = _interrupted_output(synthetic_source, tmp_path)
+    resume = output.with_suffix(".k3x.resume.json")
+    raw = resume.read_text(encoding="utf-8")
+    resume.write_text(raw.replace("{", f'{{"unexpected":{constant},', 1), encoding="utf-8")
+
+    _assert_schema_rejected_without_mutation(synthetic_source, output)
+
+
+@pytest.mark.parametrize("raw", ("{", "[]"))
+def test_resume_rejects_malformed_or_non_object_json_without_mutating_files(
+    synthetic_source: Path, tmp_path: Path, raw: str
+) -> None:
+    output = _interrupted_output(synthetic_source, tmp_path)
+    resume = output.with_suffix(".k3x.resume.json")
+    resume.write_text(raw, encoding="utf-8")
+
+    _assert_schema_rejected_without_mutation(synthetic_source, output)
+
+
+def test_resume_rejects_duplicate_json_key_without_mutating_files(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    output = _interrupted_output(synthetic_source, tmp_path)
+    resume = output.with_suffix(".k3x.resume.json")
+    raw = resume.read_text(encoding="utf-8")
+    duplicate = '"file_uuid":"' + "0" * 32 + '","file_uuid":'
+    resume.write_text(raw.replace('"file_uuid":', duplicate, 1), encoding="utf-8")
+
+    _assert_schema_rejected_without_mutation(synthetic_source, output)
+
+
 def test_conversion_resumes_without_rewriting_completed_extents(
     synthetic_source: Path, tmp_path: Path
 ) -> None:
