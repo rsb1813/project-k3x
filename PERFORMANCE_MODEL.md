@@ -172,7 +172,19 @@ The bounded released-size fixture fixes hidden width 7,168, routed latent width 
 
 Every row uses 20 measured iterations after three warmups. Split synchronization is 80 and layer synchronization is 20; measured warm weight H2D is zero; maximum error, capacity bypass, and fallback are zero. The oracle backend is released before selected-backend construction, and reported peak VRAM is the larger of the sequential oracle and selected phases: 575,555,632, 628,336,832, and 839,518,976 bytes at 1, 4, and 16 experts. The table is a layer-boundary measurement and has no token, prefill, TTFT, physical PCIe, or NVMe interpretation.
 
-The layer wall regression is much larger than its aggregate kernel-time increase. Source inspection identifies one unamortized term: each complete-layer call performs finiteness scans across all 469,776,384 immutable dense/vector bytes before resident lookup and launch. This is an evidence-backed hypothesis for the next attribution benchmark, not a measured decomposition. Admission-time validation must retain the same malformed/non-finite rejection contract before repeated scans can be removed.
+The B-0023 layer wall regression is much larger than its aggregate kernel-time increase. Source inspection identified one unamortized term: each complete-layer call performed finiteness scans across all 469,776,384 immutable dense/vector bytes before resident lookup and launch. Milestone 23 below measures this attribution while retaining the malformed/non-finite rejection contract.
+
+## Milestone 23 validation traffic attribution
+
+For `C` complete released-size layer calls, per-call validation reads `C × 469,776,384` host bytes. At `C = 20`, B-0024 measures the exact logical scan volume of 9,395,527,680 bytes per row. Admission mode reads 469,776,384 bytes once during cold setup and then performs six constant-time identity lookups per warm call, so measured warm validation bytes are zero.
+
+| Experts | Per-call median | Admission median | Paired change | Per-call validation host time over 20 calls |
+|---:|---:|---:|---:|---:|
+| 1 | 19,570,019 ns | 1,246,879 ns | -93.629% | 368,716,067 ns |
+| 4 | 20,728,924 ns | 1,939,696 ns | -90.643% | 375,352,908 ns |
+| 16 | 24,518,749 ns | 5,220,560 ns | -78.708% | 382,753,782 ns |
+
+These profiler-off medians establish host validation as the dominant B-0023 wall term at this boundary. They do not model token throughput, system-RAM bandwidth under a full checkpoint, PCIe contention, NVMe traffic, or native-Linux scheduling. After admission, expert-count-dependent CUDA work and host orchestration become the next visible terms.
 
 ## Required production measurements
 

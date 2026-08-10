@@ -348,7 +348,15 @@ Milestone 22 adds a CUDA-only diagnostic binary rather than a new production exe
 
 B-0023 validates maximum error 0, zero bypass/fallback, zero measured warm weight H2D, four-to-one synchronization reduction, lower activation H2D and D2H, thirteen layer launches per call, and an exact 14,336-byte routed-norm cold/resident delta at all expert counts. The split oracle backend now has a strict lifetime ending before selected-backend construction, so the two resident tables never overlap during measurement; peak VRAM is the maximum of the two sequential phases. The complete layer still regresses median boundary latency by 1568.62%, 783.91%, and 329.88% at 1, 4, and 16 experts. It remains experimental and non-default.
 
-The currently implemented complete-layer preflight scans every immutable dense weight for finite values on every invocation. At released dimensions those vectors total 469,776,384 bytes before expert payloads. This is a code-backed candidate for the wall/kernel gap, not yet a separately measured causal attribution. The next accepted boundary is to preserve validation at immutable tensor admission while eliminating repeated O(weight-bytes) hot-path scans, then rerun the same matrix. CUDA Graph caching and a larger device-resident token graph remain deferred until that result exists.
+The B-0023 implementation scanned every immutable dense weight for finite values on every invocation. At released dimensions those vectors total 469,776,384 bytes before expert payloads. Milestone 23 below preserves that check at admission, eliminates repeated O(weight-bytes) hot-path scans, and measures the attribution. CUDA Graph caching and a larger device-resident token graph remain deferred.
+
+## Milestone 23 immutable-weight admission validation
+
+Milestone 23 implements the D-048 backend-local admission registry as an experimental mode. The public reference remains `per-call`. `admission` is owned only by exact FP32 `cuda-custom + reused + resident + resident-grid + moe-layer + synchronous + fusion-none` execution with positive capacity. Each identity is `(tensor_id, host_pointer, byte_length, rows, cols)` and is scoped to one backend lifetime. The caller must retain and not mutate admitted host allocations for that lifetime.
+
+The preflight is transactional. It classifies all six immutable dense/vector views, rejects any identity conflict, scans every new view for finite values, and commits identities only if the complete scan succeeds. CUDA resident acquisition begins afterward. A failed last-view scan therefore leaves identity and CUDA residency state unchanged. Input, contributions, scalar parameters, dimensions, duplicate IDs, and native MXFP4 structure remain per-call checks. In-place mutation behind an unchanged pointer is outside the admission contract, which is why the general default remains `per-call`.
+
+Runtime telemetry reports immutable validation scans, identity hits, bytes, and host nanoseconds for target and draft backends. B-0024 confirms the released layer performs six cold scans and no warm scan in admission mode while retaining exact output and physical traffic parity. The result removes validation as the dominant host term but does not select CUDA Graphs or a larger token boundary.
 
 ## TITAN component registry
 
@@ -361,7 +369,7 @@ Status meanings are strict. `Implemented` requires code and passing tests. `Expe
 | CHRONOS | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
 | BLACKSTAR | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
 | PROMETHEUS-X | DSpark-compatible speculative decoding extended with MoE-aware expert-cost scheduling | Proposed |
-| AURORA | Self-speculative K3 fast-path drafter using reduced Top-K, reduced precision, and resident experts while retaining target verification | Experimental replay, persistent reduced-Top-K CPU state, exact transient CUDA draft, bounded exact residency, resident expert-grid, and resident MoE-layer execution implemented; CUDA paths remain non-default after B-0019 through B-0023; reduced precision, eviction-capable residency, and learned drafting proposed |
+| AURORA | Self-speculative K3 fast-path drafter using reduced Top-K, reduced precision, and resident experts while retaining target verification | Experimental replay, persistent reduced-Top-K CPU state, exact transient CUDA draft, bounded exact residency, resident expert-grid, resident MoE-layer execution, and admission validation implemented; CUDA paths remain non-default after B-0019 through B-0024; reduced precision, eviction-capable residency, and learned drafting proposed |
 | ORBIT | Multi-layer lookahead expert residency and prefetch prediction | Proposed |
 | MERCURY | Dynamic CPU/GPU expert placement using predicted transfer-plus-compute latency | Proposed |
 | HELIOS | Automatic hardware/workload tuning for cache, Top-K, speculation, I/O, and placement parameters | Proposed |

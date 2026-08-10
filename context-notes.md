@@ -447,4 +447,11 @@
 
 - 공개 head `e0ab5fa`에서 `codex/milestone-twenty-three-admission-validation` worktree를 만들었다. Baseline CUDA CTest 26/26과 released MoE-layer focused pytest 22/22가 통과했다.
 - D-048 구현 대안 중 resident-table miss 검사는 부분 CUDA mutation 위험 때문에 거부했고, opaque prepared-layer token은 현재 범위에 비해 public API 변경이 커서 미뤘다. Backend-local registry는 complete host preflight, 기존 caller 유지, O(1) hot identity hit를 함께 만족해 채택했다.
-- Admission identity는 tensor ID, host pointer, length, rows, cols이며 backend lifetime 동안 immutable이다. Default는 `per-call`로 유지하고 B-0024에서 `per-call|admission`과 profiler `on|off`를 분리 측정한다.
+
+## 2026-08-10 Milestone 23 구현 및 측정
+
+- `admission`은 여섯 immutable view 전체의 identity 충돌과 finiteness를 먼저 확인하고 모두 성공한 뒤에만 registry를 commit한다. CUDA resident acquisition은 그 다음에 시작하므로 마지막 view 실패도 부분 upload/admission을 남기지 않는다.
+- identity는 backend lifetime 내 tensor ID, host pointer, byte length, rows, cols로 고정했다. 같은 pointer의 in-place mutation은 탐지하지 못하므로 일반 기본값은 `per-call`로 유지하고 exact resident MoE-layer에서만 명시적으로 opt-in한다.
+- profiler-off 행에서 D2H가 0으로 사라지는 초기 B-0024 실패를 실제 로그로 확인했다. D2H physical accounting을 backend runtime counter로 분리한 뒤 profiler on/off가 동일한 traffic을 보고하도록 수정했다.
+- 최종 B-0024는 18행 모두 maximum error 0, warm weight H2D 0, bypass/fallback 0을 통과했다. Per-call은 20회에 9,395,527,680 bytes를 scan했고 admission은 cold 469,776,384 bytes 이후 warm scan 0, identity hit 120을 기록했다.
+- profiler-off complete-layer median은 1/4/16 experts에서 19.570/20.729/24.519 ms에서 1.247/1.940/5.221 ms로 감소했다. 이는 layer microbenchmark attribution이며 token TPS나 full-model 결과가 아니다.

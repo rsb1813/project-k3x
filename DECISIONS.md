@@ -544,11 +544,22 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-048 — Remove repeated immutable-weight validation before graph selection
 
 - Date: 2026-08-10.
-- Status: accepted next boundary; implementation pending.
+- Status: accepted, implemented, and measured as an opt-in experimental mode.
 - Decision: keep `moe-layer` experimental and non-default, defer CUDA Graph and larger device-token work, and first move immutable dense/vector finiteness validation out of the per-call hot path into a correctness-preserving admission or construction boundary. Rerun the same released-dimension matrix before selecting another execution boundary.
 - Alternatives considered: accept the complete layer because it reduces synchronization and transfer traffic; immediately cache a thirteen-operation CUDA Graph; skip directly to a device-resident KDA/MLA/router token graph; attribute and remove the repeated host validation cost first.
 - Evidence: corrected B-0023 uses released hidden 7,168, latent 3,584, intermediate 3,072, and 1/4/16 native expert views under a 1 GiB hard cap, with the split oracle destroyed before selected-backend measurement. All physical gates pass, yet layer median latency is 20.488/20.954/24.422 ms versus split 1.228/2.371/5.681 ms, or +1568.624%/+783.911%/+329.883%. Aggregate kernel time over 20 iterations rises much less, from 15.122/24.507/58.396 ms to 22.971/27.692/61.887 ms. The complete-layer preflight currently scans 469,776,384 immutable dense/vector bytes for finite values on every call before resident lookup and launch.
 - Benchmark result: every pair has maximum error 0, zero fallback/bypass, zero warm weight H2D, synchronization 80→20, lower activation H2D and D2H, and exact 14,336-byte cold/resident norm delta. Traffic savings do not compensate for the current host-side path.
 - Reason accepted: graph caching would optimize launches while leaving a larger unamortized O(weight-bytes) host operation in place, and a whole-token graph would broaden the correctness surface before the isolated layer boundary is sound.
 - Correctness invariant: malformed dimensions, duplicate IDs, non-finite parameters, non-finite immutable tensors, invalid MXFP4 payloads, and hard-cap behavior must still fail or bypass exactly as documented before any CUDA mutation. Validation may be cached only against immutable tensor identity and lifetime.
-- Revisit: after admission-time validation is implemented, rerun B-0023 as a new benchmark with profiler-on/off attribution. Consider CUDA Graphs only if host validation is no longer dominant and ordered routed-set reuse plus bounded graph-cache policy are measured.
+- Benchmark result: B-0024 records exact per-call warm scan volume of 9,395,527,680 bytes and admission warm scan volume of zero over 20 calls. Profiler-off complete-layer medians fall by 93.629%, 90.643%, and 78.708% at 1, 4, and 16 experts, with maximum error 0, zero warm weight H2D, zero bypass/fallback, and profiler-independent physical counters.
+- Revisit: consider CUDA Graphs only after ordered routed-set reuse, graph update/re-instantiation cost, and a bounded graph-cache policy are measured.
+
+## D-049 — Keep admission validation opt-in behind an immutable-host contract
+
+- Date: 2026-08-10.
+- Status: accepted.
+- Decision: retain `per-call` as the general backend and CLI default. Expose `admission` only for exact resident MoE-layer execution and require admitted host pointer, length, shape, and allocation lifetime to remain immutable for the backend lifetime.
+- Alternatives considered: promote admission globally after B-0024; hash all 469,776,384 bytes on every call; add a public prepared-layer token now; keep only per-call validation.
+- Evidence: tensor ID plus pointer/shape identity makes repeat validation constant-time and B-0024 removes 78.7% to 93.6% of median boundary latency. It cannot detect in-place mutation behind the same pointer. The current K3X runtime owns immutable checkpoint buffers, but the public backend API also accepts caller-provided spans.
+- Reason accepted: opt-in ownership captures the measured speedup without weakening the reference contract or expanding the public API. Transactional six-view preflight and conflict tests preserve failure atomicity before CUDA mutation.
+- Revisit: promote admission only when runtime-owned checkpoint allocations carry an enforceable immutable/prepared identity, or introduce a narrowly scoped prepared-layer handle with lifetime ownership.
