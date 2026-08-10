@@ -233,7 +233,7 @@ git commit -m "runtime: execute resident MoE CUDA Graph hits"
 - Update mode owns exactly one current entry and calls `cudaGraphExecUpdate` after a fresh capture.
 - Scratch pointer/capacity change calls one `invalidate_graph_cache()` before new capture.
 
-- [ ] **Step 1: Write RED ordered-set and update tests**
+- [x] **Step 1: Write RED ordered-set and update tests**
 
 Add four independent cases.
 
@@ -244,7 +244,7 @@ Add four independent cases.
 
 Also retain the one-byte bypass and invalid admission tests and assert every graph counter stays zero.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -255,11 +255,11 @@ cmake --build build-cuda -j2 --target test_cuda_moe_layer
 
 Expected: the new eviction/update assertions fail.
 
-- [ ] **Step 3: Implement deterministic eviction and update**
+- [x] **Step 3: Implement deterministic eviction and update**
 
 Destroy victim resources before replacement capture. For `cudaGraphExecUpdate`, record attempt first, success only for `cudaGraphExecUpdateSuccess`, and on any other result record failure, destroy the old executable, and instantiate the new graph. Never reuse a failed fresh entry.
 
-- [ ] **Step 4: Run GREEN and CUDA CTest**
+- [x] **Step 4: Run GREEN and CUDA CTest**
 
 Run:
 
@@ -270,7 +270,7 @@ ctest --test-dir build-cuda --output-on-failure
 
 Expected: all CUDA CTest targets pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add runtime/cuda/backend_cuda.cu tests/cuda/test_cuda_moe_layer.cu tests/cpp/test_backend.cpp

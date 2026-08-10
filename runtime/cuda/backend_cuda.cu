@@ -2058,13 +2058,47 @@ public:
             static_cast<float*>(layer_shared_hidden_scratch_.get());
         auto* device_final =
             static_cast<float*>(layer_final_hidden_scratch_.get());
+        if (options_.cuda_graph != CudaGraphMode::disabled) {
+            std::vector<std::uint64_t> scratch_identity;
+            scratch_identity.reserve(32);
+            const auto append_scratch = [&scratch_identity](const auto& scratch) {
+                scratch_identity.push_back(static_cast<std::uint64_t>(
+                    reinterpret_cast<std::uintptr_t>(scratch.get())));
+                scratch_identity.push_back(scratch.capacity());
+            };
+            append_scratch(layer_input_scratch_);
+            append_scratch(layer_routed_latent_scratch_);
+            append_scratch(layer_descriptor_scratch_);
+            append_scratch(layer_expert_gate_scratch_);
+            append_scratch(layer_expert_up_scratch_);
+            append_scratch(layer_expert_activation_scratch_);
+            append_scratch(layer_expert_output_scratch_);
+            append_scratch(layer_contribution_scratch_);
+            append_scratch(layer_mixed_scratch_);
+            append_scratch(layer_normalized_scratch_);
+            append_scratch(layer_routed_hidden_scratch_);
+            append_scratch(layer_shared_gate_scratch_);
+            append_scratch(layer_shared_up_scratch_);
+            append_scratch(layer_shared_activation_scratch_);
+            append_scratch(layer_shared_hidden_scratch_);
+            append_scratch(layer_final_hidden_scratch_);
+            if (!graph_scratch_identity_.empty() &&
+                graph_scratch_identity_ != scratch_identity) {
+                graph_entries_.clear();
+                if (graph_index_) graph_index_->clear();
+                update_graph_entry_.reset();
+                runtime_stats_.cuda_graph_resident_entries = 0;
+                ++runtime_stats_.cuda_graph_invalidations;
+            }
+            graph_scratch_identity_ = std::move(scratch_identity);
+        }
         std::vector<float> output(hidden_width);
         CudaGraphKey graph_key;
         cuda::GraphEntry* graph_entry = nullptr;
         std::unique_ptr<cuda::GraphEntry> graph_candidate;
         bool graph_cache_hit = false;
         const auto graph_host_start = std::chrono::steady_clock::now();
-        if (options_.cuda_graph == CudaGraphMode::cache) {
+        if (options_.cuda_graph != CudaGraphMode::disabled) {
             graph_key.words = {
                 hidden_width, latent_width, routed_width, intermediate_width,
                 shared_width, experts.size(), weights.routed_down.tensor_id,
@@ -2081,14 +2115,18 @@ public:
                 graph_key.words.push_back(expert.up.tensor_id);
                 graph_key.words.push_back(expert.down.tensor_id);
             }
-            const auto found = graph_entries_.find(graph_key);
-            if (found != graph_entries_.end()) {
-                graph_entry = found->second.get();
-                graph_cache_hit = true;
-                ++runtime_stats_.cuda_graph_cache_hits;
-                graph_index_->touch(graph_key);
-            } else {
-                ++runtime_stats_.cuda_graph_cache_misses;
+            if (options_.cuda_graph == CudaGraphMode::cache) {
+                const auto found = graph_entries_.find(graph_key);
+                if (found != graph_entries_.end()) {
+                    graph_entry = found->second.get();
+                    graph_cache_hit = true;
+                    ++runtime_stats_.cuda_graph_cache_hits;
+                    graph_index_->touch(graph_key);
+                } else {
+                    ++runtime_stats_.cuda_graph_cache_misses;
+                }
+            }
+            if (!graph_entry) {
                 graph_candidate = std::make_unique<cuda::GraphEntry>(
                     &runtime_stats_, graph_key);
                 const auto align_up = [](std::size_t value) {
@@ -2286,7 +2324,29 @@ public:
                 !graph_entry->graph.get() ||
                 cuda::instrument_linear_graph(
                     graph_entry->graph.get(), timing_events, 3, 13) !=
-                    cudaSuccess ||
+                    cudaSuccess) {
+                return Result<ResidentMoeLayerResult>::failure(
+                    ErrorCode::backend_unavailable,
+                    "resident MoE graph capture finalization failed");
+            }
+            bool instantiate = true;
+            if (options_.cuda_graph == CudaGraphMode::update &&
+                update_graph_entry_) {
+                ++runtime_stats_.cuda_graph_update_attempts;
+                cudaGraphExecUpdateResultInfo update_info{};
+                if (cudaGraphExecUpdate(
+                        update_graph_entry_->executable.get(),
+                        graph_entry->graph.get(), &update_info) == cudaSuccess &&
+                    update_info.result == cudaGraphExecUpdateSuccess) {
+                    ++runtime_stats_.cuda_graph_update_successes;
+                    graph_entry->executable =
+                        std::move(update_graph_entry_->executable);
+                    instantiate = false;
+                } else {
+                    ++runtime_stats_.cuda_graph_update_failures;
+                }
+            }
+            if (instantiate &&
                 cudaGraphInstantiate(graph_entry->executable.out(),
                                      graph_entry->graph.get(), nullptr,
                                      nullptr, 0) != cudaSuccess) {
@@ -2294,7 +2354,7 @@ public:
                     ErrorCode::backend_unavailable,
                     "resident MoE graph instantiation failed");
             }
-            ++runtime_stats_.cuda_graph_instantiations;
+            if (instantiate) ++runtime_stats_.cuda_graph_instantiations;
         }
         if (graph_entry &&
             cudaGraphLaunch(graph_entry->executable.get(), stream_) !=
@@ -2330,14 +2390,21 @@ public:
         }
         if (graph_entry) {
             if (graph_candidate) {
-                const auto decision = graph_index_->touch(graph_key);
-                if (decision.evicted) {
-                    graph_entries_.erase(*decision.evicted);
-                    ++runtime_stats_.cuda_graph_cache_evictions;
+                if (options_.cuda_graph == CudaGraphMode::update) {
+                    update_graph_entry_ = std::move(graph_candidate);
+                } else {
+                    const auto decision = graph_index_->touch(graph_key);
+                    if (decision.evicted) {
+                        graph_entries_.erase(*decision.evicted);
+                        ++runtime_stats_.cuda_graph_cache_evictions;
+                    }
+                    graph_entries_.emplace(
+                        graph_key, std::move(graph_candidate));
                 }
-                graph_entries_.emplace(graph_key, std::move(graph_candidate));
                 runtime_stats_.cuda_graph_resident_entries =
-                    graph_entries_.size();
+                    options_.cuda_graph == CudaGraphMode::update
+                        ? 1
+                        : graph_entries_.size();
                 runtime_stats_.cuda_graph_peak_entries = std::max(
                     runtime_stats_.cuda_graph_peak_entries,
                     runtime_stats_.cuda_graph_resident_entries);
@@ -3465,6 +3532,8 @@ private:
     std::optional<PreparedMxfp4Metadata> prepared_mxfp4_;
     std::unique_ptr<BoundedCudaGraphIndex> graph_index_;
     std::map<CudaGraphKey, std::unique_ptr<cuda::GraphEntry>> graph_entries_;
+    std::unique_ptr<cuda::GraphEntry> update_graph_entry_;
+    std::vector<std::uint64_t> graph_scratch_identity_;
 };
 
 Result<std::unique_ptr<ComputeBackend>> cuda_failure(
@@ -3521,11 +3590,6 @@ Result<std::unique_ptr<ComputeBackend>> make_cuda_backend(
             ErrorCode::backend_unavailable,
             "CUDA graph execution requires admission-validated resident cuda-custom moe-layer execution");
     }
-    if (options.cuda_graph == CudaGraphMode::update) {
-        return cuda_failure(ErrorCode::backend_unavailable,
-                            "CUDA graph update execution is not implemented");
-    }
-
     int device = -1;
     if (cudaGetDevice(&device) != cudaSuccess) {
         return cuda_failure(ErrorCode::backend_unavailable,

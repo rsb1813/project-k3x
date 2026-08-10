@@ -167,6 +167,26 @@ int test_bypass_and_validation() {
         bypass_stats.resident_grid_calls != 0 ||
         bypass_stats.stream_synchronization_count != 0) return 12;
 
+    auto graph_bypass_options = options(1);
+    graph_bypass_options.cuda_weight_validation =
+        k3x::CudaWeightValidationMode::admission;
+    graph_bypass_options.cuda_graph = k3x::CudaGraphMode::cache;
+    graph_bypass_options.cuda_graph_entries = 1;
+    auto graph_bypass = k3x::make_cuda_backend(graph_bypass_options);
+    if (!graph_bypass) return 16;
+    const auto graph_bypassed =
+        graph_bypass.value()->resident_mxfp4_moe_layer(
+            fixture.input, fixture.layer(), fixture.experts,
+            fixture.contributions, 1.0e-5F, 2.0F, 1.5F, 7,
+            k3x::ProfilePhase::decode);
+    const auto graph_bypass_stats = graph_bypass.value()->runtime_stats();
+    if (!graph_bypassed || graph_bypassed.value().executed ||
+        graph_bypass_stats.cuda_graph_cache_hits != 0 ||
+        graph_bypass_stats.cuda_graph_cache_misses != 0 ||
+        graph_bypass_stats.cuda_graph_instantiations != 0 ||
+        graph_bypass_stats.cuda_graph_launches != 0 ||
+        graph_bypass_stats.cuda_graph_resident_entries != 0) return 17;
+
     auto invalid = k3x::make_cuda_backend(options(8U * 1024U * 1024U));
     if (!invalid) return 13;
     auto duplicate = fixture.layer();
@@ -273,6 +293,148 @@ int test_graph_cache_hit_with_dynamic_staging() {
     return 0;
 }
 
+int run_graph_sequence(k3x::CudaGraphMode mode, std::size_t capacity,
+                       std::span<const std::size_t> order,
+                       k3x::BackendRuntimeStats* stats_out) {
+    Fixture fixture;
+    auto graph_options = options(8U * 1024U * 1024U);
+    graph_options.cuda_weight_validation =
+        k3x::CudaWeightValidationMode::admission;
+    graph_options.cuda_graph = mode;
+    graph_options.cuda_graph_entries = capacity;
+    auto backend = k3x::make_cuda_backend(graph_options);
+    if (!backend) return 50;
+    auto cpu = k3x::make_cpu_backend();
+    for (const auto expert_index : order) {
+        const std::array selected{fixture.experts[expert_index]};
+        const std::array contributions{fixture.contributions[expert_index]};
+        const auto expected = cpu->resident_mxfp4_moe_layer(
+            fixture.input, fixture.layer(), selected, contributions, 1.0e-5F,
+            2.0F, 1.5F, 7, k3x::ProfilePhase::decode);
+        const auto actual = backend.value()->resident_mxfp4_moe_layer(
+            fixture.input, fixture.layer(), selected, contributions, 1.0e-5F,
+            2.0F, 1.5F, 7, k3x::ProfilePhase::decode);
+        if (!expected || !actual || !expected.value().executed ||
+            !actual.value().executed) return 51;
+        for (std::size_t row = 0; row < hidden_width; ++row) {
+            if (!close(actual.value().output[row],
+                       expected.value().output[row])) return 52;
+        }
+    }
+    *stats_out = backend.value()->runtime_stats();
+    return 0;
+}
+
+int test_graph_eviction_and_update() {
+    k3x::BackendRuntimeStats stats{};
+    constexpr std::array<std::size_t, 4> alternating{0, 1, 0, 1};
+    if (const auto result = run_graph_sequence(
+            k3x::CudaGraphMode::cache, 1, alternating, &stats)) return result;
+    if (stats.cuda_graph_cache_misses != 4 ||
+        stats.cuda_graph_cache_hits != 0 ||
+        stats.cuda_graph_cache_evictions != 3 ||
+        stats.cuda_graph_instantiations != 4 ||
+        stats.cuda_graph_launches != 4 ||
+        stats.cuda_graph_resident_entries != 1 ||
+        stats.cuda_graph_peak_entries != 1) return 53;
+
+    if (const auto result = run_graph_sequence(
+            k3x::CudaGraphMode::cache, 2, alternating, &stats)) return result;
+    if (stats.cuda_graph_cache_misses != 2 ||
+        stats.cuda_graph_cache_hits != 2 ||
+        stats.cuda_graph_cache_evictions != 0 ||
+        stats.cuda_graph_instantiations != 2 ||
+        stats.cuda_graph_launches != 4 ||
+        stats.cuda_graph_resident_entries != 2 ||
+        stats.cuda_graph_peak_entries != 2) return 54;
+
+    constexpr std::array<std::size_t, 2> updating{0, 1};
+    if (const auto result = run_graph_sequence(
+            k3x::CudaGraphMode::update, 1, updating, &stats)) return result;
+    if (stats.cuda_graph_instantiations != 1 ||
+        stats.cuda_graph_update_attempts != 1 ||
+        stats.cuda_graph_update_successes != 1 ||
+        stats.cuda_graph_update_failures != 0 ||
+        stats.cuda_graph_launches != 2 ||
+        stats.cuda_graph_resident_entries != 1 ||
+        stats.cuda_graph_peak_entries != 1) return 55;
+    return 0;
+}
+
+int test_graph_scratch_invalidation() {
+    Fixture fixture;
+    auto graph_options = options(8U * 1024U * 1024U);
+    graph_options.cuda_weight_validation =
+        k3x::CudaWeightValidationMode::admission;
+    graph_options.cuda_graph = k3x::CudaGraphMode::cache;
+    graph_options.cuda_graph_entries = 2;
+    auto backend = k3x::make_cuda_backend(graph_options);
+    if (!backend) return 60;
+    auto cpu = k3x::make_cpu_backend();
+    for (const auto count : {std::size_t{1}, maximum_experts}) {
+        const auto experts = std::span(fixture.experts).first(count);
+        const auto contributions =
+            std::span(fixture.contributions).first(count);
+        const auto expected = cpu->resident_mxfp4_moe_layer(
+            fixture.input, fixture.layer(), experts, contributions, 1.0e-5F,
+            2.0F, 1.5F, 7, k3x::ProfilePhase::decode);
+        const auto actual = backend.value()->resident_mxfp4_moe_layer(
+            fixture.input, fixture.layer(), experts, contributions, 1.0e-5F,
+            2.0F, 1.5F, 7, k3x::ProfilePhase::decode);
+        if (!expected || !actual || !actual.value().executed) return 61;
+        for (std::size_t row = 0; row < hidden_width; ++row) {
+            if (!close(actual.value().output[row],
+                       expected.value().output[row])) return 62;
+        }
+    }
+    const auto stats = backend.value()->runtime_stats();
+    if (stats.cuda_graph_cache_misses != 2 ||
+        stats.cuda_graph_invalidations != 1 ||
+        stats.cuda_graph_cache_evictions != 0 ||
+        stats.cuda_graph_resident_entries != 1 ||
+        stats.cuda_graph_peak_entries != 1) return 63;
+    return 0;
+}
+
+int test_graph_ordered_identity() {
+    Fixture fixture;
+    auto graph_options = options(8U * 1024U * 1024U);
+    graph_options.cuda_weight_validation =
+        k3x::CudaWeightValidationMode::admission;
+    graph_options.cuda_graph = k3x::CudaGraphMode::cache;
+    graph_options.cuda_graph_entries = 2;
+    auto backend = k3x::make_cuda_backend(graph_options);
+    if (!backend) return 70;
+    auto cpu = k3x::make_cpu_backend();
+    for (const bool reverse : {false, true}) {
+        const std::array experts{
+            fixture.experts[reverse ? 1 : 0],
+            fixture.experts[reverse ? 0 : 1],
+        };
+        const std::array contributions{
+            fixture.contributions[reverse ? 1 : 0],
+            fixture.contributions[reverse ? 0 : 1],
+        };
+        const auto expected = cpu->resident_mxfp4_moe_layer(
+            fixture.input, fixture.layer(), experts, contributions, 1.0e-5F,
+            2.0F, 1.5F, 7, k3x::ProfilePhase::decode);
+        const auto actual = backend.value()->resident_mxfp4_moe_layer(
+            fixture.input, fixture.layer(), experts, contributions, 1.0e-5F,
+            2.0F, 1.5F, 7, k3x::ProfilePhase::decode);
+        if (!expected || !actual || !actual.value().executed) return 71;
+        for (std::size_t row = 0; row < hidden_width; ++row) {
+            if (!close(actual.value().output[row],
+                       expected.value().output[row])) return 72;
+        }
+    }
+    const auto stats = backend.value()->runtime_stats();
+    if (stats.cuda_graph_cache_misses != 2 ||
+        stats.cuda_graph_cache_hits != 0 ||
+        stats.cuda_graph_instantiations != 2 ||
+        stats.cuda_graph_resident_entries != 2) return 73;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -280,5 +442,10 @@ int main() {
     if (const auto result = run_full_fit(4)) return result + 20;
     if (const auto result = test_bypass_and_validation()) return result;
     if (const auto result = test_admission_validation()) return result;
-    return test_graph_cache_hit_with_dynamic_staging();
+    if (const auto result = test_graph_cache_hit_with_dynamic_staging()) {
+        return result;
+    }
+    if (const auto result = test_graph_eviction_and_update()) return result;
+    if (const auto result = test_graph_scratch_invalidation()) return result;
+    return test_graph_ordered_identity();
 }
