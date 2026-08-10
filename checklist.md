@@ -122,9 +122,9 @@
 - [x] Compare resident grid, routed-set CUDA Graph cache, and whole-device draft graph alternatives.
 - [x] Write and self-review the accepted resident-grid design.
 - [x] Write and self-review the detailed TDD implementation plan.
-- [ ] Implement the CPU oracle and CUDA rectangular grid through witnessed RED/GREEN cycles.
-- [ ] Integrate AURORA CLI, exact fallback, telemetry, and B-0021 runner.
-- [ ] Run B-0021, the complete verification matrix, sanitizer, and evidence cross-checks.
+- [x] Implement the CPU oracle and CUDA rectangular grid through witnessed RED/GREEN cycles.
+- [x] Integrate AURORA CLI, exact fallback, telemetry, and B-0021 runner.
+- [x] Run B-0021, the complete verification matrix, sanitizer, and evidence cross-checks.
 - [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
 
 ## Milestone 12 — Fused routed accumulation CUDA kernel

@@ -501,3 +501,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason CUDA Graphs deferred: ordered expert-set reuse and a safe bounded graph-cache policy are unmeasured, so graph capture would combine execution and caching policy in one experiment.
 - Reason whole-device graph deferred: it would simultaneously replace attention, recurrent state, routing, argmax, and token lifecycle boundaries, making correctness attribution too broad for one milestone.
 - Revisit: compare direct-grid launch counts and end-to-end B-0021 results first. If host activation round trips still dominate, move next to a device-resident layer or whole-token graph rather than stacking speculative graph caching.
+
+## D-045 — Retain the resident CUDA expert grid as an opt-in path
+
+- Date: 2026-08-10.
+- Status: accepted, implemented, and measured as a non-default experimental path.
+- Decision: expose `resident-grid` only for exact `cuda-custom + ffn-block + reused + resident + synchronous + fusion-none` execution. Require the complete requested expert set to be resident, execute gate/up/SiTU/down as four grid-wide launches, preserve separate expert/token outputs and stable CPU accumulation order, and fall back for the whole request to the existing exact serial path on any residency bypass.
+- Alternatives considered: promote the grid to the CUDA default after the synthetic result; cache ordered routed-set CUDA Graphs; move the complete draft token graph and recurrent state to the device; retain grouped execution as the only CUDA path.
+- Evidence: direct 1x1, 1x4, 2x2, and 4x4 native-MXFP4 cases match the CPU oracle; the 4x4 diagnostic has maximum absolute error `5.96e-08`; capability, full-fit, one-byte bypass, token-major, expert-major, counter, and artifact tests pass. CPU CTest 14/14 with pytest 290 passed/55 skipped, liburing/direct CTest 15/15 with pytest 296 passed/49 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 24/24 with pytest 336 passed/9 skipped all pass. Compute Sanitizer reports zero errors for the direct grid tests.
+- Benchmark result: B-0021 reduces MoE launches by 75% in all four matched pairs. Grid decode improves over grouped by 10.794% fixed token, 24.086% adaptive token, 38.005% fixed expert-major, and 21.857% adaptive expert-major, while preserving exact target tokens, final state, routing, acceptance, Reader bytes, and resident weight H2D. Grid fallbacks are zero.
+- Reason accepted: the result validates the smallest dependency-closed launch-amortization boundary without changing routing, arithmetic, proposal lifecycle, target authority, or defaults.
+- Reason not promoted to default: AURORA currently supplies one token per grid call, total draft H2D increases slightly, host orchestration and activation round trips remain, and the benchmark is a tiny synthetic WSL2 workload without coding-quality or full-model evidence.
+- Revisit: repeat on native Linux and representative layer dimensions, then compare a device-resident layer/token graph against routed-set CUDA Graph caching. Keep dynamic eviction and reduced precision as separate policy and quality experiments.
