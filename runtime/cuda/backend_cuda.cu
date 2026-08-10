@@ -4,6 +4,7 @@
 
 #include "async_mxfp4_pipeline.cuh"
 #include "device_memory.cuh"
+#include "graph_resources.cuh"
 #include "mxfp4.cuh"
 #include "moe_layer.cuh"
 #include "resident_weights.cuh"
@@ -15,8 +16,10 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <cstdint>
 #include <limits>
 #include <map>
@@ -181,6 +184,10 @@ public:
             resident_weights_ = std::make_unique<cuda::ResidentWeightTable>(
                 options_.cuda_resident_bytes, &memory_stats_, &runtime_stats_,
                 stream_);
+        }
+        if (options_.cuda_graph == CudaGraphMode::cache) {
+            graph_index_ = std::make_unique<BoundedCudaGraphIndex>(
+                options_.cuda_graph_entries);
         }
     }
 
@@ -2051,15 +2058,107 @@ public:
             static_cast<float*>(layer_shared_hidden_scratch_.get());
         auto* device_final =
             static_cast<float*>(layer_final_hidden_scratch_.get());
+        std::vector<float> output(hidden_width);
+        CudaGraphKey graph_key;
+        cuda::GraphEntry* graph_entry = nullptr;
+        std::unique_ptr<cuda::GraphEntry> graph_candidate;
+        bool graph_cache_hit = false;
+        const auto graph_host_start = std::chrono::steady_clock::now();
+        if (options_.cuda_graph == CudaGraphMode::cache) {
+            graph_key.words = {
+                hidden_width, latent_width, routed_width, intermediate_width,
+                shared_width, experts.size(), weights.routed_down.tensor_id,
+                weights.routed_norm.tensor_id, weights.routed_up.tensor_id,
+                weights.shared.gate.tensor_id, weights.shared.up.tensor_id,
+                weights.shared.down.tensor_id,
+                std::bit_cast<std::uint32_t>(epsilon),
+                std::bit_cast<std::uint32_t>(situ_beta),
+                situ_linear.has_value() ? 1ULL : 0ULL,
+                situ_linear ? std::bit_cast<std::uint32_t>(*situ_linear) : 0ULL,
+            };
+            for (const auto& expert : experts) {
+                graph_key.words.push_back(expert.gate.tensor_id);
+                graph_key.words.push_back(expert.up.tensor_id);
+                graph_key.words.push_back(expert.down.tensor_id);
+            }
+            const auto found = graph_entries_.find(graph_key);
+            if (found != graph_entries_.end()) {
+                graph_entry = found->second.get();
+                graph_cache_hit = true;
+                ++runtime_stats_.cuda_graph_cache_hits;
+                graph_index_->touch(graph_key);
+            } else {
+                ++runtime_stats_.cuda_graph_cache_misses;
+                graph_candidate = std::make_unique<cuda::GraphEntry>(
+                    &runtime_stats_, graph_key);
+                const auto align_up = [](std::size_t value) {
+                    constexpr auto alignment = alignof(std::max_align_t);
+                    return (value + alignment - 1) & ~(alignment - 1);
+                };
+                auto& layout = graph_candidate->layout;
+                layout.input_offset = 0;
+                layout.contribution_offset = align_up(input_bytes);
+                layout.descriptor_offset = align_up(
+                    layout.contribution_offset + contribution_bytes);
+                layout.output_offset = align_up(
+                    layout.descriptor_offset + descriptor_bytes);
+                layout.total_bytes = layout.output_offset + hidden_bytes;
+                if (graph_candidate->staging.allocate(layout.total_bytes) !=
+                    cudaSuccess) {
+                    return Result<ResidentMoeLayerResult>::failure(
+                        ErrorCode::backend_unavailable,
+                        "resident MoE graph staging allocation failed");
+                }
+                graph_entry = graph_candidate.get();
+            }
+            auto* staging = static_cast<std::byte*>(graph_entry->staging.get());
+            std::memcpy(staging + graph_entry->layout.input_offset,
+                        input.data(), input_bytes);
+            std::memcpy(staging + graph_entry->layout.contribution_offset,
+                        contributions.data(), contribution_bytes);
+            std::memcpy(staging + graph_entry->layout.descriptor_offset,
+                        descriptors.data(), descriptor_bytes);
+        }
+        auto* staging = graph_entry
+            ? static_cast<std::byte*>(graph_entry->staging.get())
+            : nullptr;
+        const void* host_input = graph_entry
+            ? staging + graph_entry->layout.input_offset
+            : static_cast<const void*>(input.data());
+        const void* host_contributions = graph_entry
+            ? staging + graph_entry->layout.contribution_offset
+            : static_cast<const void*>(contributions.data());
+        const void* host_descriptors = graph_entry
+            ? staging + graph_entry->layout.descriptor_offset
+            : static_cast<const void*>(descriptors.data());
+        void* host_output = graph_entry
+            ? staging + graph_entry->layout.output_offset
+            : static_cast<void*>(output.data());
+        const bool capture_graph = graph_entry && !graph_cache_hit;
+        if (capture_graph &&
+            cudaStreamBeginCapture(stream_, cudaStreamCaptureModeThreadLocal) !=
+                cudaSuccess) {
+            return Result<ResidentMoeLayerResult>::failure(
+                ErrorCode::backend_unavailable,
+                "resident MoE graph capture start failed");
+        }
+        const auto abort_graph_capture = [&] {
+            if (!capture_graph) return;
+            cudaGraph_t discarded{};
+            cudaStreamEndCapture(stream_, &discarded);
+            if (discarded) cudaGraphDestroy(discarded);
+        };
         const auto h2d_start = std::chrono::steady_clock::now();
-        if (cudaMemcpyAsync(device_input, input.data(), input_bytes,
+        if (!graph_cache_hit &&
+            (cudaMemcpyAsync(device_input, host_input, input_bytes,
                             cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(device_contributions, contributions.data(),
+            cudaMemcpyAsync(device_contributions, host_contributions,
                             contribution_bytes, cudaMemcpyHostToDevice,
                             stream_) != cudaSuccess ||
-            cudaMemcpyAsync(device_descriptors, descriptors.data(),
+            cudaMemcpyAsync(device_descriptors, host_descriptors,
                             descriptor_bytes, cudaMemcpyHostToDevice,
-                            stream_) != cudaSuccess) {
+                            stream_) != cudaSuccess)) {
+            abort_graph_capture();
             return Result<ResidentMoeLayerResult>::failure(
                 ErrorCode::backend_unavailable,
                 "resident MoE layer upload failed");
@@ -2067,12 +2166,14 @@ public:
 
         constexpr float alpha = 1.0F;
         constexpr float beta = 0.0F;
+        const bool inline_timing = !capture_graph;
         const auto launch_dense = [&](std::size_t pair, DensePlan* plan,
                                       const void* weight, const float* source,
                                       float* output) {
             auto& start = resident_moe_layer_events_[pair * 2];
             auto& end = resident_moe_layer_events_[pair * 2 + 1];
-            return cudaEventRecord(start.get(), stream_) == cudaSuccess &&
+            return (!inline_timing ||
+                    cudaEventRecord(start.get(), stream_) == cudaSuccess) &&
                    cublasLtMatmul(
                        handle_, plan->operation.get(), &alpha, weight,
                        plan->weight_layout.get(), source,
@@ -2080,7 +2181,8 @@ public:
                        plan->output_layout.get(), output,
                        plan->output_layout.get(), &plan->heuristic.algo,
                        nullptr, 0, stream_) == CUBLAS_STATUS_SUCCESS &&
-                   cudaEventRecord(end.get(), stream_) == cudaSuccess;
+                   (!inline_timing ||
+                    cudaEventRecord(end.get(), stream_) == cudaSuccess);
         };
         const auto launch_grid = [&](std::size_t pair,
                                      std::size_t projection,
@@ -2089,22 +2191,27 @@ public:
                                      cuda::ExpertGridInputLayout layout) {
             auto& start = resident_moe_layer_events_[pair * 2];
             auto& end = resident_moe_layer_events_[pair * 2 + 1];
-            return cudaEventRecord(start.get(), stream_) == cudaSuccess &&
+            return (!inline_timing ||
+                    cudaEventRecord(start.get(), stream_) == cudaSuccess) &&
                    cuda::launch_mxfp4_matvec_grid(
                        source,
                        device_descriptors + projection * experts.size(),
                        output, rows, cols, experts.size(), 1, layout,
                        stream_) == cudaSuccess &&
-                   cudaEventRecord(end.get(), stream_) == cudaSuccess;
+                   (!inline_timing ||
+                    cudaEventRecord(end.get(), stream_) == cudaSuccess);
         };
         const auto launch_simple = [&](std::size_t pair, auto&& launch) {
             auto& start = resident_moe_layer_events_[pair * 2];
             auto& end = resident_moe_layer_events_[pair * 2 + 1];
-            return cudaEventRecord(start.get(), stream_) == cudaSuccess &&
+            return (!inline_timing ||
+                    cudaEventRecord(start.get(), stream_) == cudaSuccess) &&
                    launch() == cudaSuccess &&
-                   cudaEventRecord(end.get(), stream_) == cudaSuccess;
+                   (!inline_timing ||
+                    cudaEventRecord(end.get(), stream_) == cudaSuccess);
         };
-        if (!launch_dense(0, plans[0], dense_members[0].primary,
+        if (!graph_cache_hit &&
+            (!launch_dense(0, plans[0], dense_members[0].primary,
                           device_input, device_latent) ||
             !launch_grid(1, 0, device_latent, device_expert_gate,
                          intermediate_width, latent_width,
@@ -2153,35 +2260,92 @@ public:
                 return cuda::launch_vector_add(
                     device_routed, device_shared, device_final,
                     hidden_width, stream_);
-            })) {
+            }))) {
+            abort_graph_capture();
             return Result<ResidentMoeLayerResult>::failure(
                 ErrorCode::backend_unavailable,
                 "resident MoE layer launch failed");
         }
 
-        std::vector<float> output(hidden_width);
         const auto d2h_start = std::chrono::steady_clock::now();
-        if (cudaMemcpyAsync(output.data(), device_final, hidden_bytes,
-                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
-            cudaStreamSynchronize(stream_) != cudaSuccess) {
+        if (!graph_cache_hit &&
+            cudaMemcpyAsync(host_output, device_final, hidden_bytes,
+                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess) {
+            abort_graph_capture();
             return Result<ResidentMoeLayerResult>::failure(
                 ErrorCode::backend_unavailable,
                 "resident MoE layer output or synchronization failed");
         }
+        if (capture_graph) {
+            std::array<cudaEvent_t, 26> timing_events{};
+            for (std::size_t index = 0; index < timing_events.size(); ++index) {
+                timing_events[index] = resident_moe_layer_events_[index].get();
+            }
+            if (cudaStreamEndCapture(stream_, graph_entry->graph.out()) !=
+                    cudaSuccess ||
+                !graph_entry->graph.get() ||
+                cuda::instrument_linear_graph(
+                    graph_entry->graph.get(), timing_events, 3, 13) !=
+                    cudaSuccess ||
+                cudaGraphInstantiate(graph_entry->executable.out(),
+                                     graph_entry->graph.get(), nullptr,
+                                     nullptr, 0) != cudaSuccess) {
+                return Result<ResidentMoeLayerResult>::failure(
+                    ErrorCode::backend_unavailable,
+                    "resident MoE graph instantiation failed");
+            }
+            ++runtime_stats_.cuda_graph_instantiations;
+        }
+        if (graph_entry &&
+            cudaGraphLaunch(graph_entry->executable.get(), stream_) !=
+                cudaSuccess) {
+            return Result<ResidentMoeLayerResult>::failure(
+                ErrorCode::backend_unavailable,
+                "resident MoE graph launch failed");
+        }
+        if (cudaStreamSynchronize(stream_) != cudaSuccess) {
+            return Result<ResidentMoeLayerResult>::failure(
+                ErrorCode::backend_unavailable,
+                "resident MoE layer output or synchronization failed");
+        }
+        if (graph_entry) {
+            ++runtime_stats_.cuda_graph_launches;
+            std::memcpy(output.data(), host_output, hidden_bytes);
+        }
         std::array<std::uint64_t, 13> durations{};
         for (std::size_t pair = 0; pair < durations.size(); ++pair) {
             float milliseconds = 0.0F;
-            if (cudaEventElapsedTime(
-                    &milliseconds,
-                    resident_moe_layer_events_[pair * 2].get(),
-                    resident_moe_layer_events_[pair * 2 + 1].get()) !=
-                cudaSuccess) {
+            const auto timing_status = cudaEventElapsedTime(
+                &milliseconds,
+                resident_moe_layer_events_[pair * 2].get(),
+                resident_moe_layer_events_[pair * 2 + 1].get());
+            if (timing_status != cudaSuccess) {
                 return Result<ResidentMoeLayerResult>::failure(
                     ErrorCode::backend_unavailable,
-                    "resident MoE layer timing failed");
+                    std::string("resident MoE layer timing failed: ") +
+                        cudaGetErrorString(timing_status));
             }
             durations[pair] = static_cast<std::uint64_t>(std::llround(
                 static_cast<double>(milliseconds) * 1.0e6));
+        }
+        if (graph_entry) {
+            if (graph_candidate) {
+                const auto decision = graph_index_->touch(graph_key);
+                if (decision.evicted) {
+                    graph_entries_.erase(*decision.evicted);
+                    ++runtime_stats_.cuda_graph_cache_evictions;
+                }
+                graph_entries_.emplace(graph_key, std::move(graph_candidate));
+                runtime_stats_.cuda_graph_resident_entries =
+                    graph_entries_.size();
+                runtime_stats_.cuda_graph_peak_entries = std::max(
+                    runtime_stats_.cuda_graph_peak_entries,
+                    runtime_stats_.cuda_graph_resident_entries);
+            }
+            runtime_stats_.cuda_graph_host_nanoseconds +=
+                static_cast<std::uint64_t>(std::chrono::duration_cast<
+                    std::chrono::nanoseconds>(std::chrono::steady_clock::now() -
+                                             graph_host_start).count());
         }
 
         std::array<std::uint64_t, 3> expert_logical_bytes{};
@@ -3299,6 +3463,8 @@ private:
     std::unique_ptr<cuda::ResidentWeightTable> resident_weights_;
     std::unique_ptr<cuda::AsyncMxfp4Pipeline> async_pipeline_;
     std::optional<PreparedMxfp4Metadata> prepared_mxfp4_;
+    std::unique_ptr<BoundedCudaGraphIndex> graph_index_;
+    std::map<CudaGraphKey, std::unique_ptr<cuda::GraphEntry>> graph_entries_;
 };
 
 Result<std::unique_ptr<ComputeBackend>> cuda_failure(
@@ -3355,9 +3521,9 @@ Result<std::unique_ptr<ComputeBackend>> make_cuda_backend(
             ErrorCode::backend_unavailable,
             "CUDA graph execution requires admission-validated resident cuda-custom moe-layer execution");
     }
-    if (options.cuda_graph != CudaGraphMode::disabled) {
+    if (options.cuda_graph == CudaGraphMode::update) {
         return cuda_failure(ErrorCode::backend_unavailable,
-                            "CUDA graph execution is not implemented");
+                            "CUDA graph update execution is not implemented");
     }
 
     int device = -1;

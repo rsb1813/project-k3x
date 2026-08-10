@@ -174,7 +174,7 @@ git commit -m "runtime: define strict CUDA Graph modes"
 - `cuda::GraphEntry` owns a key, graph, executable, one `PinnedBuffer`, staging offsets, and last output size.
 - `CudaBackend::capture_resident_moe_graph(...)` captures the exact existing H2D, 13 logical operations, timing events, and D2H sequence.
 
-- [ ] **Step 1: Write RED warm-hit and dynamic-staging tests**
+- [x] **Step 1: Write RED warm-hit and dynamic-staging tests**
 
 Extend the CUDA fixture to create `cache` options with capacity 1 and admission validation. Call the same ordered expert set twice with different input and contribution values. Compare both outputs with independent CPU calls and assert this delta after two successful calls.
 
@@ -187,7 +187,7 @@ if (stats.cuda_graph_cache_misses != 1 ||
     stats.cuda_graph_peak_entries != 1) return 40;
 ```
 
-- [ ] **Step 2: Build and run RED**
+- [x] **Step 2: Build and run RED**
 
 Run:
 
@@ -198,11 +198,11 @@ ctest --test-dir build-cuda --output-on-failure -R '^cuda_moe_layer$'
 
 Expected: compile or assertion failure because graph execution does not exist.
 
-- [ ] **Step 3: Implement entry resources and capture**
+- [x] **Step 3: Implement entry resources and capture**
 
 Allocate one combined pinned buffer for input, contribution, descriptor, and output slices with `align_up(offset, alignof(std::max_align_t))`. Copy dynamic host data into staging before capture or launch. Capture only after validation, resident acquisition, dense plan resolution, and scratch reservation succeed. Instantiate and launch; insert the entry only after synchronization and exact output extraction succeed.
 
-- [ ] **Step 4: Run GREEN and Compute Sanitizer smoke**
+- [x] **Step 4: Run GREEN and Compute Sanitizer smoke**
 
 Run:
 
@@ -214,7 +214,7 @@ compute-sanitizer --tool memcheck --error-exitcode=99 ./build-cuda/test_cuda_moe
 
 Expected: exact output and `ERROR SUMMARY: 0 errors`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add CMakeLists.txt runtime/cuda/graph_resources.cuh runtime/cuda/graph_resources.cu runtime/cuda/backend_cuda.cu tests/cuda/test_cuda_moe_layer.cu

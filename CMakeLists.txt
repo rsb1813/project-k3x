@@ -39,6 +39,7 @@ if(K3X_ENABLE_CUDA)
         runtime/cuda/async_mxfp4_pipeline.cu
         runtime/cuda/backend_cuda.cu
         runtime/cuda/device_memory.cu
+        runtime/cuda/graph_resources.cu
         runtime/cuda/mxfp4.cu
         runtime/cuda/moe_layer.cu
         runtime/cuda/pinned_memory.cu
