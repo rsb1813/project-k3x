@@ -394,9 +394,11 @@ These are synthetic converter-integrity timings, not throughput targets. Peak RS
 
 ## Milestone 26 — official bounded range discovery
 
-K3X now resolves the public `moonshotai/Kimi-K3` repository to pinned commit `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`, verifies the 59,764,096-byte model index by its declared LFS SHA-256, recomputes the Git blob identity of `config.json`, and parses the exact safetensors header through HTTP ranges. Redirects, hosts, statuses, byte ceilings, `Content-Range`, object sizes, JSON structure, shard ownership, released dimensions, and w1/w2/w3 role mapping all fail closed.
+K3X now resolves the public `moonshotai/Kimi-K3` repository to pinned commit `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`, verifies the 59,764,096-byte model index by its declared LFS SHA-256, recomputes the Git blob identity of `config.json`, and parses the exact safetensors header through HTTP ranges. Redirects, hosts, statuses, byte ceilings, `Content-Range`, object sizes, raw path segments, JSON structure, shard ownership, released dimensions, and w1/w2/w3 role mapping all fail closed.
 
 B-0027 materializes only layer 1, expert 0 from shard 2. The six official U8 tensors form the contiguous shard range `[1,268,562,960, 1,286,110,224)`, exactly 17,547,264 bytes. The payload is repacked into a content-addressed local microshard, hashed per tensor, converted through the unchanged K3X writer, reopened by the strict Reader, and marked `OPTIONAL_STORAGE_FIXTURE`. The C++ runtime rejects generation from the resulting real-weight artifact with exit code 4 and `NON_EXECUTABLE_ARTIFACT` before graph execution.
+
+The evidence verifier binds deterministic repository, snapshot, config, index, shard, expert-layout, traffic, payload, per-tensor, microshard, and K3X-root identities independently of the record's own hashes. Consistently rehashed tampering therefore does not become valid evidence.
 
 | Evidence | Measured value |
 |---|---:|

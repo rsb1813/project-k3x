@@ -543,3 +543,9 @@
 - The sole live materialization downloaded exact range `[1,268,562,960, 1,286,110,224)` and produced payload/microshard/K3X-root SHA-256 `1d925f…c36c`, `ed3f07…4a34`, and `d585d2…58be`.
 - Strict B-0027 verification passed. Real bytes remain ignored below `artifacts/`; only summary JSON/CSV are tracked.
 - Fresh gates pass CPU 15/15 + 451/70, liburing 16/16 + 453/68, ASan/UBSan 16/16, CUDA 27/27 + 511/10, and Compute Sanitizer zero errors. The real artifact directly returns exit 4 and `NON_EXECUTABLE_ARTIFACT`.
+
+## 2026-08-10 — Milestone 26 final trust-boundary review
+
+- Review found that `PurePosixPath` normalized repeated and dot path segments before validation. Witnessed RED cases reached shard-set comparison instead of failing as invalid index input; `ef37b96` validates original slash-separated segments first and the affected parser suite passes 71 tests.
+- Review also showed that mutually consistent JSON/CSV rehashing could alter deterministic repository, snapshot, config, index, expert-layout, or artifact identities because the strict verifier checked only a subset. Nine witnessed RED mutations now fail against independent B-0027 constants in `fb7fb49`; the committed evidence still verifies.
+- Fresh final-review gates pass CPU CTest 15/15 with pytest 462 passed/70 skipped, liburing/direct CTest 16/16 with pytest 464 passed/68 skipped, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 516 passed/16 skipped. No C++ or CUDA production path changed after the existing zero-error Compute Sanitizer run.

@@ -378,11 +378,13 @@ B-0026 measures fresh, clean-resume, and 8,192-byte orphan-resume synthetic conv
 
 ## Milestone 26 official bounded range discovery
 
-Milestone 26 is implemented and measured by B-0027. `official_transport.py` permits only the fixed public Hugging Face authority and trusted CDN suffix, caps every body, validates every redirect, and requires exact HTTP 206 range metadata. `official_source.py` binds the resolved 40-hex commit, API file identities, full 96-shard index set, index LFS SHA-256, config Git blob SHA-1, released text dimensions, safetensors header, and exact tensor ownership before any tensor payload request.
+Milestone 26 is implemented and measured by B-0027. `official_transport.py` permits only the fixed public Hugging Face authority and trusted CDN suffix, caps every body, validates every redirect, and requires exact HTTP 206 range metadata. `official_source.py` binds the resolved 40-hex commit, API file identities, full 96-shard index set, index LFS SHA-256, config Git blob SHA-1, released text dimensions, safetensors header, and exact tensor ownership before any tensor payload request. Paths are validated in their original textual form before `PurePosixPath` normalization, so empty, dot, parent, repeated-separator, and backslash segments fail closed.
 
 The accepted live unit is fixed to layer 1, expert 0. Official names under `language_model.model.layers.1.block_sparse_moe.experts.0` map w1 to gate, w2 to down, and w3 to up according to the official implementation. Their packed/scale extents are contiguous and form `[1,268,562,960, 1,286,110,224)`. Dry-run fetches metadata and header only; materialization adds one exact 17,547,264-byte payload request.
 
 Materialization publishes a content-addressed six-tensor safetensors microshard and `k3-storage-slice-v1` manifest atomically, records official provenance outside K3X v1, reuses an existing object only after digest verification, and rejects a finalized K3X whose source fingerprint is not bound to the current manifest. The unchanged writer verifies all local source/tensor hashes and emits `OPTIONAL_STORAGE_FIXTURE`; both Python Reader validation and the C++ `NON_EXECUTABLE_ARTIFACT` guard pass.
+
+The B-0027 strict verifier independently binds every deterministic official snapshot, config, index, selected-expert, traffic, payload, microshard, K3X-root, and per-tensor identity. Canonical record and CSV hashes alone are not treated as authority because a mutually consistent pair can be recomputed after tampering. Observation time and wall time remain measured values rather than fixed identities.
 
 This is implemented storage/conversion compatibility, not real graph execution. Provenance is `transport-pinned-range` because the complete shard LFS digest was not recomputed. Full-shard verification, a real CUDA layer invocation, full-model manufacturing, and SKYFORGE remain future boundaries.
 

@@ -939,10 +939,12 @@ Artifact SHA-256 values for fresh, clean-resume, and orphan-resume are `7abe2955
 
 Runner SHA-256 is `d292991ada21dd305078d2fe90116450d7a5184606962891bc1c383c47487ca0`; canonical aggregate SHA-256 is `4181e012dc0ccc1570f5ca18336ee3037327b32da63b8128bcc5423c0191100c`; summary JSON/CSV SHA-256 is `f78de6ef9bb3b47d1cb3d56af1969d1d3d465025a21ee0b25f2d97df27e38116` / `c98f12b39fdc7f76bd4cd824cb5fc9da9b44208dd27a954c958f6e3bf3b6ea6d`. The verifier checks schema, exact scenario order, aggregate and file digests, JSON/CSV parity, LF-only evidence, bounded reads, Reader validity, resume reuse, and absence of token/GPU/quality fields.
 
+B-0026 is a correctness and recovery audit, not a performance forecast. It permits bounded official-source discovery to begin; it does not establish publisher authenticity, full-checkpoint conversion, cloud execution, token throughput, or a production memory ceiling.
+
 ## B-0027 — Milestone 26 official bounded expert conversion
 
 - Date: 2026-08-10.
-- Commit: discovery/transport implementation through `5b893a0`; live evidence recorded immediately afterward on the same code.
+- Commit: discovery/transport implementation through `5b893a0`; live evidence recorded immediately afterward on the same code; final path and verifier review fixes through `fb7fb49`.
 - Hardware: AMD Ryzen 7 9800X3D host under WSL2 Ubuntu 24.04.4. RTX 5080 was present but the B-0027 conversion did not execute GPU kernels.
 - Model/checkpoint: official public `moonshotai/Kimi-K3` snapshot at `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`; layer 1, expert 0 only.
 - Mode: strict dry-run followed by one `transport-pinned-range` materialization. No complete shard, full checkpoint, or paid cloud resource.
@@ -964,17 +966,11 @@ Runner SHA-256 is `d292991ada21dd305078d2fe90116450d7a5184606962891bc1c383c47487
 
 The payload SHA-256 is `1d925fa7bd91331511783b7423204d20b6337cd672b403fd017b7b42f421c36c`; content-addressed microshard SHA-256 is `ed3f07d595f37d90b1688de21ba0cdc012ee92c67dd92c460c0c73b2ef374a34`; K3X root SHA-256 is `d585d283325e13e1316a0194c2d6274dd89ef75a28b96b02f02733290b7658be`. The six committed tensor digests are retained in the summary JSON.
 
-Summary JSON/CSV SHA-256 is `57ebd9d85ed3ae55a4e2ab01f023bc451faf02cd7b6e69f478d11e3ea73e982a` / `7c6238b466aca5c4eb52e83c1ba17139af15f4634074ee23a970f1ade992bdd6`. The strict verifier checks official revision/index/shard identities, JSON/CSV parity, canonical record and CSV digests, exact range/traffic values, six tensor/artifact hashes, non-executable optional identity, provenance level, and absence of token/GPU/NVMe/quality claims.
+Summary JSON/CSV SHA-256 is `57ebd9d85ed3ae55a4e2ab01f023bc451faf02cd7b6e69f478d11e3ea73e982a` / `7c6238b466aca5c4eb52e83c1ba17139af15f4634074ee23a970f1ade992bdd6`. The strict verifier checks repository/revision/snapshot/config/index/shard/expert identities, JSON/CSV parity, canonical record and CSV digests, exact deterministic range/traffic values, six tensor/artifact hashes, non-executable optional identity, provenance level, and absence of token/GPU/NVMe/quality claims. Nine consistently rehashed identity mutations are rejected.
 
-Fresh verification passes CPU CTest 15/15 with pytest 451 passed/70 skipped, liburing/direct CTest 16/16 with pytest 453 passed/68 skipped, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 511 passed/10 skipped. The unchanged released MoE-layer Compute Sanitizer path reports `ERROR SUMMARY: 0 errors`. The actual real-weight K3X exits 4 with `NON_EXECUTABLE_ARTIFACT` before graph execution.
+Fresh final-review verification passes CPU CTest 15/15 with pytest 462 passed/70 skipped, liburing/direct CTest 16/16 with pytest 464 passed/68 skipped, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 516 passed/16 skipped. The unchanged released MoE-layer Compute Sanitizer path reports `ERROR SUMMARY: 0 errors`. The actual real-weight K3X exits 4 with `NON_EXECUTABLE_ARTIFACT` before graph execution.
 
 The next bottleneck is not source compatibility or bounded conversion. It is the unimplemented dependency-closed real CUDA layer invocation. B-0027 makes no TPS or full-model performance claim.
-
-Fresh verification passes CPU CTest 15/15 with pytest 405 passed/70 skipped; liburing/direct CTest 16/16 with capability-aware pytest 407 passed/68 skipped; ASan/UBSan CTest 16/16; and CUDA CTest 27/27 with pytest 459 passed/16 skipped. The unchanged released MoE-layer Compute Sanitizer regression reports `ERROR SUMMARY: 0 errors`. This CUDA gate does not extend parser coverage.
-
-PR #42 was rebase-merged at public integration head `ca8c544e`. Push and pull-request correctness runs `31379029215`/`31379074639` passed, as did pull-request CodeQL `31379074656`. Post-merge `main` correctness `31379311743` and CodeQL `31379311695` also passed.
-
-B-0026 is a correctness and recovery audit, not a performance forecast. It permits bounded official-source discovery to begin; it does not establish publisher authenticity, full-checkpoint conversion, cloud execution, token throughput, or a production memory ceiling.
 
 ## Pending benchmark gates
 

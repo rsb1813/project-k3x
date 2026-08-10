@@ -4,7 +4,7 @@
 
 Milestone 26 bounded official Kimi K3 range discovery and conversion is locally implemented and measured by B-0027; public PR integration is pending. The pinned official index, config Git blob, shard header, tensor ownership, and exact layer-1 expert-0 range are verified before one 17,547,264-byte payload request. The real native-MXFP4 bytes round-trip through a content-addressed microshard and K3X while remaining an untracked, non-executable storage fixture. Milestone 25 remains the latest public integration at `ca8c544e` through PR #42.
 
-State audited on 2026-08-10 on the Milestone 26 branch after B-0027. Fresh CPU, liburing/direct, ASan/UBSan, CUDA, strict evidence verification, the actual-artifact runtime guard, and one unchanged Compute Sanitizer regression gate pass. One bounded official expert is present only under ignored `artifacts/`; no complete shard, full checkpoint, or paid cloud resource is in use.
+State audited on 2026-08-10 on the Milestone 26 branch after final trust-boundary review. Fresh CPU, liburing/direct, ASan/UBSan, CUDA, strict evidence verification, the actual-artifact runtime guard, and one unchanged Compute Sanitizer regression gate pass. One bounded official expert is present only under ignored `artifacts/`; no complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -108,7 +108,7 @@ State audited on 2026-08-10 on the Milestone 26 branch after B-0027. Fresh CPU, 
 
 ## Work in progress
 
-- Milestone 26 implementation, live dry-run, one exact official expert conversion, B-0027 verifier, full local verification, README, and TITAN Ledger synchronization are complete. Final Critical/Important review, public PR merge, and post-merge CI remain.
+- Milestone 26 implementation, live dry-run, one exact official expert conversion, B-0027 verifier, full local verification, final Critical/Important review, README, and TITAN Ledger synchronization are complete. Public PR merge and post-merge CI remain.
 - The actual official K3X storage fixture exits 4 with `NON_EXECUTABLE_ARTIFACT`; M27 must add a separate dependency-closed real CUDA layer path rather than weakening that guard.
 - Milestone 24 implementation, B-0025 measurement, committed-evidence validation, full local verification, final Critical/Important review, PR #40 merge, and post-merge correctness/CodeQL are complete.
 - B-0025 shows stable/alternating deltas are mixed from -4.407% to +4.466%, while rotating cache churn remains 6.091%–11.574% slower. This is insufficient for a default change without real routing and native-Linux end-to-end evidence.
@@ -159,7 +159,7 @@ State audited on 2026-08-10 on the Milestone 26 branch after B-0027. Fresh CPU, 
 
 ## Next concrete tasks
 
-1. Complete Milestone 26 Critical/Important review, publish the branch, merge the public PR, and verify post-merge correctness and CodeQL.
+1. Publish the reviewed Milestone 26 branch, merge the public PR, and verify post-merge correctness and CodeQL.
 2. Design Milestone 27 around the untracked B-0027 recipe and the smallest dependency-closed real CUDA MoE-layer invocation without weakening `NON_EXECUTABLE_ARTIFACT` for storage fixtures.
 3. Execute and compare the real expert against an independent CPU decode oracle, then measure exact H2D, VRAM, kernel, and wall time without making token-throughput claims.
 
@@ -190,8 +190,8 @@ B-0027 closes the immediate official-source compatibility and bounded real-byte 
 
 ## Last known-good state
 
-- Local Milestone 26 code head `5b893a0` plus B-0027 evidence verifies official commit `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`, index SHA-256 `a1c521…febd`, payload SHA-256 `1d925f…c36c`, microshard SHA-256 `ed3f07…4a34`, and K3X root `d585d2…58be`. Summary JSON/CSV SHA-256 are `57ebd9…982a` / `7c6238…bdd6`.
-- Fresh Milestone 26 verification passes CPU CTest 15/15 with pytest 451 passed/70 skipped, liburing/direct CTest 16/16 with pytest 453 passed/68 skipped, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 511 passed/10 skipped. The unchanged released MoE-layer Compute Sanitizer reports `ERROR SUMMARY: 0 errors`, and the actual real-weight storage artifact returns exit 4 with `NON_EXECUTABLE_ARTIFACT`.
+- Local Milestone 26 review head `fb7fb49` plus B-0027 evidence verifies official commit `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`, index SHA-256 `a1c521…febd`, payload SHA-256 `1d925f…c36c`, microshard SHA-256 `ed3f07…4a34`, and K3X root `d585d2…58be`. Summary JSON/CSV SHA-256 are `57ebd9…982a` / `7c6238…bdd6`. Raw repeated/dot path segments fail before normalization, and nine consistently rehashed official-identity mutations fail strict verification.
+- Fresh Milestone 26 final-review verification passes CPU CTest 15/15 with pytest 462 passed/70 skipped, liburing/direct CTest 16/16 with pytest 464 passed/68 skipped, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 516 passed/16 skipped. The unchanged released MoE-layer Compute Sanitizer reports `ERROR SUMMARY: 0 errors`, and the actual real-weight storage artifact returns exit 4 with `NON_EXECUTABLE_ARTIFACT`.
 - Public Milestone 25 evidence commit `cce5223` contains the B-0026 canonical summary JSON/CSV, and integration head `ca8c544e` contains strict source/safetensors/resume validation, exact orphan-suffix recovery, synchronized documentation, and the final committed-boundary correction. Runner/aggregate/summary JSON/CSV SHA-256 are `d292991ada21dd305078d2fe90116450d7a5184606962891bc1c383c47487ca0`, `4181e012dc0ccc1570f5ca18336ee3037327b32da63b8128bcc5423c0191100c`, `f78de6ef9bb3b47d1cb3d56af1969d1d3d465025a21ee0b25f2d97df27e38116`, and `c98f12b39fdc7f76bd4cd824cb5fc9da9b44208dd27a954c958f6e3bf3b6ea6d`.
 - Fresh Milestone 25 verification passes CPU CTest 15/15 with pytest 405 passed/70 skipped, liburing/direct CTest 16/16 with capability-aware pytest 407 passed/68 skipped, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 459 passed/16 skipped. The unchanged released MoE-layer Compute Sanitizer regression reports `ERROR SUMMARY: 0 errors`.
 - PR #42 push and pull-request correctness runs `31379029215`/`31379074639`, pull-request CodeQL `31379074656`, and post-merge `main` correctness/CodeQL `31379311743`/`31379311695` passed.
