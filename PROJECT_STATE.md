@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 23 admission-time immutable-weight validation is implemented, measured, documented, locally fully verified, and Critical/Important re-reviewed on `codex/milestone-twenty-three-admission-validation`; public integration remains. The opt-in exact resident MoE-layer path now performs one transactional six-view preflight and constant-time identity hits while the general reference default remains `per-call`. Final review found one CUDA AURORA draft ownership omission; the target validation mode now propagates only to a draft MoE-layer boundary, and a RED/GREEN regression plus direct CUDA execution covers it. Focused re-review found no remaining Critical/Important issue. B-0024 contains 18 released-dimension profiler/validation rows and no token-throughput interpretation.
+Milestone 23 admission-time immutable-weight validation is implemented, measured, documented, Critical/Important re-reviewed, and publicly integrated through PR #38 at `e24cac2`. The opt-in exact resident MoE-layer path performs one transactional six-view preflight and constant-time identity hits while the general reference default remains `per-call`. Final review found and corrected one CUDA AURORA draft ownership omission; focused re-review found no remaining Critical/Important issue. B-0024 contains 18 released-dimension profiler/validation rows and no token-throughput interpretation. The next engineering gate is a bounded routed-set reuse and CUDA Graph cost study, not an automatic graph-default change.
 
-State audited on 2026-08-10 at local Milestone 23 evidence head `105a860` plus synchronized documentation and final-review changes. Fresh verification passes CPU CTest 14/14 with Python 311 passed/68 skipped, liburing/direct CTest 15/15 with Python 313 passed/66 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 26/26 with Python 369 passed/10 skipped. The post-review ownership fix also passes direct released synthetic CUDA execution and CUDA CTest 26/26; GitHub correctness remains the pending Python authority for that final diff. Focused committed-evidence verification passes 3/3. Compute Sanitizer reports zero errors for both the complete CUDA MoE-layer regression and one released admission benchmark invocation. The latest public baseline remains Milestone 22 integration head `e4820a18`, whose correctness and CodeQL gates passed. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 at public Milestone 23 integration head `e24cac2`. Fresh local verification passes CPU CTest 14/14 with Python 311 passed/68 skipped, liburing/direct CTest 15/15 with Python 313 passed/66 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 26/26 with Python 369 passed/10 skipped. The post-review ownership fix also passes direct released synthetic CUDA execution and CUDA CTest 26/26. Push/PR correctness `31363433423`/`31363437230`, PR CodeQL `31363437226`, and post-merge `main` correctness/CodeQL `31363673811`/`31363673857` all passed. Focused committed-evidence verification passes 3/3, and both Compute Sanitizer paths report zero errors. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
@@ -101,7 +101,7 @@ State audited on 2026-08-10 at local Milestone 23 evidence head `105a860` plus s
 
 ## Work in progress
 
-- Milestone 23 implementation, B-0024 measurement, committed-evidence validation, full local verification, README, and TITAN Ledger synchronization are complete. Final read-only review and public integration remain.
+- Milestone 23 implementation, B-0024 measurement, committed-evidence validation, full local verification, final review and correction, README/TITAN Ledger synchronization, PR #38 integration, and post-merge correctness/CodeQL are complete.
 - B-0024 proves the former per-call 469,776,384-byte scan dominated the released complete-layer wall path. Admission rows retain six cold scans but report zero warm scan bytes and 120 identity hits across 20 calls.
 - Admission remains opt-in because unchanged-pointer in-place mutation is outside its caller contract. The K3X runtime's model-owned checkpoint buffers are immutable, but the general backend API still accepts external spans.
 - Milestone 21 design, implementation, telemetry, B-0022 runner, formal evidence, digest checks, full local verification, final review, performance model, README, TITAN Ledger, PR #31 integration, and post-merge CI are complete.
@@ -126,7 +126,7 @@ State audited on 2026-08-10 at local Milestone 23 evidence head `105a860` plus s
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Worktree: `C:\Users\jolib\Documents\project-k3x\.worktrees\milestone-twenty-three-admission-validation` on `codex/milestone-twenty-three-admission-validation`.
+- Current publication reconciliation branch: `codex/milestone-twenty-three-publication` from public `main` head `e24cac2`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build-cpu`, `build-uring`, `build-asan`, and `build-cuda`.
 
 ## Known failures and blockers
@@ -148,9 +148,9 @@ State audited on 2026-08-10 at local Milestone 23 evidence head `105a860` plus s
 
 ## Next concrete tasks
 
-1. Complete one Critical/Important-only final read-only review and apply at most one correction batch.
-2. Publish Milestone 23 through a public PR, merge after correctness and CodeQL, and verify post-merge `main`.
-3. Measure ordered routed-set reuse, graph update/re-instantiation cost, and bounded graph-cache behavior before selecting CUDA Graphs; keep dynamic eviction and reduced precision separate.
+1. Write the bounded routed-set reuse and CUDA Graph attribution design before changing the runtime default.
+2. Measure graph update/re-instantiation cost and a hard-cap graph-cache policy against the exact non-graph reference.
+3. Keep dynamic eviction, reduced precision, and a larger device-token boundary as separate decisions with independent quality and traffic gates.
 
 ## Hardware assumptions
 
@@ -177,10 +177,10 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Local Milestone 23 evidence head `105a860` plus current synchronized documentation contains atomic admission validation, profiler-independent physical telemetry, the canonical 18-row B-0024 matrix, 18 raw JSON records, one LF summary CSV, and committed-evidence verification.
+- Public Milestone 23 integration head `e24cac2` contains atomic admission validation, profiler-independent physical telemetry, the canonical 18-row B-0024 matrix, 18 raw JSON records, one LF summary CSV, committed-evidence verification, and the final CUDA AURORA draft ownership correction.
 - Fresh Milestone 23 verification passes CPU CTest 14/14 with pytest 311/68, liburing/direct CTest 15/15 with pytest 313/66, ASan/UBSan CTest 15/15, and CUDA CTest 26/26 with pytest 369/10. Both requested Compute Sanitizer paths report `ERROR SUMMARY: 0 errors`.
 - B-0024 artifact/runner/aggregate/summary JSON/CSV SHA-256 are `e087ff78284e99760a7d113cf744562878537a6379e7a63be95585eec8b9f1be`, `952fd739d7654b8a4685e62c045d5727955b792244519dd09667f1e7acff441b`, `0747d22f6e409c81ab788cb936b65c9a75a13ed2f37255d6f468c7899f3026d1`, `4c4af570602d3322120ac445ad881c00f96ac0f63f3a39dc45a8032620cc8c82`, and `a49614469b71f01b9d86ff93bf996937cb0d9e93ed272044a136491d6575b68f`.
-- Public Milestone 22 integration head `e4820a18` contains the released benchmark, corrected B-0023 runner, six raw rows, summary CSV/JSON, oracle-lifetime regression coverage, committed-evidence verification, synchronized architecture/performance/decision documents, and the English README. PR #36 is merged.
+- Public Milestone 23 push/PR correctness runs `31363433423`/`31363437230` and PR CodeQL `31363437226` passed; PR #38 is merged at `e24cac2`. Post-merge `main` correctness `31363673811` and CodeQL `31363673857` also passed.
 - Fresh pre-review Milestone 22 verification passes CPU CTest 14/14 and pytest 305/67, liburing/direct CTest 15/15 and pytest 307/65, ASan/UBSan CTest 15/15, and CUDA CTest 26/26 with pytest 362/10. Post-correction publication gates pass CUDA CTest 26/26 and focused live/evidence pytest 22/22; the released one-expert complete-layer Compute Sanitizer reports zero errors.
 - Corrected B-0023 artifact/runner/aggregate/summary JSON/CSV SHA-256 are `e087ff78284e99760a7d113cf744562878537a6379e7a63be95585eec8b9f1be`, `3c2695fc31adc01040a992098180a83cb58947d85858412eab62282b66ec6baf`, `88c51b6a58340a4325b2b09faa0fb63d1bc5f4439542261383f6070dbe526ade`, `d67fe356735ddc38e238a9e86e7f46ec3729ef24bc27d1f286aacaaabf0af954`, and `4a95494381c87862aa6933811248f1fd2ff35a28d88e576917da57e50e87d621`.
 - Public Milestone 22 post-merge `main` correctness run `31359158926` and CodeQL run `31359158878` passed at `e4820a18`.

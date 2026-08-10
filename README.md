@@ -50,9 +50,9 @@ flowchart LR
 | Milestone 20 | [PR #29 merged](https://github.com/rsb1813/project-k3x/pull/29) at `90b20c87` | B-0021 resident CUDA expert grid; four matched pairs preserve exact target behavior and reduce MoE launches 75% |
 | Milestone 21 | [PR #31 merged](https://github.com/rsb1813/project-k3x/pull/31) at `97eb3e4e` | B-0022 resident CUDA MoE layer; exact target behavior and lower sync/H2D/D2H, mixed decode result |
 | Milestone 22 | [PR #36 merged](https://github.com/rsb1813/project-k3x/pull/36) at `e4820a18` | B-0023 released-dimension MoE boundary; exact traffic gates pass, complete layer latency is 4.30×–16.69× split |
-| Milestone 23 | Publication pending | B-0024 attributes the regression to repeated 469,776,384-byte validation and measures an exact admission-time fast path |
+| Milestone 23 | [PR #38 merged](https://github.com/rsb1813/project-k3x/pull/38) at `e24cac2` | B-0024 attributes the regression to repeated 469,776,384-byte validation and measures an exact admission-time fast path |
 
-PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 22 integration head `e4820a18`; its branch and pull-request correctness runs `31358991710` and `31359003481` passed, followed by successful post-merge `main` correctness run `31359158926` and CodeQL run `31359158878`.
+PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 23 integration head `e24cac2`; its branch and pull-request correctness runs `31363433423` and `31363437230` passed with CodeQL `31363437226`, followed by successful post-merge `main` correctness `31363673811` and CodeQL `31363673857`.
 
 ## Why a dedicated engine
 
@@ -338,6 +338,8 @@ B-0024 repeats the released-dimension 1/4/16-expert boundary with profiler colle
 | 16 | 24.519 ms | 5.221 ms | -78.71% |
 
 All 18 rows preserve maximum absolute error 0, zero warm weight H2D, zero bypass/fallback, exact synchronization/launch/traffic identities, and profiler on/off physical-counter parity. This is a direct released-dimension layer microbenchmark with `routing_semantics=false`; it is not token throughput, a full-checkpoint result, or a coding-quality measurement. CUDA Graph selection remains deferred until ordered routed-set reuse and bounded graph-cache behavior are measured.
+
+Milestone 23 is published through [PR #38](https://github.com/rsb1813/project-k3x/pull/38) at `e24cac2`. Pull-request and post-merge correctness and CodeQL gates all passed.
 
 ```bash
 python -m tools.ablate_cuda_admission_validation \

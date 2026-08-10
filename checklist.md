@@ -167,7 +167,7 @@
 - [x] Update README, architecture, performance model, decisions, benchmarks, checklist, and context notes.
 - [x] Run the complete CPU/liburing/ASan/CUDA/sanitizer verification matrix.
 - [x] Complete the final Critical/Important-only read-only review.
-- [ ] Publish through a public PR, merge, verify post-merge correctness/CodeQL, and update `PROJECT_STATE.md` last.
+- [x] Publish through a public PR, merge, verify post-merge correctness/CodeQL, and update `PROJECT_STATE.md` last.
 
 ## Milestone 12 — Fused routed accumulation CUDA kernel
 
