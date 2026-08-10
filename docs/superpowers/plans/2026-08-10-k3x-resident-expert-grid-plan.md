@@ -404,11 +404,11 @@ git commit -m "feat: route AURORA through resident expert grids"
 - Consumes the seven Task 1 runtime counters.
 - Produces matching C++ JSON and Python JSON/CSV fields, including `draft_` copies.
 
-- [ ] **Step 1: Add failing schema tests**
+- [x] **Step 1: Add failing schema tests**
 
 Require ordinary CPU output to serialize all seven target and draft fields as zero. Require full-fit CUDA draft output to report positive draft calls/experts/tokens/expert-tokens, `kernel_launches == calls * 4`, zero draft fallback, and zero target values. Require one-byte output to report positive draft fallback and zero successful draft calls.
 
-- [ ] **Step 2: Run schema tests and witness RED**
+- [x] **Step 2: Run schema tests and witness RED**
 
 ```bash
 K3X_BUILD_DIR=build /home/jolib/.venvs/k3x-m1/bin/python -m pytest -q \
@@ -418,11 +418,11 @@ K3X_BUILD_DIR=build /home/jolib/.venvs/k3x-m1/bin/python -m pytest -q \
 
 Expected: missing-key or dataclass-constructor failures.
 
-- [ ] **Step 3: Propagate fields without aggregation ambiguity**
+- [x] **Step 3: Propagate fields without aggregation ambiguity**
 
 Add zero-default dataclass fields. Treat all seven as deterministic identity counters: each measured sample must equal the first sample. Do not median, average, or sum across repetitions. Include `cuda_batching` and `aurora_draft_batching` in option consistency tuples.
 
-- [ ] **Step 4: Run focused and complete CPU schema tests**
+- [x] **Step 4: Run focused and complete CPU schema tests**
 
 ```bash
 K3X_BUILD_DIR=build /home/jolib/.venvs/k3x-m1/bin/python -m pytest -q \
@@ -431,7 +431,7 @@ K3X_BUILD_DIR=build /home/jolib/.venvs/k3x-m1/bin/python -m pytest -q \
 
 Expected: pass with CUDA-only cases skipped under the CPU build.
 
-- [ ] **Step 5: Commit telemetry**
+- [x] **Step 5: Commit telemetry**
 
 ```bash
 git add runtime/src/main.cpp tools/benchmark_synthetic.py \

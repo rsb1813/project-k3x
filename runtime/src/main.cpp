@@ -1188,7 +1188,21 @@ int main(int argc, char** argv) {
            << ",\"draft_resident_weight_bytes\":"
            << draft_runtime.resident_weight_bytes
            << ",\"draft_peak_resident_weight_bytes\":"
-           << draft_runtime.peak_resident_weight_bytes;
+           << draft_runtime.peak_resident_weight_bytes
+           << ",\"draft_resident_grid_calls\":"
+           << draft_runtime.resident_grid_calls
+           << ",\"draft_resident_grid_experts\":"
+           << draft_runtime.resident_grid_experts
+           << ",\"draft_resident_grid_tokens\":"
+           << draft_runtime.resident_grid_tokens
+           << ",\"draft_resident_grid_expert_tokens\":"
+           << draft_runtime.resident_grid_expert_tokens
+           << ",\"draft_resident_grid_kernel_launches\":"
+           << draft_runtime.resident_grid_kernel_launches
+           << ",\"draft_resident_grid_fallbacks\":"
+           << draft_runtime.resident_grid_fallbacks
+           << ",\"draft_resident_grid_descriptor_h2d_bytes\":"
+           << draft_runtime.resident_grid_descriptor_h2d_bytes;
     output << ",\"draft_proposal_calls\":"
            << result.value().draft_proposal_calls
            << ",\"draft_candidate_tokens\":"
@@ -1366,6 +1380,17 @@ int main(int argc, char** argv) {
            << runtime.grouped_projection_calls
            << ",\"grouped_projection_members\":"
            << runtime.grouped_projection_members
+           << ",\"resident_grid_calls\":" << runtime.resident_grid_calls
+           << ",\"resident_grid_experts\":" << runtime.resident_grid_experts
+           << ",\"resident_grid_tokens\":" << runtime.resident_grid_tokens
+           << ",\"resident_grid_expert_tokens\":"
+           << runtime.resident_grid_expert_tokens
+           << ",\"resident_grid_kernel_launches\":"
+           << runtime.resident_grid_kernel_launches
+           << ",\"resident_grid_fallbacks\":"
+           << runtime.resident_grid_fallbacks
+           << ",\"resident_grid_descriptor_h2d_bytes\":"
+           << runtime.resident_grid_descriptor_h2d_bytes
            << ",\"ffn_block_calls\":" << runtime.ffn_block_calls
            << ",\"ffn_block_experts\":" << runtime.ffn_block_experts
            << ",\"batched_expert_ffn_calls\":"
