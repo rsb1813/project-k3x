@@ -813,7 +813,8 @@ private:
     Vector activated_mlp(const Vector& input, const std::string& base,
                          std::size_t intermediate, std::size_t layer,
                          ProfilePhase phase) {
-        if (backend_.options().cuda_boundary == CudaBoundaryMode::ffn_block) {
+        if (backend_.options().cuda_boundary == CudaBoundaryMode::ffn_block ||
+            backend_.options().cuda_boundary == CudaBoundaryMode::moe_layer) {
             const DenseMlpView weights{
                 dense_weight(base + ".gate", intermediate, input.size()),
                 dense_weight(base + ".up", intermediate, input.size()),
@@ -971,16 +972,19 @@ private:
             }
         }
         if (backend_.options().cuda_transfer ==
-            CudaTransferMode::synchronous) {
+                CudaTransferMode::synchronous &&
+            backend_.options().cuda_boundary != CudaBoundaryMode::moe_layer) {
             latent = matvec(base + "routed_down_proj",
                             config_.latent, config_.hidden, input,
                             layer, phase);
         }
         Vector shared;
-        if (expert_loader_) {
+        if (expert_loader_ &&
+            backend_.options().cuda_boundary != CudaBoundaryMode::moe_layer) {
             shared = shared_expert(input, layer, phase);
         }
-        if (backend_.options().cuda_boundary == CudaBoundaryMode::ffn_block) {
+        if (backend_.options().cuda_boundary == CudaBoundaryMode::ffn_block ||
+            backend_.options().cuda_boundary == CudaBoundaryMode::moe_layer) {
             std::vector<ExpertPayloadHandle> payloads;
             payloads.reserve(selected_k);
             for (std::size_t slot = 0; slot < selected_k; ++slot) {
@@ -1002,6 +1006,43 @@ private:
             for (std::size_t slot = 0; slot < selected_k; ++slot) {
                 contributions.push_back(
                     decision.normalized_weights[slot] * config_.routed_scale);
+            }
+            if (backend_.options().cuda_boundary ==
+                CudaBoundaryMode::moe_layer) {
+                const ResidentMoeLayerView layer_weights{
+                    dense_weight(base + "routed_down_proj", config_.latent,
+                                 config_.hidden),
+                    {fnv1a64((base + "routed_norm").c_str()),
+                     tensor(base + "routed_norm")},
+                    dense_weight(base + "routed_up_proj", config_.hidden,
+                                 config_.latent),
+                    {
+                        dense_weight(base + "shared_gate",
+                                     config_.expert_intermediate,
+                                     config_.hidden),
+                        dense_weight(base + "shared_up",
+                                     config_.expert_intermediate,
+                                     config_.hidden),
+                        dense_weight(base + "shared_down", config_.hidden,
+                                     config_.expert_intermediate),
+                    },
+                };
+                auto layer_result = backend_.resident_mxfp4_moe_layer(
+                    input, layer_weights, expert_views, contributions,
+                    config_.epsilon, config_.situ_beta, config_.situ_linear,
+                    static_cast<std::uint32_t>(layer), phase);
+                if (!layer_result) {
+                    throw std::runtime_error(
+                        "resident MoE layer backend failure");
+                }
+                if (layer_result.value().executed) {
+                    return std::move(layer_result.value().output);
+                }
+                latent = matvec(base + "routed_down_proj", config_.latent,
+                                config_.hidden, input, layer, phase);
+                if (expert_loader_) {
+                    shared = shared_expert(input, layer, phase);
+                }
             }
             if (backend_.options().cuda_moe_fusion ==
                 CudaMoeFusionMode::routed_accumulate) {

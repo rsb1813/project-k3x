@@ -402,13 +402,13 @@ git commit -m "feat: execute resident CUDA MoE layers"
 - Produces: `--aurora-draft-boundary ffn-block|moe-layer` with `ffn-block` default.
 - Preserves: one router decision, one selected payload set, and unchanged split-path fallback.
 
-- [ ] **Step 1: Add failing CLI ownership and parity tests**
+- [x] **Step 1: Add failing CLI ownership and parity tests**
 
 Add a CPU-build case requesting target `--cuda-boundary moe-layer`; expect typed `BACKEND_UNAVAILABLE`, no output file, and no Reader activity. Add invalid CUDA combinations for transient weights, zero capacity, grouped batching, prefetch, routed accumulation, BF16, replay, speculation none with draft option, and CPU draft backend.
 
 Add live CUDA cases for full-fit and one-byte capacity. Full-fit must have positive layer calls and zero fallbacks. One-byte must have zero successful layer calls, positive layer fallback, exact target tokens/state/routes, and positive existing grid fallback after the split path runs.
 
-- [ ] **Step 2: Run RED and witness unknown argument/boundary failures**
+- [x] **Step 2: Run RED and witness unknown argument/boundary failures**
 
 Run:
 
@@ -421,7 +421,7 @@ Run:
 
 Expected: failures naming unknown `--aurora-draft-boundary` or unknown `moe-layer`.
 
-- [ ] **Step 3: Add CLI parsing and fail-closed capability gates**
+- [x] **Step 3: Add CLI parsing and fail-closed capability gates**
 
 Parse target `moe-layer` into `CudaBoundaryMode::moe_layer`. Add `aurora_draft_boundary_name` and a supplied flag alongside draft batching. Reject ownership outside `aurora-persistent + cuda-custom` before artifact generation. Construct the draft backend with the selected boundary and serialize its effective value independently from the target.
 
@@ -440,7 +440,7 @@ options.cuda_weights == CudaWeightMode::resident &&
 options.cuda_resident_bytes > 0
 ```
 
-- [ ] **Step 4: Connect one model dispatch before split computations**
+- [x] **Step 4: Connect one model dispatch before split computations**
 
 After payloads and contributions exist, build `ResidentMoeLayerView` from canonical tensor names. Call the backend before routed-down or shared execution.
 
@@ -461,7 +461,7 @@ if (backend_.options().cuda_boundary == CudaBoundaryMode::moe_layer) {
 
 On `executed=false`, fall through to the existing routed-down/shared/grid/mix/norm/up path using the same decision, payload handles, and contributions. Do not recompute routing or reload experts.
 
-- [ ] **Step 5: Run GREEN and CUDA parity cases**
+- [x] **Step 5: Run GREEN and CUDA parity cases**
 
 Run the focused Python set once with the CPU build and once with:
 
@@ -475,7 +475,7 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 \
 
 Expected: CPU unavailable/ownership cases and live full-fit/bypass parity pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add runtime/src/model.cpp runtime/src/aurora.cpp runtime/src/main.cpp tests/python/test_cuda_aurora_draft.py tests/python/test_cpp_parity.py tests/python/test_persistent_aurora_runtime.py

@@ -147,11 +147,13 @@ int main(int argc, char** argv) {
     std::string aurora_draft_backend_name = "cpu";
     std::string aurora_draft_resident_bytes_text = "0";
     std::string aurora_draft_batching_name = "grouped";
+    std::string aurora_draft_boundary_name = "ffn-block";
     bool aurora_draft_k_supplied = false;
     bool aurora_block_policy_supplied = false;
     bool aurora_draft_backend_supplied = false;
     bool aurora_draft_resident_bytes_supplied = false;
     bool aurora_draft_batching_supplied = false;
+    bool aurora_draft_boundary_supplied = false;
     bool diagnostics = false;
     std::size_t count = 0;
     for (int index = 1; index + 1 < argc; index += 2) {
@@ -212,6 +214,10 @@ int main(int argc, char** argv) {
         else if (key == "--aurora-draft-batching") {
             aurora_draft_batching_name = value;
             aurora_draft_batching_supplied = true;
+        }
+        else if (key == "--aurora-draft-boundary") {
+            aurora_draft_boundary_name = value;
+            aurora_draft_boundary_supplied = true;
         }
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
     }
@@ -294,6 +300,12 @@ int main(int argc, char** argv) {
                   << aurora_draft_batching_name << '\n';
         return 2;
     }
+    if (aurora_draft_boundary_name != "ffn-block" &&
+        aurora_draft_boundary_name != "moe-layer") {
+        std::cerr << "unknown AURORA draft boundary: "
+                  << aurora_draft_boundary_name << '\n';
+        return 2;
+    }
     if (speculative_verification_name == "token-major") {
         runtime_options.speculative_verification =
             k3x::SpeculativeVerificationMode::token_major;
@@ -320,7 +332,8 @@ int main(int argc, char** argv) {
         (aurora_draft_k_supplied || aurora_block_policy_supplied ||
          aurora_draft_backend_supplied ||
          aurora_draft_resident_bytes_supplied ||
-         aurora_draft_batching_supplied)) {
+         aurora_draft_batching_supplied ||
+         aurora_draft_boundary_supplied)) {
         std::cerr << "speculative mode none does not accept speculative options\n";
         return 2;
     }
@@ -328,7 +341,8 @@ int main(int argc, char** argv) {
         (aurora_draft_k_supplied || aurora_block_policy_supplied ||
          aurora_draft_backend_supplied ||
          aurora_draft_resident_bytes_supplied ||
-         aurora_draft_batching_supplied)) {
+         aurora_draft_batching_supplied ||
+         aurora_draft_boundary_supplied)) {
         std::cerr << "scripted-reference does not accept AURORA options\n";
         return 2;
     }
@@ -342,6 +356,18 @@ int main(int argc, char** argv) {
         (speculative_mode_name != "aurora-persistent" ||
          aurora_draft_backend_name != "cuda-custom")) {
         std::cerr << "AURORA draft batching requires persistent cuda-custom draft backend\n";
+        return 2;
+    }
+    if (aurora_draft_boundary_supplied &&
+        (speculative_mode_name != "aurora-persistent" ||
+         aurora_draft_backend_name != "cuda-custom")) {
+        std::cerr << "AURORA draft boundary requires persistent cuda-custom draft backend\n";
+        return 2;
+    }
+    if (aurora_draft_boundary_name == "moe-layer" &&
+        (aurora_draft_batching_name != "resident-grid" ||
+         aurora_draft_resident_bytes == 0)) {
+        std::cerr << "AURORA moe-layer draft boundary requires resident-grid batching and positive residency\n";
         return 2;
     }
     if (aurora_draft_batching_name == "resident-grid" &&
@@ -651,6 +677,8 @@ int main(int argc, char** argv) {
         backend_options.cuda_boundary = k3x::CudaBoundaryMode::operation;
     } else if (cuda_boundary_name == "ffn-block") {
         backend_options.cuda_boundary = k3x::CudaBoundaryMode::ffn_block;
+    } else if (cuda_boundary_name == "moe-layer") {
+        backend_options.cuda_boundary = k3x::CudaBoundaryMode::moe_layer;
     } else {
         std::cerr << "unknown CUDA boundary mode: " << cuda_boundary_name << '\n';
         return 2;
@@ -689,11 +717,12 @@ int main(int argc, char** argv) {
          backend_options.cuda_allocation != k3x::CudaAllocationMode::reused ||
          backend_options.cuda_weights != k3x::CudaWeightMode::resident ||
          backend_options.cuda_resident_bytes == 0 ||
-         backend_options.cuda_boundary != k3x::CudaBoundaryMode::ffn_block ||
+         (backend_options.cuda_boundary != k3x::CudaBoundaryMode::ffn_block &&
+          backend_options.cuda_boundary != k3x::CudaBoundaryMode::moe_layer) ||
          backend_options.cuda_transfer !=
              k3x::CudaTransferMode::synchronous ||
          backend_options.cuda_moe_fusion != k3x::CudaMoeFusionMode::none)) {
-        std::cerr << "resident-grid batching requires resident cuda-custom ffn-block reused synchronous execution with fusion none\n";
+        std::cerr << "resident-grid batching requires resident cuda-custom ffn-block or moe-layer reused synchronous execution with fusion none\n";
         return 2;
     }
     const auto* pinned_begin = cuda_pinned_bytes_text.data();
@@ -714,6 +743,20 @@ int main(int argc, char** argv) {
     if (backend_options.cuda_boundary == k3x::CudaBoundaryMode::ffn_block &&
         backend_options.kind != k3x::BackendKind::cuda_custom) {
         std::cerr << "ffn-block boundary requires cuda-custom\n";
+        return 2;
+    }
+    if (backend_options.cuda_boundary == k3x::CudaBoundaryMode::moe_layer &&
+        (backend_options.kind != k3x::BackendKind::cuda_custom ||
+         backend_options.dense_precision != k3x::DensePrecision::fp32 ||
+         backend_options.cuda_allocation != k3x::CudaAllocationMode::reused ||
+         backend_options.cuda_weights != k3x::CudaWeightMode::resident ||
+         backend_options.cuda_batching !=
+             k3x::CudaBatchingMode::resident_grid ||
+         backend_options.cuda_resident_bytes == 0 ||
+         backend_options.cuda_transfer !=
+             k3x::CudaTransferMode::synchronous ||
+         backend_options.cuda_moe_fusion != k3x::CudaMoeFusionMode::none)) {
+        std::cerr << "moe-layer boundary requires FP32 resident cuda-custom resident-grid reused synchronous execution with fusion none\n";
         return 2;
     }
     if (backend_options.cuda_moe_fusion ==
@@ -945,7 +988,9 @@ int main(int argc, char** argv) {
                     ? k3x::CudaBatchingMode::resident_grid
                     : k3x::CudaBatchingMode::grouped;
             draft_backend_options.cuda_boundary =
-                k3x::CudaBoundaryMode::ffn_block;
+                aurora_draft_boundary_name == "moe-layer"
+                    ? k3x::CudaBoundaryMode::moe_layer
+                    : k3x::CudaBoundaryMode::ffn_block;
             draft_backend_options.cuda_transfer =
                 k3x::CudaTransferMode::synchronous;
             draft_backend_options.cuda_moe_fusion =
@@ -1073,7 +1118,10 @@ int main(int argc, char** argv) {
                 : "scalar";
     const auto draft_boundary_name =
         effective_draft_options.cuda_boundary ==
-                k3x::CudaBoundaryMode::ffn_block
+                k3x::CudaBoundaryMode::moe_layer
+            ? "moe-layer"
+            : effective_draft_options.cuda_boundary ==
+                      k3x::CudaBoundaryMode::ffn_block
             ? "ffn-block"
             : "operation";
     const auto draft_transfer_name =
