@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2018-passing-20a46b?style=flat-square)](#milestone-18--exact-cuda-aurora-draft-experiment)
+[![Milestone](https://img.shields.io/badge/milestone%2019-passing-20a46b?style=flat-square)](#milestone-19--bounded-exact-cuda-aurora-residency)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -20,7 +20,7 @@
 
 Kimi K3 is a 2.8T-parameter sparse MoE model whose local inference problem is dominated by moving the right expert bytes at the right time. K3X starts from that constraint. It is not a fork of llama.cpp or vLLM, and it does not assume that the checkpoint fits in RAM or VRAM.
 
-The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Implemented milestones now cover the exact synthetic graph and format, explicit RTX 5080 CUDA baselines, bounded L0/L1 primitives, independent L2 Reader modes, a released-size expert storage slice, an opt-in exact current-layer deadline worker, runtime-switchable exact eviction, persistent runtime-only task/session routing profiles, experimental fixed/adaptive Top-K with exact selected-expert rescue, opt-in routed expert accumulation on CUDA, strict token-major plus CPU/CUDA expert-major verification, a transactional persistent AURORA cursor, and an exact transient CUDA draft experiment. Cross-layer prediction and the full three-tier pipeline remain future work.
+The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Implemented milestones now cover the exact synthetic graph and format, explicit RTX 5080 CUDA baselines, bounded L0/L1 primitives, independent L2 Reader modes, a released-size expert storage slice, an opt-in exact current-layer deadline worker, runtime-switchable exact eviction, persistent runtime-only task/session routing profiles, experimental fixed/adaptive Top-K with exact selected-expert rescue, opt-in routed expert accumulation on CUDA, strict token-major plus CPU/CUDA expert-major verification, a transactional persistent AURORA cursor, and exact transient plus bounded-resident CUDA draft experiments. Cross-layer prediction and the full three-tier pipeline remain future work.
 
 ```mermaid
 flowchart LR
@@ -46,6 +46,7 @@ flowchart LR
 | Milestone 16 | [PR #20 merged](https://github.com/rsb1813/project-k3x/pull/20) at `df5c07d` | B-0017 measured AURORA replay reference; exact and non-default |
 | Milestone 17 | [PR #23 merged](https://github.com/rsb1813/project-k3x/pull/23) at `30bbf7a8` | B-0018 persistent AURORA state; exact and non-default |
 | Milestone 18 | [PR #25 merged](https://github.com/rsb1813/project-k3x/pull/25) at `7899a7ae` | B-0019 exact transient CUDA AURORA draft; measured regression, non-default |
+| Milestone 19 | Publication pending from `codex/milestone-nineteen-aurora-residency` | B-0020 bounded exact CUDA AURORA residency; H2D reduction measured, non-default |
 
 PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 18 integration head `7899a7ae`; its push and pull-request correctness runs `31343260116` and `31343261633` passed, followed by successful post-merge `main` run `31343401178`.
 
@@ -249,6 +250,22 @@ The next isolated experiment must remove repeated draft weight transfer through 
 python tools/ablate_cuda_aurora_draft.py \
   --runner build-cuda/k3x_run \
   --output build-results/b0019-cuda-aurora-draft \
+  --warmups 3 \
+  --samples 20
+```
+
+## Milestone 19 — bounded exact CUDA AURORA residency
+
+`--aurora-draft-resident-bytes N` is owned only by `aurora-persistent + cuda-custom`. Zero preserves the Milestone 18 transient identity byte-for-byte. A positive capacity selects the existing tensor-ID-keyed exact `ResidentWeightTable`; the bound is hard, has no eviction, and falls back to exact transient execution when a weight cannot be admitted. CPU drafting remains the default and `aurora-replay` remains CPU-only.
+
+Draft JSON/CSV now separates configured capacity, current resident bytes, peak resident bytes, cache hits, misses, bypasses, and weight H2D from the CPU target. B-0020 holds FP32, reduced Top-4 drafting, routing, target verification, scheduler, kernels, and synchronous transfer fixed while comparing four transient/resident pairs. Every pair preserves proposals, acceptance, target tokens, final KDA/MLA state, and committed routes.
+
+With an 8 MiB cap, the tiny Top-16 fixture actually occupies only 644,160 or 647,424 bytes, records 75.68% or 77.27% cache hit rate, and has zero bypasses. Resident weight H2D falls by 88.81% or 89.78%. Paired decode changes are mixed: +15.58% fixed token, -2.56% adaptive token, +22.67% fixed expert-major, and +5.57% adaptive expert-major. Residency is therefore retained as an exact opt-in experiment, not promoted to a default. The next isolated CUDA axis is larger persistent multi-token/multi-expert work to reduce 410–451 synchronous waits and fine-grained launches.
+
+```bash
+python tools/ablate_cuda_aurora_residency.py \
+  --runner build-cuda/k3x_run \
+  --output build-results/b0020-cuda-aurora-residency \
   --warmups 3 \
   --samples 20
 ```
@@ -542,6 +559,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Exact CPU/CUDA expert-major speculative verification with stable expert grouping, one-payload-per-group H2D reuse, and B-0015/B-0016 evidence.
 - [x] Exact replay-oracle-matched persistent AURORA draft state with bounded KDA checkpoints, MLA crop, and B-0018 evidence.
 - [x] Exact opt-in transient CUDA AURORA draft execution with separated target/draft telemetry and B-0019 rejection evidence.
+- [x] Exact opt-in bounded CUDA AURORA draft residency with hard-cap transient bypass, separated occupancy telemetry, and B-0020 evidence.
 - [ ] Learned drafting, acceptance-aware block sizing, and cost-aware verification experiments.
 - [ ] Sensitivity-calibrated mixed trunk quantization.
 - [ ] SKYFORGE shard compiler for explicitly provisioned cloud jobs.
@@ -570,7 +588,7 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - Reusable scratch, bounded static weight residency, and same-input grouping are implemented, but activations and results still cross the host/device boundary and asynchronous overlap is not implemented.
 - Static residency has no eviction and is not the future three-tier expert cache.
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
-- Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0019 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; the opt-in transient synchronous CUDA draft is exact but sharply slower in B-0019. There is no learned DSpark drafter, reduced-precision or resident-only draft path, multi-expert persistent CUDA kernel, or full-model speculative speedup claim.
+- Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0020 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; transient and bounded-resident CUDA drafts are exact opt-in experiments. B-0020 sharply reduces weight H2D but has mixed paired decode results. There is no learned DSpark drafter, reduced-precision draft path, eviction-capable draft residency, multi-expert persistent CUDA kernel, or full-model speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
 - The converter has not processed the full Kimi K3 checkpoint.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.

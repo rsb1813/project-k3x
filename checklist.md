@@ -208,7 +208,7 @@
 - [x] Write and self-review the bounded exact draft-residency design.
 - [x] Write and self-review the detailed TDD implementation plan.
 - [x] Implement provider, CLI, telemetry, and benchmark contracts through witnessed RED/GREEN cycles.
-- [ ] Run B-0020, the full verification matrix, sanitizer coverage, and evidence cross-checks.
+- [x] Run B-0020, the full verification matrix, sanitizer coverage, and evidence cross-checks.
 - [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
 
 ## Milestone 14 — Exact expert-major speculative verification
