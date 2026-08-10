@@ -82,6 +82,11 @@ class BenchmarkRecord:
     token_ids: tuple[int, ...]
     routed_experts: tuple[int, ...]
     cuda_moe_fusion: str = "none"
+    cuda_weight_validation: str = "per-call"
+    immutable_validation_scans: int = 0
+    immutable_validation_hits: int = 0
+    immutable_validation_bytes: int = 0
+    immutable_validation_nanoseconds: int = 0
     fused_moe_calls: int = 0
     fused_moe_experts: int = 0
     batched_expert_ffn_calls: int = 0
@@ -179,6 +184,11 @@ class BenchmarkRecord:
     draft_cuda_boundary: str = "operation"
     draft_cuda_transfer: str = "synchronous"
     draft_cuda_moe_fusion: str = "none"
+    draft_cuda_weight_validation: str = "per-call"
+    draft_immutable_validation_scans: int = 0
+    draft_immutable_validation_hits: int = 0
+    draft_immutable_validation_bytes: int = 0
+    draft_immutable_validation_nanoseconds: int = 0
     draft_kernel_nanoseconds: int = 0
     draft_host_to_device_bytes: int = 0
     draft_weight_h2d_bytes: int = 0
@@ -298,6 +308,7 @@ def _run_process(
     cuda_resident_bytes: int,
     cuda_pinned_bytes: int,
     cuda_moe_fusion: str,
+    cuda_weight_validation: str,
     l1_expert_cache: str,
     l1_expert_cache_bytes: int,
     l2_io: str,
@@ -338,6 +349,7 @@ def _run_process(
         "--cuda-resident-bytes", str(cuda_resident_bytes),
         "--cuda-pinned-bytes", str(cuda_pinned_bytes),
         "--cuda-moe-fusion", cuda_moe_fusion,
+        "--cuda-weight-validation", cuda_weight_validation,
         "--l1-expert-cache", l1_expert_cache,
         "--l1-expert-cache-bytes", str(l1_expert_cache_bytes),
         "--profile-prior-strength", str(profile_prior_strength),
@@ -461,6 +473,7 @@ def benchmark_once(
     cuda_boundary: str = "operation",
     cuda_transfer: str = "synchronous",
     cuda_moe_fusion: str = "none",
+    cuda_weight_validation: str = "per-call",
     cuda_resident_bytes: int = 0,
     cuda_pinned_bytes: int = 0,
     l1_expert_cache: str = "disabled",
@@ -517,6 +530,7 @@ def benchmark_once(
                 cuda_boundary=cuda_boundary,
                 cuda_transfer=cuda_transfer,
                 cuda_moe_fusion=cuda_moe_fusion,
+                cuda_weight_validation=cuda_weight_validation,
                 cuda_resident_bytes=cuda_resident_bytes,
                 cuda_pinned_bytes=cuda_pinned_bytes,
                 l1_expert_cache=l1_expert_cache,
@@ -562,6 +576,7 @@ def benchmark_once(
                 cuda_boundary=cuda_boundary,
                 cuda_transfer=cuda_transfer,
                 cuda_moe_fusion=cuda_moe_fusion,
+                cuda_weight_validation=cuda_weight_validation,
                 cuda_resident_bytes=cuda_resident_bytes,
                 cuda_pinned_bytes=cuda_pinned_bytes,
                 l1_expert_cache=l1_expert_cache,
@@ -614,6 +629,7 @@ def benchmark_once(
                 cuda_boundary="operation",
                 cuda_transfer="synchronous",
                 cuda_moe_fusion="none",
+                cuda_weight_validation="per-call",
                 cuda_resident_bytes=0,
                 cuda_pinned_bytes=0,
                 l1_expert_cache="disabled",
@@ -662,6 +678,7 @@ def benchmark_once(
                 cuda_boundary="operation",
                 cuda_transfer="synchronous",
                 cuda_moe_fusion="none",
+                cuda_weight_validation="per-call",
                 cuda_resident_bytes=0,
                 cuda_pinned_bytes=0,
                 l1_expert_cache="disabled",
@@ -701,6 +718,7 @@ def benchmark_once(
                 cuda_boundary=cuda_boundary,
                 cuda_transfer=cuda_transfer,
                 cuda_moe_fusion=cuda_moe_fusion,
+                cuda_weight_validation=cuda_weight_validation,
                 cuda_resident_bytes=cuda_resident_bytes,
                 cuda_pinned_bytes=cuda_pinned_bytes,
                 l1_expert_cache=l1_expert_cache,
@@ -750,6 +768,7 @@ def benchmark_once(
                 cuda_boundary=cuda_boundary,
                 cuda_transfer=cuda_transfer,
                 cuda_moe_fusion=cuda_moe_fusion,
+                cuda_weight_validation=cuda_weight_validation,
                 cuda_resident_bytes=cuda_resident_bytes,
                 cuda_pinned_bytes=cuda_pinned_bytes,
                 l1_expert_cache=l1_expert_cache,
@@ -877,6 +896,10 @@ def benchmark_once(
         "ffn_block_calls",
         "ffn_block_experts",
         "cuda_moe_fusion",
+        "cuda_weight_validation",
+        "immutable_validation_scans",
+        "immutable_validation_hits",
+        "immutable_validation_bytes",
         "fused_moe_calls",
         "fused_moe_experts",
         "batched_expert_ffn_calls",
@@ -902,6 +925,10 @@ def benchmark_once(
         "draft_cuda_boundary",
         "draft_cuda_transfer",
         "draft_cuda_moe_fusion",
+        "draft_cuda_weight_validation",
+        "draft_immutable_validation_scans",
+        "draft_immutable_validation_hits",
+        "draft_immutable_validation_bytes",
         "draft_host_to_device_bytes",
         "draft_weight_h2d_bytes",
         "draft_activation_h2d_bytes",
@@ -976,6 +1003,7 @@ def benchmark_once(
         cuda_boundary,
         cuda_transfer,
         cuda_moe_fusion,
+        cuda_weight_validation,
         cuda_resident_bytes,
         cuda_pinned_bytes,
         l1_expert_cache,
@@ -1013,6 +1041,7 @@ def benchmark_once(
         "cuda_boundary",
         "cuda_transfer",
         "cuda_moe_fusion",
+        "cuda_weight_validation",
         "cuda_resident_bytes",
         "cuda_pinned_bytes",
         "l1_expert_cache_mode",
@@ -1086,6 +1115,13 @@ def benchmark_once(
         cuda_boundary=samples[0]["cuda_boundary"],
         cuda_transfer=samples[0]["cuda_transfer"],
         cuda_moe_fusion=samples[0]["cuda_moe_fusion"],
+        cuda_weight_validation=samples[0]["cuda_weight_validation"],
+        immutable_validation_scans=samples[0]["immutable_validation_scans"],
+        immutable_validation_hits=samples[0]["immutable_validation_hits"],
+        immutable_validation_bytes=samples[0]["immutable_validation_bytes"],
+        immutable_validation_nanoseconds=int(statistics.median(
+            item["immutable_validation_nanoseconds"] for item in samples
+        )),
         cuda_resident_bytes=samples[0]["cuda_resident_bytes"],
         cuda_pinned_bytes=samples[0]["cuda_pinned_bytes"],
         kernel_nanoseconds=int(
@@ -1294,6 +1330,21 @@ def benchmark_once(
         draft_cuda_boundary=samples[0]["draft_cuda_boundary"],
         draft_cuda_transfer=samples[0]["draft_cuda_transfer"],
         draft_cuda_moe_fusion=samples[0]["draft_cuda_moe_fusion"],
+        draft_cuda_weight_validation=samples[0][
+            "draft_cuda_weight_validation"
+        ],
+        draft_immutable_validation_scans=samples[0][
+            "draft_immutable_validation_scans"
+        ],
+        draft_immutable_validation_hits=samples[0][
+            "draft_immutable_validation_hits"
+        ],
+        draft_immutable_validation_bytes=samples[0][
+            "draft_immutable_validation_bytes"
+        ],
+        draft_immutable_validation_nanoseconds=int(statistics.median(
+            item["draft_immutable_validation_nanoseconds"] for item in samples
+        )),
         draft_kernel_nanoseconds=int(statistics.median(
             item["draft_kernel_nanoseconds"] for item in samples
         )),
@@ -1454,6 +1505,10 @@ def main() -> int:
         "--cuda-moe-fusion", choices=("none", "routed-accumulate"),
         default="none",
     )
+    parser.add_argument(
+        "--cuda-weight-validation", choices=("per-call", "admission"),
+        default="per-call",
+    )
     parser.add_argument("--cuda-resident-bytes", type=int, default=0)
     parser.add_argument("--cuda-pinned-bytes", type=int, default=0)
     parser.add_argument(
@@ -1521,6 +1576,7 @@ def main() -> int:
         cuda_boundary=args.cuda_boundary,
         cuda_transfer=args.cuda_transfer,
         cuda_moe_fusion=args.cuda_moe_fusion,
+        cuda_weight_validation=args.cuda_weight_validation,
         cuda_resident_bytes=args.cuda_resident_bytes,
         cuda_pinned_bytes=args.cuda_pinned_bytes,
         l1_expert_cache=args.l1_expert_cache,

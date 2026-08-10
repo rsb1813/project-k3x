@@ -24,6 +24,7 @@
 #include <span>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -1759,12 +1760,6 @@ public:
             (situ_linear &&
              (!std::isfinite(*situ_linear) || *situ_linear <= 0.0F)) ||
             !all_finite(input) || !all_finite(contributions) ||
-            !all_finite(weights.routed_down.values) ||
-            !all_finite(weights.routed_norm.values) ||
-            !all_finite(weights.routed_up.values) ||
-            !all_finite(weights.shared.gate.values) ||
-            !all_finite(weights.shared.up.values) ||
-            !all_finite(weights.shared.down.values) ||
             !valid_dense(input, weights.routed_down) ||
             !valid_dense_mlp(input, weights.shared)) {
             return Result<ResidentMoeLayerResult>::failure(
@@ -1832,6 +1827,60 @@ public:
             weights.shared.up,
             weights.shared.down,
         };
+        std::array<bool, 6> validation_hits{};
+        std::array<bool, 6> validation_scans{};
+        if (options_.cuda_weight_validation ==
+            CudaWeightValidationMode::admission) {
+            for (std::size_t index = 0; index < dense_views.size(); ++index) {
+                const auto& view = dense_views[index];
+                const ImmutableWeightIdentity identity{
+                    view.values.data(), view.values.size_bytes(),
+                    view.rows, view.cols};
+                const auto found = immutable_weights_.find(view.tensor_id);
+                if (found == immutable_weights_.end()) {
+                    validation_scans[index] = true;
+                } else if (found->second == identity) {
+                    validation_hits[index] = true;
+                } else {
+                    return Result<ResidentMoeLayerResult>::failure(
+                        ErrorCode::invalid_mxfp4);
+                }
+            }
+        } else {
+            validation_scans.fill(true);
+        }
+        const auto validation_start = std::chrono::steady_clock::now();
+        bool immutable_finite = true;
+        for (std::size_t index = 0; index < dense_views.size(); ++index) {
+            if (!validation_scans[index]) continue;
+            ++runtime_stats_.immutable_validation_scans;
+            runtime_stats_.immutable_validation_bytes +=
+                dense_views[index].values.size_bytes();
+            if (!all_finite(dense_views[index].values)) immutable_finite = false;
+        }
+        runtime_stats_.immutable_validation_nanoseconds +=
+            static_cast<std::uint64_t>(std::chrono::duration_cast<
+                std::chrono::nanoseconds>(std::chrono::steady_clock::now() -
+                                         validation_start).count());
+        if (!immutable_finite) {
+            return Result<ResidentMoeLayerResult>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+        if (options_.cuda_weight_validation ==
+            CudaWeightValidationMode::admission) {
+            for (std::size_t index = 0; index < dense_views.size(); ++index) {
+                if (validation_hits[index]) {
+                    ++runtime_stats_.immutable_validation_hits;
+                } else {
+                    const auto& view = dense_views[index];
+                    immutable_weights_.emplace(
+                        view.tensor_id,
+                        ImmutableWeightIdentity{
+                            view.values.data(), view.values.size_bytes(),
+                            view.rows, view.cols});
+                }
+            }
+        }
         std::array<cuda::ResidentAcquisition, 6> dense_members{};
         std::uint64_t weight_transfer_bytes = 0;
         bool bypass = false;
@@ -3190,6 +3239,16 @@ private:
     std::string device_name_;
     BackendMemoryStats memory_stats_{};
     BackendRuntimeStats runtime_stats_{};
+    struct ImmutableWeightIdentity {
+        const float* data{};
+        std::size_t bytes{};
+        std::size_t rows{};
+        std::size_t cols{};
+
+        bool operator==(const ImmutableWeightIdentity&) const = default;
+    };
+    std::unordered_map<std::uint64_t, ImmutableWeightIdentity>
+        immutable_weights_;
     cuda::ScratchBuffer dense_input_scratch_;
     cuda::ScratchBuffer dense_weight_scratch_;
     cuda::ScratchBuffer dense_output_scratch_;

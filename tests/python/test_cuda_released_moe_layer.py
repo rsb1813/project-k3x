@@ -62,6 +62,8 @@ def test_released_moe_layer_bench_executes(
     assert payload["resident_capacity_bytes"] == 1 << 30
     assert payload["warmup"] == 0
     assert payload["iterations"] == 1
+    assert payload["validation"] == "per-call"
+    assert payload["profiler"] is True
     assert payload["maximum_absolute_error"] <= 1.0e-5
     assert payload["latency_nanoseconds_median"] > 0
     assert payload["kernel_nanoseconds"] > 0
@@ -80,17 +82,50 @@ def test_released_moe_layer_bench_executes(
     assert payload["resident_grid_fallbacks"] == 0
     assert payload["resident_moe_layer_fallbacks"] == 0
     if boundary == "ffn-block":
+        assert payload["immutable_validation_scans"] == 0
+        assert payload["immutable_validation_bytes"] == 0
         assert payload["stream_synchronization_count"] == 4
         assert payload["resident_moe_layer_calls"] == 0
         assert payload["resident_moe_layer_experts"] == 0
         assert payload["resident_moe_layer_kernel_launches"] == 0
         assert payload["resident_moe_layer_contribution_h2d_bytes"] == 0
     else:
+        assert payload["immutable_validation_scans"] == 6
+        assert payload["immutable_validation_hits"] == 0
+        assert payload["immutable_validation_bytes"] == 469_776_384
+        assert payload["immutable_validation_nanoseconds"] > 0
         assert payload["stream_synchronization_count"] == 1
         assert payload["resident_moe_layer_calls"] == 1
         assert payload["resident_moe_layer_experts"] == experts
         assert payload["resident_moe_layer_kernel_launches"] == 13
         assert payload["resident_moe_layer_contribution_h2d_bytes"] == experts * 4
+
+
+def test_released_moe_layer_admission_and_profiler_off(
+    tmp_path: Path,
+) -> None:
+    runner = _require_cuda_build()
+    artifact = _released_artifact(tmp_path)
+    result = subprocess.run(
+        [
+            str(runner), "--model", str(artifact),
+            "--boundary", "moe-layer", "--experts", "1",
+            "--warmup", "0", "--iterations", "2",
+            "--validation", "admission", "--profiler", "off",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["validation"] == "admission"
+    assert payload["profiler"] is False
+    assert payload["kernel_nanoseconds"] is None
+    assert payload["cold_immutable_validation_scans"] == 6
+    assert payload["cold_immutable_validation_bytes"] == 469_776_384
+    assert payload["immutable_validation_scans"] == 0
+    assert payload["immutable_validation_hits"] == 12
+    assert payload["immutable_validation_bytes"] == 0
 
 
 @pytest.mark.parametrize(

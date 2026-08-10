@@ -83,6 +83,10 @@ def test_cpp_runner_rejects_unknown_backend_values(
         (["--cuda-transfer", "queue"], "unknown CUDA transfer mode: queue"),
         (["--cuda-moe-fusion", "graph"], "unknown CUDA MoE fusion mode: graph"),
         (
+            ["--cuda-weight-validation", "cached"],
+            "unknown CUDA weight validation mode: cached",
+        ),
+        (
             ["--cuda-resident-bytes", "-1"],
             "invalid CUDA resident byte capacity: -1",
         ),
@@ -102,6 +106,19 @@ def test_cpp_runner_rejects_invalid_cuda_execution_options(
     )
     assert result.returncode == 2
     assert result.stderr.strip() == message
+
+
+def test_cpp_runner_rejects_admission_validation_without_resident_moe_layer() -> None:
+    result = subprocess.run(
+        [str(cpp_binary("k3x_run")), "--cuda-weight-validation", "admission"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == (
+        "admission CUDA weight validation requires resident cuda-custom "
+        "moe-layer execution"
+    )
 
 
 @pytest.mark.parametrize(
@@ -548,9 +565,14 @@ def test_cpp_generation_matches_python_golden(
     assert result["cuda_allocation"] == "per-operation"
     assert result["cuda_weights"] == "transient"
     assert result["cuda_batching"] == "scalar"
+    assert result["cuda_weight_validation"] == "per-call"
     assert result["cuda_resident_bytes"] == 0
     assert result["device_allocation_count"] == 0
     assert result["weight_cache_hits"] == 0
+    assert result["immutable_validation_scans"] == 0
+    assert result["immutable_validation_hits"] == 0
+    assert result["immutable_validation_bytes"] == 0
+    assert result["immutable_validation_nanoseconds"] == 0
 
 
 def test_cpp_scripted_speculation_preserves_greedy_execution(

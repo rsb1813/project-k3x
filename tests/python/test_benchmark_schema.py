@@ -103,6 +103,16 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["draft_cuda_boundary"] == "operation"
     assert payload["draft_cuda_transfer"] == "synchronous"
     assert payload["draft_cuda_moe_fusion"] == "none"
+    assert payload["cuda_weight_validation"] == "per-call"
+    assert payload["draft_cuda_weight_validation"] == "per-call"
+    for field in (
+        "immutable_validation_scans",
+        "immutable_validation_hits",
+        "immutable_validation_bytes",
+        "immutable_validation_nanoseconds",
+    ):
+        assert payload[field] == 0
+        assert payload[f"draft_{field}"] == 0
     assert payload["draft_kernel_nanoseconds"] == 0
     assert payload["draft_host_to_device_bytes"] == 0
     assert payload["draft_weight_h2d_bytes"] == 0
