@@ -103,6 +103,10 @@ def test_committed_b0022_evidence_is_self_consistent() -> None:
         assert record["token_parity"] is True
         assert record["committed_route_parity"] is True
         assert record["final_state_max_abs_error"] <= 1.0e-6
+        assert record["decode_delta_percent"] == (
+            record["decode_tokens_per_second"]
+            / summary["records"][0]["decode_tokens_per_second"] - 1.0
+        ) * 100.0
         for suffix, digest_key in (
             ("json", "raw_json_sha256"),
             ("csv", "raw_csv_sha256"),
@@ -111,6 +115,59 @@ def test_committed_b0022_evidence_is_self_consistent() -> None:
             assert hashlib.sha256(raw.read_bytes()).hexdigest() == record[
                 digest_key
             ]
+        assert b"\r\n" not in (output / f"{record['name']}.csv").read_bytes()
+    records = {record["name"]: record for record in summary["records"]}
+    for _, grid_name, layer_name in PAIRS:
+        grid = records[grid_name]
+        layer = records[layer_name]
+        for field in (
+            "token_ids",
+            "speculative_proposed_draft_tokens",
+            "speculative_accepted_draft_tokens",
+            "speculative_committed_tokens",
+            "speculative_acceptance_rate",
+            "draft_reader_completed_bytes",
+            "draft_routing_decisions",
+            "draft_routing_selected_experts",
+        ):
+            assert grid[field] == layer[field]
+        assert grid["draft_cuda_boundary"] == "ffn-block"
+        assert layer["draft_cuda_boundary"] == "moe-layer"
+        assert grid["draft_resident_moe_layer_calls"] == 0
+        assert layer["draft_resident_moe_layer_calls"] > 0
+        assert layer["draft_resident_moe_layer_fallbacks"] == 0
+        assert layer["draft_resident_moe_layer_kernel_launches"] == (
+            layer["draft_resident_moe_layer_calls"] * 13
+        )
+        sync_reduction = (
+            grid["draft_stream_synchronization_count"]
+            - layer["draft_stream_synchronization_count"]
+        )
+        assert sync_reduction == layer["draft_resident_moe_layer_calls"] * 3
+        assert layer["paired_sync_reduction"] == sync_reduction
+        assert layer["draft_activation_h2d_bytes"] < grid[
+            "draft_activation_h2d_bytes"
+        ]
+        assert layer["draft_host_to_device_bytes"] < grid[
+            "draft_host_to_device_bytes"
+        ]
+        assert layer["draft_device_to_host_bytes"] < grid[
+            "draft_device_to_host_bytes"
+        ]
+        weight_delta = (
+            layer["draft_weight_h2d_bytes"] - grid["draft_weight_h2d_bytes"]
+        )
+        resident_delta = (
+            layer["draft_resident_weight_bytes"]
+            - grid["draft_resident_weight_bytes"]
+        )
+        assert weight_delta > 0
+        assert weight_delta == resident_delta
+        assert layer["paired_weight_h2d_delta_bytes"] == weight_delta
+        assert layer["paired_decode_delta_percent"] == (
+            layer["decode_tokens_per_second"]
+            / grid["decode_tokens_per_second"] - 1.0
+        ) * 100.0
     summary_csv = output / "summary.csv"
     assert b"\r\n" not in summary_csv.read_bytes()
     assert hashlib.sha256(summary_csv.read_bytes()).hexdigest() == summary[

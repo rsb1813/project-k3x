@@ -666,7 +666,7 @@ git commit -m "bench: add resident MoE layer ablation"
 **Interfaces:**
 - Produces: committed measured B-0022 evidence with raw/summary parity.
 
-- [ ] **Step 1: Run the formal matrix**
+- [x] **Step 1: Run the formal matrix**
 
 Run under WSL2 on the local RTX 5080.
 
@@ -681,11 +681,11 @@ Run under WSL2 on the local RTX 5080.
 
 Expected: nine JSON, nine CSV, one summary JSON, and one summary CSV complete without a forced TPS assertion.
 
-- [ ] **Step 2: Add committed-evidence verification**
+- [x] **Step 2: Add committed-evidence verification**
 
 The evidence test must recompute all eighteen raw digests, summary CSV digest, canonical aggregate, pair identity, exact tokens/state/routes/acceptance, synchronization equation, activation/total-H2D and D2H direction, the norm cold-admission weight/resident-byte delta, thirteen launches per call, and zero fallback directly from committed bytes.
 
-- [ ] **Step 3: Run evidence verification**
+- [x] **Step 3: Run evidence verification**
 
 Run:
 
@@ -696,7 +696,7 @@ Run:
 
 Expected: committed evidence checks pass and reported percentages are recomputed, not copied constants.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add results/b0022-cuda-aurora-moe-layer-wsl tests/python/test_cuda_aurora_moe_layer_ablation.py
