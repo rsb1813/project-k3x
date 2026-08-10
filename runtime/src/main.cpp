@@ -1025,6 +1025,11 @@ int main(int argc, char** argv) {
                 k3x::CudaTransferMode::synchronous;
             draft_backend_options.cuda_moe_fusion =
                 k3x::CudaMoeFusionMode::none;
+            if (draft_backend_options.cuda_boundary ==
+                k3x::CudaBoundaryMode::moe_layer) {
+                draft_backend_options.cuda_weight_validation =
+                    backend_options.cuda_weight_validation;
+            }
             draft_backend_options.cuda_resident_bytes =
                 aurora_draft_resident_bytes;
             auto created_backend = k3x::make_cuda_backend(
