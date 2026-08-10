@@ -175,7 +175,7 @@
 - [x] Inspect CUDA 13.3 graph update/thread-safety contracts, CUDA Samples, installed CUDA 13.3.73, and the exact resident MoE-layer boundary.
 - [x] Compare a whole-token graph, one mutable superset graph, and reference/update/bounded ordered-set cache experiments.
 - [x] Write and self-review the accepted bounded CUDA Graph cache design.
-- [ ] Write and self-review the detailed TDD implementation plan.
+- [x] Write and self-review the detailed TDD implementation plan.
 - [ ] Implement graph identity, bounded cache, strict options, and telemetry through witnessed RED/GREEN cycles.
 - [ ] Integrate exact CUDA capture/update/cache execution and target/draft ownership.
 - [ ] Add and run the canonical B-0025 trace ablation with digest-backed evidence.
