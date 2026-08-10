@@ -328,16 +328,23 @@ int main(int argc, char** argv) {
     }
     auto fixture = make_fixture(loaded.value(), arguments->experts);
 
-    auto oracle_backend =
-        k3x::make_cuda_backend(backend_options(Boundary::ffn_block));
-    if (!oracle_backend) {
-        write_error(oracle_backend.error(), oracle_backend.message());
-        return 4;
-    }
-    auto oracle = execute_split(*oracle_backend.value(), fixture);
-    if (!oracle) {
-        write_error(oracle.error(), oracle.message());
-        return 4;
+    std::vector<float> oracle;
+    std::uint64_t oracle_peak_vram_bytes{};
+    {
+        auto oracle_backend =
+            k3x::make_cuda_backend(backend_options(Boundary::ffn_block));
+        if (!oracle_backend) {
+            write_error(oracle_backend.error(), oracle_backend.message());
+            return 4;
+        }
+        auto oracle_result = execute_split(*oracle_backend.value(), fixture);
+        if (!oracle_result) {
+            write_error(oracle_result.error(), oracle_result.message());
+            return 4;
+        }
+        oracle = std::move(oracle_result.value());
+        oracle_peak_vram_bytes =
+            oracle_backend.value()->memory_stats().peak_device_bytes;
     }
 
     k3x::Profiler profiler;
@@ -361,7 +368,7 @@ int main(int argc, char** argv) {
     }
     const auto cold_runtime_after = backend.value()->runtime_stats();
     auto observed_maximum_error =
-        maximum_error(cold.value(), oracle.value());
+        maximum_error(cold.value(), oracle);
 
     for (std::size_t index = 0; index < arguments->warmup; ++index) {
         const auto result = execute();
@@ -391,7 +398,7 @@ int main(int argc, char** argv) {
         samples.push_back(elapsed);
     }
     observed_maximum_error = std::max(
-        observed_maximum_error, maximum_error(actual, oracle.value()));
+        observed_maximum_error, maximum_error(actual, oracle));
     const auto runtime_after = backend.value()->runtime_stats();
     const auto profile_after = profiler.summary();
     const auto memory = backend.value()->memory_stats();
@@ -433,7 +440,10 @@ int main(int argc, char** argv) {
               << runtime_after.resident_weight_bytes
               << ",\"peak_resident_weight_bytes\":"
               << runtime_after.peak_resident_weight_bytes
-              << ",\"peak_vram_bytes\":" << memory.peak_device_bytes
+              << ",\"oracle_peak_vram_bytes\":"
+              << oracle_peak_vram_bytes
+              << ",\"peak_vram_bytes\":"
+              << std::max(oracle_peak_vram_bytes, memory.peak_device_bytes)
               << ",\"weight_cache_bypasses\":"
               << runtime_after.weight_cache_bypasses -
                      runtime_before.weight_cache_bypasses
