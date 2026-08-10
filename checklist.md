@@ -166,7 +166,7 @@
 - [x] Measure B-0024 at released dimensions with 3 warmups and 20 iterations and commit digest-backed evidence.
 - [x] Update README, architecture, performance model, decisions, benchmarks, checklist, and context notes.
 - [x] Run the complete CPU/liburing/ASan/CUDA/sanitizer verification matrix.
-- [ ] Complete the final Critical/Important-only read-only review.
+- [x] Complete the final Critical/Important-only read-only review.
 - [ ] Publish through a public PR, merge, verify post-merge correctness/CodeQL, and update `PROJECT_STATE.md` last.
 
 ## Milestone 12 — Fused routed accumulation CUDA kernel
