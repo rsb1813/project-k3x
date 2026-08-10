@@ -417,18 +417,18 @@ Use the existing deterministic synthetic source generator and converter. Do not 
 
 Run one canonical WSL2 audit and commit raw summaries. Treat timings as converter audit measurements, not throughput forecasts.
 
-- [ ] **Step 3: Run the full local verification matrix**
+- [x] **Step 3: Run the full local verification matrix**
 
 ```powershell
 rtk wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/c/Users/jolib/Documents/project-k3x/.worktrees/milestone-twenty-four-cuda-graph-cache && cmake --build build-cpu -j && ctest --test-dir build-cpu --output-on-failure && K3X_BUILD_DIR=build-cpu /home/jolib/.venvs/k3x-m1/bin/python -m pytest -q'
-rtk wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/c/Users/jolib/Documents/project-k3x/.worktrees/milestone-twenty-four-cuda-graph-cache && cmake --build build-liburing -j && ctest --test-dir build-liburing --output-on-failure && K3X_BUILD_DIR=build-liburing /home/jolib/.venvs/k3x-m1/bin/python -m pytest -q'
+rtk wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/c/Users/jolib/Documents/project-k3x/.worktrees/milestone-twenty-four-cuda-graph-cache && cmake --build build-liburing -j && ctest --test-dir build-liburing --output-on-failure && K3X_TEST_IO_URING=1 K3X_BUILD_DIR=build-liburing /home/jolib/.venvs/k3x-m1/bin/python -m pytest -q'
 rtk wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/c/Users/jolib/Documents/project-k3x/.worktrees/milestone-twenty-four-cuda-graph-cache && cmake --build build-asan -j && ctest --test-dir build-asan --output-on-failure'
 rtk wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/c/Users/jolib/Documents/project-k3x/.worktrees/milestone-twenty-four-cuda-graph-cache && cmake --build build-cuda -j && ctest --test-dir build-cuda --output-on-failure && K3X_BUILD_DIR=build-cuda /home/jolib/.venvs/k3x-m1/bin/python -m pytest -q'
 ```
 
 Expected: every suite passes. Re-run the unchanged stable CUDA Graph hit Compute Sanitizer as a cross-boundary regression gate and report it separately from Python parser coverage.
 
-- [ ] **Step 4: Synchronize the TITAN Ledger in protocol order**
+- [x] **Step 4: Synchronize the TITAN Ledger in protocol order**
 
 Update `ARCHITECTURE.md`, D-051 in `DECISIONS.md`, B-0026 in `BENCHMARKS.md`, `README.md`, checklist, and context notes. Update `PROJECT_STATE.md` last. State that D-028 was already implemented, distinguish local integrity from publisher authenticity, and retain no-full-weight/no-cloud/no-tok/s caveats.
 

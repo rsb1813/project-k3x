@@ -366,6 +366,16 @@ Each graph entry owns the captured definition, executable, fixed page-locked inp
 
 B-0025 measures stable-one, alternating-two, and rotating-five ordered identities across direct, update-one, and cache capacities one/two/four. All 15 rows preserve exact output, zero warm weight H2D, zero fallback/bypass, one synchronization, and thirteen logical kernels per call. Stable and alternating deltas are mixed from -4.41% to +4.47%; rotating cache rows with 20/20 misses and evictions are 6.09%–11.57% slower. This does not justify a default. CUDA Graph execution remains implemented, experimental, and opt-in; real K3 ordered-set reuse, native-Linux end-to-end timing, dynamic residency interaction, and a whole-token device graph remain unmeasured.
 
+## Milestone 25 converter trust boundary
+
+Milestone 25 hardens the existing K3X v1 streaming converter before it consumes externally supplied real shards. The source manifest is rooted, contained, and canonical: shard paths must remain below the declared source root, shard identities and tensor ownership cannot overlap, constants and lowercase SHA-256 fields are exact, and every tensor belongs to exactly one declared shard. This extends the bounded fixture integrity work from D-028 rather than replacing it.
+
+Safetensors parsing is bounded before allocation by the upstream 100,000,000-byte header ceiling. Duplicate or non-standard JSON, invalid metadata structure, unsupported dtype/shape combinations, byte-count disagreement, gaps, overlaps, and trailing payload bytes fail closed. Valid leading JSON whitespace, scalar tensors, and empty tensors remain supported.
+
+Resume ledgers require the exact versioned schema, canonical hashes and UUID, unique ordered extent identities, bounded numeric fields, and consistency with the current plan, source bytes, partial bytes, and CRC32C. After all committed entries validate, the writer truncates any uncommitted suffix to the exact last `offset + length`, not the following aligned boundary, then regenerates padding and remaining extents. Corrupt committed content remains fatal and the ledger is not rewritten on failure.
+
+B-0026 measures fresh, clean-resume, and 8,192-byte orphan-resume synthetic conversions. All three cap a source read at 257 bytes and finish as Reader-valid 1,421,568-byte artifacts; both resume paths reuse two extents from a 20,736-byte committed prefix. Peak RSS, token throughput, GPU behavior, physical storage traffic, real-checkpoint behavior, and publisher authenticity remain unmeasured.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.
@@ -396,7 +406,7 @@ VEILBREAK remains isolated from model correctness modes and from serving-layer p
 
 ## K3X data flow
 
-The file format is deliberately execution ordered. The converter reads bounded source chunks, copies or transforms one extent, verifies it after `fsync`, records completion in an atomic ledger, and releases temporary memory. Only after every extent is verified are directories and the superblock finalized and the `.partial` artifact atomically renamed.
+The file format is deliberately execution ordered. The converter reads bounded source chunks, copies or transforms one extent, verifies it after `fsync`, records completion in an atomic ledger, and releases temporary memory. On resume it validates the canonical committed prefix before truncating only the uncommitted suffix to the final extent's exact end. Only after every extent is verified are directories and the superblock finalized and the `.partial` artifact atomically renamed.
 
 ```mermaid
 flowchart LR
@@ -404,6 +414,7 @@ flowchart LR
     CONVERT --> PARTIAL[".partial aligned extents"]
     PARTIAL --> VERIFY["read-back CRC32C"]
     VERIFY --> LEDGER["atomic resume ledger"]
+    LEDGER -->|"validate prefix; truncate orphan suffix"| PARTIAL
     LEDGER --> FINAL["directories + SHA-256 + final rename"]
 ```
 

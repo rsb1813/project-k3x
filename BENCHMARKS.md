@@ -919,6 +919,30 @@ PR #40 was rebase-merged at public integration head `13a403f`. Branch and pull-r
 
 The result retains direct execution as the default. Stable and alternating deltas are small and mixed, while rotating churn is consistently slower. Real K3 routed-set reuse, native-Linux end-to-end token timing, dynamic residency interaction, utilization, physical traffic, and quality remain unmeasured.
 
+## B-0026 — Milestone 25 converter integrity audit
+
+- Date: 2026-08-10.
+- Commit: canonical runner and implementation `70e71a7`; committed evidence `cbc4d35`.
+- Hardware: AMD Ryzen 7 9800X3D host under WSL2 Ubuntu 24.04.4. The RTX 5080 was present but unused. The audit used temporary filesystem storage and did not measure the P44 Pro as a physical device.
+- Model/checkpoint: deterministic synthetic K3-compatible source checkpoint and K3X v1 output; no official Kimi K3 weight.
+- Mode: `k3x-converter-integrity-audit-v1`, 257-byte source chunks, interruption after two committed extents, and an optional 8,192-byte orphan suffix.
+- Context length, decode tok/s, prefill tok/s, TTFT, VRAM, H2D, cache hit rate, average Top-K, speculative acceptance, cold rescue, GPU utilization, GPU bandwidth, physical NVMe GB/token, and quality: not applicable or not measured.
+- System RAM: peak RSS not measured. Output bytes are file size, not resident-memory use.
+
+| Scenario | Wall time | Maximum source read | Output | Reused extents | Committed prefix | Orphan suffix | Reader valid |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| fresh | 804,991,621 ns | 257 B | 1,421,568 B | 0 | 0 B | 0 B | yes |
+| resume-clean | 800,116,522 ns | 257 B | 1,421,568 B | 2 | 20,736 B | 0 B | yes |
+| resume-orphan | 887,550,657 ns | 257 B | 1,421,568 B | 2 | 20,736 B | 8,192 B | yes |
+
+Artifact SHA-256 values for fresh, clean-resume, and orphan-resume are `7abe2955c1433b1b6087308b37eefaf6edbdf9a70a6b04c6fdf071e8bd209998`, `4597ed5559cf8a4c3f9da9e875dbf00d903413b1ef553a4006c76f1c80839e77`, and `22b0d40dc643bd48ca81e8e00da2a3d3d7fef2b32a130e26a0bc6c94f31d8ae2`. Root digests are `ba8fdade8492068af56a4ac51b6e7e4cb4e45e13b107881cec782b1e37db112d`, `c4707c4644eb66f1b4c0bc22a3fce22bd6fb29f00104ca1b641fde9ac06c1751`, and `71122ea28bdd8abfbf27deb2b589a85e72c0a95a7abe5931da02ecfc8433c751`.
+
+Runner SHA-256 is `d292991ada21dd305078d2fe90116450d7a5184606962891bc1c383c47487ca0`; canonical aggregate SHA-256 is `4181e012dc0ccc1570f5ca18336ee3037327b32da63b8128bcc5423c0191100c`; summary JSON/CSV SHA-256 is `f78de6ef9bb3b47d1cb3d56af1969d1d3d465025a21ee0b25f2d97df27e38116` / `c98f12b39fdc7f76bd4cd824cb5fc9da9b44208dd27a954c958f6e3bf3b6ea6d`. The verifier checks schema, exact scenario order, aggregate and file digests, JSON/CSV parity, LF-only evidence, bounded reads, Reader validity, resume reuse, and absence of token/GPU/quality fields.
+
+Fresh verification passes CPU CTest 15/15 with pytest 405 passed/70 skipped; liburing/direct CTest 16/16 with capability-aware pytest 407 passed/68 skipped; ASan/UBSan CTest 16/16; and CUDA CTest 27/27 with pytest 459 passed/16 skipped. The unchanged released MoE-layer Compute Sanitizer regression reports `ERROR SUMMARY: 0 errors`. This CUDA gate does not extend parser coverage.
+
+B-0026 is a correctness and recovery audit, not a performance forecast. It permits bounded official-source discovery to begin; it does not establish publisher authenticity, full-checkpoint conversion, cloud execution, token throughput, or a production memory ceiling.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
@@ -933,4 +957,5 @@ The result retains direct execution as the default. Stable and alternating delta
 - Native-Linux and representative-dimension repetition of B-0022 before selecting a MoE-layer boundary or CUDA Graph strategy as a default.
 - Real K3 ordered routed-set reuse, native-Linux end-to-end graph timing, and dynamic residency interaction before reconsidering CUDA Graphs or a larger device-resident token boundary; B-0025 keeps direct execution as the default.
 - Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
+- Bounded official Kimi K3 shard discovery and conversion with content-addressed provenance before claiming real-checkpoint compatibility.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.
