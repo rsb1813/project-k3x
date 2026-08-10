@@ -15,7 +15,7 @@ Use a narrow trust-boundary audit rather than either a no-op repetition of D-028
 3. Inspect each referenced safetensors shard independently and prove exact ownership: every manifest tensor appears in exactly its declared shard, no referenced shard supplies an undeclared tensor, and duplicate tensor names across shards are rejected rather than silently overwritten.
 4. Validate safetensors header structure, tensor names, dtype, shape, offsets, byte length, and non-overlap without reading tensor payloads into memory. Duplicate JSON keys and malformed metadata fail with a stable source-header error.
 5. Parse the resume ledger through a strict schema boundary. Required top-level and extent keys, lowercase fixed-width hex strings, non-boolean integers, canonical extent order, and valid UUID length are verified before reuse.
-6. Treat the ledger as the commit record. After every committed extent and partial-file CRC is verified, truncate and fsync any bytes after the aligned end of the committed prefix. This recovers a crash after payload fsync but before ledger publication without preserving orphan bytes or allowing unbounded suffix growth.
+6. Treat the ledger as the commit record. After every committed extent and partial-file CRC is verified, truncate and fsync any bytes after the exact end of the committed prefix. Padding for the next aligned extent is not checksummed or ledger-committed and is regenerated deterministically on resume. This recovers a crash after payload fsync but before ledger publication without preserving orphan bytes or allowing unbounded suffix growth.
 
 ## Source manifest contract
 

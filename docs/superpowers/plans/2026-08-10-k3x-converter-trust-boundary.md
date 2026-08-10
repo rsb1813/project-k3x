@@ -368,7 +368,7 @@ Expected: the valid orphan-suffix output is larger than clean output; committed 
 
 - [ ] **Step 3: Implement post-validation truncation**
 
-After the existing loop verifies every committed partial CRC, compute the aligned end of the last completed extent or `SUPERBLOCK_BYTES` for an empty prefix. Reject a partial shorter than that boundary. If it is longer, open it `r+b`, `truncate(boundary)`, `flush()`, and `os.fsync()`. Seek subsequent new writes from that boundary. Do not truncate before all validation loops finish.
+After the existing loop verifies every committed partial CRC, compute the exact `offset + length` of the last completed extent or `SUPERBLOCK_BYTES` for an empty prefix. This exact byte is the ledger-committed boundary; alignment padding for the next extent is uncommitted and will be regenerated. Reject a partial shorter than that boundary. If it is longer, open it `r+b`, `truncate(boundary)`, `flush()`, and `os.fsync()`. Seek subsequent new writes from that boundary. Do not truncate before all validation loops finish.
 
 - [ ] **Step 4: Run Task 4 GREEN and full converter tests**
 
