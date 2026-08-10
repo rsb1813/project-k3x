@@ -373,7 +373,7 @@ git add tools/ablate_cuda_aurora_residency.py \
 git commit -m "bench: add CUDA AURORA residency ablation"
 ```
 
-- [ ] **Step 6: Run canonical B-0020**
+- [x] **Step 6: Run canonical B-0020**
 
 ```bash
 K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 python \
@@ -385,7 +385,7 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 python \
 
 Do not claim a speedup until the summary exists and every parity, capacity, bypass, and H2D gate passes.
 
-- [ ] **Step 7: Add committed-evidence validation and commit results**
+- [x] **Step 7: Add committed-evidence validation and commit results**
 
 Extend the test to load committed B-0020, require 10 JSON and 10 CSV files, recompute every raw digest, summary CSV digest, aggregate digest, pair delta, H2D reduction, and hit rate. Run it and commit.
 
