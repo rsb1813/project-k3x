@@ -561,7 +561,7 @@ git commit -m "feat: report resident MoE layer telemetry"
 - Consumes: `run_benchmark(...)`, draft boundary option, and new telemetry.
 - Produces: nine canonical rows, four named pairs, raw JSON/CSV, `summary.json`, and LF-stable `summary.csv`.
 
-- [ ] **Step 1: Write the canonical matrix test before the runner exists**
+- [x] **Step 1: Write the canonical matrix test before the runner exists**
 
 Define this exact case order in the test.
 
@@ -581,7 +581,7 @@ EXPECTED = (
 
 Assert four pair names, three warmups/twenty samples in committed evidence, and that the runner uses only the executable synthetic artifact.
 
-- [ ] **Step 2: Run RED and witness missing module**
+- [x] **Step 2: Run RED and witness missing module**
 
 Run:
 
@@ -592,7 +592,7 @@ Run:
 
 Expected: import failure for `tools.ablate_cuda_aurora_moe_layer`.
 
-- [ ] **Step 3: Implement the minimum nine-row runner**
+- [x] **Step 3: Implement the minimum nine-row runner**
 
 Reuse B-0021 fixed options. Split rows pass `aurora_draft_boundary="ffn-block"`; layer rows pass `aurora_draft_boundary="moe-layer"`. Both use `resident-grid`, FP32, reused allocation, synchronous transfer, fusion none, and 8 MiB residency.
 
@@ -633,7 +633,7 @@ if (
 
 Compute paired decode, synchronization, activation-H2D, and D2H deltas from raw records. Use `csv.DictWriter(..., lineterminator="\n")` and SHA-256 every raw artifact plus canonical aggregate.
 
-- [ ] **Step 4: Run one live sample and schema tests**
+- [x] **Step 4: Run one live sample and schema tests**
 
 Run:
 
@@ -645,7 +645,7 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 \
 
 Expected: matrix/schema tests and the marked live one-sample comparison pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tools/ablate_cuda_aurora_moe_layer.py tests/python/test_cuda_aurora_moe_layer_ablation.py
