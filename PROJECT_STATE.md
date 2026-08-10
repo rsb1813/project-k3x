@@ -92,7 +92,7 @@ State audited on 2026-08-10 against public documentation head `7728acd0`; its po
 
 ## Work in progress
 
-- Milestone 21 runtime/backend inspection, official CUDA Graph constraint review, alternative comparison, accepted design, D-046, checklist, and context notes are complete. The detailed TDD plan, implementation, B-0022, full verification, and publication remain.
+- Milestone 21 runtime/backend inspection, official CUDA Graph constraint review, alternative comparison, accepted design, D-046, detailed TDD plan, checklist, and context notes are complete. Implementation, B-0022, full verification, and publication remain.
 - `moe-layer` is not implemented. Its accepted contract is exact FP32/native-MXFP4, resident-only, all-or-nothing before launch, and non-default. CUDA Graph caching and a complete device-resident token graph remain deferred alternatives.
 - Milestone 20 design, implementation, B-0021, full verification, sanitizer coverage, evidence cross-checks, final review, public PR integration, post-merge CI, README, and TITAN Ledger synchronization are complete.
 - `resident-grid` remains exact, opt-in, and non-default. CUDA Graph caching, a cooperative persistent kernel, device-resident KDA/MLA/router state, reduced precision, and dynamic eviction remain outside this milestone.
@@ -133,8 +133,8 @@ State audited on 2026-08-10 against public documentation head `7728acd0`; its po
 
 ## Next concrete tasks
 
-1. Write and self-review the detailed Milestone 21 TDD implementation plan.
-2. Implement the CPU oracle and CUDA layer kernels, then connect exact runtime fallback, AURORA ownership, CLI, and telemetry through witnessed RED/GREEN cycles.
+1. Implement the CPU oracle and CUDA layer kernels through witnessed RED/GREEN cycles.
+2. Connect exact runtime fallback, AURORA ownership, CLI, and telemetry through focused tests.
 3. Implement and run B-0022 before deciding whether CUDA Graph caching or a larger device token graph is the next boundary.
 4. Update GitHub Actions dependencies to remove the observed Node.js 20 deprecation warning without changing the correctness workflow contract.
 
