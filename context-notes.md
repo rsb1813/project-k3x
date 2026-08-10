@@ -455,3 +455,8 @@
 - profiler-off 행에서 D2H가 0으로 사라지는 초기 B-0024 실패를 실제 로그로 확인했다. D2H physical accounting을 backend runtime counter로 분리한 뒤 profiler on/off가 동일한 traffic을 보고하도록 수정했다.
 - 최종 B-0024는 18행 모두 maximum error 0, warm weight H2D 0, bypass/fallback 0을 통과했다. Per-call은 20회에 9,395,527,680 bytes를 scan했고 admission은 cold 469,776,384 bytes 이후 warm scan 0, identity hit 120을 기록했다.
 - profiler-off complete-layer median은 1/4/16 experts에서 19.570/20.729/24.519 ms에서 1.247/1.940/5.221 ms로 감소했다. 이는 layer microbenchmark attribution이며 token TPS나 full-model 결과가 아니다.
+
+## 2026-08-10 Milestone 23 최종 리뷰 수정
+
+- Critical/Important-only read-only review는 B-0024 원시 자료, 요약, CSV digest와 산식을 모두 재계산해 일치함을 확인했고 Critical은 찾지 않았다. Important 1건은 target의 `admission` 선택이 CUDA AURORA draft MoE-layer backend로 전달되지 않아 draft가 묵시적으로 `per-call`을 유지하는 CLI ownership 누락이었다.
+- 회귀 테스트로 target은 `admission`이지만 draft가 `per-call`인 RED를 먼저 확인했다. CUDA AURORA draft boundary가 `moe-layer`일 때만 target validation mode를 전달하도록 최소 수정했고, 직접 CUDA 실행에서 target/draft 모두 `admission`, target/draft 최초 scan 18/18, identity hit 144/162를 확인했다. 전체 CUDA CTest는 26/26 통과했다.

@@ -286,3 +286,47 @@ def test_cuda_draft_matches_cpu_persistent_target_execution(
             assert resident_grid_bypass[field] == cpu[field]
             assert moe_layer[field] == cpu[field]
             assert moe_layer_bypass[field] == cpu[field]
+
+
+def test_admission_validation_propagates_to_cuda_moe_layer_draft(
+    tmp_path: Path,
+) -> None:
+    if Path(os.environ.get("K3X_BUILD_DIR", "build")).name != "build-cuda":
+        pytest.skip("CUDA AURORA admission propagation requires build-cuda")
+    artifact = _top16_artifact(tmp_path)
+    output = tmp_path / "admission-draft.json"
+    result = subprocess.run(
+        [
+            str(cpp_binary("k3x_run")),
+            "--model", str(artifact),
+            "--prompt-ids", "1,7,3,9",
+            "--generate", "6",
+            "--mode", "incremental",
+            "--backend", "cuda-custom",
+            "--cuda-allocation", "reused",
+            "--cuda-weights", "resident",
+            "--cuda-batching", "resident-grid",
+            "--cuda-boundary", "moe-layer",
+            "--cuda-resident-bytes", "8388608",
+            "--cuda-weight-validation", "admission",
+            "--speculative-mode", "aurora-persistent",
+            "--speculative-verification", "token-major",
+            "--speculative-block-size", "2",
+            "--aurora-draft-k", "4",
+            "--aurora-draft-backend", "cuda-custom",
+            "--aurora-draft-resident-bytes", "8388608",
+            "--aurora-draft-batching", "resident-grid",
+            "--aurora-draft-boundary", "moe-layer",
+            "--json", str(output),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["cuda_weight_validation"] == "admission"
+    assert payload["draft_cuda_weight_validation"] == "admission"
+    assert payload["immutable_validation_scans"] > 0
+    assert payload["draft_immutable_validation_scans"] > 0
+    assert payload["immutable_validation_hits"] > 0
+    assert payload["draft_immutable_validation_hits"] > 0
