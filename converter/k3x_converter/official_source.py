@@ -192,6 +192,8 @@ def _decode_document(body: bytes, code: str) -> dict[str, object]:
 def _valid_path(value: object) -> bool:
     if not isinstance(value, str) or not value or "\\" in value:
         return False
+    if any(part in {"", ".", ".."} for part in value.split("/")):
+        return False
     path = PurePosixPath(value)
     return not path.is_absolute() and all(part not in {"", ".", ".."} for part in path.parts)
 
