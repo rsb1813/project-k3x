@@ -321,13 +321,13 @@ git commit -m "feat: execute resident expert grids"
 - Produces `--aurora-draft-batching grouped|resident-grid`, default `grouped`.
 - Preserves replay CPU-only and target/draft backend ownership.
 
-- [ ] **Step 1: Add failing CLI and provider tests**
+- [x] **Step 1: Add failing CLI and provider tests**
 
 Add cases proving `resident-grid` is rejected with zero capacity, transient weights, CPU backend, speculation `none` when supplied as a draft option, replay, prefetch, routed accumulation, or per-operation allocation. Assert return code 2 for invalid options, code 4 for CUDA unavailable in CPU builds, the exact error class, and absence of the requested output file.
 
 Extend the CUDA provider test with CPU, resident-grouped, resident-grid, and one-byte grid fallback providers. Require equal candidates for full accept and partial rollback, equal cursor counters, positive grid calls only for full-fit, and positive fallbacks only for one-byte.
 
-- [ ] **Step 2: Run focused tests and witness RED**
+- [x] **Step 2: Run focused tests and witness RED**
 
 Run:
 
@@ -342,13 +342,13 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 \
 
 Expected: unknown-argument or unsupported-provider failures because the new identity is not parsed or accepted.
 
-- [ ] **Step 3: Add parsing and closed capability gates**
+- [x] **Step 3: Add parsing and closed capability gates**
 
 Parse `resident-grid` into `CudaBatchingMode::resident_grid`. Track whether `--aurora-draft-batching` was explicitly supplied. Only AURORA persistent CUDA owns it. Build draft options with `grouped` by default and `resident_grid` only when requested.
 
 Update `supported_persistent_backend()` to accept grouped transient/resident as before and resident-grid only with positive resident capacity and the exact fixed backend identity.
 
-- [ ] **Step 4: Select the grid in Stable LatentMoE**
+- [x] **Step 4: Select the grid in Stable LatentMoE**
 
 After existing payload view construction, select:
 
@@ -365,7 +365,7 @@ auto outputs = backend_.options().cuda_batching ==
 
 Keep the existing router-slot accumulation loop unchanged.
 
-- [ ] **Step 5: Run provider, CLI, and full CPU/CUDA CTests**
+- [x] **Step 5: Run provider, CLI, and full CPU/CUDA CTests**
 
 Run:
 
@@ -381,7 +381,7 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 \
 
 Expected: exact provider/CLI parity and all CTests pass.
 
-- [ ] **Step 6: Commit runtime ownership**
+- [x] **Step 6: Commit runtime ownership**
 
 ```bash
 git add runtime/src/model.cpp runtime/src/aurora.cpp runtime/src/main.cpp \

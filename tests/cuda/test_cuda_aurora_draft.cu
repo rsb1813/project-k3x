@@ -26,7 +26,9 @@ k3x::RuntimeOptions draft_options() {
     return options;
 }
 
-k3x::BackendOptions cuda_options(std::uint64_t resident_bytes = 0) {
+k3x::BackendOptions cuda_options(
+    std::uint64_t resident_bytes = 0,
+    k3x::CudaBatchingMode batching = k3x::CudaBatchingMode::grouped) {
     k3x::BackendOptions options;
     options.kind = k3x::BackendKind::cuda_custom;
     options.dense_precision = k3x::DensePrecision::fp32;
@@ -34,7 +36,7 @@ k3x::BackendOptions cuda_options(std::uint64_t resident_bytes = 0) {
     options.cuda_weights = resident_bytes == 0
         ? k3x::CudaWeightMode::transient
         : k3x::CudaWeightMode::resident;
-    options.cuda_batching = k3x::CudaBatchingMode::grouped;
+    options.cuda_batching = batching;
     options.cuda_boundary = k3x::CudaBoundaryMode::ffn_block;
     options.cuda_transfer = k3x::CudaTransferMode::synchronous;
     options.cuda_moe_fusion = k3x::CudaMoeFusionMode::none;
@@ -50,21 +52,33 @@ int main(int argc, char** argv) {
     auto cuda_reader = k3x::Reader::open(artifact);
     auto resident_reader = k3x::Reader::open(artifact);
     auto bypass_reader = k3x::Reader::open(artifact);
+    auto grid_reader = k3x::Reader::open(artifact);
+    auto grid_bypass_reader = k3x::Reader::open(artifact);
     require(static_cast<bool>(cpu_reader));
     require(static_cast<bool>(cuda_reader));
     require(static_cast<bool>(resident_reader));
     require(static_cast<bool>(bypass_reader));
+    require(static_cast<bool>(grid_reader));
+    require(static_cast<bool>(grid_bypass_reader));
     auto cpu_backend = k3x::make_cpu_backend();
     auto created_cuda_backend = k3x::make_cuda_backend(cuda_options());
     auto created_resident_backend =
         k3x::make_cuda_backend(cuda_options(8ULL * 1024ULL * 1024ULL));
     auto created_bypass_backend = k3x::make_cuda_backend(cuda_options(1));
+    auto created_grid_backend = k3x::make_cuda_backend(cuda_options(
+        8ULL * 1024ULL * 1024ULL, k3x::CudaBatchingMode::resident_grid));
+    auto created_grid_bypass_backend = k3x::make_cuda_backend(cuda_options(
+        1, k3x::CudaBatchingMode::resident_grid));
     require(static_cast<bool>(created_cuda_backend));
     require(static_cast<bool>(created_resident_backend));
     require(static_cast<bool>(created_bypass_backend));
+    require(static_cast<bool>(created_grid_backend));
+    require(static_cast<bool>(created_grid_bypass_backend));
     auto cuda_backend = std::move(created_cuda_backend.value());
     auto resident_backend = std::move(created_resident_backend.value());
     auto bypass_backend = std::move(created_bypass_backend.value());
+    auto grid_backend = std::move(created_grid_backend.value());
+    auto grid_bypass_backend = std::move(created_grid_bypass_backend.value());
     const std::vector<std::uint32_t> prompt{1, 7, 3, 9};
     const k3x::AuroraPersistentConfig config{
         .scheduler = {.policy = k3x::AuroraBlockPolicy::fixed,
@@ -80,10 +94,17 @@ int main(int argc, char** argv) {
     auto bypass_provider = k3x::AuroraPersistentDraftProvider::create(
         bypass_reader.value(), *bypass_backend, prompt, draft_options(),
         config);
+    auto grid_provider = k3x::AuroraPersistentDraftProvider::create(
+        grid_reader.value(), *grid_backend, prompt, draft_options(), config);
+    auto grid_bypass_provider = k3x::AuroraPersistentDraftProvider::create(
+        grid_bypass_reader.value(), *grid_bypass_backend, prompt,
+        draft_options(), config);
     require(static_cast<bool>(cpu_provider));
     require(static_cast<bool>(cuda_provider));
     require(static_cast<bool>(resident_provider));
     require(static_cast<bool>(bypass_provider));
+    require(static_cast<bool>(grid_provider));
+    require(static_cast<bool>(grid_bypass_provider));
 
     std::vector<std::uint32_t> history{43};
     auto request = [&](std::size_t count) {
@@ -99,15 +120,23 @@ int main(int argc, char** argv) {
     auto cuda_first = cuda_provider.value()->propose(request(2));
     auto resident_first = resident_provider.value()->propose(request(2));
     auto bypass_first = bypass_provider.value()->propose(request(2));
+    auto grid_first = grid_provider.value()->propose(request(2));
+    auto grid_bypass_first = grid_bypass_provider.value()->propose(request(2));
     require(static_cast<bool>(cpu_first));
     require(static_cast<bool>(cuda_first));
     require(static_cast<bool>(resident_first));
     require(static_cast<bool>(bypass_first));
+    require(static_cast<bool>(grid_first));
+    require(static_cast<bool>(grid_bypass_first));
     require(cuda_first.value().candidate_tokens ==
             cpu_first.value().candidate_tokens);
     require(resident_first.value().candidate_tokens ==
             cpu_first.value().candidate_tokens);
     require(bypass_first.value().candidate_tokens ==
+            cpu_first.value().candidate_tokens);
+    require(grid_first.value().candidate_tokens ==
+            cpu_first.value().candidate_tokens);
+    require(grid_bypass_first.value().candidate_tokens ==
             cpu_first.value().candidate_tokens);
     const auto first = cpu_first.value().candidate_tokens;
     const std::vector<std::uint32_t> full_commit{first[0], first[1], 17};
@@ -122,21 +151,31 @@ int main(int argc, char** argv) {
     cuda_provider.value()->update(full_verification);
     resident_provider.value()->update(full_verification);
     bypass_provider.value()->update(full_verification);
+    grid_provider.value()->update(full_verification);
+    grid_bypass_provider.value()->update(full_verification);
     history.insert(history.end(), full_commit.begin(), full_commit.end());
 
     auto cpu_second = cpu_provider.value()->propose(request(4));
     auto cuda_second = cuda_provider.value()->propose(request(4));
     auto resident_second = resident_provider.value()->propose(request(4));
     auto bypass_second = bypass_provider.value()->propose(request(4));
+    auto grid_second = grid_provider.value()->propose(request(4));
+    auto grid_bypass_second = grid_bypass_provider.value()->propose(request(4));
     require(static_cast<bool>(cpu_second));
     require(static_cast<bool>(cuda_second));
     require(static_cast<bool>(resident_second));
     require(static_cast<bool>(bypass_second));
+    require(static_cast<bool>(grid_second));
+    require(static_cast<bool>(grid_bypass_second));
     require(cuda_second.value().candidate_tokens ==
             cpu_second.value().candidate_tokens);
     require(resident_second.value().candidate_tokens ==
             cpu_second.value().candidate_tokens);
     require(bypass_second.value().candidate_tokens ==
+            cpu_second.value().candidate_tokens);
+    require(grid_second.value().candidate_tokens ==
+            cpu_second.value().candidate_tokens);
+    require(grid_bypass_second.value().candidate_tokens ==
             cpu_second.value().candidate_tokens);
     const auto second = cpu_second.value().candidate_tokens;
     const std::vector<std::uint32_t> partial_commit{second[0], 23};
@@ -151,6 +190,8 @@ int main(int argc, char** argv) {
     cuda_provider.value()->update(partial_verification);
     resident_provider.value()->update(partial_verification);
     bypass_provider.value()->update(partial_verification);
+    grid_provider.value()->update(partial_verification);
+    grid_bypass_provider.value()->update(partial_verification);
 
     const auto cpu_stats = cpu_provider.value()->stats();
     const auto cuda_stats = cuda_provider.value()->stats();
@@ -182,6 +223,15 @@ int main(int argc, char** argv) {
     require(bypass_stats.weight_cache_bypasses > 0);
     require(bypass_stats.resident_weight_bytes == 0);
     require(bypass_stats.peak_resident_weight_bytes == 0);
+
+    const auto grid_stats = grid_backend->runtime_stats();
+    require(grid_stats.resident_grid_calls > 0);
+    require(grid_stats.resident_grid_kernel_launches ==
+            grid_stats.resident_grid_calls * 4);
+    require(grid_stats.resident_grid_fallbacks == 0);
+    const auto grid_bypass_stats = grid_bypass_backend->runtime_stats();
+    require(grid_bypass_stats.resident_grid_calls == 0);
+    require(grid_bypass_stats.resident_grid_fallbacks > 0);
 
     auto replay_reader = k3x::Reader::open(artifact);
     require(static_cast<bool>(replay_reader));

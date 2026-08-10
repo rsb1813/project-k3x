@@ -105,6 +105,57 @@ def test_cpp_runner_rejects_invalid_cuda_execution_options(
 
 
 @pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--backend", "cuda-custom", "--cuda-batching", "resident-grid"],
+        [
+            "--backend", "cuda-custom",
+            "--cuda-allocation", "reused",
+            "--cuda-weights", "transient",
+            "--cuda-batching", "resident-grid",
+            "--cuda-boundary", "ffn-block",
+        ],
+        [
+            "--backend", "cuda-custom",
+            "--cuda-allocation", "per-operation",
+            "--cuda-weights", "resident",
+            "--cuda-resident-bytes", "1",
+            "--cuda-batching", "resident-grid",
+            "--cuda-boundary", "ffn-block",
+        ],
+    ],
+)
+def test_cpp_runner_rejects_open_resident_grid_contract(
+    arguments: list[str],
+) -> None:
+    result = subprocess.run(
+        [str(cpp_binary("k3x_run")), *arguments],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == (
+        "resident-grid batching requires resident cuda-custom ffn-block "
+        "reused synchronous execution with fusion none"
+    )
+
+
+def test_cpp_runner_rejects_draft_batching_without_persistent_aurora() -> None:
+    result = subprocess.run(
+        [
+            str(cpp_binary("k3x_run")),
+            "--aurora-draft-batching", "resident-grid",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert result.stderr.strip() == (
+        "speculative mode none does not accept speculative options"
+    )
+
+
+@pytest.mark.parametrize(
     ("arguments", "message"),
     [
         (["--l1-expert-cache", "clock"], "unknown L1 expert cache mode: clock"),

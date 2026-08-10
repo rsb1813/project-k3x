@@ -84,6 +84,22 @@ def test_cuda_draft_matches_cpu_persistent_target_execution(
                 "cuda-custom",
                 ["--aurora-draft-resident-bytes", "8388608"],
             ),
+            (
+                "resident-grid",
+                "cuda-custom",
+                [
+                    "--aurora-draft-resident-bytes", "8388608",
+                    "--aurora-draft-batching", "resident-grid",
+                ],
+            ),
+            (
+                "resident-grid-bypass",
+                "cuda-custom",
+                [
+                    "--aurora-draft-resident-bytes", "1",
+                    "--aurora-draft-batching", "resident-grid",
+                ],
+            ),
         )
         for identity, draft_backend, extra in identities:
             output = tmp_path / f"{verification}-{policy}-{identity}.json"
@@ -103,6 +119,8 @@ def test_cuda_draft_matches_cpu_persistent_target_execution(
         cpu = results["cpu"]
         cuda = results["transient"]
         resident = results["resident"]
+        resident_grid = results["resident-grid"]
+        resident_grid_bypass = results["resident-grid-bypass"]
         assert cpu["aurora_draft_backend"] == "cpu"
         assert cuda["aurora_draft_backend"] == "cuda-custom"
         assert cpu["draft_device"] == "CPU"
@@ -133,6 +151,8 @@ def test_cuda_draft_matches_cpu_persistent_target_execution(
         assert resident["resident_weight_bytes"] == 0
         assert resident["peak_resident_weight_bytes"] == 0
         assert cuda["draft_cuda_batching"] == "grouped"
+        assert resident_grid["draft_cuda_batching"] == "resident-grid"
+        assert resident_grid_bypass["draft_cuda_batching"] == "resident-grid"
         assert cuda["draft_cuda_boundary"] == "ffn-block"
         assert cuda["draft_cuda_transfer"] == "synchronous"
         assert cuda["draft_cuda_moe_fusion"] == "none"
@@ -165,3 +185,5 @@ def test_cuda_draft_matches_cpu_persistent_target_execution(
         ):
             assert cuda[field] == cpu[field]
             assert resident[field] == cpu[field]
+            assert resident_grid[field] == cpu[field]
+            assert resident_grid_bypass[field] == cpu[field]
