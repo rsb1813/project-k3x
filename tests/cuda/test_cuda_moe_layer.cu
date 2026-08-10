@@ -233,11 +233,52 @@ int test_admission_validation() {
     return 0;
 }
 
+int test_graph_cache_hit_with_dynamic_staging() {
+    Fixture fixture;
+    auto graph_options = options(8U * 1024U * 1024U);
+    graph_options.cuda_weight_validation =
+        k3x::CudaWeightValidationMode::admission;
+    graph_options.cuda_graph = k3x::CudaGraphMode::cache;
+    graph_options.cuda_graph_entries = 1;
+    auto backend = k3x::make_cuda_backend(graph_options);
+    if (!backend) return 40;
+    auto cpu = k3x::make_cpu_backend();
+    const auto experts = std::span(fixture.experts).first(1);
+    const auto contributions = std::span(fixture.contributions).first(1);
+    for (int call = 0; call < 2; ++call) {
+        if (call == 1) {
+            fixture.input = {-3.0F, 0.25F, 1.5F};
+            fixture.contributions[0] = -0.75F;
+        }
+        const auto expected = cpu->resident_mxfp4_moe_layer(
+            fixture.input, fixture.layer(), experts, contributions, 1.0e-5F,
+            2.0F, 1.5F, 7, k3x::ProfilePhase::decode);
+        const auto actual = backend.value()->resident_mxfp4_moe_layer(
+            fixture.input, fixture.layer(), experts, contributions, 1.0e-5F,
+            2.0F, 1.5F, 7, k3x::ProfilePhase::decode);
+        if (!expected || !actual || !expected.value().executed ||
+            !actual.value().executed) return 41 + call;
+        for (std::size_t row = 0; row < hidden_width; ++row) {
+            if (!close(actual.value().output[row],
+                       expected.value().output[row])) return 43 + call;
+        }
+    }
+    const auto stats = backend.value()->runtime_stats();
+    if (stats.cuda_graph_cache_misses != 1 ||
+        stats.cuda_graph_cache_hits != 1 ||
+        stats.cuda_graph_instantiations != 1 ||
+        stats.cuda_graph_launches != 2 ||
+        stats.cuda_graph_resident_entries != 1 ||
+        stats.cuda_graph_peak_entries != 1) return 45;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
     if (const auto result = run_full_fit(1)) return result;
     if (const auto result = run_full_fit(4)) return result + 20;
     if (const auto result = test_bypass_and_validation()) return result;
-    return test_admission_validation();
+    if (const auto result = test_admission_validation()) return result;
+    return test_graph_cache_hit_with_dynamic_staging();
 }
