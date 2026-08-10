@@ -34,7 +34,7 @@
 - Produces: `k3x::OfficialExpertObservation`, `k3x::OfficialExpertIdentity`, `k3x::official_kimi_k3_expert()`, and `k3x::verify_official_kimi_k3_expert(const OfficialExpertObservation&)`.
 - Consumes: `optional_storage_fixture`, `Result<T>`, and `ErrorCode::invalid_mxfp4` from the existing runtime.
 
-- [ ] **Step 1: Add the failing identity test and CMake target**
+- [x] **Step 1: Add the failing identity test and CMake target**
 
 Define the wished-for observation with exact literals and verify success plus one mutation for every field.
 
@@ -57,7 +57,7 @@ if (k3x::verify_official_kimi_k3_expert(bad)) return 2;
 
 Repeat independent mutations for ordered digest, optional features, layer, expert, payload bytes, and each shape. Add `test_official_expert` to CTest and add `runtime/src/official_expert.cpp` to `k3x_runtime` before the file exists.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -68,7 +68,7 @@ cmake --build build --target test_official_expert
 
 Expected: compilation fails because `k3x/official_expert.hpp` and the declared symbols do not exist.
 
-- [ ] **Step 3: Implement the minimal pure contract**
+- [x] **Step 3: Implement the minimal pure contract**
 
 Use fixed-size values only.
 
@@ -97,7 +97,7 @@ Result<OfficialExpertIdentity> verify_official_kimi_k3_expert(
 
 The implementation compares every field and returns `invalid_mxfp4` with `official Kimi K3 expert identity mismatch` on any difference. Parse the two literal 64-hex digests once into byte arrays; reject no caller input because the API accepts bytes, not text.
 
-- [ ] **Step 4: Run GREEN and the CPU CTest suite**
+- [x] **Step 4: Run GREEN and the CPU CTest suite**
 
 Run:
 
@@ -108,7 +108,7 @@ ctest --test-dir build --output-on-failure
 
 Expected: `official_expert` passes and the complete CPU CTest suite has zero failures.
 
-- [ ] **Step 5: Self-review and commit**
+- [x] **Step 5: Self-review and commit**
 
 Confirm the helper performs no I/O, allocation, environment lookup, or CUDA work. Then commit:
 
