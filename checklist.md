@@ -115,6 +115,18 @@
 - [x] TITAN Ledger 최종 검토와 검토 수정 후 전체 검증.
 - [x] Public GitHub PR, CI, main 반영과 post-merge CI 확인.
 
+## Milestone 20 — Resident multi-token multi-expert CUDA grid
+
+- [x] Re-read the public charter, architecture, state, D-043, and B-0020 evidence.
+- [x] Capture an exact resident AURORA Nsight launch diagnostic.
+- [x] Compare resident grid, routed-set CUDA Graph cache, and whole-device draft graph alternatives.
+- [x] Write and self-review the accepted resident-grid design.
+- [ ] Write and self-review the detailed TDD implementation plan.
+- [ ] Implement the CPU oracle and CUDA rectangular grid through witnessed RED/GREEN cycles.
+- [ ] Integrate AURORA CLI, exact fallback, telemetry, and B-0021 runner.
+- [ ] Run B-0021, the complete verification matrix, sanitizer, and evidence cross-checks.
+- [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
+
 ## Milestone 12 — Fused routed accumulation CUDA kernel
 
 - [x] TITAN Ledger, 현재 CUDA 경계, 원 구현 근거 재확인.

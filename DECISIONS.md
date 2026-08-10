@@ -489,3 +489,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason not promoted to default: throughput is mixed even on the tiny synthetic graph, 410–451 synchronous waits and fine-grained launches remain, static no-eviction residency does not model full Kimi K3 pressure, and coding quality/native-Linux/full-model traffic remain unmeasured.
 - Revisit: after persistent multi-token/multi-expert CUDA execution isolates launch/synchronization amortization. Dynamic eviction/prediction and reduced precision remain separate policy and quality axes.
 - Publication: PR #27 was rebase-merged at public integration head `c88456c0`; push, pull-request, and post-merge correctness runs `31346575341`, `31346587586`, and `31346725071` passed.
+
+## D-044 — Implement a resident rectangular expert grid before CUDA Graphs or a whole-device draft graph
+
+- Date: 2026-08-10.
+- Status: accepted design; not yet implemented or benchmarked.
+- Decision: add an opt-in `resident-grid` CUDA batching identity that evaluates equal-shaped native MXFP4 experts and token inputs with four grid-wide launches while returning separate expert/token outputs for the existing stable CPU accumulation order. Require exact resident weights and use whole-request serial fallback on any hard-cap bypass.
+- Alternatives considered: cache a CUDA Graph for every ordered routed-expert set; move KDA, MLA, routing, argmax, and draft state to a complete device-resident graph; first implement the smaller dependency-closed resident expert grid.
+- Evidence: B-0020 retains 410 to 451 synchronizations after removing most weight H2D. An Nsight Systems diagnostic at public head `01eac162` observed 1,040 kernel launches and 1,346 async copies across ten CUDA draft forwards, while aggregate GPU kernel duration was only about 1.13 ms. This supports reducing operation granularity before adding routing-set graph-cache policy.
+- Reason accepted: the grid attacks repeated expert launch overhead without changing KDA/MLA state, routing, arithmetic order, proposals, or target authority, and exposes a multi-token contract that later expert-major consumers can reuse.
+- Reason CUDA Graphs deferred: ordered expert-set reuse and a safe bounded graph-cache policy are unmeasured, so graph capture would combine execution and caching policy in one experiment.
+- Reason whole-device graph deferred: it would simultaneously replace attention, recurrent state, routing, argmax, and token lifecycle boundaries, making correctness attribution too broad for one milestone.
+- Revisit: compare direct-grid launch counts and end-to-end B-0021 results first. If host activation round trips still dominate, move next to a device-resident layer or whole-token graph rather than stacking speculative graph caching.
