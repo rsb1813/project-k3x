@@ -108,3 +108,38 @@ def test_committed_b0021_evidence_is_self_consistent() -> None:
         summary["records"], sort_keys=True, separators=(",", ":")
     ).encode()
     assert hashlib.sha256(aggregate).hexdigest() == summary["aggregate_sha256"]
+    summary_csv = output / "summary.csv"
+    assert hashlib.sha256(summary_csv.read_bytes()).hexdigest() == summary[
+        "summary_csv_sha256"
+    ]
+    assert b"\r\n" not in summary_csv.read_bytes()
+    baseline_decode = summary["records"][0]["decode_tokens_per_second"]
+    records = {record["name"]: record for record in summary["records"]}
+    for record in summary["records"]:
+        assert record["token_parity"] is True
+        assert record["committed_route_parity"] is True
+        assert record["final_state_max_abs_error"] <= 1.0e-6
+        assert record["decode_delta_percent"] == (
+            record["decode_tokens_per_second"] / baseline_decode - 1.0
+        ) * 100.0
+    for _, grouped_name, grid_name in PAIRS:
+        grouped = records[grouped_name]
+        grid = records[grid_name]
+        assert grouped["draft_resident_grid_calls"] == 0
+        assert grid["draft_resident_grid_calls"] > 0
+        assert grid["draft_resident_grid_kernel_launches"] == (
+            grid["draft_resident_grid_calls"] * 4
+        )
+        assert grid["draft_resident_grid_fallbacks"] == 0
+        assert grid["draft_moe_kernel_launches"] < grouped[
+            "draft_moe_kernel_launches"
+        ]
+        assert grid["paired_decode_delta_percent"] == (
+            grid["decode_tokens_per_second"]
+            / grouped["decode_tokens_per_second"] - 1.0
+        ) * 100.0
+        assert grid["paired_moe_launch_reduction_percent"] == (
+            1.0
+            - grid["draft_moe_kernel_launches"]
+            / grouped["draft_moe_kernel_launches"]
+        ) * 100.0
