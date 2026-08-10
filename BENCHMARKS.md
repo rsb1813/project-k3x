@@ -768,7 +768,7 @@ Public push and pull-request correctness runs `31346575341` and `31346587586` pa
 ## B-0021 — Milestone 20 resident CUDA expert grid
 
 - Date: 2026-08-10.
-- Commit: evidence head `331d33d`; implementation lineage ends at `efeba7b` before the evidence commit.
+- Commit: public evidence head `8e85ff3`; implementation and runner lineage ends at `5ed8e74` before the evidence commit.
 - Hardware: AMD Ryzen 7 9800X3D and NVIDIA GeForce RTX 5080 16,303 MiB under WSL2 Ubuntu 24.04.4, CUDA 13.3 native `sm_120`.
 - Model/checkpoint: runner-generated synthetic natural Top-16 K3X artifact, SHA-256 `7e12595e5e400b4c26946c75927b37f39ed3a0bcb8f90ca72b1e8f7c6cb95cad`.
 - Mode: CPU natural Top-16 target; persistent exact resident CUDA Top-4 draft; grouped versus resident-grid draft batching; fixed block-2 and adaptive policies; token-major and CPU expert-major target verification; 4 prompt tokens; 6 generated tokens; 3 warmups and 20 measured samples.
@@ -788,6 +788,8 @@ Each grid call uses four MoE kernel launches. Descriptor H2D is 5,760 bytes acro
 Raw JSON/CSV and summaries are under `results/b0021-cuda-aurora-grid-wsl/`. Runner SHA-256 is `0497a53a6ba6045d911dbb685e7155ee698a7e83946059e7b611202918bd4aa8`; canonical aggregate SHA-256 is `a628064544cdae0d06af7177539bc253f264946840f59651508121146af2edda`; summary JSON/CSV SHA-256 is `8586f6a1939dfe209813c504727c0952149730a757eb5600b05fb6a02021877f` / `b87b26c1403a2f3d30fa46b5550837f1f72db18a1d162710a907419da8d64401`.
 
 Fresh verification passes CPU CTest 14/14 with pytest 290 passed/55 skipped, liburing/direct CTest 15/15 with pytest 296 passed/49 skipped, ASan/UBSan liburing CTest 15/15, and CUDA CTest 24/24 with pytest 336 passed/9 skipped. Compute Sanitizer reports `ERROR SUMMARY: 0 errors` for the direct expert-grid test and 4x4 benchmark.
+
+Public push and pull-request correctness runs `31351465644` and `31351486146` passed. PR #29 was rebase-merged at public integration head `90b20c87`, and post-merge `main` correctness run `31351649761` passed.
 
 ## Pending benchmark gates
 

@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 20 resident multi-token multi-expert CUDA grid is implemented, measured, and fully verified on branch `codex/milestone-twenty-resident-grid`; public integration remains. The opt-in boundary uses exact resident native MXFP4 weights and four grid-wide launches while preserving separate expert/token outputs and stable CPU accumulation. Milestone 19 remains the latest public runtime through PR #27 at integration head `c88456c0` until the Milestone 20 branch is merged.
+Milestone 20 resident multi-token multi-expert CUDA grid is implemented, measured, fully verified, and public through PR #29 at integration head `90b20c87`. The opt-in boundary uses exact resident native MXFP4 weights and four grid-wide launches while preserving separate expert/token outputs and stable CPU accumulation. CPU drafting and grouped CUDA execution remain the defaults.
 
-State audited on 2026-08-10 at local evidence head `331d33d` plus synchronized documentation. Fresh verification passes CPU CTest 14/14 with Python 290 passed/55 skipped, liburing/direct CTest 15/15 with Python 296 passed/49 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 24/24 with Python 336 passed/9 skipped. Direct expert-grid Compute Sanitizer checks report zero errors. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 against public integration head `90b20c87` and successful post-merge `main` correctness run `31351649761`. Fresh local verification passes CPU CTest 14/14 with Python 290 passed/55 skipped, liburing/direct CTest 15/15 with Python 296 passed/49 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 24/24 with Python 336 passed/9 skipped. Direct expert-grid Compute Sanitizer checks report zero errors. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
@@ -92,7 +92,7 @@ State audited on 2026-08-10 at local evidence head `331d33d` plus synchronized d
 
 ## Work in progress
 
-- Milestone 20 design, implementation, B-0021, full verification, sanitizer coverage, evidence cross-checks, README, and TITAN Ledger synchronization are complete. Final review, public PR integration, and post-merge CI remain.
+- Milestone 20 design, implementation, B-0021, full verification, sanitizer coverage, evidence cross-checks, final review, public PR integration, post-merge CI, README, and TITAN Ledger synchronization are complete.
 - `resident-grid` remains exact, opt-in, and non-default. CUDA Graph caching, a cooperative persistent kernel, device-resident KDA/MLA/router state, reduced precision, and dynamic eviction remain outside this milestone.
 - Milestone 19 implementation, B-0020, full verification, sanitizer coverage, evidence cross-checks, final self-review, public PR integration, post-merge CI, and TITAN Ledger synchronization are complete.
 - Exact bounded CUDA residency remains opt-in and no-eviction. No default, draft precision, scheduler threshold, routing rule, or target verifier changed in Milestone 19.
@@ -131,9 +131,8 @@ State audited on 2026-08-10 at local evidence head `331d33d` plus synchronized d
 
 ## Next concrete tasks
 
-1. Complete Milestone 20 final review, publish the branch, merge the public PR, verify post-merge CI, and reconcile publication identifiers in the README and ledger.
-2. Isolate a device-resident draft layer/token boundary that removes activation round trips and host orchestration without combining reduced precision or dynamic eviction.
-3. Update GitHub Actions dependencies to remove the observed Node.js 20 deprecation warning without changing the correctness workflow contract.
+1. Isolate a device-resident draft layer/token boundary that removes activation round trips and host orchestration without combining reduced precision or dynamic eviction.
+2. Update GitHub Actions dependencies to remove the observed Node.js 20 deprecation warning without changing the correctness workflow contract.
 
 ## Hardware assumptions
 
@@ -162,7 +161,8 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Local Milestone 20 evidence head `331d33d` contains the exact resident grid implementation lineage, B-0021 runner, 9 rows, and 20 result files under `results/b0021-cuda-aurora-grid-wsl/`. Public integration is pending.
+- Public Milestone 20 integration head `90b20c87` includes the exact resident grid implementation, B-0021 evidence, English README, and synchronized TITAN Ledger. PR #29 push/PR correctness runs `31351465644`/`31351486146` and post-merge `main` correctness run `31351649761` succeeded.
+- Public Milestone 20 evidence head `8e85ff3` contains the B-0021 runner lineage, 9 rows, and 20 result files under `results/b0021-cuda-aurora-grid-wsl/`.
 - Fresh Milestone 20 verification passes CPU CTest 14/14 and pytest 290 passed/55 skipped, liburing/direct CTest 15/15 and pytest 296 passed/49 skipped, ASan/UBSan liburing CTest 15/15, and CUDA CTest 24/24 with pytest 336 passed/9 skipped. Direct expert-grid and 4x4 benchmark Compute Sanitizer runs report `ERROR SUMMARY: 0 errors`.
 - B-0021 artifact SHA-256 is `7e12595e5e400b4c26946c75927b37f39ed3a0bcb8f90ca72b1e8f7c6cb95cad`; runner SHA-256 is `0497a53a6ba6045d911dbb685e7155ee698a7e83946059e7b611202918bd4aa8`; canonical aggregate SHA-256 is `a628064544cdae0d06af7177539bc253f264946840f59651508121146af2edda`; summary JSON/CSV SHA-256 is `8586f6a1939dfe209813c504727c0952149730a757eb5600b05fb6a02021877f` / `b87b26c1403a2f3d30fa46b5550837f1f72db18a1d162710a907419da8d64401`.
 - Public Milestone 19 integration head `c88456c0` includes the complete bounded exact CUDA draft-residency implementation, B-0020 evidence, English README, and synchronized TITAN Ledger. PR #27 push/PR correctness runs `31346575341`/`31346587586` and post-merge `main` correctness run `31346725071` succeeded.

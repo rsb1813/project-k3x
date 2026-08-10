@@ -125,7 +125,7 @@
 - [x] Implement the CPU oracle and CUDA rectangular grid through witnessed RED/GREEN cycles.
 - [x] Integrate AURORA CLI, exact fallback, telemetry, and B-0021 runner.
 - [x] Run B-0021, the complete verification matrix, sanitizer, and evidence cross-checks.
-- [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
+- [x] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
 
 ## Milestone 12 — Fused routed accumulation CUDA kernel
 
