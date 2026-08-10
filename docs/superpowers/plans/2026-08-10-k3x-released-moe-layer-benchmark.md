@@ -228,7 +228,7 @@ git commit -m "bench: validate released MoE layer traffic"
 - Consumes: released K3X artifact and Task 2 binary.
 - Produces: canonical six rows, three named pairs, digest-backed JSON/CSV summary.
 
-- [ ] **Step 1: Write matrix and gate RED tests**
+- [x] **Step 1: Write matrix and gate RED tests**
 
 Require this order.
 
@@ -242,11 +242,11 @@ CASES = (
 
 Monkeypatch `_run_case` with deterministic records. Prove the runner rejects numerical divergence, fallback, nonzero warm weight H2D, incorrect sync counts, missing 14,336-byte cold/resident norm delta, or non-decreasing activation/D2H.
 
-- [ ] **Step 2: Run RED and witness missing module**
+- [x] **Step 2: Run RED and witness missing module**
 
 Expected: import failure for `tools.ablate_cuda_released_moe_layer`.
 
-- [ ] **Step 3: Implement the runner and pair validation**
+- [x] **Step 3: Implement the runner and pair validation**
 
 Invoke the binary with no shell, parse one JSON object, and include raw record SHA-256. Before summary output, validate exact identity and compute:
 
@@ -265,11 +265,11 @@ layer["paired_d2h_reduction_bytes"] = (
 
 Do not assert latency direction. Write `summary.csv` with `lineterminator="\n"` and compute raw, aggregate, runner, artifact, and summary CSV hashes.
 
-- [ ] **Step 4: Run unit and one-sample live GREEN**
+- [x] **Step 4: Run unit and one-sample live GREEN**
 
 Run CPU unit tests first, then CUDA live tests with warmup 0/sample 1. Expected: three pairs pass every physical gate.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tools/ablate_cuda_released_moe_layer.py \

@@ -150,7 +150,7 @@
 - [x] Compare released repeated-view, scaled synthetic, and executable-checkpoint approaches.
 - [x] Write and self-review the accepted released-dimension benchmark design.
 - [x] Write and self-review the detailed TDD implementation plan.
-- [ ] Implement the released-dimension split/layer benchmark through witnessed RED/GREEN cycles.
+- [x] Implement the released-dimension split/layer benchmark through witnessed RED/GREEN cycles.
 - [ ] Implement and run B-0023 with committed raw/summary evidence validation.
 - [ ] Run full verification, synchronize the TITAN Ledger and README, review, publish, merge, and verify public `main`.
 
