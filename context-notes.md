@@ -513,3 +513,13 @@
 - Final Critical/Important review에서 설계 문서 한 줄의 stale `align_up` 표현을 확인했다. 구현과 계획이 사용하는 exact `last.offset + last.length`로 `ca8c544e`에서 정정했고 focused resume/audit 회귀 40개와 scoped re-review를 통과했다.
 - Public ready PR #42의 push/pull-request correctness `31379029215`/`31379074639`와 CodeQL `31379074656`이 통과했다. PR은 public integration head `ca8c544e`로 rebase merge됐다.
 - Post-merge `main` correctness `31379311743`과 CodeQL `31379311695`도 통과했다. GitHub Actions의 Node.js 20 및 CodeQL v3 deprecation annotation은 성공 결론을 바꾸지 않으며 별도 maintenance 대상이다.
+
+## 2026-08-10 Milestone 26 공식 source 조사
+
+- Official Hugging Face `moonshotai/Kimi-K3` main은 commit `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`로 resolve됐다. Public/ungated API는 118 files와 1,560,998,984,390 repository bytes를 보고했다.
+- `model.safetensors.index.json`은 59,764,096 bytes, LFS SHA-256 `a1c5210650ce71d2d3ae9ec5a101ac4afd3cf4b10091be589853437eb967febd`다. Index는 497,220 tensors, 96 shards, total tensor bytes 1,560,860,324,864를 보고했다.
+- Layer 1 expert 0의 w1/w2/w3 packed/scale 여섯 tensor는 shard 2에 함께 있다. Shard 2는 16,990,911,504 bytes, LFS SHA-256 `26a3284e1d2cb567934ebef002e6a1813551d646739e8bcb1e9e3fe7f878e0f5`다.
+- 실제 8-byte HTTP Range는 206과 exact total을 반환했고 header length는 818,696 bytes였다. Header-only range에서 여섯 tensor가 하나의 17,547,264-byte contiguous payload union을 이룸을 확인했다. Tensor payload는 아직 다운로드하지 않았다.
+- Official `modeling_kimi_linear.py`는 w1=gate, w2=down, w3=up을 명시한다. 기존 K3X released storage fixture의 gate/down/up 크기와 exact payload bytes가 일치한다.
+- API-only는 tensor placement가 없어 기각했고 full 16.99 GB shard-first는 첫 real evidence가 느려 보류했다. Pinned index + header + exact expert range를 채택하되 provenance를 `transport-pinned-range`로 제한하고 full-shard-verified라고 주장하지 않는다.
+- M26 live output은 non-executable storage fixture이며 real bytes와 K3X artifact를 Git에 commit하지 않는다. No-payload dry-run이 기본이고 live payload는 explicit capped mode에서만 허용한다.
