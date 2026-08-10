@@ -876,6 +876,8 @@ Raw JSON and summaries are under `results/b0024-cuda-admission-validation-wsl/`.
 
 Fresh verification passes CPU CTest 14/14 with pytest 311 passed/68 skipped, liburing/direct CTest 15/15 with pytest 313 passed/66 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 26/26 with pytest 369 passed/10 skipped. Compute Sanitizer reports `ERROR SUMMARY: 0 errors` for both `test_cuda_moe_layer` and a released one-expert admission benchmark invocation.
 
+Public push and pull-request correctness runs `31363433423` and `31363437230` passed, as did pull-request CodeQL run `31363437226`. PR #38 was rebase-merged at public integration head `e24cac2`, followed by successful post-merge `main` correctness run `31363673811` and CodeQL run `31363673857`.
+
 The measurement establishes repeated host validation as the dominant B-0023 wall term and accepts admission validation as an exact opt-in path. It does not promote the general default because unchanged-pointer in-place mutation is outside the admission contract, and it does not select CUDA Graphs without ordered routed-set reuse and bounded graph-cache evidence.
 
 ## Pending benchmark gates

@@ -4,7 +4,7 @@
 
 ## Current execution addendum — Milestone 23
 
-Milestone 23 implements D-048 with a transactional immutable-weight admission registry, measures the 18-row B-0024 profiler/validation matrix, keeps `per-call` as the reference default, and defers CUDA Graph selection until ordered routed-set reuse and bounded graph-cache behavior are measured. The normative design and task plan are `docs/superpowers/specs/2026-08-10-k3x-admission-validation-attribution-design.md` and `docs/superpowers/plans/2026-08-10-k3x-admission-validation-attribution.md`.
+Milestone 23 implemented D-048 with a transactional immutable-weight admission registry, measured the 18-row B-0024 profiler/validation matrix, kept `per-call` as the reference default, and was published through PR #38 at `e24cac2`. The next planning gate is ordered routed-set reuse, graph update/re-instantiation cost, and bounded graph-cache behavior before any CUDA Graph selection. The normative completed design and task plan are `docs/superpowers/specs/2026-08-10-k3x-admission-validation-attribution-design.md` and `docs/superpowers/plans/2026-08-10-k3x-admission-validation-attribution.md`.
 
 ## 목표
 

@@ -461,3 +461,8 @@
 - Critical/Important-only read-only review는 B-0024 원시 자료, 요약, CSV digest와 산식을 모두 재계산해 일치함을 확인했고 Critical은 찾지 않았다. Important 1건은 target의 `admission` 선택이 CUDA AURORA draft MoE-layer backend로 전달되지 않아 draft가 묵시적으로 `per-call`을 유지하는 CLI ownership 누락이었다.
 - 회귀 테스트로 target은 `admission`이지만 draft가 `per-call`인 RED를 먼저 확인했다. CUDA AURORA draft boundary가 `moe-layer`일 때만 target validation mode를 전달하도록 최소 수정했고, 직접 CUDA 실행에서 target/draft 모두 `admission`, target/draft 최초 scan 18/18, identity hit 144/162를 확인했다. 전체 CUDA CTest는 26/26 통과했다.
 - 동일 리뷰어의 focused re-review는 이전 Important가 해결됐고 새 Critical/Important가 없다고 판정했다. 코드의 MoE-layer 한정 전달, 회귀의 target/draft mode 및 실제 scan/hit 검증, 원장 설명이 서로 일치함을 확인했다.
+
+## 2026-08-10 Milestone 23 공개 통합
+
+- 최종 head `07cd743`의 push/PR correctness `31363433423`/`31363437230`과 PR CodeQL `31363437226`이 통과했다. PR #38을 public integration head `e24cac2`로 rebase merge했고, post-merge `main` correctness `31363673811`과 CodeQL `31363673857`도 통과했다.
+- 공개 결과는 admission validation을 opt-in으로 유지한다. B-0024의 layer attribution을 token TPS나 full-model 품질로 확대 해석하지 않으며, 다음 선택 gate는 ordered routed-set reuse와 bounded CUDA Graph cache의 실제 비용 측정이다.
