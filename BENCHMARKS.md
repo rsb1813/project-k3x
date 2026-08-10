@@ -819,6 +819,8 @@ The exact layer boundary remains opt-in. Two paired decode rows improve and two 
 
 Fresh verification passes CPU CTest 14/14 with pytest 295 passed/56 skipped, liburing/direct CTest 15/15 with pytest 301 passed/50 skipped, ASan/UBSan liburing CTest 15/15, and CUDA CTest 26/26 with pytest 341 passed/10 skipped. Compute Sanitizer reports `ERROR SUMMARY: 0 errors` for both the low-level MoE-layer operations and the complete resident layer. Focused B-0022 evidence plus CLI ownership verification passes 103/33.
 
+Public branch and pull-request correctness runs `31355460022` and `31355471896` passed, as did CodeQL run `31355471922`. PR #31 was rebase-merged at public integration head `97eb3e4e`, and post-merge `main` correctness run `31355678835` passed.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
