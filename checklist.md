@@ -201,7 +201,7 @@
 - [x] Resolve the official public snapshot and inspect API, index, shard 2 header, exact expert ranges, and w1/w2/w3 roles without tensor-payload download.
 - [x] Compare API-only, full-shard-first, and pinned exact-range approaches.
 - [x] Write and self-review the accepted official range-discovery design under the standing pre-Cloud-Run approval.
-- [ ] Write and self-review the detailed TDD implementation plan.
+- [x] Write and self-review the detailed TDD implementation plan.
 - [ ] Implement bounded snapshot/index/config discovery through witnessed RED/GREEN cycles.
 - [ ] Implement exact expert planning and atomic range materialization through witnessed RED/GREEN cycles.
 - [ ] Convert and verify one live official expert slice without committing real bytes.

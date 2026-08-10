@@ -523,3 +523,9 @@
 - Official `modeling_kimi_linear.py`는 w1=gate, w2=down, w3=up을 명시한다. 기존 K3X released storage fixture의 gate/down/up 크기와 exact payload bytes가 일치한다.
 - API-only는 tensor placement가 없어 기각했고 full 16.99 GB shard-first는 첫 real evidence가 느려 보류했다. Pinned index + header + exact expert range를 채택하되 provenance를 `transport-pinned-range`로 제한하고 full-shard-verified라고 주장하지 않는다.
 - M26 live output은 non-executable storage fixture이며 real bytes와 K3X artifact를 Git에 commit하지 않는다. No-payload dry-run이 기본이고 live payload는 explicit capped mode에서만 허용한다.
+## 2026-08-10 — Milestone 26 implementation boundary
+
+- The accepted implementation plan is `docs/superpowers/plans/2026-08-10-k3x-official-range-discovery.md`.
+- `config.json` is bound to its API-declared Git blob ID by recomputing the canonical Git blob SHA-1 before released-dimension validation.
+- Implementation order is bounded transport and snapshot identity, strict index/config/header planning, atomic one-expert materialization, then the sole opt-in live B-0027 payload request.
+- The live artifact remains untracked and non-executable; M27 owns the first real-weight CUDA layer execution.
