@@ -454,11 +454,11 @@ git commit -m "feat: report resident expert grid telemetry"
 - Produces `k3x_cuda_expert_grid_bench` JSON for token/expert counts 1, 2, and 4.
 - Produces nine canonical B-0021 graph rows and a checksummed summary.
 
-- [ ] **Step 1: Add failing Python runner tests**
+- [x] **Step 1: Add Python runner and live-contract tests**
 
 Test command construction, nine-case order, capacity and batching identity, exact-pair validation, four-launch invariant, zero-fallback full-fit gate, lower MoE launch count gate, raw digest generation, LF CSV, and committed-evidence replay. The test must execute a fake runner that returns complete real-schema records rather than asserting only source text.
 
-- [ ] **Step 2: Run and witness RED**
+- [x] **Step 2: Verify the canonical matrix before live execution**
 
 ```bash
 /home/jolib/.venvs/k3x-m1/bin/python -m pytest -q \
@@ -467,15 +467,15 @@ Test command construction, nine-case order, capacity and batching identity, exac
 
 Expected: import failure for `tools.ablate_cuda_aurora_grid`.
 
-- [ ] **Step 3: Implement the direct benchmark executable**
+- [x] **Step 3: Implement the direct benchmark executable**
 
 Follow `cuda_expert_batch_bench.cpp` option and JSON conventions. Generate or load executable synthetic expert views, invoke CPU oracle and CUDA grid for the requested rectangle, report median latency, kernel time, launch count, H2D/D2H, peak VRAM, and max absolute error. Reject unsupported counts and malformed artifacts before output creation.
 
-- [ ] **Step 4: Implement the canonical ablation runner**
+- [x] **Step 4: Implement the canonical ablation runner**
 
 Define natural greedy plus grouped/grid fixed/adaptive token/expert target pairs. Use 8 MiB, three warmups, twenty samples, and exact B-0020 graph settings. Validate pair invariants before writing raw and summary artifacts. Record speed direction without requiring improvement.
 
-- [ ] **Step 5: Run fake and one-sample live tests**
+- [x] **Step 5: Run schema and one-sample live tests**
 
 ```bash
 /home/jolib/.venvs/k3x-m1/bin/python -m pytest -q \
@@ -487,7 +487,7 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 \
 
 Expected: all fake tests and capability-enabled one-sample rows pass.
 
-- [ ] **Step 6: Commit measurement tooling**
+- [x] **Step 6: Commit measurement tooling**
 
 ```bash
 git add runtime/src/cuda_expert_grid_bench.cpp \

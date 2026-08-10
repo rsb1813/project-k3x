@@ -1202,7 +1202,11 @@ int main(int argc, char** argv) {
            << ",\"draft_resident_grid_fallbacks\":"
            << draft_runtime.resident_grid_fallbacks
            << ",\"draft_resident_grid_descriptor_h2d_bytes\":"
-           << draft_runtime.resident_grid_descriptor_h2d_bytes;
+           << draft_runtime.resident_grid_descriptor_h2d_bytes
+           << ",\"draft_ffn_block_calls\":"
+           << draft_runtime.ffn_block_calls
+           << ",\"draft_ffn_block_experts\":"
+           << draft_runtime.ffn_block_experts;
     output << ",\"draft_proposal_calls\":"
            << result.value().draft_proposal_calls
            << ",\"draft_candidate_tokens\":"
