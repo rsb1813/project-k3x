@@ -23,6 +23,7 @@
 #include <span>
 #include <string>
 #include <tuple>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -154,7 +155,8 @@ public:
           mxfp4_packed_scratch_(&memory_stats_, &runtime_stats_),
           mxfp4_scales_scratch_(&memory_stats_, &runtime_stats_),
           mxfp4_output_scratch_(&memory_stats_, &runtime_stats_),
-          mxfp4_group_output_scratch_(&memory_stats_, &runtime_stats_) {
+          mxfp4_group_output_scratch_(&memory_stats_, &runtime_stats_),
+          mxfp4_descriptor_scratch_(&memory_stats_, &runtime_stats_) {
         runtime_stats_.async_engine_count = async_engine_count;
         runtime_stats_.device_overlap = device_overlap;
         if (options_.cuda_weights == CudaWeightMode::resident) {
@@ -1418,6 +1420,293 @@ public:
             input, experts, {}, situ_beta, situ_linear, layer, phase);
     }
 
+    Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_grid(
+        std::span<const float> inputs, std::size_t token_count,
+        std::span<const Mxfp4MlpView> experts, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) override {
+        constexpr auto precision = NumericPrecision::mxfp4_e2m1_e8m0;
+        const auto operation_start = std::chrono::steady_clock::now();
+        const auto multiply_fits = [](std::size_t left, std::size_t right) {
+            return right == 0 ||
+                   left <= std::numeric_limits<std::size_t>::max() / right;
+        };
+        if (options_.kind != BackendKind::cuda_custom ||
+            options_.cuda_boundary != CudaBoundaryMode::ffn_block ||
+            options_.cuda_allocation != CudaAllocationMode::reused ||
+            options_.cuda_weights != CudaWeightMode::resident ||
+            options_.cuda_transfer != CudaTransferMode::synchronous ||
+            options_.cuda_batching != CudaBatchingMode::resident_grid ||
+            options_.cuda_moe_fusion != CudaMoeFusionMode::none ||
+            options_.cuda_resident_bytes == 0 || resident_weights_ == nullptr ||
+            token_count == 0 ||
+            token_count > 65535 || experts.empty() || experts.size() > 65535 ||
+            experts.front().gate.cols == 0 ||
+            !multiply_fits(token_count, experts.front().gate.cols) ||
+            inputs.size() != token_count * experts.front().gate.cols ||
+            !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
+            (situ_linear &&
+             (!std::isfinite(*situ_linear) || *situ_linear <= 0.0F))) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+
+        const auto input_width = experts.front().gate.cols;
+        const auto intermediate_width = experts.front().gate.rows;
+        const auto output_width = experts.front().down.rows;
+        std::unordered_set<std::uint64_t> tensor_ids;
+        for (const auto& expert : experts) {
+            if (expert.gate.cols != input_width ||
+                expert.gate.rows != intermediate_width ||
+                expert.up.cols != input_width ||
+                expert.up.rows != intermediate_width ||
+                expert.down.cols != intermediate_width ||
+                expert.down.rows != output_width ||
+                expert.gate.group_size != 32 || expert.up.group_size != 32 ||
+                expert.down.group_size != 32 ||
+                !valid_mxfp4_size(input_width, expert.gate) ||
+                !valid_mxfp4_size(input_width, expert.up) ||
+                !valid_mxfp4_size(intermediate_width, expert.down)) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::invalid_mxfp4);
+            }
+            for (const auto tensor_id : {
+                     expert.gate.tensor_id, expert.up.tensor_id,
+                     expert.down.tensor_id}) {
+                if (tensor_id == 0 || !tensor_ids.insert(tensor_id).second) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        ErrorCode::invalid_mxfp4);
+                }
+            }
+        }
+        if (!multiply_fits(experts.size(), token_count) ||
+            !multiply_fits(experts.size() * token_count, intermediate_width) ||
+            !multiply_fits(experts.size() * token_count, output_width) ||
+            intermediate_width > 65535 || output_width > 65535) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+
+        std::vector<cuda::Mxfp4DeviceMatrix> descriptors(experts.size() * 3);
+        std::uint64_t weight_transfer_bytes = 0;
+        bool bypass = false;
+        for (std::size_t expert_index = 0;
+             expert_index < experts.size(); ++expert_index) {
+            const auto weights = std::array{
+                experts[expert_index].gate,
+                experts[expert_index].up,
+                experts[expert_index].down,
+            };
+            for (std::size_t projection = 0; projection < weights.size();
+                 ++projection) {
+                const auto& weight = weights[projection];
+                const auto acquisition = resident_weights_->acquire(
+                    {weight.tensor_id, cuda::WeightRepresentation::mxfp4,
+                     weight.rows, weight.cols, weight.group_size},
+                    weight.packed, weight.scales);
+                if (!acquisition) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        acquisition.error(), acquisition.message());
+                }
+                if (acquisition.value().disposition ==
+                    cuda::ResidentDisposition::bypass) {
+                    bypass = true;
+                    continue;
+                }
+                descriptors[projection * experts.size() + expert_index] = {
+                    static_cast<const std::uint8_t*>(
+                        acquisition.value().primary),
+                    static_cast<const std::uint8_t*>(
+                        acquisition.value().secondary),
+                };
+                weight_transfer_bytes += acquisition.value().uploaded_bytes;
+            }
+        }
+        if (bypass) {
+            ++runtime_stats_.resident_grid_fallbacks;
+            if (weight_transfer_bytes != 0) {
+                runtime_stats_.weight_h2d_bytes += weight_transfer_bytes;
+                record(phase, ProfileOperation::weight_host_to_device,
+                       precision, layer, operation_start, 0,
+                       weight_transfer_bytes, 0, true);
+            }
+            std::vector<std::vector<float>> outputs(experts.size());
+            for (std::size_t token = 0; token < token_count; ++token) {
+                const auto token_input = inputs.subspan(
+                    token * input_width, input_width);
+                auto token_outputs = mxfp4_situ_mlp_group_impl(
+                    token_input, experts, {}, situ_beta, situ_linear, layer,
+                    phase);
+                if (!token_outputs) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        token_outputs.error(), token_outputs.message());
+                }
+                for (std::size_t expert = 0; expert < experts.size(); ++expert) {
+                    outputs[expert].insert(outputs[expert].end(),
+                                           token_outputs.value()[expert].begin(),
+                                           token_outputs.value()[expert].end());
+                }
+            }
+            return Result<std::vector<std::vector<float>>>::success(
+                std::move(outputs));
+        }
+
+        const auto expert_tokens = experts.size() * token_count;
+        const auto input_bytes = inputs.size_bytes();
+        const auto descriptor_bytes =
+            descriptors.size() * sizeof(cuda::Mxfp4DeviceMatrix);
+        const auto intermediate_count = expert_tokens * intermediate_width;
+        const auto intermediate_bytes = intermediate_count * sizeof(float);
+        const auto output_count = expert_tokens * output_width;
+        const auto output_bytes = output_count * sizeof(float);
+        if (ffn_input_scratch_.reserve(input_bytes) != cudaSuccess ||
+            mxfp4_descriptor_scratch_.reserve(descriptor_bytes) != cudaSuccess ||
+            ffn_gate_scratch_.reserve(intermediate_bytes) != cudaSuccess ||
+            ffn_up_scratch_.reserve(intermediate_bytes) != cudaSuccess ||
+            ffn_activation_scratch_.reserve(intermediate_bytes) != cudaSuccess ||
+            ffn_output_scratch_.reserve(output_bytes) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA resident expert grid allocation failed");
+        }
+        for (auto& event : resident_grid_events_) {
+            if (event.ensure() != cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA resident expert grid event creation failed");
+            }
+        }
+
+        auto* device_input = static_cast<float*>(ffn_input_scratch_.get());
+        auto* device_descriptors = static_cast<cuda::Mxfp4DeviceMatrix*>(
+            mxfp4_descriptor_scratch_.get());
+        auto* device_gate = static_cast<float*>(ffn_gate_scratch_.get());
+        auto* device_up = static_cast<float*>(ffn_up_scratch_.get());
+        auto* device_activation = static_cast<float*>(
+            ffn_activation_scratch_.get());
+        auto* device_output = static_cast<float*>(ffn_output_scratch_.get());
+        const auto h2d_start = std::chrono::steady_clock::now();
+        if (cudaMemcpyAsync(device_input, inputs.data(), input_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+            cudaMemcpyAsync(device_descriptors, descriptors.data(),
+                            descriptor_bytes, cudaMemcpyHostToDevice,
+                            stream_) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA resident expert grid upload failed");
+        }
+        const auto launch_grid = [&](std::size_t event_pair,
+                                     std::size_t descriptor_projection,
+                                     const float* grid_input, float* grid_output,
+                                     std::size_t rows, std::size_t cols,
+                                     cuda::ExpertGridInputLayout layout) {
+            auto& start = resident_grid_events_[event_pair * 2];
+            auto& end = resident_grid_events_[event_pair * 2 + 1];
+            return cudaEventRecord(start.get(), stream_) == cudaSuccess &&
+                   cuda::launch_mxfp4_matvec_grid(
+                       grid_input,
+                       device_descriptors +
+                           descriptor_projection * experts.size(),
+                       grid_output, rows, cols, experts.size(), token_count,
+                       layout, stream_) == cudaSuccess &&
+                   cudaEventRecord(end.get(), stream_) == cudaSuccess;
+        };
+        if (!launch_grid(0, 0, device_input, device_gate, intermediate_width,
+                         input_width,
+                         cuda::ExpertGridInputLayout::shared_token_major) ||
+            !launch_grid(1, 1, device_input, device_up, intermediate_width,
+                         input_width,
+                         cuda::ExpertGridInputLayout::shared_token_major) ||
+            cudaEventRecord(resident_grid_events_[4].get(), stream_) !=
+                cudaSuccess ||
+            cuda::launch_situ_glu(
+                device_gate, device_up, device_activation, intermediate_count,
+                situ_beta, situ_linear.has_value(), situ_linear.value_or(0.0F),
+                false, stream_) != cudaSuccess ||
+            cudaEventRecord(resident_grid_events_[5].get(), stream_) !=
+                cudaSuccess ||
+            !launch_grid(3, 2, device_activation, device_output, output_width,
+                         intermediate_width,
+                         cuda::ExpertGridInputLayout::expert_token_major)) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA resident expert grid launch failed");
+        }
+
+        std::vector<float> flat_output(output_count);
+        const auto d2h_start = std::chrono::steady_clock::now();
+        if (cudaMemcpyAsync(flat_output.data(), device_output, output_bytes,
+                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+            cudaStreamSynchronize(stream_) != cudaSuccess) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::backend_unavailable,
+                "CUDA resident expert grid output or synchronization failed");
+        }
+        std::array<std::uint64_t, 4> durations{};
+        for (std::size_t pair = 0; pair < durations.size(); ++pair) {
+            float milliseconds = 0.0F;
+            if (cudaEventElapsedTime(&milliseconds,
+                                     resident_grid_events_[pair * 2].get(),
+                                     resident_grid_events_[pair * 2 + 1].get()) !=
+                cudaSuccess) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::backend_unavailable,
+                    "CUDA resident expert grid timing failed");
+            }
+            durations[pair] = static_cast<std::uint64_t>(std::llround(
+                static_cast<double>(milliseconds) * 1.0e6));
+        }
+
+        std::vector<std::vector<float>> outputs(experts.size());
+        const auto values_per_expert = token_count * output_width;
+        for (std::size_t expert = 0; expert < experts.size(); ++expert) {
+            outputs[expert].assign(
+                flat_output.begin() + expert * values_per_expert,
+                flat_output.begin() + (expert + 1) * values_per_expert);
+        }
+        std::array<std::uint64_t, 3> logical_projection_bytes{};
+        for (const auto& expert : experts) {
+            const auto weights = std::array{expert.gate, expert.up, expert.down};
+            for (std::size_t projection = 0; projection < weights.size();
+                 ++projection) {
+                logical_projection_bytes[projection] +=
+                    weights[projection].packed.size_bytes() +
+                    weights[projection].scales.size_bytes();
+            }
+        }
+        ++runtime_stats_.stream_synchronization_count;
+        runtime_stats_.activation_h2d_bytes += input_bytes;
+        runtime_stats_.weight_h2d_bytes += weight_transfer_bytes;
+        ++runtime_stats_.ffn_block_calls;
+        runtime_stats_.ffn_block_experts += experts.size();
+        ++runtime_stats_.resident_grid_calls;
+        runtime_stats_.resident_grid_experts += experts.size();
+        runtime_stats_.resident_grid_tokens += token_count;
+        runtime_stats_.resident_grid_expert_tokens += expert_tokens;
+        runtime_stats_.resident_grid_kernel_launches += 4;
+        runtime_stats_.resident_grid_descriptor_h2d_bytes += descriptor_bytes;
+        record(phase, ProfileOperation::activation_host_to_device, precision,
+               layer, h2d_start, 0, input_bytes + descriptor_bytes, 0, true);
+        record(phase, ProfileOperation::weight_host_to_device, precision, layer,
+               operation_start, 0, weight_transfer_bytes, 0, true);
+        record(phase, ProfileOperation::device_to_host, precision, layer,
+               d2h_start, 0, output_bytes, 0, true);
+        record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+               operation_start, logical_projection_bytes[0], 0,
+               durations[0], true);
+        record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+               operation_start, logical_projection_bytes[1], 0,
+               durations[1], true);
+        record(phase, ProfileOperation::situ_glu, NumericPrecision::fp32,
+               layer, operation_start, intermediate_bytes, 0, durations[2],
+               true);
+        record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+               operation_start, logical_projection_bytes[2], 0,
+               durations[3], true);
+        return Result<std::vector<std::vector<float>>>::success(
+            std::move(outputs));
+    }
+
     Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_batch(
         std::span<const float> inputs, std::size_t batch_size,
         Mxfp4MlpView expert, float situ_beta,
@@ -2419,6 +2708,7 @@ private:
     cuda::ScratchBuffer mxfp4_scales_scratch_;
     cuda::ScratchBuffer mxfp4_output_scratch_;
     cuda::ScratchBuffer mxfp4_group_output_scratch_;
+    cuda::ScratchBuffer mxfp4_descriptor_scratch_;
     EventOwner dense_event_start_;
     EventOwner dense_event_end_;
     EventOwner mxfp4_event_start_;
@@ -2427,6 +2717,7 @@ private:
     std::vector<std::unique_ptr<EventOwner>> dense_group_event_ends_;
     std::vector<std::unique_ptr<EventOwner>> mxfp4_group_event_starts_;
     std::vector<std::unique_ptr<EventOwner>> mxfp4_group_event_ends_;
+    std::array<EventOwner, 8> resident_grid_events_;
     std::map<DensePlanKey, std::unique_ptr<DensePlan>> dense_plans_;
     std::unique_ptr<cuda::ResidentWeightTable> resident_weights_;
     std::unique_ptr<cuda::AsyncMxfp4Pipeline> async_pipeline_;
