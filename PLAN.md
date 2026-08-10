@@ -2,6 +2,10 @@
 
 > 이 문서는 완료된 Milestone 0의 최초 실행 계획을 보존합니다. 현재 마일스톤, 검증 상태, 측정 결과, 다음 작업은 `PROJECT_STATE.md`, `BENCHMARKS.md`, `checklist.md`를 기준으로 합니다.
 
+## Current execution addendum — Milestone 23
+
+Milestone 23 implements D-048 with a transactional immutable-weight admission registry, measures the 18-row B-0024 profiler/validation matrix, keeps `per-call` as the reference default, and defers CUDA Graph selection until ordered routed-set reuse and bounded graph-cache behavior are measured. The normative design and task plan are `docs/superpowers/specs/2026-08-10-k3x-admission-validation-attribution-design.md` and `docs/superpowers/plans/2026-08-10-k3x-admission-validation-attribution.md`.
+
 ## 목표
 
 전체 Kimi K3 체크포인트나 유료 클라우드 자원을 사용하지 않고, K3의 텍스트 디코더 그래프를 축소한 합성 모델을 PyTorch 기준 구현과 독립 C++20 runtime에서 동일하게 실행하고 K3X 형식으로 round-trip한다.

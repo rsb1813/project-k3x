@@ -853,6 +853,31 @@ Public branch and pull-request correctness runs `31358991710` and `31359003481` 
 
 The result rejects a default change and does not select CUDA Graphs. The next benchmark must preserve immutable-tensor validation while removing its repeated hot-path scan, then distinguish host validation, launch, synchronization, and kernel time before broadening the execution boundary.
 
+## B-0024 — Milestone 23 admission validation attribution
+
+- Date: 2026-08-10.
+- Commit: implementation lineage `3560e9a` through profiler-off physical telemetry correction `7931d66`; committed evidence head `105a860`.
+- Hardware: AMD Ryzen 7 9800X3D and NVIDIA GeForce RTX 5080 16,303 MiB under WSL2 Ubuntu 24.04.4, CUDA 13.3 native `sm_120`.
+- Model/checkpoint: the existing non-executable released expert fixture, SHA-256 `e087ff78284e99760a7d113cf744562878537a6379e7a63be95585eec8b9f1be`, plus deterministic released-size FP32 dense/vector tensors.
+- Mode: split `ffn-block + per-call`, complete `moe-layer + per-call`, and complete `moe-layer + admission`; profiler independently off/on; 1/4/16 repeated-view experts; 1 GiB hard capacity; 3 warmups and 20 measured iterations.
+- Context length, decode tok/s, prefill tok/s, TTFT, average Top-K, speculative acceptance, and cold rescue: not applicable and not emitted because this directly invokes one released-dimension layer with `routing_semantics=false`.
+- System RAM, physical NVMe GB/token, physical H2D/PCIe counters, GPU utilization, and GPU memory bandwidth: not measured.
+- Quality: maximum absolute error 0 against the separately scoped split CUDA oracle in all 18 rows. Coding/agentic and full-model quality are unmeasured.
+
+| Experts | Per-call median, profiler off | Admission median, profiler off | Paired change | Per-call warm validation bytes | Admission warm scans / hits |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 19,570,019 ns | 1,246,879 ns | -93.629% | 9,395,527,680 B | 0 / 120 |
+| 4 | 20,728,924 ns | 1,939,696 ns | -90.643% | 9,395,527,680 B | 0 / 120 |
+| 16 | 24,518,749 ns | 5,220,560 ns | -78.708% | 9,395,527,680 B | 0 / 120 |
+
+Each admission layer row records six cold scans and 469,776,384 cold validation bytes, followed by zero measured warm scan bytes. Every per-call layer row records 120 scans. All rows preserve zero warm weight H2D, zero cache bypass, zero grid/layer fallback, exact 80 versus 20 synchronization counts, exact launch counts, and profiler on/off parity for numerical and non-profiler physical counters. `kernel_nanoseconds` is JSON `null` when profiler collection is off.
+
+Raw JSON and summaries are under `results/b0024-cuda-admission-validation-wsl/`. Runner SHA-256 is `952fd739d7654b8a4685e62c045d5727955b792244519dd09667f1e7acff441b`; canonical aggregate SHA-256 is `0747d22f6e409c81ab788cb936b65c9a75a13ed2f37255d6f468c7899f3026d1`; summary JSON/CSV SHA-256 is `4c4af570602d3322120ac445ad881c00f96ac0f63f3a39dc45a8032620cc8c82` / `a49614469b71f01b9d86ff93bf996937cb0d9e93ed272044a136491d6575b68f`. Committed-evidence verification recomputes all 18 raw hashes, exact case order, aggregate and summary CSV hashes, validation formulas, nullable-kernel contract, LF-only CSV, and reported admission percentage deltas.
+
+Fresh verification passes CPU CTest 14/14 with pytest 311 passed/68 skipped, liburing/direct CTest 15/15 with pytest 313 passed/66 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 26/26 with pytest 369 passed/10 skipped. Compute Sanitizer reports `ERROR SUMMARY: 0 errors` for both `test_cuda_moe_layer` and a released one-expert admission benchmark invocation.
+
+The measurement establishes repeated host validation as the dominant B-0023 wall term and accepts admission validation as an exact opt-in path. It does not promote the general default because unchanged-pointer in-place mutation is outside the admission contract, and it does not select CUDA Graphs without ordered routed-set reuse and bounded graph-cache evidence.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
@@ -865,6 +890,6 @@ The result rejects a default change and does not select CUDA Graphs. The next be
 - Representative native-Linux persistent AURORA measurement with physical I/O, realistic acceptance, coding quality, and resident-expert pressure before any self-speculative default claim.
 - Persistent multi-token/multi-expert CUDA execution after B-0020 removes most repeated weight H2D; keep dynamic eviction/prediction and reduced precision as separate policy and quality axes.
 - Native-Linux and representative-dimension repetition of B-0022 before selecting a MoE-layer boundary or CUDA Graph strategy as a default.
-- Admission-time immutable-tensor validation plus profiler-on/off attribution and a B-0023 rerun before selecting CUDA Graphs or a larger device-resident token boundary.
+- Ordered routed-set reuse, graph update/re-instantiation cost, and bounded graph-cache policy before selecting CUDA Graphs or a larger device-resident token boundary.
 - Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.

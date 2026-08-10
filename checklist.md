@@ -159,12 +159,15 @@
 - [x] Re-read the charter, architecture, project state, D-048, and corrected B-0023 evidence.
 - [x] Inspect CUDA MoE-layer validation, resident identity, CLI, telemetry, and ownership boundaries.
 - [x] Compare resident-table miss validation, prepared-layer tokens, and backend-local admission registry designs.
-- [x] Write and self-review the accepted admission validation design.
-- [x] Write and self-review the detailed TDD implementation plan.
-- [ ] Implement public validation modes and telemetry through witnessed RED/GREEN cycles.
-- [ ] Implement atomic admission validation and lifetime conflict gates.
-- [ ] Implement and measure B-0024 with committed raw/summary evidence validation.
-- [ ] Run full verification, synchronize the TITAN Ledger and README, review, publish, merge, and verify public `main`.
+- [x] Write and self-review the accepted admission validation design and detailed TDD implementation plan.
+- [x] Add `per-call|admission` ownership, runtime telemetry, JSON/CSV schema, and reference defaults through witnessed RED/GREEN cycles.
+- [x] Prove six-view atomic preflight, repeat identity hits, non-finite last-view failure, and pointer/shape conflict rejection.
+- [x] Add profiler-off physical telemetry and the canonical 18-row B-0024 runner.
+- [x] Measure B-0024 at released dimensions with 3 warmups and 20 iterations and commit digest-backed evidence.
+- [x] Update README, architecture, performance model, decisions, benchmarks, checklist, and context notes.
+- [x] Run the complete CPU/liburing/ASan/CUDA/sanitizer verification matrix.
+- [ ] Complete the final Critical/Important-only read-only review.
+- [ ] Publish through a public PR, merge, verify post-merge correctness/CodeQL, and update `PROJECT_STATE.md` last.
 
 ## Milestone 12 — Fused routed accumulation CUDA kernel
 

@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2022-measured-20a46b?style=flat-square)](#milestone-22--released-dimension-moe-layer-boundary)
+[![Milestone](https://img.shields.io/badge/milestone%2023-measured-20a46b?style=flat-square)](#milestone-23--admission-validation-attribution)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -50,6 +50,7 @@ flowchart LR
 | Milestone 20 | [PR #29 merged](https://github.com/rsb1813/project-k3x/pull/29) at `90b20c87` | B-0021 resident CUDA expert grid; four matched pairs preserve exact target behavior and reduce MoE launches 75% |
 | Milestone 21 | [PR #31 merged](https://github.com/rsb1813/project-k3x/pull/31) at `97eb3e4e` | B-0022 resident CUDA MoE layer; exact target behavior and lower sync/H2D/D2H, mixed decode result |
 | Milestone 22 | [PR #36 merged](https://github.com/rsb1813/project-k3x/pull/36) at `e4820a18` | B-0023 released-dimension MoE boundary; exact traffic gates pass, complete layer latency is 4.30×–16.69× split |
+| Milestone 23 | Publication pending | B-0024 attributes the regression to repeated 469,776,384-byte validation and measures an exact admission-time fast path |
 
 PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 22 integration head `e4820a18`; its branch and pull-request correctness runs `31358991710` and `31359003481` passed, followed by successful post-merge `main` correctness run `31359158926` and CodeQL run `31359158878`.
 
@@ -313,13 +314,36 @@ python tools/ablate_cuda_aurora_moe_layer.py \
 
 B-0023 confirms maximum error 0, zero fallback/bypass, zero warm weight H2D, exactly 80→20 synchronizations per 20 iterations, lower activation H2D and D2H, and an exact 14,336-byte routed-norm cold/resident delta in all three pairs. The split oracle is destroyed before the selected backend is measured, and peak VRAM reports the larger sequential phase rather than overlapping two resident tables. Median complete-layer latency nevertheless regresses by **+1568.62%**, **+783.91%**, and **+329.88%** at 1, 4, and 16 experts.
 
-The complete boundary therefore remains diagnostic and non-default. Code inspection shows that it scans all immutable dense weights for finiteness on every call, an O(weight-bytes) host-side check absent from the split hot path. That is the next attribution target, not a measured causal conclusion yet. K3X will remove or relocate repeated validation only with admission-time correctness tests and remeasure before choosing CUDA Graph caching or a larger device-resident token boundary.
+The complete boundary therefore remained diagnostic and non-default after B-0023. Code inspection identified its O(weight-bytes) immutable-weight scan as the next attribution target. Milestone 23 below implements the correctness-preserving admission alternative and confirms that attribution; CUDA Graph caching and a larger device-resident token boundary remain separate decisions.
 
 ```bash
 python tools/ablate_cuda_released_moe_layer.py \
   --artifact build-fixtures/released-expert.k3x \
   --runner build-cuda/k3x_cuda_moe_layer_bench \
   --output-dir build-results/b0023-cuda-released-moe-layer \
+  --warmup 3 \
+  --iterations 20
+```
+
+## Milestone 23 — admission validation attribution
+
+The exact resident MoE-layer backend now supports `--cuda-weight-validation per-call|admission`. The default remains `per-call`. The opt-in `admission` mode validates all six immutable FP32 tensors before any CUDA acquisition, commits their tensor-ID/pointer/shape identities only after the complete preflight succeeds, and rejects later identity conflicts before CUDA mutation. Dynamic inputs, contributions, dimensions, IDs, native MXFP4 structure, and scalar parameters remain validated on every call.
+
+B-0024 repeats the released-dimension 1/4/16-expert boundary with profiler collection independently off and on. Each per-call row scans exactly **9,395,527,680 bytes** over 20 measured calls. Each admission row records six cold scans totaling **469,776,384 bytes**, then zero warm scan bytes and 120 identity hits. With profiler off, complete-layer median latency changes as follows.
+
+| Experts | Per-call validation | Admission validation | Paired change |
+|---:|---:|---:|---:|
+| 1 | 19.570 ms | 1.247 ms | -93.63% |
+| 4 | 20.729 ms | 1.940 ms | -90.64% |
+| 16 | 24.519 ms | 5.221 ms | -78.71% |
+
+All 18 rows preserve maximum absolute error 0, zero warm weight H2D, zero bypass/fallback, exact synchronization/launch/traffic identities, and profiler on/off physical-counter parity. This is a direct released-dimension layer microbenchmark with `routing_semantics=false`; it is not token throughput, a full-checkpoint result, or a coding-quality measurement. CUDA Graph selection remains deferred until ordered routed-set reuse and bounded graph-cache behavior are measured.
+
+```bash
+python -m tools.ablate_cuda_admission_validation \
+  --artifact build-fixtures/released-expert.k3x \
+  --runner build-cuda/k3x_cuda_moe_layer_bench \
+  --output-dir build-results/b0024-cuda-admission-validation \
   --warmup 3 \
   --iterations 20
 ```
