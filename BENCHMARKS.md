@@ -751,6 +751,8 @@ Raw JSON/CSV and independently cross-checked summaries are under `results/b0020-
 
 Fresh verification passes CPU CTest 14/14 with pytest 284 passed/53 skipped, liburing/direct CTest 15/15 with pytest 290 passed/47 skipped, ASan/UBSan liburing CTest 15/15, and CUDA CTest 23/23 with pytest 328 passed/9 skipped. Compute Sanitizer reports `ERROR SUMMARY: 0 errors` for both the 8 MiB full-fit path and the one-byte exact-bypass path; the latter records 880 misses, 880 bypasses, and zero resident bytes while preserving target tokens.
 
+Public push and pull-request correctness runs `31346575341` and `31346587586` passed. PR #27 was rebase-merged at public integration head `c88456c0`, and post-merge `main` correctness run `31346725071` passed.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.

@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 19 bounded exact CUDA AURORA residency is implemented, measured, fully verified, and final-reviewed on branch `codex/milestone-nineteen-aurora-residency`; public integration remains in progress. The path is opt-in, persistent-only, fail-closed, and preserves the transient proposal/acceptance/target contract. B-0020 reduces draft weight H2D by 88.81% to 89.78%, but paired decode ranges from -2.56% to +22.67%, so CPU drafting remains the default, replay remains CPU-only, and the natural strict target verifier remains authoritative.
+Milestone 19 bounded exact CUDA AURORA residency is implemented, measured, fully verified, final-reviewed, and published on public `main` through PR #27 at integration head `c88456c0`. The path is opt-in, persistent-only, fail-closed, and preserves the transient proposal/acceptance/target contract. B-0020 reduces draft weight H2D by 88.81% to 89.78%, but paired decode ranges from -2.56% to +22.67%, so CPU drafting remains the default, replay remains CPU-only, and the natural strict target verifier remains authoritative.
 
-State audited on 2026-08-10 against local documentation head `e7d1610` and evidence head `f676957`, based on public documentation head `beaf6bb`. Fresh matrices pass CPU CTest 14/14 with Python 284 passed/53 skipped, liburing/direct CTest 15/15 with Python 290 passed/47 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 23/23 with Python 328 passed/9 skipped. Compute Sanitizer reports zero errors for both full-fit and exact-bypass resident paths. Final review found no Critical or Important issue. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 against public Milestone 19 integration head `c88456c0` and evidence head `f676957`. Fresh matrices pass CPU CTest 14/14 with Python 284 passed/53 skipped, liburing/direct CTest 15/15 with Python 290 passed/47 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 23/23 with Python 328 passed/9 skipped. Compute Sanitizer reports zero errors for both full-fit and exact-bypass resident paths. Final review found no Critical or Important issue, and public push, pull-request, and post-merge correctness runs all passed. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
@@ -88,7 +88,7 @@ State audited on 2026-08-10 against local documentation head `e7d1610` and evide
 
 ## Work in progress
 
-- Milestone 19 implementation, B-0020, full verification, sanitizer coverage, evidence cross-checks, and TITAN Ledger synchronization are complete. Final self-review, public PR integration, and post-merge CI remain.
+- Milestone 19 implementation, B-0020, full verification, sanitizer coverage, evidence cross-checks, final self-review, public PR integration, post-merge CI, and TITAN Ledger synchronization are complete.
 - Exact bounded CUDA residency remains opt-in and no-eviction. No default, draft precision, scheduler threshold, routing rule, or target verifier changed in Milestone 19.
 - Milestone 18 implementation, B-0019, full verification, sanitizer coverage, evidence cross-checks, TITAN Ledger synchronization, final self-review, public integration, and post-merge CI are complete.
 - Exact transient CUDA drafting remains diagnostic-only. No default, draft precision, residency, scheduler threshold, routing rule, or target verifier changed in Milestone 18.
@@ -154,6 +154,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
+- Public Milestone 19 integration head `c88456c0` includes the complete bounded exact CUDA draft-residency implementation, B-0020 evidence, English README, and synchronized TITAN Ledger. PR #27 push/PR correctness runs `31346575341`/`31346587586` and post-merge `main` correctness run `31346725071` succeeded.
 - Local Milestone 19 evidence head `f676957` contains the bounded resident provider/CLI/telemetry lineage, B-0020 runner, 9 rows, and 20 result files under `results/b0020-cuda-aurora-residency-wsl/`.
 - Fresh Milestone 19 verification passes CPU CTest 14/14 and pytest 284 passed/53 skipped, liburing/direct CTest 15/15 and pytest 290 passed/47 skipped, ASan/UBSan liburing CTest 15/15, and CUDA CTest 23/23 with pytest 328 passed/9 skipped. Full-fit and one-byte exact-bypass Compute Sanitizer runs both report `ERROR SUMMARY: 0 errors`.
 - B-0020 artifact SHA-256 is `47795886397106b3d1a029fefb86e58776be659cb0470ceb7c9998851aedcf26`; runner SHA-256 is `9fd847ff95c0f3b9c3bb3bc90ff568381b3a3d540f80eebcf433551465d79daa`; canonical aggregate SHA-256 is `4bb84fe49cbbc735bc9ef8668ab4d2944fef3d4e3a0f1048a7973410b211df87`; summary JSON/CSV SHA-256 is `32d9795ab3da3107c8f4fe5573be439130795d91b6860bdda91cc7d84635a192` / `059ede44149da8490f8342061b4dc10e623abe08f420266f84d7ca73963e3a62`.

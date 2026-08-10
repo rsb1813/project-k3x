@@ -322,6 +322,8 @@ Ownership remains narrow. Only `aurora-persistent + cuda-custom` accepts the dra
 
 B-0020 compares transient/resident pairs for fixed/adaptive token-major and expert-major target verification on the Top-16 synthetic graph. All pairs preserve proposals, acceptance, target tokens, final KDA/MLA state, and committed routing. An 8 MiB cap admits the complete observed draft working set with 644,160–647,424 resident bytes and zero bypasses, reducing draft weight H2D by 88.81%–89.78%. Paired decode changes range from -2.56% to +22.67%, so the path remains experimental and non-default. Dynamic eviction, predictive residency, reduced precision, and new kernels are not part of this milestone. The next isolated boundary is persistent multi-token/multi-expert CUDA execution that reduces synchronous launches and waits after weight transfer has been removed.
 
+This implementation is published on public `main` through PR #27 at integration head `c88456c0`. Its push, pull-request, and post-merge correctness runs all passed; publication does not promote bounded residency to a default.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.
