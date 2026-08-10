@@ -121,7 +121,7 @@
 - [x] Capture an exact resident AURORA Nsight launch diagnostic.
 - [x] Compare resident grid, routed-set CUDA Graph cache, and whole-device draft graph alternatives.
 - [x] Write and self-review the accepted resident-grid design.
-- [ ] Write and self-review the detailed TDD implementation plan.
+- [x] Write and self-review the detailed TDD implementation plan.
 - [ ] Implement the CPU oracle and CUDA rectangular grid through witnessed RED/GREEN cycles.
 - [ ] Integrate AURORA CLI, exact fallback, telemetry, and B-0021 runner.
 - [ ] Run B-0021, the complete verification matrix, sanitizer, and evidence cross-checks.
