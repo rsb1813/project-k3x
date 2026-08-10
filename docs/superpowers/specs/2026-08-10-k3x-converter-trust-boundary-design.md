@@ -33,7 +33,7 @@ The generic synthetic format continues to derive `source_sha256` from the canoni
 - dtype/shape/extent byte-count disagreement for the currently supported source dtypes `F32` and `U8`;
 - any declared data range outside the shard or any unreferenced bytes inside a tensor range.
 
-The header length is rejected when it exceeds the file payload boundary. A separate arbitrary small header cap is not introduced before real K3 shard metadata is measured.
+The header length is rejected when it exceeds either the file payload boundary or the official safetensors 100 MB default header limit. The limit is a denial-of-service boundary rather than a measured K3 layout assumption and is checked before allocating or reading the declared header. This follows the upstream safetensors format and implementation boundary rather than inventing a smaller project-specific cap.
 
 ## Resume ledger and recovery contract
 
