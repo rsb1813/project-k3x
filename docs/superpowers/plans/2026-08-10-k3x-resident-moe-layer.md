@@ -285,7 +285,7 @@ git commit -m "feat: add resident MoE layer kernels"
 - Produces: fully resident `executed=true` result or launch-free hard-cap `executed=false`.
 - Produces: exact new counters and existing grid/traffic/profile counters.
 
-- [ ] **Step 1: Write complete backend RED tests**
+- [x] **Step 1: Write complete backend RED tests**
 
 Build one literal layer from existing test helpers with one expert and four experts. Create a CPU oracle and a CUDA backend configured as follows.
 
@@ -306,7 +306,7 @@ Assert output parity within `1e-6`, calls `1`, experts equal fixture size, kerne
 
 Create a second backend with `cuda_resident_bytes=1`. Assert `executed=false`, empty output, layer fallbacks `1`, successful layer/grid counters `0`, and no synchronization. Add malformed-input cases proving counters and resident bytes do not change.
 
-- [ ] **Step 2: Run RED and witness backend-unavailable result**
+- [x] **Step 2: Run RED and witness backend-unavailable result**
 
 Run:
 
@@ -317,7 +317,7 @@ build-cuda/test_cuda_moe_layer
 
 Expected: assertion failure because the inherited virtual method returns `backend_unavailable`.
 
-- [ ] **Step 3: Add layer-specific scratch, events, and resident acquisition helpers**
+- [x] **Step 3: Add layer-specific scratch, events, and resident acquisition helpers**
 
 Include `moe_layer.cuh`. Add grow-only allocations for hidden input, routed latent, descriptors, expert gate/up/activation/output, contributions, mixed latent, normalized latent, routed hidden, shared gate/up/activation/hidden, and final hidden. Add `std::array<EventOwner, 26>` for thirteen timed operations.
 
@@ -334,13 +334,13 @@ struct ResidentDenseMember {
 
 The helper accepts only FP32, nonzero tensor IDs, exact row/column payloads, and returns the stable resident pointer plus cached cuBLASLt plan. Treat the norm as representation `dense_fp32`, rows `1`, columns `latent`.
 
-- [ ] **Step 4: Implement prevalidation and all-or-nothing acquisition**
+- [x] **Step 4: Implement prevalidation and all-or-nothing acquisition**
 
 Validate all dimensions, checked products, finite values, epsilon, group-32 payloads, and unique IDs before `ResidentWeightTable::acquire`. Acquire six dense/vector tensors followed by every expert gate/up/down tensor. Sum uploaded bytes exactly once.
 
 If any disposition is `bypass`, increment only `resident_moe_layer_fallbacks` among new success counters, add successful admission bytes to existing weight H2D/profile accounting, and return `{false, {}}` without reserving scratch, uploading activation, recording an event, or launching a kernel.
 
-- [ ] **Step 5: Implement the thirteen-operation stream**
+- [x] **Step 5: Implement the thirteen-operation stream**
 
 Upload hidden input, contributions, and expert descriptors. Use the existing cached FP32 cuBLASLt plans with device-to-device inputs/outputs for routed-down, routed-up, shared gate/up/down. Reuse the M20 native grid launcher for expert gate/up/down and Task 2 launchers for mix, norm, and add.
 
@@ -361,11 +361,11 @@ runtime_stats_.resident_grid_kernel_launches += 4;
 
 Include descriptors and contributions in activation H2D total, weights in weight H2D, and exactly one hidden result in D2H. Record all thirteen event durations so `ProfileSummary::device_nanoseconds` remains complete.
 
-- [ ] **Step 6: Permit the internal exact split fallback**
+- [x] **Step 6: Permit the internal exact split fallback**
 
 Where `dense_situ_mlp`, `mxfp4_situ_mlp_grid`, and the serial group implementation currently require `ffn_block`, accept `moe_layer` as well. Do not loosen any other kind/allocation/weight/batching/transfer/fusion gate. This allows `executed=false` to reuse the M20 CUDA split path without changing the public identity.
 
-- [ ] **Step 7: Run GREEN, full CUDA backend tests, and sanitizer**
+- [x] **Step 7: Run GREEN, full CUDA backend tests, and sanitizer**
 
 Run:
 
@@ -377,7 +377,7 @@ compute-sanitizer --tool memcheck --error-exitcode 99 build-cuda/test_cuda_moe_l
 
 Expected: selected CTest cases pass and sanitizer reports zero errors.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add CMakeLists.txt runtime/cuda/backend_cuda.cu tests/cuda/test_cuda_moe_layer.cu
@@ -616,8 +616,19 @@ if layer["draft_activation_h2d_bytes"] >= split["draft_activation_h2d_bytes"]:
     raise RuntimeError("resident MoE layer did not reduce activation H2D")
 if layer["draft_device_to_host_bytes"] >= split["draft_device_to_host_bytes"]:
     raise RuntimeError("resident MoE layer did not reduce D2H")
-if layer["draft_weight_h2d_bytes"] != split["draft_weight_h2d_bytes"]:
-    raise RuntimeError("resident MoE layer changed exact weight traffic")
+weight_delta = (
+    layer["draft_weight_h2d_bytes"] - split["draft_weight_h2d_bytes"]
+)
+resident_delta = (
+    layer["draft_resident_weight_bytes"] - split["draft_resident_weight_bytes"]
+)
+if weight_delta <= 0 or weight_delta != resident_delta:
+    raise RuntimeError("resident norm cold-admission accounting changed")
+if (
+    layer["draft_weight_h2d_bytes"] + layer["draft_activation_h2d_bytes"]
+    >= split["draft_weight_h2d_bytes"] + split["draft_activation_h2d_bytes"]
+):
+    raise RuntimeError("resident MoE layer did not reduce total H2D")
 ```
 
 Compute paired decode, synchronization, activation-H2D, and D2H deltas from raw records. Use `csv.DictWriter(..., lineterminator="\n")` and SHA-256 every raw artifact plus canonical aggregate.
@@ -672,7 +683,7 @@ Expected: nine JSON, nine CSV, one summary JSON, and one summary CSV complete wi
 
 - [ ] **Step 2: Add committed-evidence verification**
 
-The evidence test must recompute all eighteen raw digests, summary CSV digest, canonical aggregate, pair identity, exact tokens/state/routes/acceptance, synchronization equation, H2D/D2H direction, equal weight H2D, thirteen launches per call, and zero fallback directly from committed bytes.
+The evidence test must recompute all eighteen raw digests, summary CSV digest, canonical aggregate, pair identity, exact tokens/state/routes/acceptance, synchronization equation, activation/total-H2D and D2H direction, the norm cold-admission weight/resident-byte delta, thirteen launches per call, and zero fallback directly from committed bytes.
 
 - [ ] **Step 3: Run evidence verification**
 

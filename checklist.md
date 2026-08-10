@@ -136,7 +136,7 @@
 - [x] Write and self-review the detailed TDD implementation plan.
 - [x] Implement the portable whole-layer API and exact CPU oracle through a witnessed RED/GREEN cycle.
 - [x] Implement ordered mix, strict RMSNorm, and final-add CUDA primitives through a witnessed RED/GREEN cycle and Compute Sanitizer.
-- [ ] Implement the complete resident CUDA MoE-layer backend through a witnessed RED/GREEN cycle.
+- [x] Implement the complete resident CUDA MoE-layer backend through a witnessed RED/GREEN cycle and Compute Sanitizer.
 - [ ] Integrate runtime, AURORA, CLI, exact fallback, and target/draft telemetry.
 - [ ] Implement and run B-0022 plus the complete verification and sanitizer matrices.
 - [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.

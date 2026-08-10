@@ -147,7 +147,7 @@ Add target and draft fields for these exact counters.
 
 A successful layer call increments calls once, experts by selected K, and logical kernel launches by thirteen. A hard-cap bypass increments only layer fallbacks among the new success counters. Successful layer execution also increments the existing resident-grid call/expert/token/expert-token counters and four resident-grid kernel launches because the native expert grid still executes.
 
-Existing weight/activation H2D, D2H, resident-cache, scratch, allocation, synchronization, FFN, grid, and kernel-time counters remain authoritative. Descriptor and contribution uploads are included in activation H2D and also exposed by their narrow counters; they are not counted twice in total H2D.
+Existing weight/activation H2D, D2H, resident-cache, scratch, allocation, synchronization, FFN, grid, and kernel-time counters remain authoritative. Descriptor and contribution uploads are included in activation H2D and also exposed by their narrow counters; they are not counted twice in total H2D. Unlike the split path's CPU RMSNorm, the layer path must admit the routed norm vector to L0. B-0022 therefore reports this one-time cold weight/resident-byte delta explicitly instead of incorrectly requiring equal weight H2D.
 
 ## B-0022 evidence
 
@@ -160,7 +160,7 @@ The canonical end-to-end matrix contains natural greedy plus four matched Milest
 
 Every pair uses CPU natural Top-16 target, CUDA persistent fixed Top-4 draft, 8 MiB exact residency, FP32, reused allocation, synchronous transfer, fusion `none`, four prompt tokens, six generated tokens, three warmups, and twenty measured samples. Only the draft boundary changes from `ffn-block + resident-grid` to `moe-layer + resident-grid`.
 
-Before summary publication, the runner requires identical proposals, acceptance, target tokens, final KDA/MLA state, committed routing, Reader bytes, selected K, and weight-H2D bytes. Fully resident layer rows require positive layer calls, zero layer fallbacks, thirteen logical launches per call, three fewer stream synchronizations per successful MoE-layer call than the matched split row, and lower activation H2D plus D2H. Decode direction is measured and never forced.
+Before summary publication, the runner requires identical proposals, acceptance, target tokens, final KDA/MLA state, committed routing, Reader bytes, and selected K. Fully resident layer rows require positive layer calls, zero layer fallbacks, thirteen logical launches per call, three fewer stream synchronizations per successful MoE-layer call than the matched split row, and lower activation H2D plus D2H. The layer-minus-split weight-H2D delta must equal the corresponding resident-weight-byte delta and be positive because it is the routed norm vector's cold admission; total H2D must still decrease. Decode direction is measured and never forced.
 
 ## Verification gates
 
