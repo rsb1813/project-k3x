@@ -604,3 +604,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Rejected claims: no complete shard/full checkpoint verification, token generation, GPU execution, model quality, NVMe GB/token, PCIe traffic, or publisher signature is established.
 - Publication: PR #44 was rebase-merged at public implementation head `5b6345db`; both branch and pull-request correctness passed, all pull-request CodeQL checks passed, and post-merge `main` correctness `31386873905` and CodeQL `31386873928` succeeded.
 - Revisit: production conversion must recompute complete source-object identity or adopt an equivalently authenticated chunk scheme. M27 must separately prove real-weight CUDA layer correctness before widening the dependency closure.
+
+## D-053 — Prove one official expert FFN before widening real-weight closure
+
+- Date: 2026-08-10.
+- Status: accepted and designed; implementation and B-0028 are pending.
+- Decision: add a dedicated benchmark-only path that hard-binds the B-0027 K3X root and ordered expert digest, uses the portable CPU backend as oracle, and measures transient and resident RTX 5080 execution without changing `k3x_run`.
+- Alternatives considered: reuse the released-dimension executable unchanged; add caller-selected official labels to that executable; add a pinned official-expert harness.
+- Evidence: a read-only exploratory run of the existing CPU/CUDA path against the ignored official artifact completed with `3.0267983675e-9` maximum absolute error. Its schema and identity checks are insufficient for formal evidence, so its timing is not B-0028.
+- Reason accepted: the dedicated harness is the smallest boundary that proves actual official MXFP4 CUDA computation while keeping synthetic released evidence, production generation, and official provenance distinct.
+- Rejected claims: one expert FFN is not a real full MoE layer, routing result, token throughput, full-checkpoint runtime, physical NVMe measurement, or quality result.
+- Revisit: B-0028 transient/resident traffic, latency, and parity determine the smallest real multi-expert or complete-layer closure for M28.

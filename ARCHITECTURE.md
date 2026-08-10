@@ -388,6 +388,12 @@ The B-0027 strict verifier independently binds every deterministic official snap
 
 This is implemented storage/conversion compatibility, not real graph execution. Provenance is `transport-pinned-range` because the complete shard LFS digest was not recomputed. Full-shard verification, a real CUDA layer invocation, full-model manufacturing, and SKYFORGE remain future boundaries.
 
+## Milestone 27 official expert CUDA execution
+
+Milestone 27 is accepted and designed but not yet implemented. It adds a dedicated benchmark-only official-expert path that binds the B-0027 K3X root and gate/up/down ordered digest before constructing a CPU or CUDA backend. The path executes one exact layer-1 expert-0 FFN, compares all 3,584 outputs with the portable CPU backend, and separately measures transient and exact-capacity resident CUDA behavior.
+
+The executable remains outside `k3x_run`; `OPTIONAL_STORAGE_FIXTURE` generation continues to fail with `NON_EXECUTABLE_ARTIFACT`. M27 does not claim a full MoE layer because routed projections, normalization, shared experts, routing, and the surrounding trunk are not real official weights. That dependency closure remains a separate M28 decision after B-0028.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

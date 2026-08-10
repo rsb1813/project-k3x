@@ -208,6 +208,17 @@
 - [x] Record B-0027, run the full verification matrix, close Critical/Important path/evidence findings, and synchronize documentation.
 - [x] Publish through PR #44, merge, and verify public `main` correctness and CodeQL.
 
+## Milestone 27 — Official expert CUDA execution
+
+- [x] Re-read the public M26 state and inspect the storage-slice, CPU MXFP4, CUDA FFN, and released benchmark boundaries.
+- [x] Execute one read-only exploratory official-artifact CPU/CUDA parity smoke without treating it as benchmark evidence.
+- [x] Compare unchanged reuse, mixed-schema extension, and a dedicated pinned official-expert harness.
+- [x] Write and self-review the accepted M27 design under the standing pre-Cloud-Run authorization.
+- [ ] Write the detailed TDD implementation plan.
+- [ ] Implement pinned identity validation and the dedicated CUDA harness through witnessed RED/GREEN cycles.
+- [ ] Implement and verify the B-0028 two-mode runner and strict evidence verifier.
+- [ ] Run B-0028, the full verification matrix, final review, TITAN Ledger synchronization, and public integration.
+
 ## Milestone 12 — Fused routed accumulation CUDA kernel
 
 - [x] TITAN Ledger, 현재 CUDA 경계, 원 구현 근거 재확인.

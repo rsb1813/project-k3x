@@ -554,3 +554,9 @@
 
 - Public PR #44 passed both branch and pull-request correctness plus all CodeQL checks and was rebase-merged at implementation head `5b6345db`.
 - Post-merge `main` correctness `31386873905` and CodeQL `31386873928` succeeded. Node.js 20 and CodeQL Action v3 deprecation annotations remain workflow maintenance rather than correctness failures.
+
+## 2026-08-10 — Milestone 27 official expert CUDA boundary
+
+- The existing released single-expert executable was run once against the ignored B-0027 artifact as read-only exploration. It completed on RTX 5080 with 7,212,040 ns wall, 1,962,624 ns kernel, 17,547,264 weight-H2D bytes, and `3.0267983675e-9` maximum CPU-oracle error. This is feasibility evidence only, not B-0028.
+- Reusing the released schema cannot prove official identity, while adding caller-selected official labels would mix evidence contracts. M27 therefore uses a dedicated pinned official-expert harness and leaves `k3x_run` unchanged.
+- M27 proves only the exact layer-1 expert-0 FFN. Real routed/shared/trunk dependency closure remains M28, preventing a synthetic-dense plus real-expert mixture from being described as a real full layer.
