@@ -23,6 +23,7 @@ enum class CudaBoundaryMode { operation, ffn_block, moe_layer };
 enum class CudaTransferMode { synchronous, prefetch };
 enum class CudaMoeFusionMode { none, routed_accumulate };
 enum class CudaWeightValidationMode { per_call, admission };
+enum class CudaGraphMode { disabled, update, cache };
 
 struct BackendOptions {
     BackendKind kind{BackendKind::cpu};
@@ -35,6 +36,8 @@ struct BackendOptions {
     CudaMoeFusionMode cuda_moe_fusion{CudaMoeFusionMode::none};
     CudaWeightValidationMode cuda_weight_validation{
         CudaWeightValidationMode::per_call};
+    CudaGraphMode cuda_graph{CudaGraphMode::disabled};
+    std::size_t cuda_graph_entries{};
     std::uint64_t cuda_resident_bytes{};
     std::uint64_t cuda_pinned_bytes{};
 };
@@ -57,6 +60,18 @@ struct BackendRuntimeStats {
     std::uint64_t immutable_validation_hits{};
     std::uint64_t immutable_validation_bytes{};
     std::uint64_t immutable_validation_nanoseconds{};
+    std::uint64_t cuda_graph_cache_hits{};
+    std::uint64_t cuda_graph_cache_misses{};
+    std::uint64_t cuda_graph_cache_evictions{};
+    std::uint64_t cuda_graph_instantiations{};
+    std::uint64_t cuda_graph_update_attempts{};
+    std::uint64_t cuda_graph_update_successes{};
+    std::uint64_t cuda_graph_update_failures{};
+    std::uint64_t cuda_graph_launches{};
+    std::uint64_t cuda_graph_invalidations{};
+    std::uint64_t cuda_graph_host_nanoseconds{};
+    std::uint64_t cuda_graph_resident_entries{};
+    std::uint64_t cuda_graph_peak_entries{};
     std::uint64_t scratch_bytes{};
     std::uint64_t peak_scratch_bytes{};
     std::uint64_t weight_h2d_bytes{};

@@ -125,6 +125,8 @@ int main(int argc, char** argv) {
     std::string cuda_transfer_name = "synchronous";
     std::string cuda_moe_fusion_name = "none";
     std::string cuda_weight_validation_name = "per-call";
+    std::string cuda_graph_name = "disabled";
+    std::string cuda_graph_entries_text = "0";
     std::string cuda_resident_bytes_text = "0";
     std::string cuda_pinned_bytes_text = "0";
     std::string l1_expert_cache_name = "disabled";
@@ -175,6 +177,8 @@ int main(int argc, char** argv) {
         else if (key == "--cuda-transfer") cuda_transfer_name = value;
         else if (key == "--cuda-moe-fusion") cuda_moe_fusion_name = value;
         else if (key == "--cuda-weight-validation") cuda_weight_validation_name = value;
+        else if (key == "--cuda-graph") cuda_graph_name = value;
+        else if (key == "--cuda-graph-entries") cuda_graph_entries_text = value;
         else if (key == "--cuda-resident-bytes") cuda_resident_bytes_text = value;
         else if (key == "--cuda-pinned-bytes") cuda_pinned_bytes_text = value;
         else if (key == "--l1-expert-cache") l1_expert_cache_name = value;
@@ -714,6 +718,44 @@ int main(int argc, char** argv) {
                   << cuda_weight_validation_name << '\n';
         return 2;
     }
+    if (cuda_graph_name == "disabled") {
+        backend_options.cuda_graph = k3x::CudaGraphMode::disabled;
+    } else if (cuda_graph_name == "update") {
+        backend_options.cuda_graph = k3x::CudaGraphMode::update;
+    } else if (cuda_graph_name == "cache") {
+        backend_options.cuda_graph = k3x::CudaGraphMode::cache;
+    } else {
+        std::cerr << "unknown CUDA graph mode: " << cuda_graph_name << '\n';
+        return 2;
+    }
+    const auto* graph_entries_begin = cuda_graph_entries_text.data();
+    const auto* graph_entries_end =
+        graph_entries_begin + cuda_graph_entries_text.size();
+    const auto graph_entries_parse = std::from_chars(
+        graph_entries_begin, graph_entries_end,
+        backend_options.cuda_graph_entries);
+    if (cuda_graph_entries_text.empty() ||
+        graph_entries_parse.ec != std::errc{} ||
+        graph_entries_parse.ptr != graph_entries_end) {
+        std::cerr << "invalid CUDA graph entry capacity: "
+                  << cuda_graph_entries_text << '\n';
+        return 2;
+    }
+    if (backend_options.cuda_graph == k3x::CudaGraphMode::disabled &&
+        backend_options.cuda_graph_entries != 0) {
+        std::cerr << "CUDA graph disabled requires zero entry capacity\n";
+        return 2;
+    }
+    if (backend_options.cuda_graph == k3x::CudaGraphMode::update &&
+        backend_options.cuda_graph_entries != 1) {
+        std::cerr << "CUDA graph update requires exactly one entry\n";
+        return 2;
+    }
+    if (backend_options.cuda_graph == k3x::CudaGraphMode::cache &&
+        backend_options.cuda_graph_entries == 0) {
+        std::cerr << "CUDA graph cache requires positive entry capacity\n";
+        return 2;
+    }
     const auto* resident_begin = cuda_resident_bytes_text.data();
     const auto* resident_end = resident_begin + cuda_resident_bytes_text.size();
     const auto resident_parse = std::from_chars(
@@ -763,6 +805,23 @@ int main(int argc, char** argv) {
          backend_options.cuda_resident_bytes == 0)) {
         std::cerr << "admission CUDA weight validation requires resident "
                      "cuda-custom moe-layer execution\n";
+        return 2;
+    }
+    if (backend_options.cuda_graph != k3x::CudaGraphMode::disabled &&
+        (backend_options.kind != k3x::BackendKind::cuda_custom ||
+         backend_options.dense_precision != k3x::DensePrecision::fp32 ||
+         backend_options.cuda_allocation != k3x::CudaAllocationMode::reused ||
+         backend_options.cuda_weights != k3x::CudaWeightMode::resident ||
+         backend_options.cuda_batching !=
+             k3x::CudaBatchingMode::resident_grid ||
+         backend_options.cuda_boundary != k3x::CudaBoundaryMode::moe_layer ||
+         backend_options.cuda_transfer !=
+             k3x::CudaTransferMode::synchronous ||
+         backend_options.cuda_moe_fusion != k3x::CudaMoeFusionMode::none ||
+         backend_options.cuda_weight_validation !=
+             k3x::CudaWeightValidationMode::admission ||
+         backend_options.cuda_resident_bytes == 0)) {
+        std::cerr << "CUDA graph execution requires admission-validated resident cuda-custom moe-layer execution\n";
         return 2;
     }
     if (backend_options.kind == k3x::BackendKind::cpu &&
@@ -1174,6 +1233,11 @@ int main(int argc, char** argv) {
                 k3x::CudaWeightValidationMode::admission
             ? "admission"
             : "per-call";
+    const auto graph_mode_name = [](k3x::CudaGraphMode mode) {
+        if (mode == k3x::CudaGraphMode::update) return "update";
+        if (mode == k3x::CudaGraphMode::cache) return "cache";
+        return "disabled";
+    };
     output << std::setprecision(9);
     output << "{\"backend\":";
     write_json_string(output, backend_name);
@@ -1195,6 +1259,10 @@ int main(int argc, char** argv) {
     write_json_string(output, cuda_moe_fusion_name);
     output << ",\"cuda_weight_validation\":";
     write_json_string(output, cuda_weight_validation_name);
+    output << ",\"cuda_graph\":";
+    write_json_string(output, graph_mode_name(effective_options.cuda_graph));
+    output << ",\"cuda_graph_entries\":"
+           << effective_options.cuda_graph_entries;
     output << ",\"cuda_resident_bytes\":"
            << effective_options.cuda_resident_bytes;
     output << ",\"cuda_pinned_bytes\":"
@@ -1253,6 +1321,11 @@ int main(int argc, char** argv) {
     write_json_string(output, draft_moe_fusion_name);
     output << ",\"draft_cuda_weight_validation\":";
     write_json_string(output, draft_weight_validation_name);
+    output << ",\"draft_cuda_graph\":";
+    write_json_string(
+        output, graph_mode_name(effective_draft_options.cuda_graph));
+    output << ",\"draft_cuda_graph_entries\":"
+           << effective_draft_options.cuda_graph_entries;
     output << ",\"draft_kernel_nanoseconds\":"
            << draft_profile.device_nanoseconds
            << ",\"draft_host_to_device_bytes\":"
@@ -1289,6 +1362,30 @@ int main(int argc, char** argv) {
            << draft_runtime.immutable_validation_bytes
            << ",\"draft_immutable_validation_nanoseconds\":"
            << draft_runtime.immutable_validation_nanoseconds
+           << ",\"draft_cuda_graph_cache_hits\":"
+           << draft_runtime.cuda_graph_cache_hits
+           << ",\"draft_cuda_graph_cache_misses\":"
+           << draft_runtime.cuda_graph_cache_misses
+           << ",\"draft_cuda_graph_cache_evictions\":"
+           << draft_runtime.cuda_graph_cache_evictions
+           << ",\"draft_cuda_graph_instantiations\":"
+           << draft_runtime.cuda_graph_instantiations
+           << ",\"draft_cuda_graph_update_attempts\":"
+           << draft_runtime.cuda_graph_update_attempts
+           << ",\"draft_cuda_graph_update_successes\":"
+           << draft_runtime.cuda_graph_update_successes
+           << ",\"draft_cuda_graph_update_failures\":"
+           << draft_runtime.cuda_graph_update_failures
+           << ",\"draft_cuda_graph_launches\":"
+           << draft_runtime.cuda_graph_launches
+           << ",\"draft_cuda_graph_invalidations\":"
+           << draft_runtime.cuda_graph_invalidations
+           << ",\"draft_cuda_graph_host_nanoseconds\":"
+           << draft_runtime.cuda_graph_host_nanoseconds
+           << ",\"draft_cuda_graph_resident_entries\":"
+           << draft_runtime.cuda_graph_resident_entries
+           << ",\"draft_cuda_graph_peak_entries\":"
+           << draft_runtime.cuda_graph_peak_entries
            << ",\"draft_resident_grid_calls\":"
            << draft_runtime.resident_grid_calls
            << ",\"draft_resident_grid_experts\":"
@@ -1496,6 +1593,30 @@ int main(int argc, char** argv) {
            << runtime.immutable_validation_bytes
            << ",\"immutable_validation_nanoseconds\":"
            << runtime.immutable_validation_nanoseconds
+           << ",\"cuda_graph_cache_hits\":"
+           << runtime.cuda_graph_cache_hits
+           << ",\"cuda_graph_cache_misses\":"
+           << runtime.cuda_graph_cache_misses
+           << ",\"cuda_graph_cache_evictions\":"
+           << runtime.cuda_graph_cache_evictions
+           << ",\"cuda_graph_instantiations\":"
+           << runtime.cuda_graph_instantiations
+           << ",\"cuda_graph_update_attempts\":"
+           << runtime.cuda_graph_update_attempts
+           << ",\"cuda_graph_update_successes\":"
+           << runtime.cuda_graph_update_successes
+           << ",\"cuda_graph_update_failures\":"
+           << runtime.cuda_graph_update_failures
+           << ",\"cuda_graph_launches\":"
+           << runtime.cuda_graph_launches
+           << ",\"cuda_graph_invalidations\":"
+           << runtime.cuda_graph_invalidations
+           << ",\"cuda_graph_host_nanoseconds\":"
+           << runtime.cuda_graph_host_nanoseconds
+           << ",\"cuda_graph_resident_entries\":"
+           << runtime.cuda_graph_resident_entries
+           << ",\"cuda_graph_peak_entries\":"
+           << runtime.cuda_graph_peak_entries
            << ",\"scratch_bytes\":" << runtime.scratch_bytes
            << ",\"peak_scratch_bytes\":" << runtime.peak_scratch_bytes
            << ",\"grouped_projection_calls\":"

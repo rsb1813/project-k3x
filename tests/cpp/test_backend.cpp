@@ -25,6 +25,8 @@ int main() {
     if (defaults.cuda_boundary != k3x::CudaBoundaryMode::operation) return 58;
     if (defaults.cuda_transfer != k3x::CudaTransferMode::synchronous) return 67;
     if (defaults.cuda_pinned_bytes != 0) return 68;
+    if (defaults.cuda_graph != k3x::CudaGraphMode::disabled ||
+        defaults.cuda_graph_entries != 0) return 87;
     if (k3x::error_code_name(k3x::ErrorCode::invalid_state) !=
         std::string_view{"INVALID_STATE"}) {
         return 69;
@@ -69,6 +71,20 @@ int main() {
         runtime_stats.transfer_stall_nanoseconds != 0 ||
         runtime_stats.async_engine_count != 0 || runtime_stats.device_overlap) {
         return 70;
+    }
+    if (runtime_stats.cuda_graph_cache_hits != 0 ||
+        runtime_stats.cuda_graph_cache_misses != 0 ||
+        runtime_stats.cuda_graph_cache_evictions != 0 ||
+        runtime_stats.cuda_graph_instantiations != 0 ||
+        runtime_stats.cuda_graph_update_attempts != 0 ||
+        runtime_stats.cuda_graph_update_successes != 0 ||
+        runtime_stats.cuda_graph_update_failures != 0 ||
+        runtime_stats.cuda_graph_launches != 0 ||
+        runtime_stats.cuda_graph_invalidations != 0 ||
+        runtime_stats.cuda_graph_host_nanoseconds != 0 ||
+        runtime_stats.cuda_graph_resident_entries != 0 ||
+        runtime_stats.cuda_graph_peak_entries != 0) {
+        return 88;
     }
 
     const auto prefetch = backend->prefetch_mxfp4_situ_mlp_group(

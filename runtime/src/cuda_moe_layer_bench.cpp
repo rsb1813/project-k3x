@@ -41,6 +41,9 @@ struct Arguments {
     std::string validation_name{"per-call"};
     k3x::CudaWeightValidationMode validation{
         k3x::CudaWeightValidationMode::per_call};
+    std::string graph_name{"disabled"};
+    k3x::CudaGraphMode graph{k3x::CudaGraphMode::disabled};
+    std::size_t graph_entries{};
     bool profiler{true};
 };
 
@@ -108,6 +111,15 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
             arguments.iterations = *parsed;
         } else if (key == "--validation") {
             arguments.validation_name = value;
+        } else if (key == "--graph") {
+            arguments.graph_name = value;
+        } else if (key == "--graph-entries") {
+            const auto parsed = parse_size(value);
+            if (!parsed) {
+                std::cerr << "invalid option: --graph-entries\n";
+                return std::nullopt;
+            }
+            arguments.graph_entries = *parsed;
         } else if (key == "--profiler") {
             if (value == "on") arguments.profiler = true;
             else if (value == "off") arguments.profiler = false;
@@ -144,6 +156,31 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
     if (arguments.validation == k3x::CudaWeightValidationMode::admission &&
         arguments.boundary != Boundary::moe_layer) {
         std::cerr << "admission validation requires moe-layer boundary\n";
+        return std::nullopt;
+    }
+    if (arguments.graph_name == "disabled") {
+        arguments.graph = k3x::CudaGraphMode::disabled;
+    } else if (arguments.graph_name == "update") {
+        arguments.graph = k3x::CudaGraphMode::update;
+    } else if (arguments.graph_name == "cache") {
+        arguments.graph = k3x::CudaGraphMode::cache;
+    } else {
+        std::cerr << "unknown graph mode: " << arguments.graph_name << '\n';
+        return std::nullopt;
+    }
+    if ((arguments.graph == k3x::CudaGraphMode::disabled &&
+         arguments.graph_entries != 0) ||
+        (arguments.graph == k3x::CudaGraphMode::update &&
+         arguments.graph_entries != 1) ||
+        (arguments.graph == k3x::CudaGraphMode::cache &&
+         arguments.graph_entries == 0)) {
+        std::cerr << "invalid graph entry capacity\n";
+        return std::nullopt;
+    }
+    if (arguments.graph != k3x::CudaGraphMode::disabled &&
+        (arguments.boundary != Boundary::moe_layer ||
+         arguments.validation != k3x::CudaWeightValidationMode::admission)) {
+        std::cerr << "graph execution requires admission-validated moe-layer boundary\n";
         return std::nullopt;
     }
     if (arguments.iterations == 0) {
@@ -304,7 +341,9 @@ void write_error(k3x::ErrorCode code, const std::string& message) {
 k3x::BackendOptions backend_options(
     Boundary boundary,
     k3x::CudaWeightValidationMode validation =
-        k3x::CudaWeightValidationMode::per_call) {
+        k3x::CudaWeightValidationMode::per_call,
+    k3x::CudaGraphMode graph = k3x::CudaGraphMode::disabled,
+    std::size_t graph_entries = 0) {
     k3x::BackendOptions options;
     options.kind = k3x::BackendKind::cuda_custom;
     options.dense_precision = k3x::DensePrecision::fp32;
@@ -317,6 +356,8 @@ k3x::BackendOptions backend_options(
     options.cuda_transfer = k3x::CudaTransferMode::synchronous;
     options.cuda_moe_fusion = k3x::CudaMoeFusionMode::none;
     options.cuda_weight_validation = validation;
+    options.cuda_graph = graph;
+    options.cuda_graph_entries = graph_entries;
     options.cuda_resident_bytes = kResidentCapacity;
     return options;
 }
@@ -380,7 +421,8 @@ int main(int argc, char** argv) {
 
     k3x::Profiler profiler;
     auto backend = k3x::make_cuda_backend(
-        backend_options(arguments->boundary, arguments->validation),
+        backend_options(arguments->boundary, arguments->validation,
+                        arguments->graph, arguments->graph_entries),
         arguments->profiler ? &profiler : nullptr);
     if (!backend) {
         write_error(backend.error(), backend.message());
@@ -448,6 +490,8 @@ int main(int argc, char** argv) {
               << ",\"warmup\":" << arguments->warmup
               << ",\"iterations\":" << arguments->iterations
               << ",\"validation\":\"" << arguments->validation_name << "\""
+              << ",\"cuda_graph\":\"" << arguments->graph_name << "\""
+              << ",\"cuda_graph_entries\":" << arguments->graph_entries
               << ",\"profiler\":"
               << (arguments->profiler ? "true" : "false")
               << ",\"maximum_absolute_error\":"
@@ -494,6 +538,40 @@ int main(int argc, char** argv) {
               << ",\"immutable_validation_nanoseconds\":"
               << runtime_after.immutable_validation_nanoseconds -
                      runtime_before.immutable_validation_nanoseconds
+              << ",\"cuda_graph_cache_hits\":"
+              << runtime_after.cuda_graph_cache_hits -
+                     runtime_before.cuda_graph_cache_hits
+              << ",\"cuda_graph_cache_misses\":"
+              << runtime_after.cuda_graph_cache_misses -
+                     runtime_before.cuda_graph_cache_misses
+              << ",\"cuda_graph_cache_evictions\":"
+              << runtime_after.cuda_graph_cache_evictions -
+                     runtime_before.cuda_graph_cache_evictions
+              << ",\"cuda_graph_instantiations\":"
+              << runtime_after.cuda_graph_instantiations -
+                     runtime_before.cuda_graph_instantiations
+              << ",\"cuda_graph_update_attempts\":"
+              << runtime_after.cuda_graph_update_attempts -
+                     runtime_before.cuda_graph_update_attempts
+              << ",\"cuda_graph_update_successes\":"
+              << runtime_after.cuda_graph_update_successes -
+                     runtime_before.cuda_graph_update_successes
+              << ",\"cuda_graph_update_failures\":"
+              << runtime_after.cuda_graph_update_failures -
+                     runtime_before.cuda_graph_update_failures
+              << ",\"cuda_graph_launches\":"
+              << runtime_after.cuda_graph_launches -
+                     runtime_before.cuda_graph_launches
+              << ",\"cuda_graph_invalidations\":"
+              << runtime_after.cuda_graph_invalidations -
+                     runtime_before.cuda_graph_invalidations
+              << ",\"cuda_graph_host_nanoseconds\":"
+              << runtime_after.cuda_graph_host_nanoseconds -
+                     runtime_before.cuda_graph_host_nanoseconds
+              << ",\"cuda_graph_resident_entries\":"
+              << runtime_after.cuda_graph_resident_entries
+              << ",\"cuda_graph_peak_entries\":"
+              << runtime_after.cuda_graph_peak_entries
               << ",\"resident_weight_bytes\":"
               << runtime_after.resident_weight_bytes
               << ",\"peak_resident_weight_bytes\":"

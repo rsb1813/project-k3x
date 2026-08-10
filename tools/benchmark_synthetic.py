@@ -83,6 +83,20 @@ class BenchmarkRecord:
     routed_experts: tuple[int, ...]
     cuda_moe_fusion: str = "none"
     cuda_weight_validation: str = "per-call"
+    cuda_graph: str = "disabled"
+    cuda_graph_entries: int = 0
+    cuda_graph_cache_hits: int = 0
+    cuda_graph_cache_misses: int = 0
+    cuda_graph_cache_evictions: int = 0
+    cuda_graph_instantiations: int = 0
+    cuda_graph_update_attempts: int = 0
+    cuda_graph_update_successes: int = 0
+    cuda_graph_update_failures: int = 0
+    cuda_graph_launches: int = 0
+    cuda_graph_invalidations: int = 0
+    cuda_graph_host_nanoseconds: int = 0
+    cuda_graph_resident_entries: int = 0
+    cuda_graph_peak_entries: int = 0
     immutable_validation_scans: int = 0
     immutable_validation_hits: int = 0
     immutable_validation_bytes: int = 0
@@ -185,6 +199,20 @@ class BenchmarkRecord:
     draft_cuda_transfer: str = "synchronous"
     draft_cuda_moe_fusion: str = "none"
     draft_cuda_weight_validation: str = "per-call"
+    draft_cuda_graph: str = "disabled"
+    draft_cuda_graph_entries: int = 0
+    draft_cuda_graph_cache_hits: int = 0
+    draft_cuda_graph_cache_misses: int = 0
+    draft_cuda_graph_cache_evictions: int = 0
+    draft_cuda_graph_instantiations: int = 0
+    draft_cuda_graph_update_attempts: int = 0
+    draft_cuda_graph_update_successes: int = 0
+    draft_cuda_graph_update_failures: int = 0
+    draft_cuda_graph_launches: int = 0
+    draft_cuda_graph_invalidations: int = 0
+    draft_cuda_graph_host_nanoseconds: int = 0
+    draft_cuda_graph_resident_entries: int = 0
+    draft_cuda_graph_peak_entries: int = 0
     draft_immutable_validation_scans: int = 0
     draft_immutable_validation_hits: int = 0
     draft_immutable_validation_bytes: int = 0
@@ -335,6 +363,8 @@ def _run_process(
     aurora_draft_resident_bytes: int = 0,
     aurora_draft_batching: str = "grouped",
     aurora_draft_boundary: str = "ffn-block",
+    cuda_graph: str = "disabled",
+    cuda_graph_entries: int = 0,
     diagnostics: bool = False,
 ) -> tuple[dict, int, float]:
     command = [
@@ -350,6 +380,8 @@ def _run_process(
         "--cuda-pinned-bytes", str(cuda_pinned_bytes),
         "--cuda-moe-fusion", cuda_moe_fusion,
         "--cuda-weight-validation", cuda_weight_validation,
+        "--cuda-graph", cuda_graph,
+        "--cuda-graph-entries", str(cuda_graph_entries),
         "--l1-expert-cache", l1_expert_cache,
         "--l1-expert-cache-bytes", str(l1_expert_cache_bytes),
         "--profile-prior-strength", str(profile_prior_strength),
@@ -474,6 +506,8 @@ def benchmark_once(
     cuda_transfer: str = "synchronous",
     cuda_moe_fusion: str = "none",
     cuda_weight_validation: str = "per-call",
+    cuda_graph: str = "disabled",
+    cuda_graph_entries: int = 0,
     cuda_resident_bytes: int = 0,
     cuda_pinned_bytes: int = 0,
     l1_expert_cache: str = "disabled",
@@ -531,6 +565,8 @@ def benchmark_once(
                 cuda_transfer=cuda_transfer,
                 cuda_moe_fusion=cuda_moe_fusion,
                 cuda_weight_validation=cuda_weight_validation,
+                cuda_graph=cuda_graph,
+                cuda_graph_entries=cuda_graph_entries,
                 cuda_resident_bytes=cuda_resident_bytes,
                 cuda_pinned_bytes=cuda_pinned_bytes,
                 l1_expert_cache=l1_expert_cache,
@@ -577,6 +613,8 @@ def benchmark_once(
                 cuda_transfer=cuda_transfer,
                 cuda_moe_fusion=cuda_moe_fusion,
                 cuda_weight_validation=cuda_weight_validation,
+                cuda_graph=cuda_graph,
+                cuda_graph_entries=cuda_graph_entries,
                 cuda_resident_bytes=cuda_resident_bytes,
                 cuda_pinned_bytes=cuda_pinned_bytes,
                 l1_expert_cache=l1_expert_cache,
@@ -719,6 +757,8 @@ def benchmark_once(
                 cuda_transfer=cuda_transfer,
                 cuda_moe_fusion=cuda_moe_fusion,
                 cuda_weight_validation=cuda_weight_validation,
+                cuda_graph=cuda_graph,
+                cuda_graph_entries=cuda_graph_entries,
                 cuda_resident_bytes=cuda_resident_bytes,
                 cuda_pinned_bytes=cuda_pinned_bytes,
                 l1_expert_cache=l1_expert_cache,
@@ -769,6 +809,8 @@ def benchmark_once(
                 cuda_transfer=cuda_transfer,
                 cuda_moe_fusion=cuda_moe_fusion,
                 cuda_weight_validation=cuda_weight_validation,
+                cuda_graph=cuda_graph,
+                cuda_graph_entries=cuda_graph_entries,
                 cuda_resident_bytes=cuda_resident_bytes,
                 cuda_pinned_bytes=cuda_pinned_bytes,
                 l1_expert_cache=l1_expert_cache,
@@ -897,6 +939,19 @@ def benchmark_once(
         "ffn_block_experts",
         "cuda_moe_fusion",
         "cuda_weight_validation",
+        "cuda_graph",
+        "cuda_graph_entries",
+        "cuda_graph_cache_hits",
+        "cuda_graph_cache_misses",
+        "cuda_graph_cache_evictions",
+        "cuda_graph_instantiations",
+        "cuda_graph_update_attempts",
+        "cuda_graph_update_successes",
+        "cuda_graph_update_failures",
+        "cuda_graph_launches",
+        "cuda_graph_invalidations",
+        "cuda_graph_resident_entries",
+        "cuda_graph_peak_entries",
         "immutable_validation_scans",
         "immutable_validation_hits",
         "immutable_validation_bytes",
@@ -926,6 +981,19 @@ def benchmark_once(
         "draft_cuda_transfer",
         "draft_cuda_moe_fusion",
         "draft_cuda_weight_validation",
+        "draft_cuda_graph",
+        "draft_cuda_graph_entries",
+        "draft_cuda_graph_cache_hits",
+        "draft_cuda_graph_cache_misses",
+        "draft_cuda_graph_cache_evictions",
+        "draft_cuda_graph_instantiations",
+        "draft_cuda_graph_update_attempts",
+        "draft_cuda_graph_update_successes",
+        "draft_cuda_graph_update_failures",
+        "draft_cuda_graph_launches",
+        "draft_cuda_graph_invalidations",
+        "draft_cuda_graph_resident_entries",
+        "draft_cuda_graph_peak_entries",
         "draft_immutable_validation_scans",
         "draft_immutable_validation_hits",
         "draft_immutable_validation_bytes",
@@ -1004,6 +1072,8 @@ def benchmark_once(
         cuda_transfer,
         cuda_moe_fusion,
         cuda_weight_validation,
+        cuda_graph,
+        cuda_graph_entries,
         cuda_resident_bytes,
         cuda_pinned_bytes,
         l1_expert_cache,
@@ -1042,6 +1112,8 @@ def benchmark_once(
         "cuda_transfer",
         "cuda_moe_fusion",
         "cuda_weight_validation",
+        "cuda_graph",
+        "cuda_graph_entries",
         "cuda_resident_bytes",
         "cuda_pinned_bytes",
         "l1_expert_cache_mode",
@@ -1116,6 +1188,22 @@ def benchmark_once(
         cuda_transfer=samples[0]["cuda_transfer"],
         cuda_moe_fusion=samples[0]["cuda_moe_fusion"],
         cuda_weight_validation=samples[0]["cuda_weight_validation"],
+        cuda_graph=samples[0]["cuda_graph"],
+        cuda_graph_entries=samples[0]["cuda_graph_entries"],
+        cuda_graph_cache_hits=samples[0]["cuda_graph_cache_hits"],
+        cuda_graph_cache_misses=samples[0]["cuda_graph_cache_misses"],
+        cuda_graph_cache_evictions=samples[0]["cuda_graph_cache_evictions"],
+        cuda_graph_instantiations=samples[0]["cuda_graph_instantiations"],
+        cuda_graph_update_attempts=samples[0]["cuda_graph_update_attempts"],
+        cuda_graph_update_successes=samples[0]["cuda_graph_update_successes"],
+        cuda_graph_update_failures=samples[0]["cuda_graph_update_failures"],
+        cuda_graph_launches=samples[0]["cuda_graph_launches"],
+        cuda_graph_invalidations=samples[0]["cuda_graph_invalidations"],
+        cuda_graph_host_nanoseconds=int(statistics.median(
+            item["cuda_graph_host_nanoseconds"] for item in samples
+        )),
+        cuda_graph_resident_entries=samples[0]["cuda_graph_resident_entries"],
+        cuda_graph_peak_entries=samples[0]["cuda_graph_peak_entries"],
         immutable_validation_scans=samples[0]["immutable_validation_scans"],
         immutable_validation_hits=samples[0]["immutable_validation_hits"],
         immutable_validation_bytes=samples[0]["immutable_validation_bytes"],
@@ -1333,6 +1421,22 @@ def benchmark_once(
         draft_cuda_weight_validation=samples[0][
             "draft_cuda_weight_validation"
         ],
+        draft_cuda_graph=samples[0]["draft_cuda_graph"],
+        draft_cuda_graph_entries=samples[0]["draft_cuda_graph_entries"],
+        draft_cuda_graph_cache_hits=samples[0]["draft_cuda_graph_cache_hits"],
+        draft_cuda_graph_cache_misses=samples[0]["draft_cuda_graph_cache_misses"],
+        draft_cuda_graph_cache_evictions=samples[0]["draft_cuda_graph_cache_evictions"],
+        draft_cuda_graph_instantiations=samples[0]["draft_cuda_graph_instantiations"],
+        draft_cuda_graph_update_attempts=samples[0]["draft_cuda_graph_update_attempts"],
+        draft_cuda_graph_update_successes=samples[0]["draft_cuda_graph_update_successes"],
+        draft_cuda_graph_update_failures=samples[0]["draft_cuda_graph_update_failures"],
+        draft_cuda_graph_launches=samples[0]["draft_cuda_graph_launches"],
+        draft_cuda_graph_invalidations=samples[0]["draft_cuda_graph_invalidations"],
+        draft_cuda_graph_host_nanoseconds=int(statistics.median(
+            item["draft_cuda_graph_host_nanoseconds"] for item in samples
+        )),
+        draft_cuda_graph_resident_entries=samples[0]["draft_cuda_graph_resident_entries"],
+        draft_cuda_graph_peak_entries=samples[0]["draft_cuda_graph_peak_entries"],
         draft_immutable_validation_scans=samples[0][
             "draft_immutable_validation_scans"
         ],
@@ -1492,10 +1596,12 @@ def main() -> int:
         "--cuda-weights", choices=("transient", "resident"), default="transient"
     )
     parser.add_argument(
-        "--cuda-batching", choices=("scalar", "grouped"), default="scalar"
+        "--cuda-batching", choices=("scalar", "grouped", "resident-grid"),
+        default="scalar"
     )
     parser.add_argument(
-        "--cuda-boundary", choices=("operation", "ffn-block"), default="operation"
+        "--cuda-boundary", choices=("operation", "ffn-block", "moe-layer"),
+        default="operation"
     )
     parser.add_argument(
         "--cuda-transfer", choices=("synchronous", "prefetch"),
@@ -1509,6 +1615,11 @@ def main() -> int:
         "--cuda-weight-validation", choices=("per-call", "admission"),
         default="per-call",
     )
+    parser.add_argument(
+        "--cuda-graph", choices=("disabled", "update", "cache"),
+        default="disabled",
+    )
+    parser.add_argument("--cuda-graph-entries", type=int, default=0)
     parser.add_argument("--cuda-resident-bytes", type=int, default=0)
     parser.add_argument("--cuda-pinned-bytes", type=int, default=0)
     parser.add_argument(
@@ -1577,6 +1688,8 @@ def main() -> int:
         cuda_transfer=args.cuda_transfer,
         cuda_moe_fusion=args.cuda_moe_fusion,
         cuda_weight_validation=args.cuda_weight_validation,
+        cuda_graph=args.cuda_graph,
+        cuda_graph_entries=args.cuda_graph_entries,
         cuda_resident_bytes=args.cuda_resident_bytes,
         cuda_pinned_bytes=args.cuda_pinned_bytes,
         l1_expert_cache=args.l1_expert_cache,

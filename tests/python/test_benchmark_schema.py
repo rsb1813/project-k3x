@@ -105,6 +105,27 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["draft_cuda_moe_fusion"] == "none"
     assert payload["cuda_weight_validation"] == "per-call"
     assert payload["draft_cuda_weight_validation"] == "per-call"
+    assert payload["cuda_graph"] == "disabled"
+    assert payload["cuda_graph_entries"] == 0
+    assert payload["draft_cuda_graph"] == "disabled"
+    assert payload["draft_cuda_graph_entries"] == 0
+    graph_fields = (
+        "cuda_graph_cache_hits",
+        "cuda_graph_cache_misses",
+        "cuda_graph_cache_evictions",
+        "cuda_graph_instantiations",
+        "cuda_graph_update_attempts",
+        "cuda_graph_update_successes",
+        "cuda_graph_update_failures",
+        "cuda_graph_launches",
+        "cuda_graph_invalidations",
+        "cuda_graph_host_nanoseconds",
+        "cuda_graph_resident_entries",
+        "cuda_graph_peak_entries",
+    )
+    for field in graph_fields:
+        assert payload[field] == 0
+        assert payload[f"draft_{field}"] == 0
     for field in (
         "immutable_validation_scans",
         "immutable_validation_hits",
@@ -245,6 +266,13 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert row["draft_resident_grid_calls"] == "0"
     assert row["resident_moe_layer_calls"] == "0"
     assert row["draft_resident_moe_layer_calls"] == "0"
+    assert row["cuda_graph"] == "disabled"
+    assert row["cuda_graph_entries"] == "0"
+    assert row["draft_cuda_graph"] == "disabled"
+    assert row["draft_cuda_graph_entries"] == "0"
+    for field in graph_fields:
+        assert row[field] == "0"
+        assert row[f"draft_{field}"] == "0"
     assert row["cuda_pinned_bytes"] == "0"
     assert row["transfer_device_nanoseconds"] == "0"
     assert row["device_overlap"] == "False"

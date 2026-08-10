@@ -109,7 +109,7 @@ git commit -m "runtime: add bounded CUDA Graph index"
 - Add CLI `--cuda-graph disabled|update|cache` and `--cuda-graph-entries N`.
 - Add target and `draft_` JSON/CSV fields with zero defaults.
 
-- [ ] **Step 1: Write RED option and schema tests**
+- [x] **Step 1: Write RED option and schema tests**
 
 Add tests that invoke `k3x_run` with these cases.
 
@@ -122,7 +122,7 @@ Add tests that invoke `k3x_run` with these cases.
 
 Each must exit 2 with a graph-specific message. Add one `BenchmarkRecord` assertion that every graph field serializes as zero under CPU defaults.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -134,11 +134,11 @@ K3X_BUILD_DIR=build-cpu python -m pytest -q \
 
 Expected: tests fail because the arguments and fields are absent.
 
-- [ ] **Step 3: Add the strict contract and serialization**
+- [x] **Step 3: Add the strict contract and serialization**
 
 Parse sizes with the existing `from_chars` path. Enforce the exact matrix in both CLI and `make_cuda_backend`; CLI errors remain exit 2, factory errors use `backend_unavailable`. Output mode names exactly `disabled`, `update`, and `cache`.
 
-- [ ] **Step 4: Run GREEN and second-order searches**
+- [x] **Step 4: Run GREEN and second-order searches**
 
 Run:
 
@@ -152,7 +152,7 @@ rg -n "cuda_graph_(cache|update|launch|resident|peak|host)" runtime tools tests
 
 Expected: selected tests pass and every public counter appears in backend, runtime JSON, benchmark model, aggregation, and CSV field lists.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add runtime/include/k3x/backend.hpp runtime/cuda/backend_cuda.cu runtime/src/main.cpp runtime/src/cuda_moe_layer_bench.cpp tools/benchmark_synthetic.py tests/cpp/test_backend.cpp tests/python/test_cpp_parity.py tests/python/test_benchmark_schema.py
