@@ -51,9 +51,9 @@ flowchart LR
 | Milestone 21 | [PR #31 merged](https://github.com/rsb1813/project-k3x/pull/31) at `97eb3e4e` | B-0022 resident CUDA MoE layer; exact target behavior and lower sync/H2D/D2H, mixed decode result |
 | Milestone 22 | [PR #36 merged](https://github.com/rsb1813/project-k3x/pull/36) at `e4820a18` | B-0023 released-dimension MoE boundary; exact traffic gates pass, complete layer latency is 4.30×–16.69× split |
 | Milestone 23 | [PR #38 merged](https://github.com/rsb1813/project-k3x/pull/38) at `e24cac2` | B-0024 attributes the regression to repeated 469,776,384-byte validation and measures an exact admission-time fast path |
-| Milestone 24 | Local verification complete; publication pending | B-0025 measures direct, whole-update, and bounded ordered-set CUDA Graph behavior across stable, alternating, and rotating traces |
+| Milestone 24 | [PR #40 open](https://github.com/rsb1813/project-k3x/pull/40) from `27feced` | B-0025 measures direct, whole-update, and bounded ordered-set CUDA Graph behavior across stable, alternating, and rotating traces |
 
-PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 23 integration head `e24cac2`; its branch and pull-request correctness runs `31363433423` and `31363437230` passed with CodeQL `31363437226`, followed by successful post-merge `main` correctness `31363673811` and CodeQL `31363673857`.
+PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 23 integration head `e24cac2`; its branch and pull-request correctness runs `31363433423` and `31363437230` passed with CodeQL `31363437226`, followed by successful post-merge `main` correctness `31363673811` and CodeQL `31363673857`. Milestone 24 is under public review in [PR #40](https://github.com/rsb1813/project-k3x/pull/40); it is not described as merged before pull-request and post-merge gates complete.
 
 ## Why a dedicated engine
 

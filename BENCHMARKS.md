@@ -915,6 +915,8 @@ Raw JSON/CSV and summaries are under `results/b0025-cuda-graph-cache-wsl/`. Runn
 
 Fresh verification passes CPU CTest 15/15 with pytest 332 passed/70 skipped, liburing/direct CTest 16/16 with pytest 334 passed/68 skipped, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 386 passed/16 skipped. Compute Sanitizer reports `ERROR SUMMARY: 0 errors` for both a stable cache hit and an alternating capacity-one miss/eviction.
 
+Review head `27feced` is published in PR #40. Pull-request and post-merge correctness/CodeQL results remain pending and are not recorded as passed.
+
 The result retains direct execution as the default. Stable and alternating deltas are small and mixed, while rotating churn is consistently slower. Real K3 routed-set reuse, native-Linux end-to-end token timing, dynamic residency interaction, utilization, physical traffic, and quality remain unmeasured.
 
 ## Pending benchmark gates
