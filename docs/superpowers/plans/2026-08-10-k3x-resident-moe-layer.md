@@ -756,7 +756,7 @@ git add README.md ARCHITECTURE.md PERFORMANCE_MODEL.md DECISIONS.md BENCHMARKS.m
 git commit -m "docs: synchronize milestone twenty one ledger"
 ```
 
-- [ ] **Step 5: Publish and merge**
+- [x] **Step 5: Publish and merge**
 
 Push `codex/milestone-twenty-one-resident-moe-layer`, create a ready public PR against `main`, wait for push and pull-request correctness runs, rebase-merge only after both pass, and wait for the post-merge `main` run. Then reconcile the README milestone row with the actual PR and public integration head in a small follow-up documentation PR.
 

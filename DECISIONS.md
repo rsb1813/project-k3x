@@ -528,6 +528,7 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: B-0022 records exactly three fewer synchronizations per successful layer call, 14,880/16,368 fewer activation-H2D bytes, 26,880/29,568 fewer D2H bytes, and 14,496/15,984 fewer total-H2D bytes for fixed/adaptive rows. Paired decode changes are +5.619%, -2.753%, -1.216%, and +3.933%.
 - Reason not promoted to default: throughput is mixed, the graph is tiny and WSL2-bound, and representative dimensions, native-Linux timing, physical PCIe traffic, and coding quality remain unmeasured.
 - Revisit: use B-0022 to decide whether the next boundary should be a CUDA Graph over the stable MoE layer or a larger device-resident token graph. Do not combine reduced precision or dynamic eviction with the first layer measurement.
+- Publication: PR #31 was rebase-merged at public integration head `97eb3e4e`; branch, pull-request, and post-merge correctness runs `31355460022`, `31355471896`, and `31355678835` passed. CodeQL run `31355471922` also passed.
 
 ## D-047 — Account for the routed norm as a real L0 weight
 

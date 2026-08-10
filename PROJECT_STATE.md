@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 21 exact resident MoE-layer CUDA execution and B-0022 measurement are complete on branch `codex/milestone-twenty-one-resident-moe-layer`; complete verification, final review, and public integration remain. The backend keeps routing on CPU but joins routed-down, resident expert grid, ordered contribution mixing, RMSNorm, routed-up, shared SiTU MLP, and final addition into thirteen timed operations on one stream with one result synchronization. Milestone 20 remains the latest public milestone through PR #29 at integration head `90b20c87`; Milestone 21 is not yet public or merged.
+Milestone 21 exact resident MoE-layer CUDA execution, B-0022 measurement, complete verification, final review, and public integration are complete. PR #31 was rebase-merged at public integration head `97eb3e4e`. The backend keeps routing on CPU but joins routed-down, resident expert grid, ordered contribution mixing, RMSNorm, routed-up, shared SiTU MLP, and final addition into thirteen timed operations on one stream with one result synchronization. The current branch `codex/milestone-twenty-one-public-docs` only reconciles publication metadata.
 
-State audited on 2026-08-10 against local evidence head `78a7022` and public documentation baseline `7728acd0`; the public baseline's post-merge `main` correctness run `31352046040` passed. Fresh Milestone 21 verification passes CPU CTest 14/14 with Python 295 passed/56 skipped, liburing/direct CTest 15/15 with Python 301 passed/50 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 26/26 with Python 341 passed/10 skipped. Both MoE-layer Compute Sanitizer targets report zero errors. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 against public integration head `97eb3e4e`; branch/pull-request correctness runs `31355460022`/`31355471896`, CodeQL run `31355471922`, and post-merge `main` correctness run `31355678835` passed. Fresh Milestone 21 local verification passes CPU CTest 14/14 with Python 295 passed/56 skipped, liburing/direct CTest 15/15 with Python 301 passed/50 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 26/26 with Python 341 passed/10 skipped. Both MoE-layer Compute Sanitizer targets report zero errors. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
@@ -96,7 +96,7 @@ State audited on 2026-08-10 against local evidence head `78a7022` and public doc
 
 ## Work in progress
 
-- Milestone 21 design, implementation, telemetry, B-0022 runner, formal evidence, digest checks, full local verification, performance model, README, and TITAN Ledger measurement entries are complete. Final review and publication remain.
+- Milestone 21 design, implementation, telemetry, B-0022 runner, formal evidence, digest checks, full local verification, final review, performance model, README, TITAN Ledger, PR #31 integration, and post-merge CI are complete.
 - `moe-layer` now has executable full-fit and one-byte bypass runtime coverage. The exact FP32/native-MXFP4 backend performs all weight acquisition before scratch/events/kernel launch, returns `executed=false` on hard-cap bypass, and never converts CUDA errors into fallback. Focused CPU ownership/parity tests pass 104/35, CUDA ownership/parity tests pass 133/6, CPU schema coverage passes 13/8, and live CUDA schema coverage passes 19/2. CUDA Graph caching and a complete device-resident token graph remain deferred alternatives.
 - B-0022 paired decode is mixed at +5.619%, -2.753%, -1.216%, and +3.933%. Fixed/adaptive layer paths reduce synchronizations by 90/99, total H2D by 14,496/15,984 bytes, and D2H by 26,880/29,568 bytes while adding exactly 384 norm-weight/resident bytes. The boundary remains experimental and non-default.
 - Milestone 20 design, implementation, B-0021, full verification, sanitizer coverage, evidence cross-checks, final review, public PR integration, post-merge CI, README, and TITAN Ledger synchronization are complete.
@@ -139,9 +139,9 @@ State audited on 2026-08-10 against local evidence head `78a7022` and public doc
 
 ## Next concrete tasks
 
-1. Perform final diff/evidence review and resolve any Critical or Important finding.
-2. Publish the branch, open and merge the public pull request after CI, then verify post-merge `main` and synchronize public status fields.
-3. Decide the next measured boundary only after representative-dimension/native-Linux evidence; do not infer CUDA Graph selection from B-0022 alone.
+1. Decide the next measured boundary only after representative-dimension/native-Linux evidence; do not infer CUDA Graph selection from B-0022 alone.
+2. Evaluate whether a stable MoE-layer CUDA Graph or a larger device-resident token boundary best addresses the remaining host orchestration cost.
+3. Keep dynamic eviction, reduced precision, and graph caching as separately attributable experiments.
 4. Update GitHub Actions dependencies to remove the observed Node.js 20 deprecation warning without changing the correctness workflow contract.
 
 ## Hardware assumptions

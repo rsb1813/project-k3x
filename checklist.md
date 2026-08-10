@@ -141,7 +141,7 @@
 - [x] Propagate target/draft MoE-layer telemetry through runtime JSON and benchmark schemas.
 - [x] Implement and run B-0022 with committed raw/summary evidence validation.
 - [x] Run the complete verification and sanitizer matrices.
-- [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
+- [x] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
 
 ## Milestone 12 — Fused routed accumulation CUDA kernel
 
