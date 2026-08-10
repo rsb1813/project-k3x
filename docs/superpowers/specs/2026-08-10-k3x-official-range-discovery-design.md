@@ -53,7 +53,7 @@ The discovery record uses schema `k3x-official-discovery-v1` and contains the re
 
 The pinned index is fetched atomically with a 64 MiB ceiling, hashed while streaming, and accepted only when size and SHA-256 equal the API record. JSON duplicate keys, non-standard constants, wrong top-level keys, non-string tensor/shard names, unsupported shard paths, inconsistent shard counts, missing declared shards, and non-integer `metadata.total_size` fail closed.
 
-The pinned `config.json` is capped at 1 MiB, hashed locally, and checked for the released text dimensions needed by the slice: 93 layers, one dense layer, 896 experts, natural Top-16, hidden width 7,168, routed latent width 3,584, expert intermediate width 3,072, MXFP4 group size 32, SiTU constants 4.0 and 25.0, and routed scaling 1.0. Mismatch stops before any tensor range.
+The pinned `config.json` is capped at 1 MiB, hashed locally, and bound to the API-declared Git blob identity by recomputing `SHA-1("blob " + decimal_length + NUL + payload)`. It is then checked for the released text dimensions needed by the slice: 93 layers, one dense layer, 896 experts, natural Top-16, hidden width 7,168, routed latent width 3,584, expert intermediate width 3,072, MXFP4 group size 32, SiTU constants 4.0 and 25.0, and routed scaling 1.0. Blob-identity or configuration mismatch stops before any tensor range.
 
 ### Expert range planning
 
