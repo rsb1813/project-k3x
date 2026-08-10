@@ -117,6 +117,17 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["draft_cuda_resident_bytes"] == 0
     assert payload["draft_resident_weight_bytes"] == 0
     assert payload["draft_peak_resident_weight_bytes"] == 0
+    for field in (
+        "resident_grid_calls",
+        "resident_grid_experts",
+        "resident_grid_tokens",
+        "resident_grid_expert_tokens",
+        "resident_grid_kernel_launches",
+        "resident_grid_fallbacks",
+        "resident_grid_descriptor_h2d_bytes",
+    ):
+        assert payload[field] == 0
+        assert payload[f"draft_{field}"] == 0
     assert payload["draft_proposal_calls"] == 0
     assert payload["draft_candidate_tokens"] == 0
     assert payload["draft_replayed_context_tokens"] == 0
@@ -211,6 +222,8 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert row["fused_moe_experts"] == "0"
     assert row["batched_expert_ffn_calls"] == "0"
     assert row["batched_expert_ffn_tokens"] == "0"
+    assert row["resident_grid_calls"] == "0"
+    assert row["draft_resident_grid_calls"] == "0"
     assert row["cuda_pinned_bytes"] == "0"
     assert row["transfer_device_nanoseconds"] == "0"
     assert row["device_overlap"] == "False"

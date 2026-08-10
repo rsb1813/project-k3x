@@ -153,6 +153,18 @@ def test_cuda_draft_matches_cpu_persistent_target_execution(
         assert cuda["draft_cuda_batching"] == "grouped"
         assert resident_grid["draft_cuda_batching"] == "resident-grid"
         assert resident_grid_bypass["draft_cuda_batching"] == "resident-grid"
+        assert resident_grid["draft_resident_grid_calls"] > 0
+        assert resident_grid["draft_resident_grid_experts"] > 0
+        assert resident_grid["draft_resident_grid_tokens"] > 0
+        assert resident_grid["draft_resident_grid_expert_tokens"] > 0
+        assert resident_grid["draft_resident_grid_kernel_launches"] == (
+            resident_grid["draft_resident_grid_calls"] * 4
+        )
+        assert resident_grid["draft_resident_grid_fallbacks"] == 0
+        assert resident_grid["draft_resident_grid_descriptor_h2d_bytes"] > 0
+        assert resident_grid_bypass["draft_resident_grid_calls"] == 0
+        assert resident_grid_bypass["draft_resident_grid_fallbacks"] > 0
+        assert resident_grid["resident_grid_calls"] == 0
         assert cuda["draft_cuda_boundary"] == "ffn-block"
         assert cuda["draft_cuda_transfer"] == "synchronous"
         assert cuda["draft_cuda_moe_fusion"] == "none"

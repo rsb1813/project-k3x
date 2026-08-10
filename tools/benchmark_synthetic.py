@@ -86,6 +86,13 @@ class BenchmarkRecord:
     fused_moe_experts: int = 0
     batched_expert_ffn_calls: int = 0
     batched_expert_ffn_tokens: int = 0
+    resident_grid_calls: int = 0
+    resident_grid_experts: int = 0
+    resident_grid_tokens: int = 0
+    resident_grid_expert_tokens: int = 0
+    resident_grid_kernel_launches: int = 0
+    resident_grid_fallbacks: int = 0
+    resident_grid_descriptor_h2d_bytes: int = 0
     l1_expert_cache_mode: str = "disabled"
     l1_expert_cache_bytes: int = 0
     l1_expert_cache_hits: int = 0
@@ -180,6 +187,13 @@ class BenchmarkRecord:
     draft_weight_cache_bypasses: int = 0
     draft_resident_weight_bytes: int = 0
     draft_peak_resident_weight_bytes: int = 0
+    draft_resident_grid_calls: int = 0
+    draft_resident_grid_experts: int = 0
+    draft_resident_grid_tokens: int = 0
+    draft_resident_grid_expert_tokens: int = 0
+    draft_resident_grid_kernel_launches: int = 0
+    draft_resident_grid_fallbacks: int = 0
+    draft_resident_grid_descriptor_h2d_bytes: int = 0
     draft_proposal_calls: int = 0
     draft_candidate_tokens: int = 0
     draft_replayed_context_tokens: int = 0
@@ -296,6 +310,7 @@ def _run_process(
     aurora_block_policy: str = "fixed",
     aurora_draft_backend: str = "cpu",
     aurora_draft_resident_bytes: int = 0,
+    aurora_draft_batching: str = "grouped",
     diagnostics: bool = False,
 ) -> tuple[dict, int, float]:
     command = [
@@ -339,6 +354,11 @@ def _run_process(
             "--aurora-draft-resident-bytes",
             str(aurora_draft_resident_bytes),
         ])
+    if (
+        speculative_mode == "aurora-persistent"
+        and aurora_draft_backend == "cuda-custom"
+    ):
+        command.extend(["--aurora-draft-batching", aurora_draft_batching])
     if runtime_metadata:
         command.extend(["--runtime-metadata", runtime_metadata])
     if runtime_profile_in is not None:
@@ -451,6 +471,7 @@ def benchmark_once(
     aurora_block_policy: str = "fixed",
     aurora_draft_backend: str = "cpu",
     aurora_draft_resident_bytes: int = 0,
+    aurora_draft_batching: str = "grouped",
 ) -> BenchmarkRecord:
     if warmup < 0 or iterations <= 0:
         raise ValueError("warmup must be non-negative and iterations must be positive")
@@ -508,6 +529,7 @@ def benchmark_once(
                 aurora_block_policy=aurora_block_policy,
                 aurora_draft_backend=aurora_draft_backend,
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
+                aurora_draft_batching=aurora_draft_batching,
             )
             _, ttft_peak, ttft = _run_process(
                 artifact,
@@ -551,6 +573,7 @@ def benchmark_once(
                 aurora_block_policy=aurora_block_policy,
                 aurora_draft_backend=aurora_draft_backend,
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
+                aurora_draft_batching=aurora_draft_batching,
             )
             if index >= warmup:
                 samples.append(sample)
@@ -594,6 +617,7 @@ def benchmark_once(
                 aurora_block_policy=aurora_block_policy,
                 aurora_draft_backend=aurora_draft_backend,
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
+                aurora_draft_batching=aurora_draft_batching,
                 diagnostics=True,
             )
             if diagnostic["token_ids"] != samples[0]["token_ids"]:
@@ -640,6 +664,7 @@ def benchmark_once(
                 aurora_block_policy=aurora_block_policy,
                 aurora_draft_backend=aurora_draft_backend,
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
+                aurora_draft_batching=aurora_draft_batching,
                 diagnostics=True,
             )
             candidate, _, _ = _run_process(
@@ -677,6 +702,7 @@ def benchmark_once(
                 aurora_block_policy=aurora_block_policy,
                 aurora_draft_backend=aurora_draft_backend,
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
+                aurora_draft_batching=aurora_draft_batching,
                 diagnostics=True,
             )
             max_absolute_error, max_relative_error = _numerical_errors(
@@ -728,6 +754,7 @@ def benchmark_once(
                 aurora_block_policy=aurora_block_policy,
                 aurora_draft_backend=aurora_draft_backend,
                 aurora_draft_resident_bytes=aurora_draft_resident_bytes,
+                aurora_draft_batching=aurora_draft_batching,
             )
             if (
                 materialized["token_ids"] != samples[0]["token_ids"]
@@ -812,6 +839,13 @@ def benchmark_once(
         "activation_h2d_bytes",
         "grouped_projection_calls",
         "grouped_projection_members",
+        "resident_grid_calls",
+        "resident_grid_experts",
+        "resident_grid_tokens",
+        "resident_grid_expert_tokens",
+        "resident_grid_kernel_launches",
+        "resident_grid_fallbacks",
+        "resident_grid_descriptor_h2d_bytes",
         "ffn_block_calls",
         "ffn_block_experts",
         "cuda_moe_fusion",
@@ -852,6 +886,13 @@ def benchmark_once(
         "draft_weight_cache_bypasses",
         "draft_resident_weight_bytes",
         "draft_peak_resident_weight_bytes",
+        "draft_resident_grid_calls",
+        "draft_resident_grid_experts",
+        "draft_resident_grid_tokens",
+        "draft_resident_grid_expert_tokens",
+        "draft_resident_grid_kernel_launches",
+        "draft_resident_grid_fallbacks",
+        "draft_resident_grid_descriptor_h2d_bytes",
         "draft_proposal_calls",
         "draft_candidate_tokens",
         "draft_replayed_context_tokens",
@@ -923,6 +964,10 @@ def benchmark_once(
         if speculative_mode in ("aurora-replay", "aurora-persistent")
         else "none",
         aurora_draft_resident_bytes,
+        aurora_draft_batching
+        if speculative_mode == "aurora-persistent"
+        and aurora_draft_backend == "cuda-custom"
+        else "scalar",
     )
     option_fields = (
         "backend",
@@ -954,6 +999,7 @@ def benchmark_once(
         "aurora_block_policy",
         "aurora_draft_backend",
         "draft_cuda_resident_bytes",
+        "draft_cuda_batching",
     )
     observed_options = tuple(samples[0][field] for field in option_fields)
     float_option_fields = {"routing_mass_target", "routing_min_boundary_gap"}
@@ -1031,6 +1077,15 @@ def benchmark_once(
         peak_scratch_bytes=samples[0]["peak_scratch_bytes"],
         grouped_projection_calls=samples[0]["grouped_projection_calls"],
         grouped_projection_members=samples[0]["grouped_projection_members"],
+        resident_grid_calls=samples[0]["resident_grid_calls"],
+        resident_grid_experts=samples[0]["resident_grid_experts"],
+        resident_grid_tokens=samples[0]["resident_grid_tokens"],
+        resident_grid_expert_tokens=samples[0]["resident_grid_expert_tokens"],
+        resident_grid_kernel_launches=samples[0]["resident_grid_kernel_launches"],
+        resident_grid_fallbacks=samples[0]["resident_grid_fallbacks"],
+        resident_grid_descriptor_h2d_bytes=samples[0][
+            "resident_grid_descriptor_h2d_bytes"
+        ],
         ffn_block_calls=samples[0]["ffn_block_calls"],
         ffn_block_experts=samples[0]["ffn_block_experts"],
         fused_moe_calls=samples[0]["fused_moe_calls"],
@@ -1216,6 +1271,21 @@ def benchmark_once(
         draft_peak_resident_weight_bytes=samples[0][
             "draft_peak_resident_weight_bytes"
         ],
+        draft_resident_grid_calls=samples[0]["draft_resident_grid_calls"],
+        draft_resident_grid_experts=samples[0]["draft_resident_grid_experts"],
+        draft_resident_grid_tokens=samples[0]["draft_resident_grid_tokens"],
+        draft_resident_grid_expert_tokens=samples[0][
+            "draft_resident_grid_expert_tokens"
+        ],
+        draft_resident_grid_kernel_launches=samples[0][
+            "draft_resident_grid_kernel_launches"
+        ],
+        draft_resident_grid_fallbacks=samples[0][
+            "draft_resident_grid_fallbacks"
+        ],
+        draft_resident_grid_descriptor_h2d_bytes=samples[0][
+            "draft_resident_grid_descriptor_h2d_bytes"
+        ],
         draft_proposal_calls=samples[0]["draft_proposal_calls"],
         draft_candidate_tokens=samples[0]["draft_candidate_tokens"],
         draft_replayed_context_tokens=samples[0][
@@ -1370,6 +1440,7 @@ def main() -> int:
         default="cpu",
     )
     parser.add_argument("--aurora-draft-resident-bytes", type=int, default=0)
+    parser.add_argument("--aurora-draft-batching", default="grouped")
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--csv", type=Path, required=True)
     args = parser.parse_args()
@@ -1408,6 +1479,7 @@ def main() -> int:
         aurora_block_policy=args.aurora_block_policy,
         aurora_draft_backend=args.aurora_draft_backend,
         aurora_draft_resident_bytes=args.aurora_draft_resident_bytes,
+        aurora_draft_batching=args.aurora_draft_batching,
     )
     write_results(result, args.json, args.csv)
     print(json.dumps(asdict(result), sort_keys=True, separators=(",", ":")))
