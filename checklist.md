@@ -188,7 +188,7 @@
 - [x] Resolve the stale-state contradiction: D-028 already closes bounded fixture hash and canonical extent-prefix findings.
 - [x] Compare a D-028 no-op, narrow generic trust-boundary hardening, and premature signed-manifest v2.
 - [x] Write and self-review the accepted converter trust-boundary design.
-- [ ] Write and self-review the detailed TDD implementation plan.
+- [x] Write and self-review the detailed TDD implementation plan.
 - [ ] Harden source manifest containment and exact tensor-to-shard ownership through witnessed RED/GREEN cycles.
 - [ ] Harden safetensors metadata and resume-ledger schema through witnessed RED/GREEN cycles.
 - [ ] Recover uncommitted partial suffixes without weakening committed-prefix validation.
