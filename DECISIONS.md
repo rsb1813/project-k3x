@@ -591,3 +591,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Rejected claims: the audit does not prove power-loss durability, signed supply-chain provenance, peak RSS, real-checkpoint compatibility, token throughput, GPU behavior, physical NVMe traffic, or model quality.
 - Publication: PR #42 was rebase-merged at public integration head `ca8c544e`; push and pull-request correctness runs `31379029215`/`31379074639`, pull-request CodeQL `31379074656`, and post-merge `main` correctness/CodeQL `31379311743`/`31379311695` passed.
 - Revisit: Milestone 26 must define content-addressed official-source discovery and publisher provenance before a bounded real shard is downloaded. Signed provenance or a format revision should be reconsidered from that evidence rather than guessed in advance.
+
+## D-052 — Accept pinned exact-range provenance for the first real expert smoke
+
+- Date: 2026-08-10.
+- Status: accepted, implemented, and measured for a non-executable bounded storage artifact.
+- Decision: resolve the official public snapshot to one fixed commit, verify API/index/config/header identities, and download only the exact contiguous layer-1 expert-0 range. Label the result `transport-pinned-range`; never label it `full-shard-verified`.
+- Alternatives considered: API inventory only; download and hash the complete 16.99 GB shard first; pinned index plus exact header/payload ranges.
+- Evidence: the official index binds 497,220 tensors to 96 shards. The selected six w1/w2/w3 U8 tensors share shard 2 and form one exact 17,547,264-byte range. B-0027 verifies the index LFS digest, config Git blob, exact 206 responses, tensor hashes, content-addressed microshard, Reader-valid K3X, and runtime rejection.
+- Benchmark result: 59,799,719 metadata bytes, 818,704 header bytes, and 17,547,264 tensor-payload bytes were returned across 11 HTTP requests in 14.972839499 seconds. This is conversion wall time, not token throughput or physical NVMe performance.
+- Reason accepted: it reaches real native-MXFP4 bytes with bounded cost while keeping the weaker provenance level explicit and preserving the non-executable storage-fixture boundary.
+- Rejected claims: no complete shard/full checkpoint verification, token generation, GPU execution, model quality, NVMe GB/token, PCIe traffic, or publisher signature is established.
+- Revisit: production conversion must recompute complete source-object identity or adopt an equivalently authenticated chunk scheme. M27 must separately prove real-weight CUDA layer correctness before widening the dependency closure.

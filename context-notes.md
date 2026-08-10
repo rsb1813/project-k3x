@@ -536,3 +536,10 @@
 - Shared safetensors metadata parsing plus strict index/config/header/expert planning passed 109 focused and regression tests.
 - Atomic released-size materialization, local content hashing, source-manifest provenance, K3X conversion, cleanup, and stale-artifact binding passed 50 Python storage/K3X tests.
 - The attempted C++ reader regression identified only a missing `build/test_reader` binary in this fresh worktree; that binary must be built before the final cross-language gate.
+
+## 2026-08-10 — B-0027 live official expert evidence
+
+- Live dry-run resolved 118 files and 1,560,998,984,390 repository bytes, verified the 59,764,096-byte index and 818,704-byte header, and downloaded zero tensor payload bytes.
+- The sole live materialization downloaded exact range `[1,268,562,960, 1,286,110,224)` and produced payload/microshard/K3X-root SHA-256 `1d925f…c36c`, `ed3f07…4a34`, and `d585d2…58be`.
+- Strict B-0027 verification passed. Real bytes remain ignored below `artifacts/`; only summary JSON/CSV are tracked.
+- Fresh gates pass CPU 15/15 + 451/70, liburing 16/16 + 453/68, ASan/UBSan 16/16, CUDA 27/27 + 511/10, and Compute Sanitizer zero errors. The real artifact directly returns exit 4 and `NON_EXECUTABLE_ARTIFACT`.

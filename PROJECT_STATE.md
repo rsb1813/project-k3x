@@ -2,14 +2,16 @@
 
 ## Current milestone
 
-Milestone 25 converter trust-boundary integrity is publicly integrated at `ca8c544e` through PR #42. Generic source manifests require rooted containment and exact tensor-to-shard ownership, safetensors parsing is bounded and structurally strict, resume ledgers are canonical, and validated committed prefixes recover by truncating only an uncommitted suffix to the exact final extent end. B-0026 records fresh, clean-resume, and orphan-resume synthetic conversions. The active engineering boundary is Milestone 26 content-addressed official Kimi K3 shard discovery and bounded conversion without a full-checkpoint download.
+Milestone 26 bounded official Kimi K3 range discovery and conversion is locally implemented and measured by B-0027; public PR integration is pending. The pinned official index, config Git blob, shard header, tensor ownership, and exact layer-1 expert-0 range are verified before one 17,547,264-byte payload request. The real native-MXFP4 bytes round-trip through a content-addressed microshard and K3X while remaining an untracked, non-executable storage fixture. Milestone 25 remains the latest public integration at `ca8c544e` through PR #42.
 
-State audited on 2026-08-10 at public Milestone 25 integration head `ca8c544e`. Fresh CPU, liburing/direct, ASan/UBSan, CUDA, and one unchanged Compute Sanitizer regression gate pass. PR #42 push/pull-request correctness and CodeQL passed, followed by successful post-merge `main` correctness and CodeQL. No official Kimi K3 weight, paid cloud resource, or full checkpoint is in use.
+State audited on 2026-08-10 on the Milestone 26 branch after B-0027. Fresh CPU, liburing/direct, ASan/UBSan, CUDA, strict evidence verification, the actual-artifact runtime guard, and one unchanged Compute Sanitizer regression gate pass. One bounded official expert is present only under ignored `artifacts/`; no complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
 - Milestone 0 deterministic synthetic K3-compatible PyTorch graph, K3X v1 streaming converter, strict Python/C++ readers, and independent portable C++20 runtime.
 - Milestone 25 strict generic source containment and ownership, bounded canonical safetensors metadata, exact resume-ledger schema, committed-prefix validation, and fail-atomic orphan-suffix recovery without changing K3X v1.
+- Milestone 26 fixed-authority HTTPS discovery, content-addressed snapshot/index/config/header identity, exact official expert planning, atomic real-byte materialization, K3X round-trip, and strict B-0027 JSON/CSV verification.
+- B-0027 official layer-1 expert-0 conversion with 59,799,719 metadata bytes, 818,704 header bytes, 17,547,264 tensor-payload bytes, Reader validity, and explicit `transport-pinned-range` provenance.
 - B-0026 synthetic converter audit with fresh, two-extent clean resume, and two-extent resume after an 8,192-byte orphan suffix; all outputs are Reader-valid and 1,421,568 bytes with maximum individual source reads of 257 bytes.
 - KDA, Gated MLA, Attention Residual, Stable LatentMoE, router, native MXFP4, full/incremental state, layer/logit/state parity, and exact greedy token tests.
 - Public Milestone 1 at `254a9ac` with explicit CPU, `cuda-dense`, and `cuda-custom` identities; CUDA 13.3 native `sm_120`; cuBLASLt dense FP32/BF16; exact native-byte MXFP4 CUDA; deterministic JSON/CSV profiling; and B-0002.
@@ -106,6 +108,8 @@ State audited on 2026-08-10 at public Milestone 25 integration head `ca8c544e`. 
 
 ## Work in progress
 
+- Milestone 26 implementation, live dry-run, one exact official expert conversion, B-0027 verifier, full local verification, README, and TITAN Ledger synchronization are complete. Final Critical/Important review, public PR merge, and post-merge CI remain.
+- The actual official K3X storage fixture exits 4 with `NON_EXECUTABLE_ARTIFACT`; M27 must add a separate dependency-closed real CUDA layer path rather than weakening that guard.
 - Milestone 24 implementation, B-0025 measurement, committed-evidence validation, full local verification, final Critical/Important review, PR #40 merge, and post-merge correctness/CodeQL are complete.
 - B-0025 shows stable/alternating deltas are mixed from -4.407% to +4.466%, while rotating cache churn remains 6.091%–11.574% slower. This is insufficient for a default change without real routing and native-Linux end-to-end evidence.
 - Direct execution, `per-call` validation, CPU AURORA draft, natural routing, blocking `pread + buffered`, and disabled L1 remain defaults. Admission and CUDA Graph modes are explicit experimental opt-ins.
@@ -131,14 +135,14 @@ State audited on 2026-08-10 at public Milestone 25 integration head `ca8c544e`. 
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Current implementation branch: `codex/milestone-twenty-four-cuda-graph-cache` from public `main` head `08b769c`.
-- Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build-cpu`, `build-liburing`, `build-asan`, and `build-cuda`.
+- Current implementation branch: `codex/milestone-twenty-six-real-shard-discovery` from public `main` head `f5a15c5`.
+- Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build`, `build-uring`, `build-uring-asan`, and `build-cuda`.
 
 ## Known failures and blockers
 
 - Windows Smart App Control still blocks unsigned `k3x_run.exe`; WSL2 is the verified local CUDA path and native Linux remains the final performance authority.
-- The executable checkpoint is synthetic and tiny. The full-dimension artifact contains only one non-executable expert. No official Kimi K3 weights have been downloaded, and B-0008/B-0026 are neither token throughput nor full-model claims.
-- M25 verifies local content integrity and recovery, not publisher authenticity or signed supply-chain provenance. Milestone 26 must bind discovered official sources to content-addressed identities before a bounded real shard is trusted.
+- The executable checkpoint is synthetic and tiny. The official artifact contains only one non-executable expert range; no complete shard or full checkpoint has been downloaded. B-0027 is neither token throughput nor full-model evidence.
+- M26 binds transport, snapshot, index, config, shard header, range, tensor, microshard, and K3X identities, but does not recompute the complete shard LFS digest or provide signed publisher provenance. Production conversion needs stronger complete-object or authenticated-chunk verification.
 - The graph remains CPU-driven outside FFN blocks. KDA, MLA, routing, score mixing, residual work, state management, and non-FFN boundaries remain on the host.
 - L1 misses use ordered Reader batches into pageable host vectors. Deadline mode may run one such blocking batch on a worker, but there is no cross-layer asynchronous L2 pipeline, transition predictor, or N/N+1/N+2 triple buffering.
 - Exact prefetch is single-flight and limited to `cuda-custom + ffn-block + reused + transient`; it is not combined with static residency.
@@ -155,9 +159,9 @@ State audited on 2026-08-10 at public Milestone 25 integration head `ca8c544e`. 
 
 ## Next concrete tasks
 
-1. Design Milestone 26 official-source identity, bounded index discovery, and content-addressed manifest production without downloading tensor payloads.
-2. Implement and test a dry-run discovery path, then explicitly bound and download only the smallest dependency-closed real shard range required for a conversion smoke.
-3. Use bounded real-shard evidence to prepare Milestone 27, the first local real out-of-core layer/runtime execution.
+1. Complete Milestone 26 Critical/Important review, publish the branch, merge the public PR, and verify post-merge correctness and CodeQL.
+2. Design Milestone 27 around the untracked B-0027 recipe and the smallest dependency-closed real CUDA MoE-layer invocation without weakening `NON_EXECUTABLE_ARTIFACT` for storage fixtures.
+3. Execute and compare the real expert against an independent CPU decode oracle, then measure exact H2D, VRAM, kernel, and wall time without making token-throughput claims.
 
 ## Hardware assumptions
 
@@ -182,10 +186,12 @@ The immediate result is to retain CUDA MoE fusion `none` alongside natural routi
 
 The derived uncached full-model expert traffic remains 25.83 GB/token, but it is not a measured full-model value. Native-Linux NVMe traffic, cache reuse, and full Kimi K3 throughput remain unknown.
 
-B-0026 closes the immediate malformed-input and crash-residue gate for synthetic conversion. Its 0.800–0.888 second wall times are audit observations, not the runtime bottleneck and not a real-shard throughput estimate. The next evidence gap is official-source identity plus bounded real-shard compatibility; peak converter RSS and native-Linux physical storage behavior remain unmeasured.
+B-0027 closes the immediate official-source compatibility and bounded real-byte conversion gate. Its 14.972839499-second wall time includes public metadata/header/payload transport and local conversion; it is not a runtime bottleneck, TPS measurement, or physical NVMe result. The next concrete bottleneck is the missing dependency-closed real CUDA layer invocation and independent numerical oracle. Peak converter RSS, complete-shard provenance, native-Linux physical storage behavior, and full-model execution remain unmeasured.
 
 ## Last known-good state
 
+- Local Milestone 26 code head `5b893a0` plus B-0027 evidence verifies official commit `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`, index SHA-256 `a1c521…febd`, payload SHA-256 `1d925f…c36c`, microshard SHA-256 `ed3f07…4a34`, and K3X root `d585d2…58be`. Summary JSON/CSV SHA-256 are `57ebd9…982a` / `7c6238…bdd6`.
+- Fresh Milestone 26 verification passes CPU CTest 15/15 with pytest 451 passed/70 skipped, liburing/direct CTest 16/16 with pytest 453 passed/68 skipped, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 511 passed/10 skipped. The unchanged released MoE-layer Compute Sanitizer reports `ERROR SUMMARY: 0 errors`, and the actual real-weight storage artifact returns exit 4 with `NON_EXECUTABLE_ARTIFACT`.
 - Public Milestone 25 evidence commit `cce5223` contains the B-0026 canonical summary JSON/CSV, and integration head `ca8c544e` contains strict source/safetensors/resume validation, exact orphan-suffix recovery, synchronized documentation, and the final committed-boundary correction. Runner/aggregate/summary JSON/CSV SHA-256 are `d292991ada21dd305078d2fe90116450d7a5184606962891bc1c383c47487ca0`, `4181e012dc0ccc1570f5ca18336ee3037327b32da63b8128bcc5423c0191100c`, `f78de6ef9bb3b47d1cb3d56af1969d1d3d465025a21ee0b25f2d97df27e38116`, and `c98f12b39fdc7f76bd4cd824cb5fc9da9b44208dd27a954c958f6e3bf3b6ea6d`.
 - Fresh Milestone 25 verification passes CPU CTest 15/15 with pytest 405 passed/70 skipped, liburing/direct CTest 16/16 with capability-aware pytest 407 passed/68 skipped, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 459 passed/16 skipped. The unchanged released MoE-layer Compute Sanitizer regression reports `ERROR SUMMARY: 0 errors`.
 - PR #42 push and pull-request correctness runs `31379029215`/`31379074639`, pull-request CodeQL `31379074656`, and post-merge `main` correctness/CodeQL `31379311743`/`31379311695` passed.
@@ -255,4 +261,4 @@ B-0026 closes the immediate malformed-input and crash-residue gate for synthetic
 
 ## Proposed component status
 
-AURORA's replay reference, persistent reduced-Top-K CPU state, adaptive scheduler, exact transient CUDA draft, bounded exact resident CUDA draft, exact resident expert grid, resident MoE-layer execution, admission validation, independent target/draft CUDA Graph ownership, target feedback, CLI, separated telemetry, and B-0017 through B-0025 are implemented and measured as experimental non-default paths. The strict K3X v1 converter trust boundary and B-0026 are publicly implemented and measured; official-source discovery is now active Milestone 26 work. Transient CUDA is rejected as a default; bounded residency, the resident grid, the resident MoE layer, admission validation, and CUDA Graph modes remain opt-in. B-0025 rejects a graph default on current evidence. Reduced precision, eviction-capable residency, a complete device-resident token graph, and learned drafting remain proposed. APOLLO, TITAN COUNCIL, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None of the proposed-only components is claimed as implemented or benchmarked.
+AURORA's replay reference, persistent reduced-Top-K CPU state, adaptive scheduler, exact transient CUDA draft, bounded exact resident CUDA draft, exact resident expert grid, resident MoE-layer execution, admission validation, independent target/draft CUDA Graph ownership, target feedback, CLI, separated telemetry, and B-0017 through B-0025 are implemented and measured as experimental non-default paths. The strict K3X v1 converter trust boundary, official bounded discovery/materialization path, and B-0026/B-0027 are implemented and measured; Milestone 26 public integration remains pending. Transient CUDA is rejected as a default; bounded residency, the resident grid, the resident MoE layer, admission validation, and CUDA Graph modes remain opt-in. B-0025 rejects a graph default on current evidence. Reduced precision, eviction-capable residency, a complete device-resident token graph, learned drafting, and real-weight CUDA graph execution remain proposed. APOLLO, TITAN COUNCIL, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None of the proposed-only components is claimed as implemented or benchmarked.
