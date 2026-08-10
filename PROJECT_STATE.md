@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 19 bounded exact CUDA AURORA residency is implemented, measured, and fully verified on branch `codex/milestone-nineteen-aurora-residency`; final review and public integration remain in progress. The path is opt-in, persistent-only, fail-closed, and preserves the transient proposal/acceptance/target contract. B-0020 reduces draft weight H2D by 88.81% to 89.78%, but paired decode ranges from -2.56% to +22.67%, so CPU drafting remains the default, replay remains CPU-only, and the natural strict target verifier remains authoritative.
+Milestone 19 bounded exact CUDA AURORA residency is implemented, measured, fully verified, and final-reviewed on branch `codex/milestone-nineteen-aurora-residency`; public integration remains in progress. The path is opt-in, persistent-only, fail-closed, and preserves the transient proposal/acceptance/target contract. B-0020 reduces draft weight H2D by 88.81% to 89.78%, but paired decode ranges from -2.56% to +22.67%, so CPU drafting remains the default, replay remains CPU-only, and the natural strict target verifier remains authoritative.
 
-State audited on 2026-08-10 against local evidence head `f676957`, based on public documentation head `beaf6bb`. Fresh matrices pass CPU CTest 14/14 with Python 284 passed/53 skipped, liburing/direct CTest 15/15 with Python 290 passed/47 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 23/23 with Python 328 passed/9 skipped. Compute Sanitizer reports zero errors for both full-fit and exact-bypass resident paths. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 against local documentation head `e7d1610` and evidence head `f676957`, based on public documentation head `beaf6bb`. Fresh matrices pass CPU CTest 14/14 with Python 284 passed/53 skipped, liburing/direct CTest 15/15 with Python 290 passed/47 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 23/23 with Python 328 passed/9 skipped. Compute Sanitizer reports zero errors for both full-fit and exact-bypass resident paths. Final review found no Critical or Important issue. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
