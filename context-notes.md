@@ -325,6 +325,12 @@
 - Milestone 16 branch/PR correctness run `31337234073`/`31337240722`가 통과했고 PR #20이 공개 integration head `df5c07d`로 rebase merge되었다. 병합 후 `main` correctness run `31337365175`도 통과해 AURORA replay 구현, B-0017 증거, README, TITAN Ledger가 공개 기준선에 포함되었다.
 - Milestone 16 공개 문서 정합 PR #21의 push/PR correctness run `31337548635`/`31337554179`가 통과했고 public documentation head `0eb0966`으로 rebase merge되었다. 병합 후 `main` correctness run `31337694471`도 성공했다.
 
+## 2026-08-10 Milestone 19 실행 계획
+
+- 상세 TDD 계획은 provider 계약, CLI 소유권, 독립 telemetry, B-0020 측정, 전체 검증과 공개 병합의 다섯 작업으로 고정했습니다.
+- 계획 자체 검토에서 자리표시자와 구현을 막는 모순은 발견되지 않았습니다. 기존 exact `ResidentWeightTable`만 재사용하며 새로운 eviction, kernel, precision 축은 추가하지 않습니다.
+- 활성 정책상 하위 에이전트는 사용하지 않고 주 에이전트가 `executing-plans` 절차로 RED, GREEN, 측정, 문서 동기화를 연결해 수행합니다.
+
 ## 2026-08-10 Milestone 17 준비
 
 - 공개 `main` head `44aa049`에서 `codex/milestone-seventeen-persistent-aurora` worktree를 분리했다. CPU 기준선은 CTest 14/14와 Python 268 passed/47 skipped다.
