@@ -442,3 +442,9 @@
 
 - 구현 PR #36의 branch/PR correctness `31358991710`/`31359003481`과 CodeQL `31359003436`이 통과했다. PR #36은 `e4820a18`로 rebase merge됐다.
 - 공개 `main`의 post-merge correctness `31359158926`과 CodeQL `31359158878`도 통과했다. README와 TITAN Ledger를 PR #36 및 공개 head 기준으로 정합화한다.
+
+## 2026-08-10 Milestone 23 준비
+
+- 공개 head `e0ab5fa`에서 `codex/milestone-twenty-three-admission-validation` worktree를 만들었다. Baseline CUDA CTest 26/26과 released MoE-layer focused pytest 22/22가 통과했다.
+- D-048 구현 대안 중 resident-table miss 검사는 부분 CUDA mutation 위험 때문에 거부했고, opaque prepared-layer token은 현재 범위에 비해 public API 변경이 커서 미뤘다. Backend-local registry는 complete host preflight, 기존 caller 유지, O(1) hot identity hit를 함께 만족해 채택했다.
+- Admission identity는 tensor ID, host pointer, length, rows, cols이며 backend lifetime 동안 immutable이다. Default는 `per-call`로 유지하고 B-0024에서 `per-call|admission`과 profiler `on|off`를 분리 측정한다.

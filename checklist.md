@@ -154,6 +154,18 @@
 - [x] Implement and run B-0023 with committed raw/summary evidence validation.
 - [x] Run full verification, synchronize the TITAN Ledger and README, review, publish, merge, and verify public `main`.
 
+## Milestone 23 — Admission-time immutable validation attribution
+
+- [x] Re-read the charter, architecture, project state, D-048, and corrected B-0023 evidence.
+- [x] Inspect CUDA MoE-layer validation, resident identity, CLI, telemetry, and ownership boundaries.
+- [x] Compare resident-table miss validation, prepared-layer tokens, and backend-local admission registry designs.
+- [x] Write and self-review the accepted admission validation design.
+- [x] Write and self-review the detailed TDD implementation plan.
+- [ ] Implement public validation modes and telemetry through witnessed RED/GREEN cycles.
+- [ ] Implement atomic admission validation and lifetime conflict gates.
+- [ ] Implement and measure B-0024 with committed raw/summary evidence validation.
+- [ ] Run full verification, synchronize the TITAN Ledger and README, review, publish, merge, and verify public `main`.
+
 ## Milestone 12 — Fused routed accumulation CUDA kernel
 
 - [x] TITAN Ledger, 현재 CUDA 경계, 원 구현 근거 재확인.
