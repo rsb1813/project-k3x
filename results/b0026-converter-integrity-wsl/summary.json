@@ -1,0 +1,59 @@
+{
+  "aggregate_sha256": "4181e012dc0ccc1570f5ca18336ee3037327b32da63b8128bcc5423c0191100c",
+  "benchmark_id": "B-0026",
+  "chunk_bytes": 257,
+  "environment_label": "wsl2-ubuntu-24.04.4-synthetic-converter-integrity",
+  "evidence": "measured",
+  "orphan_suffix_bytes": 8192,
+  "records": [
+    {
+      "artifact_sha256": "7abe2955c1433b1b6087308b37eefaf6edbdf9a70a6b04c6fdf071e8bd209998",
+      "artifact_valid": true,
+      "committed_prefix_bytes": 0,
+      "initial_stop_after_extents": 0,
+      "maximum_source_read_bytes": 257,
+      "orphan_suffix_bytes": 0,
+      "output_bytes": 1421568,
+      "peak_rss_bytes": null,
+      "reused_extent_count": 0,
+      "root_sha256": "ba8fdade8492068af56a4ac51b6e7e4cb4e45e13b107881cec782b1e37db112d",
+      "rss_measurement": "not-measured",
+      "scenario": "fresh",
+      "wall_nanoseconds": 804991621
+    },
+    {
+      "artifact_sha256": "4597ed5559cf8a4c3f9da9e875dbf00d903413b1ef553a4006c76f1c80839e77",
+      "artifact_valid": true,
+      "committed_prefix_bytes": 20736,
+      "initial_stop_after_extents": 2,
+      "maximum_source_read_bytes": 257,
+      "orphan_suffix_bytes": 0,
+      "output_bytes": 1421568,
+      "peak_rss_bytes": null,
+      "reused_extent_count": 2,
+      "root_sha256": "c4707c4644eb66f1b4c0bc22a3fce22bd6fb29f00104ca1b641fde9ac06c1751",
+      "rss_measurement": "not-measured",
+      "scenario": "resume-clean",
+      "wall_nanoseconds": 800116522
+    },
+    {
+      "artifact_sha256": "22b0d40dc643bd48ca81e8e00da2a3d3d7fef2b32a130e26a0bc6c94f31d8ae2",
+      "artifact_valid": true,
+      "committed_prefix_bytes": 20736,
+      "initial_stop_after_extents": 2,
+      "maximum_source_read_bytes": 257,
+      "orphan_suffix_bytes": 8192,
+      "output_bytes": 1421568,
+      "peak_rss_bytes": null,
+      "reused_extent_count": 2,
+      "root_sha256": "71122ea28bdd8abfbf27deb2b589a85e72c0a95a7abe5931da02ecfc8433c751",
+      "rss_measurement": "not-measured",
+      "scenario": "resume-orphan",
+      "wall_nanoseconds": 887550657
+    }
+  ],
+  "runner_sha256": "d292991ada21dd305078d2fe90116450d7a5184606962891bc1c383c47487ca0",
+  "schema": "k3x-converter-integrity-audit-v1",
+  "stop_after_extents": 2,
+  "summary_csv_sha256": "c98f12b39fdc7f76bd4cd824cb5fc9da9b44208dd27a954c958f6e3bf3b6ea6d"
+}

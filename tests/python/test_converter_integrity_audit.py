@@ -104,3 +104,17 @@ def test_verify_evidence_rejects_non_lf_terminated_summary_json(
 
     with pytest.raises(ValueError, match="LF"):
         verify_evidence(evidence_dir)
+
+
+def test_committed_b0026_evidence_matches_current_runner() -> None:
+    root = Path(__file__).resolve().parents[2]
+
+    summary = verify_evidence(
+        root / "results" / "b0026-converter-integrity-wsl",
+        runner=root / "tools" / "audit_converter_integrity.py",
+    )
+
+    assert summary["benchmark_id"] == "B-0026"
+    assert summary["environment_label"] == (
+        "wsl2-ubuntu-24.04.4-synthetic-converter-integrity"
+    )
