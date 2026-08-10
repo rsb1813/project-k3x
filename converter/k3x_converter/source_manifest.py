@@ -17,11 +17,16 @@ def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object
     return result
 
 
+def _reject_non_standard_constant(_: str) -> object:
+    raise K3XError("INVALID_SOURCE_MANIFEST")
+
+
 def load_source_manifest(source: Path) -> dict[str, object]:
     try:
         manifest = json.loads(
             (source / "source-manifest.json").read_text(encoding="utf-8"),
             object_pairs_hook=_reject_duplicate_pairs,
+            parse_constant=_reject_non_standard_constant,
         )
     except K3XError:
         raise
