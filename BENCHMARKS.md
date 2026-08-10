@@ -720,6 +720,37 @@ Verification passes CPU CTest 14/14 and pytest 278/50, liburing/direct CTest 15/
 
 Public push and pull-request correctness runs `31343260116` and `31343261633` passed. PR #25 was rebase-merged at public integration head `7899a7ae`, and post-merge `main` correctness run `31343401178` passed.
 
+## B-0020 — Milestone 19 bounded exact CUDA AURORA residency
+
+- Date: 2026-08-10.
+- Commit: provider contract `f3e3c6c`; CLI ownership `6fa0806`; telemetry `26686c6`; measurement runner `1bc2b1b`; evidence `f676957`.
+- Hardware: AMD Ryzen 7 9800X3D and NVIDIA GeForce RTX 5080 16 GB under WSL2 Ubuntu 24.04.4, CUDA 13.3 native `sm_120`.
+- Model/checkpoint: runner-generated temporary synthetic natural Top-16 K3X artifact, SHA-256 `47795886397106b3d1a029fefb86e58776be659cb0470ceb7c9998851aedcf26`.
+- Mode: CPU natural Top-16 target; persistent fixed draft Top-4; disabled L1; blocking `pread + buffered`; 4 prompt tokens; 6 generated tokens; 3 warmups and 20 measured samples. CUDA draft identity is FP32, reused, grouped, `ffn-block`, synchronous, fusion `none`, zero pinned capacity, and either transient weights or exact resident weights with an 8,388,608-byte hard cap.
+- Cases: natural greedy plus matched transient/resident fixed block-2 and adaptive pairs for token-major and CPU expert-major target verification.
+
+| Case | Decode tok/s | Prefill tok/s | TTFT ms | Peak RSS | Acceptance | Target / draft Reader bytes | Draft weight H2D | Draft kernel ms | Draft peak VRAM | Pair decode delta |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| natural greedy | 1172.6545 | 930.9483 | 82.1574 | 236,945,408 B | n/a | 1,294,992 / 0 | 0 | 0 | 0 | n/a |
+| transient fixed-2 token | 21.7783 | 903.6918 | 337.9615 | 509,939,712 B | 1.0000 | 1,294,992 / 785,808 | 5,756,160 B | 54.7252 | 44,448 B | reference |
+| resident fixed-2 token | 25.1719 | 918.2254 | 340.1868 | 510,492,672 B | 1.0000 | 1,294,992 / 785,808 | 644,160 B | 45.6142 | 688,608 B | +15.582% |
+| transient adaptive token | 21.5013 | 912.5053 | 337.8708 | 509,739,008 B | 0.5000 | 1,294,992 / 805,392 | 6,331,776 B | 52.7462 | 44,448 B | reference |
+| resident adaptive token | 20.9506 | 913.7784 | 335.7986 | 510,492,672 B | 0.5000 | 1,294,992 / 805,392 | 647,424 B | 54.1255 | 691,872 B | -2.561% |
+| transient fixed-2 expert | 21.5694 | 912.7434 | 339.4491 | 509,898,752 B | 1.0000 | 1,102,416 / 785,808 | 5,756,160 B | 55.2515 | 44,448 B | reference |
+| resident fixed-2 expert | 26.4599 | 911.6050 | 339.6024 | 510,259,200 B | 1.0000 | 1,102,416 / 785,808 | 644,160 B | 44.3741 | 688,608 B | +22.673% |
+| transient adaptive expert | 21.8668 | 908.1380 | 339.1982 | 510,115,840 B | 0.5000 | 1,197,072 / 805,392 | 6,331,776 B | 51.1403 | 44,448 B | reference |
+| resident adaptive expert | 23.0844 | 909.6943 | 340.7877 | 510,324,736 B | 0.5000 | 1,197,072 / 805,392 | 647,424 B | 53.2099 | 691,872 B | +5.569% |
+
+All matched pairs preserve proposed, accepted, and committed draft-token counts; strict target tokens `[56, 55, 18, 11, 11, 13]`; final KDA/MLA state; and committed routing. Target CUDA residency, H2D, kernel, and VRAM counters remain zero. Average target Top-K is 16 and the fixed draft executes Top-4. Expert-major fixed rows observe 122 unique expert payloads across two verification blocks, or 61 per block; adaptive rows observe 180 across three blocks, or 60 per block.
+
+The resident fixed rows record 666 hits, 214 misses, 75.682% hit rate, 644,160 current/peak resident bytes, and zero bypasses. Adaptive rows record 748 hits, 220 misses, 77.273% hit rate, 647,424 current/peak resident bytes, and zero bypasses. Weight H2D falls by 88.809% fixed and 89.775% adaptive. Including activation traffic, total draft RAM-to-GPU traffic falls from 5,843,840 to 731,840 bytes per run for fixed rows and from 6,428,224 to 743,872 bytes per run for adaptive rows, or approximately 0.000974 to 0.000122 GB/generated-token and 0.001071 to 0.000124 GB/generated-token respectively.
+
+Physical NVMe GB/token, GPU utilization, GPU memory bandwidth, and I/O stall time are not measured by this WSL2 synthetic benchmark. Reader bytes above are logical runtime bytes, peak RSS is process memory rather than total system-RAM residency, and the cache is a tiny no-eviction working set. Quality evidence is exact synthetic token/state/route parity only; coding/agentic quality and full-model behavior remain unmeasured. The mixed paired decode results reject promotion to a default and identify 410–451 synchronous waits plus fine-grained launches as the next isolated CUDA draft bottleneck.
+
+Raw JSON/CSV and independently cross-checked summaries are under `results/b0020-cuda-aurora-residency-wsl/`. Runner SHA-256 is `9fd847ff95c0f3b9c3bb3bc90ff568381b3a3d540f80eebcf433551465d79daa`; canonical aggregate-record SHA-256 is `4bb84fe49cbbc735bc9ef8668ab4d2944fef3d4e3a0f1048a7973410b211df87`; summary JSON/CSV SHA-256 is `32d9795ab3da3107c8f4fe5573be439130795d91b6860bdda91cc7d84635a192` / `059ede44149da8490f8342061b4dc10e623abe08f420266f84d7ca73963e3a62`. Independent validation recomputes all 18 raw digests, the summary CSV digest, canonical aggregate, exact pair invariants, capacity and bypass gates, pair decode deltas, H2D reductions, and hit rates from committed bytes.
+
+Fresh verification passes CPU CTest 14/14 with pytest 284 passed/53 skipped, liburing/direct CTest 15/15 with pytest 290 passed/47 skipped, ASan/UBSan liburing CTest 15/15, and CUDA CTest 23/23 with pytest 328 passed/9 skipped. Compute Sanitizer reports `ERROR SUMMARY: 0 errors` for both the 8 MiB full-fit path and the one-byte exact-bypass path; the latter records 880 misses, 880 bypasses, and zero resident bytes while preserving target tokens.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
@@ -730,6 +761,6 @@ Public push and pull-request correctness runs `31343260116` and `31343261633` pa
 - Native-Linux repetition of B-0011 with repository-duration sessions and controlled helpful, stale, and adversarial priors before selecting any profile policy.
 - Native-Linux repetition of B-0016 with physical NVMe accounting, GPU utilization, memory bandwidth, multi-expert/full-layer groups, and representative acceptance distributions before any speculative default claim.
 - Representative native-Linux persistent AURORA measurement with physical I/O, realistic acceptance, coding quality, and resident-expert pressure before any self-speculative default claim.
-- Bounded exact draft residency and persistent multi-token/multi-expert CUDA execution before reconsidering GPU drafting; keep reduced precision as a separate quality-measured axis.
+- Persistent multi-token/multi-expert CUDA execution after B-0020 removes most repeated weight H2D; keep dynamic eviction/prediction and reduced precision as separate policy and quality axes.
 - Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.

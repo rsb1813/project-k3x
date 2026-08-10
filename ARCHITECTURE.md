@@ -314,6 +314,14 @@ B-0019 keeps the natural target on CPU and changes only draft placement. Fixed/a
 
 This implementation is published on public `main` through PR #25 at integration head `7899a7ae`. Its push, pull-request, and post-merge correctness runs all passed; publication does not change the rejected-default status above.
 
+## Milestone 19 bounded exact CUDA AURORA residency
+
+The persistent AURORA provider now accepts exactly two CUDA weight identities behind the existing fixed FP32/reused/grouped/`ffn-block`/synchronous/fusion-none boundary. A zero draft capacity selects the Milestone 18 transient path. A positive `--aurora-draft-resident-bytes` selects the existing backend-owned `ResidentWeightTable`, keyed by tensor ID and bounded by a hard unsigned byte capacity. Admission never evicts and capacity failure executes the same weight through the exact transient path; routing, proposals, target verification, and output state are unchanged.
+
+Ownership remains narrow. Only `aurora-persistent + cuda-custom` accepts the draft-residency option. CPU drafting remains the default, replay remains CPU-only, the target owns a separate Reader/backend/profiler/runtime-stat set, and ordinary execution serializes literal zero draft capacity and occupancy. Draft telemetry adds configured capacity, current/peak resident bytes, hits, misses, and bypasses without contaminating target counters.
+
+B-0020 compares transient/resident pairs for fixed/adaptive token-major and expert-major target verification on the Top-16 synthetic graph. All pairs preserve proposals, acceptance, target tokens, final KDA/MLA state, and committed routing. An 8 MiB cap admits the complete observed draft working set with 644,160–647,424 resident bytes and zero bypasses, reducing draft weight H2D by 88.81%–89.78%. Paired decode changes range from -2.56% to +22.67%, so the path remains experimental and non-default. Dynamic eviction, predictive residency, reduced precision, and new kernels are not part of this milestone. The next isolated boundary is persistent multi-token/multi-expert CUDA execution that reduces synchronous launches and waits after weight transfer has been removed.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.
@@ -325,7 +333,7 @@ Status meanings are strict. `Implemented` requires code and passing tests. `Expe
 | CHRONOS | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
 | BLACKSTAR | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
 | PROMETHEUS-X | DSpark-compatible speculative decoding extended with MoE-aware expert-cost scheduling | Proposed |
-| AURORA | Self-speculative K3 fast-path drafter using reduced Top-K, reduced precision, and resident experts while retaining target verification | Experimental replay, persistent reduced-Top-K CPU state, and exact transient CUDA draft implemented; CUDA transient default rejected by B-0019; reduced precision, residency, and learned drafting proposed |
+| AURORA | Self-speculative K3 fast-path drafter using reduced Top-K, reduced precision, and resident experts while retaining target verification | Experimental replay, persistent reduced-Top-K CPU state, exact transient CUDA draft, and bounded exact resident CUDA draft implemented; both CUDA identities remain non-default after B-0019/B-0020; reduced precision, eviction-capable residency, and learned drafting proposed |
 | ORBIT | Multi-layer lookahead expert residency and prefetch prediction | Proposed |
 | MERCURY | Dynamic CPU/GPU expert placement using predicted transfer-plus-compute latency | Proposed |
 | HELIOS | Automatic hardware/workload tuning for cache, Top-K, speculation, I/O, and placement parameters | Proposed |

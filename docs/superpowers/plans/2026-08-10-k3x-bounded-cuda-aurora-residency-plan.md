@@ -416,7 +416,7 @@ git commit -m "bench: measure bounded CUDA AURORA residency"
 - Consumes: committed implementation and B-0020 evidence.
 - Produces: synchronized measured state and public integration.
 
-- [ ] **Step 1: Run the complete CPU matrix**
+- [x] **Step 1: Run the complete CPU matrix**
 
 ```bash
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -425,7 +425,7 @@ ctest --test-dir build --output-on-failure
 K3X_BUILD_DIR=build python -m pytest -q
 ```
 
-- [ ] **Step 2: Run liburing/direct and ASan/UBSan matrices**
+- [x] **Step 2: Run liburing/direct and ASan/UBSan matrices**
 
 ```bash
 cmake -S . -B build-uring -G Ninja -DCMAKE_BUILD_TYPE=Release \
@@ -443,7 +443,7 @@ cmake --build build-uring-asan --parallel 8
 ASAN_OPTIONS=detect_leaks=0 ctest --test-dir build-uring-asan --output-on-failure
 ```
 
-- [ ] **Step 3: Run the complete CUDA matrix**
+- [x] **Step 3: Run the complete CUDA matrix**
 
 ```bash
 cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release \
@@ -454,11 +454,11 @@ ctest --test-dir build-cuda --output-on-failure
 K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 python -m pytest -q
 ```
 
-- [ ] **Step 4: Run Compute Sanitizer on full-fit and exact-bypass paths**
+- [x] **Step 4: Run Compute Sanitizer on full-fit and exact-bypass paths**
 
 Run persistent expert-major CUDA draft once with 8 MiB and once with one byte, using the generated Top-16 artifact. Require exit zero and `ERROR SUMMARY: 0 errors` for both.
 
-- [ ] **Step 5: Update measured documents and commit**
+- [x] **Step 5: Update measured documents and commit**
 
 Record exact hardware, commits, B-0020 values, raw and summary hashes, tests, accepted/rejected decision, current bottleneck, and next isolated axis. Keep `PROJECT_CHARTER.md` unchanged and update `PROJECT_STATE.md` last.
 
