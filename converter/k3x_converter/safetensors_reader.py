@@ -9,6 +9,10 @@ from typing import Iterator
 
 from .format import K3XError
 
+_MAX_HEADER_BYTES = 100_000_000
+_METADATA_KEYS = {"dtype", "shape", "data_offsets"}
+_KNOWN_DTYPE_BYTES = {"F32": 4, "U8": 1}
+
 
 @dataclass(frozen=True)
 class SourceTensor:
@@ -20,6 +24,37 @@ class SourceTensor:
     length: int
 
 
+def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise K3XError("INVALID_SOURCE_HEADER")
+        result[key] = value
+    return result
+
+
+def _reject_non_standard_constant(_: str) -> object:
+    raise K3XError("INVALID_SOURCE_HEADER")
+
+
+def _is_non_boolean_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _known_dtype_length(dtype: str, shape: list[int], data_bytes: int) -> int | None:
+    item_bytes = _KNOWN_DTYPE_BYTES.get(dtype)
+    if item_bytes is None:
+        return None
+    if 0 in shape:
+        return 0
+    length = item_bytes
+    for dimension in shape:
+        if length > data_bytes // dimension:
+            raise K3XError("INVALID_SOURCE_EXTENT")
+        length *= dimension
+    return length
+
+
 def inspect_shard(path: Path) -> dict[str, SourceTensor]:
     size = path.stat().st_size
     with path.open("rb") as stream:
@@ -27,29 +62,70 @@ def inspect_shard(path: Path) -> dict[str, SourceTensor]:
         if len(raw) != 8:
             raise K3XError("TRUNCATED_SOURCE_SHARD")
         header_length = struct.unpack("<Q", raw)[0]
+        if header_length > _MAX_HEADER_BYTES:
+            raise K3XError("INVALID_SOURCE_HEADER")
         if header_length > size - 8:
             raise K3XError("INVALID_SOURCE_HEADER")
         try:
-            header = json.loads(stream.read(header_length))
+            header = json.loads(
+                stream.read(header_length),
+                object_pairs_hook=_reject_duplicate_pairs,
+                parse_constant=_reject_non_standard_constant,
+            )
+        except K3XError:
+            raise
         except (json.JSONDecodeError, UnicodeDecodeError) as error:
             raise K3XError("INVALID_SOURCE_HEADER") from error
+    if not isinstance(header, dict):
+        raise K3XError("INVALID_SOURCE_HEADER")
     data_start = 8 + header_length
+    data_bytes = size - data_start
     result: dict[str, SourceTensor] = {}
     ranges: list[tuple[int, int]] = []
     for name, metadata in header.items():
         if name == "__metadata__":
+            if not isinstance(metadata, dict) or not all(
+                isinstance(key, str) and isinstance(value, str)
+                for key, value in metadata.items()
+            ):
+                raise K3XError("INVALID_SOURCE_HEADER")
             continue
-        start, end = metadata["data_offsets"]
-        absolute_start, absolute_end = data_start + start, data_start + end
-        if start < 0 or end < start or absolute_end > size:
+        if not name or name.startswith("__"):
+            raise K3XError("INVALID_SOURCE_HEADER")
+        if not isinstance(metadata, dict) or set(metadata) != _METADATA_KEYS:
+            raise K3XError("INVALID_SOURCE_HEADER")
+        dtype = metadata["dtype"]
+        shape = metadata["shape"]
+        offsets = metadata["data_offsets"]
+        if (
+            not isinstance(dtype, str)
+            or not isinstance(shape, list)
+            or not isinstance(offsets, list)
+            or len(offsets) != 2
+            or any(not _is_non_boolean_int(dimension) or dimension < 0 for dimension in shape)
+            or any(not _is_non_boolean_int(offset) for offset in offsets)
+        ):
+            raise K3XError("INVALID_SOURCE_HEADER")
+        start, end = offsets
+        if start < 0 or end < start or end > data_bytes:
             raise K3XError("INVALID_SOURCE_EXTENT")
-        ranges.append((absolute_start, absolute_end))
-        result[name] = SourceTensor(path, name, metadata["dtype"],
-                                    tuple(metadata["shape"]), absolute_start,
-                                    absolute_end - absolute_start)
+        known_length = _known_dtype_length(dtype, shape, data_bytes)
+        if known_length is not None and end - start != known_length:
+            raise K3XError("INVALID_SOURCE_EXTENT")
+        if end > start:
+            ranges.append((start, end))
+        result[name] = SourceTensor(path, name, dtype, tuple(shape), data_start + start,
+                                    end - start)
     ranges.sort()
-    if any(right[0] < left[1] for left, right in zip(ranges, ranges[1:])):
-        raise K3XError("OVERLAPPING_SOURCE_EXTENT")
+    cursor = 0
+    for start, end in ranges:
+        if start < cursor:
+            raise K3XError("OVERLAPPING_SOURCE_EXTENT")
+        if start > cursor:
+            raise K3XError("INVALID_SOURCE_EXTENT")
+        cursor = end
+    if cursor != data_bytes:
+        raise K3XError("INVALID_SOURCE_EXTENT")
     return result
 
 
