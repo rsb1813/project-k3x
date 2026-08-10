@@ -126,6 +126,22 @@ def test_converter_rejects_duplicate_manifest_json_key(
     )
 
 
+@pytest.mark.parametrize("constant", ("NaN", "Infinity", "-Infinity"))
+def test_converter_rejects_non_standard_json_constant(
+    synthetic_source: Path, tmp_path: Path, constant: str
+) -> None:
+    manifest_path = synthetic_source / "source-manifest.json"
+    raw = manifest_path.read_text(encoding="utf-8")
+    manifest_path.write_text(
+        raw.replace('"config":{', f'"config":{{"unused":{constant},', 1),
+        encoding="utf-8",
+    )
+
+    _assert_rejected_without_output(
+        synthetic_source, tmp_path / f"{constant}.k3x", "INVALID_SOURCE_MANIFEST"
+    )
+
+
 def test_converter_rejects_non_dictionary_weight_map(
     synthetic_source: Path, tmp_path: Path
 ) -> None:
