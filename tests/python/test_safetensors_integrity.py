@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from k3x_converter.format import K3XError
-from k3x_converter.safetensors_reader import inspect_shard
+from k3x_converter.safetensors_reader import inspect_shard, parse_safetensors_header
 
 
 def _write_raw(path: Path, header: bytes, payload: bytes = b"") -> None:
@@ -202,3 +202,60 @@ def test_preserves_unsupported_string_dtype_for_writer_validation(tmp_path: Path
     _write_raw(shard, _header({"x": _tensor("I16", [1], [0, 0])}))
 
     assert inspect_shard(shard)["x"].dtype == "I16"
+
+
+def test_parse_safetensors_header_returns_absolute_metadata_offsets() -> None:
+    header = _header(
+        {
+            "a": _tensor("U8", [2], [0, 2]),
+            "b": _tensor("U8", [4], [2, 6]),
+        }
+    )
+
+    tensors = parse_safetensors_header(header, data_start=100, file_size=106)
+
+    assert tensors["a"].name == "a"
+    assert tensors["a"].shape == (2,)
+    assert tensors["a"].offset == 100
+    assert tensors["a"].length == 2
+    assert tensors["b"].offset == 102
+    assert tensors["b"].length == 4
+
+
+def test_parse_safetensors_header_matches_local_shard_inspection(tmp_path: Path) -> None:
+    shard = tmp_path / "equivalent.safetensors"
+    header = _header({"x": _tensor("U8", [4], [0, 4])})
+    _write_raw(shard, header, b"data")
+    data_start = 8 + len(header)
+
+    metadata = parse_safetensors_header(
+        header, data_start=data_start, file_size=shard.stat().st_size
+    )["x"]
+    local = inspect_shard(shard)["x"]
+
+    assert (metadata.name, metadata.dtype, metadata.shape) == (
+        local.name,
+        local.dtype,
+        local.shape,
+    )
+    assert (metadata.offset, metadata.length) == (local.offset, local.length)
+
+
+@pytest.mark.parametrize(
+    ("header", "file_size", "code"),
+    [
+        (_header({"x": _tensor("U8", [1], [1, 2])}), 102, "INVALID_SOURCE_EXTENT"),
+        (_header({"x": _tensor("U8", [1], [0, 1])}), 102, "INVALID_SOURCE_EXTENT"),
+        (
+            b'{"x":{"dtype":"U8","shape":[1],"data_offsets":[0,1]},'
+            b'"x":{"dtype":"U8","shape":[1],"data_offsets":[0,1]}}',
+            101,
+            "INVALID_SOURCE_HEADER",
+        ),
+    ],
+)
+def test_parse_safetensors_header_rejects_gap_trailing_or_duplicate(
+    header: bytes, file_size: int, code: str
+) -> None:
+    with pytest.raises(K3XError, match=code):
+        parse_safetensors_header(header, data_start=100, file_size=file_size)

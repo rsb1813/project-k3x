@@ -24,6 +24,15 @@ class SourceTensor:
     length: int
 
 
+@dataclass(frozen=True)
+class TensorMetadata:
+    name: str
+    dtype: str
+    shape: tuple[int, ...]
+    offset: int
+    length: int
+
+
 def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in pairs:
@@ -55,32 +64,28 @@ def _known_dtype_length(dtype: str, shape: list[int], data_bytes: int) -> int | 
     return length
 
 
-def inspect_shard(path: Path) -> dict[str, SourceTensor]:
-    size = path.stat().st_size
-    with path.open("rb") as stream:
-        raw = stream.read(8)
-        if len(raw) != 8:
-            raise K3XError("TRUNCATED_SOURCE_SHARD")
-        header_length = struct.unpack("<Q", raw)[0]
-        if header_length > _MAX_HEADER_BYTES:
-            raise K3XError("INVALID_SOURCE_HEADER")
-        if header_length > size - 8:
-            raise K3XError("INVALID_SOURCE_HEADER")
-        try:
-            header = json.loads(
-                stream.read(header_length),
-                object_pairs_hook=_reject_duplicate_pairs,
-                parse_constant=_reject_non_standard_constant,
-            )
-        except K3XError:
-            raise
-        except (json.JSONDecodeError, UnicodeDecodeError) as error:
-            raise K3XError("INVALID_SOURCE_HEADER") from error
+def parse_safetensors_header(
+    header_bytes: bytes,
+    *,
+    data_start: int,
+    file_size: int,
+) -> dict[str, TensorMetadata]:
+    if data_start < 0 or file_size < data_start:
+        raise K3XError("INVALID_SOURCE_HEADER")
+    try:
+        header = json.loads(
+            header_bytes,
+            object_pairs_hook=_reject_duplicate_pairs,
+            parse_constant=_reject_non_standard_constant,
+        )
+    except K3XError:
+        raise
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise K3XError("INVALID_SOURCE_HEADER") from error
     if not isinstance(header, dict):
         raise K3XError("INVALID_SOURCE_HEADER")
-    data_start = 8 + header_length
-    data_bytes = size - data_start
-    result: dict[str, SourceTensor] = {}
+    data_bytes = file_size - data_start
+    result: dict[str, TensorMetadata] = {}
     ranges: list[tuple[int, int]] = []
     for name, metadata in header.items():
         if name == "__metadata__":
@@ -114,8 +119,9 @@ def inspect_shard(path: Path) -> dict[str, SourceTensor]:
             raise K3XError("INVALID_SOURCE_EXTENT")
         if end > start:
             ranges.append((start, end))
-        result[name] = SourceTensor(path, name, dtype, tuple(shape), data_start + start,
-                                    end - start)
+        result[name] = TensorMetadata(
+            name, dtype, tuple(shape), data_start + start, end - start
+        )
     ranges.sort()
     cursor = 0
     for start, end in ranges:
@@ -127,6 +133,31 @@ def inspect_shard(path: Path) -> dict[str, SourceTensor]:
     if cursor != data_bytes:
         raise K3XError("INVALID_SOURCE_EXTENT")
     return result
+
+
+def inspect_shard(path: Path) -> dict[str, SourceTensor]:
+    size = path.stat().st_size
+    with path.open("rb") as stream:
+        raw = stream.read(8)
+        if len(raw) != 8:
+            raise K3XError("TRUNCATED_SOURCE_SHARD")
+        header_length = struct.unpack("<Q", raw)[0]
+        if header_length > _MAX_HEADER_BYTES:
+            raise K3XError("INVALID_SOURCE_HEADER")
+        if header_length > size - 8:
+            raise K3XError("INVALID_SOURCE_HEADER")
+        header_bytes = stream.read(header_length)
+        if len(header_bytes) != header_length:
+            raise K3XError("INVALID_SOURCE_HEADER")
+    metadata = parse_safetensors_header(
+        header_bytes, data_start=8 + header_length, file_size=size
+    )
+    return {
+        name: SourceTensor(
+            path, item.name, item.dtype, item.shape, item.offset, item.length
+        )
+        for name, item in metadata.items()
+    }
 
 
 def iter_tensor_chunks(tensor: SourceTensor, chunk_bytes: int) -> Iterator[bytes]:
