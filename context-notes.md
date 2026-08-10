@@ -498,3 +498,12 @@
 - M25 구현 계획은 source containment/ownership, safetensors metadata, resume schema, committed-prefix recovery, audit/ledger/publication의 다섯 독립 TDD 단위로 고정했다. 사용자의 자율 진행 지침에 따라 inline executing-plans 경로를 사용하며 각 production 변경 전에 실제 RED를 목격한다.
 - 공식 safetensors 형식과 구현을 다시 대조해 header DoS 경계를 정정했다. M25 reader는 payload나 declared header를 할당하기 전에 upstream 기본값인 100 MB 초과를 거부하며, 이는 K3 shard 측정에 기반한 임의 제한이 아니라 외부 입력 안전 경계다.
 - Resume crash 경계를 실제 synthetic stop 1~8로 측정했다. stop 2의 정상 partial은 20,736 bytes이고 다음 aligned boundary는 24,576 bytes여서, 정렬 끝을 committed로 간주하면 정상 중단을 손상으로 오판한다. Ledger가 CRC로 보증하는 마지막 extent의 정확한 `offset + length`만 committed boundary로 채택하고 다음 padding은 재개 시 다시 생성한다.
+
+## 2026-08-10 Milestone 25 구현과 검증
+
+- Source containment/ownership은 `4d2471f`와 non-standard constant 보정 `00fe36a`, safetensors header/metadata는 `b7b602b`와 `274c852`, resume schema는 `0eb8452`, exact orphan-suffix recovery는 `e59589d`로 각각 RED/GREEN 구현했다. D-028의 기존 bounded-fixture hash 검증은 중복하지 않았다.
+- B-0026 runner와 verifier는 `8686a41`에 추가했고, summary JSON도 LF-only final-newline으로 검증하도록 `70e71a7`에서 보정했다. Canonical evidence는 `cbc4d35`에 기록했다.
+- Canonical B-0026은 fresh/resume-clean/resume-orphan 세 시나리오에서 maximum source read 257 bytes와 final output 1,421,568 bytes를 기록했다. Resume 두 행은 20,736-byte committed prefix의 extent 2개를 재사용했고 orphan 행은 8,192-byte suffix를 검증 뒤 제거했다. RSS는 측정하지 않았고 token/GPU/NVMe/quality 필드는 내보내지 않았다.
+- 첫 canonical direct-module 실행은 shared venv의 editable `k3x_converter`가 오래된 milestone-one worktree를 가리켜 final output size가 달랐다. 결과 파일은 남지 않았다. Repository `pyproject.toml`의 pytest path와 일치하도록 direct tool invocation에 `PYTHONPATH=converter:reference`를 명시해 현재 worktree 코드를 사용했고, shared venv 자체는 변경하지 않았다.
+- Fresh full gates는 CPU CTest 15/15와 pytest 405 passed/70 skipped, liburing/direct CTest 16/16와 capability-aware `K3X_TEST_IO_URING=1 K3X_BUILD_DIR=build-liburing` pytest 407 passed/68 skipped, ASan/UBSan CTest 16/16, CUDA CTest 27/27와 pytest 459 passed/16 skipped를 통과했다. Released MoE-layer Compute Sanitizer regression은 `ERROR SUMMARY: 0 errors`였다.
+- B-0026은 converter correctness/recovery audit이다. 공식 weight, publisher authenticity, peak RSS, token throughput, GPU 성능, physical NVMe, cloud 실행은 아직 증명하지 않는다.

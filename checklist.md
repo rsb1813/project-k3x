@@ -189,10 +189,10 @@
 - [x] Compare a D-028 no-op, narrow generic trust-boundary hardening, and premature signed-manifest v2.
 - [x] Write and self-review the accepted converter trust-boundary design.
 - [x] Write and self-review the detailed TDD implementation plan.
-- [ ] Harden source manifest containment and exact tensor-to-shard ownership through witnessed RED/GREEN cycles.
-- [ ] Harden safetensors metadata and resume-ledger schema through witnessed RED/GREEN cycles.
-- [ ] Recover uncommitted partial suffixes without weakening committed-prefix validation.
-- [ ] Run the full verification matrix and record measured resource/correctness evidence.
+- [x] Harden source manifest containment and exact tensor-to-shard ownership through witnessed RED/GREEN cycles.
+- [x] Harden safetensors metadata and resume-ledger schema through witnessed RED/GREEN cycles.
+- [x] Recover uncommitted partial suffixes without weakening committed-prefix validation.
+- [x] Run the full verification matrix and record measured resource/correctness evidence.
 - [ ] Complete Critical/Important review, synchronize README/TITAN Ledger, publish, merge, and verify public `main`.
 
 ## Milestone 12 — Fused routed accumulation CUDA kernel

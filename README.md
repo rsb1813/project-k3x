@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2023-measured-20a46b?style=flat-square)](#milestone-23--admission-validation-attribution)
+[![Milestone](https://img.shields.io/badge/milestone%2025-local%20verified-20a46b?style=flat-square)](#milestone-25--converter-trust-boundary)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -20,7 +20,7 @@
 
 Kimi K3 is a 2.8T-parameter sparse MoE model whose local inference problem is dominated by moving the right expert bytes at the right time. K3X starts from that constraint. It is not a fork of llama.cpp or vLLM, and it does not assume that the checkpoint fits in RAM or VRAM.
 
-The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Implemented milestones now cover the exact synthetic graph and format, explicit RTX 5080 CUDA baselines, bounded L0/L1 primitives, independent L2 Reader modes, a released-size expert storage slice, an opt-in exact current-layer deadline worker, runtime-switchable exact eviction, persistent runtime-only task/session routing profiles, experimental fixed/adaptive Top-K with exact selected-expert rescue, opt-in routed expert accumulation on CUDA, strict token-major plus CPU/CUDA expert-major verification, a transactional persistent AURORA cursor, exact transient and bounded-resident CUDA drafts, an opt-in resident multi-expert CUDA grid, an exact resident MoE-layer boundary, and bounded ordered-set CUDA Graph experiments. Cross-layer prediction and the full three-tier pipeline remain future work.
+The long-term design treats NVMe, system RAM, and GPU memory as one deadline-scheduled hierarchy while preserving full routing and exact cold-expert rescue. Implemented milestones now cover the exact synthetic graph and format, strict converter source/metadata/resume boundaries, explicit RTX 5080 CUDA baselines, bounded L0/L1 primitives, independent L2 Reader modes, a released-size expert storage slice, an opt-in exact current-layer deadline worker, runtime-switchable exact eviction, persistent runtime-only task/session routing profiles, experimental fixed/adaptive Top-K with exact selected-expert rescue, opt-in routed expert accumulation on CUDA, strict token-major plus CPU/CUDA expert-major verification, a transactional persistent AURORA cursor, exact transient and bounded-resident CUDA drafts, an opt-in resident multi-expert CUDA grid, an exact resident MoE-layer boundary, and bounded ordered-set CUDA Graph experiments. Cross-layer prediction and the full three-tier pipeline remain future work.
 
 ```mermaid
 flowchart LR
@@ -52,6 +52,7 @@ flowchart LR
 | Milestone 22 | [PR #36 merged](https://github.com/rsb1813/project-k3x/pull/36) at `e4820a18` | B-0023 released-dimension MoE boundary; exact traffic gates pass, complete layer latency is 4.30×–16.69× split |
 | Milestone 23 | [PR #38 merged](https://github.com/rsb1813/project-k3x/pull/38) at `e24cac2` | B-0024 attributes the regression to repeated 469,776,384-byte validation and measures an exact admission-time fast path |
 | Milestone 24 | [PR #40 merged](https://github.com/rsb1813/project-k3x/pull/40) at `13a403f` | B-0025 measures direct, whole-update, and bounded ordered-set CUDA Graph behavior across stable, alternating, and rotating traces |
+| Milestone 25 | Local verification complete; publication pending | B-0026 validates bounded fresh/resume/orphan conversion and strict external-input rejection without real weights |
 
 PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 24 integration head `13a403f`; its branch and pull-request correctness runs `31371133295` and `31371136825` passed with CodeQL `31371136804`, followed by successful post-merge `main` correctness `31371387067` and CodeQL `31371387081`.
 
@@ -374,6 +375,22 @@ python -m tools.ablate_cuda_graph_cache \
   --iterations 20
 ```
 
+## Milestone 25 — converter trust boundary
+
+The streaming converter now rejects source manifests that escape the declared root, overlap shard ownership, use noncanonical hashes or constants, or bind a tensor to anything other than one contained shard. The safetensors reader enforces the upstream 100,000,000-byte header ceiling before allocation, rejects duplicate or non-standard JSON, validates exact tensor metadata and payload coverage, and retains valid leading-whitespace, scalar, and empty-tensor cases.
+
+Resume ledgers now require the exact canonical schema, lowercase digests and UUIDs, unique ordered extent IDs, and bounded non-boolean integer fields. A resume first validates the complete committed prefix and source bytes, then truncates any uncommitted suffix to the exact final `offset + length`; alignment padding is regenerated. Corrupt committed data remains a hard failure and is never repaired silently.
+
+B-0026 exercises one fresh conversion, one clean two-extent resume, and one resume after appending an 8,192-byte orphan suffix. Every run limits an individual source read to 257 bytes and produces a Reader-valid 1,421,568-byte synthetic K3X artifact. Both resume cases reuse two verified extents from an exact 20,736-byte committed prefix.
+
+| Scenario | Wall time | Max source read | Reused extents | Orphan suffix | Final bytes |
+|---|---:|---:|---:|---:|---:|
+| Fresh | 804,991,621 ns | 257 B | 0 | 0 B | 1,421,568 |
+| Resume clean | 800,116,522 ns | 257 B | 2 | 0 B | 1,421,568 |
+| Resume orphan | 887,550,657 ns | 257 B | 2 | 8,192 B | 1,421,568 |
+
+These are synthetic converter-integrity timings, not throughput targets. Peak RSS was not measured, no full Kimi K3 weight was downloaded, no cloud resource was provisioned, and no token, quality, GPU, PCIe, or physical NVMe claim is made.
+
 ## Quick start
 
 ### 1. Create an environment
@@ -642,6 +659,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] K3X v1 streaming format and crash-safe converter.
 - [x] Independent exact C++20 synthetic runtime.
 - [x] Synthetic profiler and reproducible JSON/CSV output.
+- [x] Strict converter source, safetensors, resume-ledger, and orphan-suffix trust boundaries with B-0026 evidence.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.
@@ -698,7 +716,7 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
 - Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0025 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; transient, bounded-resident, resident-grid, resident MoE-layer, admission-validation, and CUDA Graph paths are exact opt-in experiments. B-0025 finds mixed stable/alternating deltas and rotating churn 6.09%–11.57% slower, so no graph default changes. There is no learned DSpark drafter, reduced-precision draft path, eviction-capable draft residency, device-resident whole-token graph, or full-model speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
-- The converter has not processed the full Kimi K3 checkpoint.
+- The converter trust boundary is hardened and measured on the synthetic checkpoint, but it has not yet processed an official real Kimi K3 shard or the full checkpoint. Publisher authenticity and signed source provenance remain separate future work.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.
 - No open-source license has been selected yet; public visibility does not itself grant reuse rights.
 
