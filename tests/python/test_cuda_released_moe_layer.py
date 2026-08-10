@@ -1,4 +1,5 @@
 # released-dimension resident MoE-layer CUDA 벤치마크의 CLI 경계를 검증합니다.
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -25,8 +26,9 @@ def _released_artifact(tmp_path: Path) -> Path:
 
 
 @pytest.mark.parametrize("boundary", ["ffn-block", "moe-layer"])
+@pytest.mark.parametrize("experts", [1, 16])
 def test_released_moe_layer_bench_executes(
-    boundary: str, tmp_path: Path
+    boundary: str, experts: int, tmp_path: Path
 ) -> None:
     runner = _require_cuda_build()
     artifact = _released_artifact(tmp_path)
@@ -38,7 +40,7 @@ def test_released_moe_layer_bench_executes(
             "--boundary",
             boundary,
             "--experts",
-            "1",
+            str(experts),
             "--warmup",
             "0",
             "--iterations",
@@ -48,6 +50,45 @@ def test_released_moe_layer_bench_executes(
         text=True,
     )
     assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["artifact_kind"] == "released_dimension_moe_layer"
+    assert payload["routing_semantics"] is False
+    assert payload["boundary"] == boundary
+    assert payload["experts"] == experts
+    assert payload["hidden_width"] == 7168
+    assert payload["latent_width"] == 3584
+    assert payload["expert_intermediate_width"] == 3072
+    assert payload["expert_payload_bytes"] == 17_547_264
+    assert payload["resident_capacity_bytes"] == 1 << 30
+    assert payload["warmup"] == 0
+    assert payload["iterations"] == 1
+    assert payload["maximum_absolute_error"] <= 1.0e-5
+    assert payload["latency_nanoseconds_median"] > 0
+    assert payload["kernel_nanoseconds"] > 0
+    assert payload["activation_h2d_bytes"] > 0
+    assert payload["device_to_host_bytes"] > 0
+    assert payload["weight_h2d_bytes"] == 0
+    assert payload["cold_weight_h2d_bytes"] > 0
+    assert payload["resident_weight_bytes"] > 0
+    assert payload["peak_resident_weight_bytes"] > 0
+    assert payload["peak_vram_bytes"] >= payload["resident_weight_bytes"]
+    assert payload["weight_cache_bypasses"] == 0
+    assert payload["resident_grid_calls"] == 1
+    assert payload["resident_grid_kernel_launches"] == 4
+    assert payload["resident_grid_fallbacks"] == 0
+    assert payload["resident_moe_layer_fallbacks"] == 0
+    if boundary == "ffn-block":
+        assert payload["stream_synchronization_count"] == 4
+        assert payload["resident_moe_layer_calls"] == 0
+        assert payload["resident_moe_layer_experts"] == 0
+        assert payload["resident_moe_layer_kernel_launches"] == 0
+        assert payload["resident_moe_layer_contribution_h2d_bytes"] == 0
+    else:
+        assert payload["stream_synchronization_count"] == 1
+        assert payload["resident_moe_layer_calls"] == 1
+        assert payload["resident_moe_layer_experts"] == experts
+        assert payload["resident_moe_layer_kernel_launches"] == 13
+        assert payload["resident_moe_layer_contribution_h2d_bytes"] == experts * 4
 
 
 @pytest.mark.parametrize(

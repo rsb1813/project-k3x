@@ -3,11 +3,14 @@
 #include "k3x/reader.hpp"
 #include "k3x/storage_slice.hpp"
 
+#include <algorithm>
 #include <charconv>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <optional>
 #include <span>
@@ -259,7 +262,7 @@ k3x::Result<std::vector<float>> execute_layer(
     if (!result.value().executed) {
         return k3x::Result<std::vector<float>>::failure(
             k3x::ErrorCode::backend_unavailable,
-            "resident MoE layer bypassed hard capacity");
+            "released MoE layer capacity bypass");
     }
     return k3x::Result<std::vector<float>>::success(
         std::move(result.value().output));
@@ -287,6 +290,24 @@ k3x::BackendOptions backend_options(Boundary boundary) {
     return options;
 }
 
+std::uint64_t median(std::vector<std::uint64_t> values) {
+    std::sort(values.begin(), values.end());
+    const auto middle = values.size() / 2;
+    return values.size() % 2 != 0
+        ? values[middle]
+        : values[middle - 1] +
+              (values[middle] - values[middle - 1]) / 2;
+}
+
+float maximum_error(
+    std::span<const float> actual, std::span<const float> expected) {
+    float result = 0.0F;
+    for (std::size_t index = 0; index < actual.size(); ++index) {
+        result = std::max(result, std::abs(actual[index] - expected[index]));
+    }
+    return result;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -306,7 +327,22 @@ int main(int argc, char** argv) {
         return 4;
     }
     auto fixture = make_fixture(loaded.value(), arguments->experts);
-    auto backend = k3x::make_cuda_backend(backend_options(arguments->boundary));
+
+    auto oracle_backend =
+        k3x::make_cuda_backend(backend_options(Boundary::ffn_block));
+    if (!oracle_backend) {
+        write_error(oracle_backend.error(), oracle_backend.message());
+        return 4;
+    }
+    auto oracle = execute_split(*oracle_backend.value(), fixture);
+    if (!oracle) {
+        write_error(oracle.error(), oracle.message());
+        return 4;
+    }
+
+    k3x::Profiler profiler;
+    auto backend = k3x::make_cuda_backend(
+        backend_options(arguments->boundary), &profiler);
     if (!backend) {
         write_error(backend.error(), backend.message());
         return 4;
@@ -316,19 +352,115 @@ int main(int argc, char** argv) {
             ? execute_layer(*backend.value(), fixture)
             : execute_split(*backend.value(), fixture);
     };
-    for (std::size_t index = 0;
-         index < arguments->warmup + arguments->iterations; ++index) {
+
+    const auto cold_runtime_before = backend.value()->runtime_stats();
+    auto cold = execute();
+    if (!cold) {
+        write_error(cold.error(), cold.message());
+        return 4;
+    }
+    const auto cold_runtime_after = backend.value()->runtime_stats();
+    auto observed_maximum_error =
+        maximum_error(cold.value(), oracle.value());
+
+    for (std::size_t index = 0; index < arguments->warmup; ++index) {
         const auto result = execute();
         if (!result) {
             write_error(result.error(), result.message());
             return 4;
         }
     }
-    std::cout << "{\"artifact_kind\":\"released_dimension_moe_layer\""
+
+    const auto runtime_before = backend.value()->runtime_stats();
+    const auto profile_before = profiler.summary();
+    std::vector<std::uint64_t> samples;
+    samples.reserve(arguments->iterations);
+    std::vector<float> actual;
+    for (std::size_t index = 0; index < arguments->iterations; ++index) {
+        const auto start = std::chrono::steady_clock::now();
+        auto result = execute();
+        const auto elapsed = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - start)
+                .count());
+        if (!result) {
+            write_error(result.error(), result.message());
+            return 4;
+        }
+        actual = std::move(result.value());
+        samples.push_back(elapsed);
+    }
+    observed_maximum_error = std::max(
+        observed_maximum_error, maximum_error(actual, oracle.value()));
+    const auto runtime_after = backend.value()->runtime_stats();
+    const auto profile_after = profiler.summary();
+    const auto memory = backend.value()->memory_stats();
+
+    std::cout << std::setprecision(12)
+              << "{\"artifact_kind\":\"released_dimension_moe_layer\""
               << ",\"routing_semantics\":false"
               << ",\"boundary\":\"" << arguments->boundary_name << "\""
               << ",\"experts\":" << arguments->experts
+              << ",\"hidden_width\":" << kHidden
+              << ",\"latent_width\":" << kLatent
+              << ",\"expert_intermediate_width\":" << kIntermediate
+              << ",\"expert_payload_bytes\":" << loaded.value().logical_bytes
+              << ",\"resident_capacity_bytes\":" << kResidentCapacity
               << ",\"warmup\":" << arguments->warmup
-              << ",\"iterations\":" << arguments->iterations << "}\n";
+              << ",\"iterations\":" << arguments->iterations
+              << ",\"maximum_absolute_error\":"
+              << observed_maximum_error
+              << ",\"latency_nanoseconds_median\":" << median(samples)
+              << ",\"kernel_nanoseconds\":"
+              << profile_after.device_nanoseconds -
+                     profile_before.device_nanoseconds
+              << ",\"activation_h2d_bytes\":"
+              << runtime_after.activation_h2d_bytes -
+                     runtime_before.activation_h2d_bytes
+              << ",\"device_to_host_bytes\":"
+              << profile_after.device_to_host_bytes -
+                     profile_before.device_to_host_bytes
+              << ",\"weight_h2d_bytes\":"
+              << runtime_after.weight_h2d_bytes -
+                     runtime_before.weight_h2d_bytes
+              << ",\"stream_synchronization_count\":"
+              << runtime_after.stream_synchronization_count -
+                     runtime_before.stream_synchronization_count
+              << ",\"cold_weight_h2d_bytes\":"
+              << cold_runtime_after.weight_h2d_bytes -
+                     cold_runtime_before.weight_h2d_bytes
+              << ",\"resident_weight_bytes\":"
+              << runtime_after.resident_weight_bytes
+              << ",\"peak_resident_weight_bytes\":"
+              << runtime_after.peak_resident_weight_bytes
+              << ",\"peak_vram_bytes\":" << memory.peak_device_bytes
+              << ",\"weight_cache_bypasses\":"
+              << runtime_after.weight_cache_bypasses -
+                     runtime_before.weight_cache_bypasses
+              << ",\"resident_grid_calls\":"
+              << runtime_after.resident_grid_calls -
+                     runtime_before.resident_grid_calls
+              << ",\"resident_grid_kernel_launches\":"
+              << runtime_after.resident_grid_kernel_launches -
+                     runtime_before.resident_grid_kernel_launches
+              << ",\"resident_grid_fallbacks\":"
+              << runtime_after.resident_grid_fallbacks -
+                     runtime_before.resident_grid_fallbacks
+              << ",\"resident_moe_layer_calls\":"
+              << runtime_after.resident_moe_layer_calls -
+                     runtime_before.resident_moe_layer_calls
+              << ",\"resident_moe_layer_experts\":"
+              << runtime_after.resident_moe_layer_experts -
+                     runtime_before.resident_moe_layer_experts
+              << ",\"resident_moe_layer_kernel_launches\":"
+              << runtime_after.resident_moe_layer_kernel_launches -
+                     runtime_before.resident_moe_layer_kernel_launches
+              << ",\"resident_moe_layer_fallbacks\":"
+              << runtime_after.resident_moe_layer_fallbacks -
+                     runtime_before.resident_moe_layer_fallbacks
+              << ",\"resident_moe_layer_contribution_h2d_bytes\":"
+              << runtime_after.resident_moe_layer_contribution_h2d_bytes -
+                     runtime_before.resident_moe_layer_contribution_h2d_bytes
+              << "}\n";
     return 0;
 }

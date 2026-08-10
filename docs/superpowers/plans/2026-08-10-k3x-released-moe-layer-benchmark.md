@@ -149,7 +149,7 @@ git commit -m "bench: add released MoE layer driver"
 - Consumes: Task 1 fixture and split executor.
 - Produces: one JSON object with released identity, cold residency, warm traffic, calls, fallbacks, error, and median latency.
 
-- [ ] **Step 1: Add complete output-contract RED assertions**
+- [x] **Step 1: Add complete output-contract RED assertions**
 
 For every boundary at expert counts 1 and 16, assert released dimensions, `routing_semantics is False`, error at most `1e-5`, zero bypass/fallback, positive cold weight H2D, zero measured weight H2D, positive kernel time, and exact iteration counters.
 
@@ -163,17 +163,17 @@ else:
     assert payload["resident_moe_layer_kernel_launches"] == 13
 ```
 
-- [ ] **Step 2: Run RED and witness missing fields**
+- [x] **Step 2: Run RED and witness missing fields**
 
 Expected: JSON key failures name `cold_weight_h2d_bytes` or `resident_moe_layer_calls`.
 
-- [ ] **Step 3: Separate oracle, cold, warmup, and measurement phases**
+- [x] **Step 3: Separate oracle, cold, warmup, and measurement phases**
 
 Construct an `ffn-block` oracle backend and execute split once. Construct a second backend for the requested boundary, snapshot before cold execution, execute once, validate output, and record cold deltas. Run warmups, snapshot again, then collect requested iterations.
 
 Use `std::nth_element` or sorted samples for an integer median. Reject a layer result with `executed=false` as `BACKEND_UNAVAILABLE: released MoE layer capacity bypass`.
 
-- [ ] **Step 4: Emit the exact JSON contract**
+- [x] **Step 4: Emit the exact JSON contract**
 
 Include:
 
@@ -191,11 +191,11 @@ resident_moe_layer_kernel_launches, resident_moe_layer_fallbacks,
 resident_moe_layer_contribution_h2d_bytes
 ```
 
-- [ ] **Step 5: Run GREEN for 1 and 16 experts**
+- [x] **Step 5: Run GREEN for 1 and 16 experts**
 
 Run the focused test with CUDA enabled. Expected: all direct cases pass without a speed-direction assertion.
 
-- [ ] **Step 6: Run Compute Sanitizer at one expert**
+- [x] **Step 6: Run Compute Sanitizer at one expert**
 
 Generate one bounded artifact, then run:
 
@@ -208,7 +208,7 @@ compute-sanitizer --tool memcheck --error-exitcode 99 \
 
 Expected: `ERROR SUMMARY: 0 errors`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add runtime/src/cuda_moe_layer_bench.cpp \
