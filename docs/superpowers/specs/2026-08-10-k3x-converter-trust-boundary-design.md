@@ -39,7 +39,7 @@ The header length is rejected when it exceeds either the file payload boundary o
 
 `read_resume_manifest()` returns only a fully validated `ResumeManifest` or raises `K3XError("INVALID_RESUME_MANIFEST")`. It never leaks `KeyError`, `TypeError`, `ValueError`, JSON decoding errors, or duplicate-key ambiguity across the converter boundary.
 
-The existing writer still proves that `completed` is a canonical prefix of expected execution-order extents and that source CRC32C equals the ledger value. It then proves the committed bytes in the partial file have the same CRC32C. Only after both proofs succeed may the writer truncate the partial file to `align_up(last.offset + last.length)`, or to `SUPERBLOCK_BYTES` for an empty ledger, and fsync it. Missing committed bytes remain an error; only an uncommitted suffix is discarded.
+The existing writer still proves that `completed` is a canonical prefix of expected execution-order extents and that source CRC32C equals the ledger value. It then proves the committed bytes in the partial file have the same CRC32C. Only after both proofs succeed may the writer truncate the partial file to the exact `last.offset + last.length`, or to `SUPERBLOCK_BYTES` for an empty ledger, and fsync it. Padding for the next aligned extent is uncommitted and regenerated. Missing committed bytes remain an error; only an uncommitted suffix is discarded.
 
 ## Error behavior
 
