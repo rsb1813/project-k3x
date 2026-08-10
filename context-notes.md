@@ -466,3 +466,9 @@
 
 - 최종 head `07cd743`의 push/PR correctness `31363433423`/`31363437230`과 PR CodeQL `31363437226`이 통과했다. PR #38을 public integration head `e24cac2`로 rebase merge했고, post-merge `main` correctness `31363673811`과 CodeQL `31363673857`도 통과했다.
 - 공개 결과는 admission validation을 opt-in으로 유지한다. B-0024의 layer attribution을 token TPS나 full-model 품질로 확대 해석하지 않으며, 다음 선택 gate는 ordered routed-set reuse와 bounded CUDA Graph cache의 실제 비용 측정이다.
+
+## 2026-08-10 Milestone 24 준비
+
+- Public `main` `08b769c`에서 `codex/milestone-twenty-four-cuda-graph-cache` worktree를 만들었다. CUDA 13.3.73 native `sm_120` baseline은 CTest 26/26을 통과했다.
+- NVIDIA CUDA 13.3 원문은 whole-graph update가 동일 topology와 dependency/sink ordering을 요구하고, individual update는 소수의 known node 변경에 유리하며, graph object가 thread-safe하지 않다고 명시한다. CUDA Samples `b7c5481`의 explicit/capture 구현과 현재 resident MoE-layer의 13 logical kernel, stable resident pointers, grow-only scratch를 대조했다.
+- Whole-token graph는 정확성 범위를 과도하게 넓히고, superset node enable은 현재 variable-expert grid와 중복된다. M24는 `disabled|update|cache`를 분리해 direct reference, whole-update 비용, ordered-set bounded-cache reuse를 독립 측정한다. 기본값은 `disabled`이며 graph failure는 direct fallback으로 숨기지 않는다.
