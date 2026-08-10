@@ -169,6 +169,19 @@
 - [x] Complete the final Critical/Important-only read-only review.
 - [x] Publish through a public PR, merge, verify post-merge correctness/CodeQL, and update `PROJECT_STATE.md` last.
 
+## Milestone 24 — Bounded CUDA Graph cache attribution
+
+- [x] Re-read the charter, architecture, project state, D-044/D-046/D-048/D-049, and B-0022 through B-0024 evidence.
+- [x] Inspect CUDA 13.3 graph update/thread-safety contracts, CUDA Samples, installed CUDA 13.3.73, and the exact resident MoE-layer boundary.
+- [x] Compare a whole-token graph, one mutable superset graph, and reference/update/bounded ordered-set cache experiments.
+- [x] Write and self-review the accepted bounded CUDA Graph cache design.
+- [ ] Write and self-review the detailed TDD implementation plan.
+- [ ] Implement graph identity, bounded cache, strict options, and telemetry through witnessed RED/GREEN cycles.
+- [ ] Integrate exact CUDA capture/update/cache execution and target/draft ownership.
+- [ ] Add and run the canonical B-0025 trace ablation with digest-backed evidence.
+- [ ] Run the full CPU/liburing/ASan/CUDA/sanitizer verification matrix.
+- [ ] Complete Critical/Important review, synchronize README/TITAN Ledger, publish, merge, and verify public `main`.
+
 ## Milestone 12 — Fused routed accumulation CUDA kernel
 
 - [x] TITAN Ledger, 현재 CUDA 경계, 원 구현 근거 재확인.
