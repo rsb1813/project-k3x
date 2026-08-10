@@ -105,7 +105,7 @@ State audited on 2026-08-10 at local evidence head `708e555` with the complete R
 ## Work in progress
 
 - Milestone 24 implementation, B-0025 measurement, committed-evidence validation, full local verification, README, ARCHITECTURE, DECISIONS, BENCHMARKS, checklist, context notes, and this state update are complete. Critical/Important review, publication, and post-merge CI remain.
-- B-0025 shows stable cache reuse remains 2.808%–6.478% slower than direct and rotating churn remains 10.715%–15.864% slower. Alternating cache-four improves 4.194% in isolation, which is insufficient for a default change without real routing and native-Linux end-to-end evidence.
+- B-0025 shows stable/alternating deltas are mixed from -4.407% to +4.466%, while rotating cache churn remains 6.091%–11.574% slower. This is insufficient for a default change without real routing and native-Linux end-to-end evidence.
 - Direct execution, `per-call` validation, CPU AURORA draft, natural routing, blocking `pread + buffered`, and disabled L1 remain defaults. Admission and CUDA Graph modes are explicit experimental opt-ins.
 - Milestone 21 design, implementation, telemetry, B-0022 runner, formal evidence, digest checks, full local verification, final review, performance model, README, TITAN Ledger, PR #31 integration, and post-merge CI are complete.
 - `moe-layer` now has executable full-fit and one-byte bypass runtime coverage. The exact FP32/native-MXFP4 backend performs all weight acquisition before scratch/events/kernel launch, returns `executed=false` on hard-cap bypass, and never converts CUDA errors into fallback. Focused CPU ownership/parity tests pass 104/35, CUDA ownership/parity tests pass 133/6, CPU schema coverage passes 13/8, and live CUDA schema coverage passes 19/2. CUDA Graph caching and a complete device-resident token graph remain deferred alternatives.
@@ -148,7 +148,7 @@ State audited on 2026-08-10 at local evidence head `708e555` with the complete R
 - B-0021 reduces MoE launches by 75% and improves all four paired synthetic decode rows, but total draft H2D rises slightly and AURORA currently supplies one token per grid call. It is not evidence of full-model throughput, coding quality, or true speculative multi-token CUDA concurrency.
 - B-0022 removes exactly three synchronizations per successful MoE-layer call and lowers activation/total H2D and D2H, but two of four paired decode rows regress. The latest measured bottleneck is therefore host-driven execution outside the MoE layer plus tiny-kernel/orchestration variance; representative dimensions and native Linux are required before choosing CUDA Graph caching or a larger device-resident token boundary.
 - B-0024 attributes the B-0023 regression to repeated immutable validation: profiler-off complete-layer medians fall from 19.570/20.729/24.519 ms to 1.247/1.940/5.221 ms at 1/4/16 experts when the warm scan is replaced by exact identity hits.
-- B-0025 resolves the bounded graph-cache attribution gate but not the end-to-end decision. Stable graph reuse is slower than direct, whole-update is slower in every trace, and cache churn is materially slower. Real K3 routed-set reuse, dynamic L0 residency interaction, native-Linux token timing, utilization, physical traffic, and quality remain blockers for reconsidering a graph default.
+- B-0025 resolves the bounded graph-cache attribution gate but not the end-to-end decision. Stable/alternating deltas are small and mixed, while rotating cache churn is materially slower. Real K3 routed-set reuse, dynamic L0 residency interaction, native-Linux token timing, utilization, physical traffic, and quality remain blockers for reconsidering a graph default.
 
 ## Next concrete tasks
 
@@ -171,7 +171,7 @@ State audited on 2026-08-10 at local evidence head `708e555` with the complete R
 
 ## Latest measured bottleneck
 
-B-0025 closes the bounded CUDA Graph attribution question. At four resident expert views, direct medians are 1.902–1.995 ms. Stable cache reuse is 2.808%–6.478% slower, update is 4.131%–9.867% slower, and rotating cache churn is 10.715%–15.864% slower. Alternating cache-two/four improve 0.832%/4.194%, but this one deterministic layer trace is not sufficient to select a default.
+B-0025 closes the bounded CUDA Graph attribution question. At four resident expert views, direct medians are 1.961–2.068 ms. Stable/alternating mode deltas range from -4.407% to +4.466%, while rotating update/cache paths regress 6.091%–11.574%. This one deterministic layer trace is not sufficient to select a default.
 
 The measured bottleneck is no longer an unidentified validation scan. It is host graph management/update overhead when identity is stable and capture/instantiation/eviction overhead when ordered identities churn. A useful graph policy now requires real routing reuse and a larger device-resident boundary that amortizes host work; that broader boundary remains unimplemented.
 
@@ -181,7 +181,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
-- Local Milestone 24 evidence head `708e555` contains the bounded graph runner/verifier and 15-row B-0025 raw/summary evidence. Artifact/runner/aggregate/summary CSV SHA-256 are `e087ff78284e99760a7d113cf744562878537a6379e7a63be95585eec8b9f1be`, `6e544dd0cc24d8bfcce6524b72a5f75bd7113392a7e0c71a64ca177a50b230bd`, `afac1037c613ff5dcf6f625ec1ca513865adc2f19ba490218d32f9296a64f3be`, and `e1c5e57062f24330859dc5845dfbb3bf167e5c60625d879313cbf2e88514d0fb`.
+- Local Milestone 24 evidence lineage through `708e555` plus the host-time correction contains the bounded graph runner/verifier and remeasured 15-row B-0025 raw/summary evidence. Artifact/runner/aggregate/summary CSV SHA-256 are `e087ff78284e99760a7d113cf744562878537a6379e7a63be95585eec8b9f1be`, `60ee26df29b05a9f6638323477abd7c277f22802fe67866bdb4b647ec7f85c21`, `f65ab85eb8b750a69330f10146f50f1644b5205e60c6752abcaf0d1deffa3bd8`, and `a53482f9386eaeb292c263f921c165fd8fb931aa156f4ebd2ecee2f74672d2ad`.
 - Fresh Milestone 24 verification passes CPU CTest 15/15 with pytest 332/70, liburing/direct CTest 16/16 with pytest 334/68, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 386/16. Stable-hit and capacity-one eviction Compute Sanitizer runs both report `ERROR SUMMARY: 0 errors`.
 - Milestone 24 remains unpublished at this state checkpoint. The latest public known-good implementation is still Milestone 23 integration head `e24cac2` with its recorded post-merge correctness and CodeQL runs.
 - Public Milestone 23 integration head `e24cac2` contains atomic admission validation, profiler-independent physical telemetry, the canonical 18-row B-0024 matrix, 18 raw JSON records, one LF summary CSV, committed-evidence verification, and the final CUDA AURORA draft ownership correction.

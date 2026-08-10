@@ -359,11 +359,11 @@ B-0025 uses four already-resident expert views in five deterministic orderings, 
 
 | Trace | Direct | Update-1 | Cache-1 | Cache-2 | Cache-4 |
 |---|---:|---:|---:|---:|---:|
-| Stable A/A | 1.902 ms | 2.090 ms (+9.87%) | 2.025 ms (+6.48%) | 1.956 ms (+2.81%) | 2.009 ms (+5.61%) |
-| Alternating A/B | 1.995 ms | 2.078 ms (+4.13%) | 2.122 ms (+6.33%) | 1.979 ms (-0.83%) | 1.912 ms (-4.19%) |
-| Rotating A/B/C/D/E | 1.903 ms | 2.048 ms (+7.59%) | 2.116 ms (+11.17%) | 2.205 ms (+15.86%) | 2.107 ms (+10.72%) |
+| Stable A/A | 1.998 ms | 1.968 ms (-1.51%) | 1.964 ms (-1.68%) | 2.011 ms (+0.66%) | 2.035 ms (+1.87%) |
+| Alternating A/B | 2.068 ms | 1.976 ms (-4.41%) | 2.160 ms (+4.47%) | 2.035 ms (-1.58%) | 2.005 ms (-3.01%) |
+| Rotating A/B/C/D/E | 1.961 ms | 2.094 ms (+6.79%) | 2.099 ms (+7.07%) | 2.080 ms (+6.09%) | 2.188 ms (+11.57%) |
 
-Stable cache reuse does not beat direct execution, and every rotating capacity churns on all 20 measured calls. The isolated alternating cache-4 improvement is insufficient to change defaults, especially without real K3 routing traces or native-Linux end-to-end evidence. CUDA Graph modes therefore remain exact, experimental, and opt-in. This is a released-dimension layer microbenchmark with `routing_semantics=false`, not token throughput or coding-quality evidence.
+Stable and alternating rows vary within roughly -4.41% to +4.47%, while every rotating capacity churns on all 20 measured calls and regresses 6.09%–11.57%. The mixed small deltas and consistent churn penalty are insufficient to change defaults, especially without real K3 routing traces or native-Linux end-to-end evidence. CUDA Graph modes therefore remain exact, experimental, and opt-in. This is a released-dimension layer microbenchmark with `routing_semantics=false`, not token throughput or coding-quality evidence.
 
 ```bash
 python -m tools.ablate_cuda_graph_cache \
@@ -696,7 +696,7 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - Reusable scratch, bounded static weight residency, and same-input grouping are implemented, but activations and results still cross the host/device boundary and asynchronous overlap is not implemented.
 - Static residency has no eviction and is not the future three-tier expert cache.
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
-- Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0025 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; transient, bounded-resident, resident-grid, resident MoE-layer, admission-validation, and CUDA Graph paths are exact opt-in experiments. B-0025 finds stable reuse still 2.81%–6.48% slower than direct and rotating churn 10.72%–15.86% slower, so no graph default changes. There is no learned DSpark drafter, reduced-precision draft path, eviction-capable draft residency, device-resident whole-token graph, or full-model speculative speedup claim.
+- Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0025 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; transient, bounded-resident, resident-grid, resident MoE-layer, admission-validation, and CUDA Graph paths are exact opt-in experiments. B-0025 finds mixed stable/alternating deltas and rotating churn 6.09%–11.57% slower, so no graph default changes. There is no learned DSpark drafter, reduced-precision draft path, eviction-capable draft residency, device-resident whole-token graph, or full-model speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
 - The converter has not processed the full Kimi K3 checkpoint.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.
