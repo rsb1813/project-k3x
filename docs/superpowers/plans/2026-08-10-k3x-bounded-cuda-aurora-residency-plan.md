@@ -49,7 +49,7 @@
 - Consumes: existing `BackendOptions`, `ResidentWeightTable`, and `AuroraPersistentDraftProvider::create`.
 - Produces: provider acceptance for transient-zero or resident-positive canonical CUDA options while replay remains CPU-only.
 
-- [ ] **Step 1: Extend the direct CUDA provider test before production code**
+- [x] **Step 1: Extend the direct CUDA provider test before production code**
 
 Change the option helper to accept a capacity.
 
@@ -75,7 +75,7 @@ Create CPU, transient CUDA, 8 MiB resident CUDA, and one-byte resident CUDA prov
 
 Retain an invalid backend case by setting `cuda_weights=resident` with `cuda_resident_bytes=0` after backend construction.
 
-- [ ] **Step 2: Build and witness provider RED**
+- [x] **Step 2: Build and witness provider RED**
 
 Run.
 
@@ -86,7 +86,7 @@ build-cuda/test_cuda_aurora_draft artifacts/m18-top16.k3x
 
 Expected failure: resident provider creation returns `INVALID_STATE` because `supported_persistent_backend` accepts only transient zero-capacity CUDA.
 
-- [ ] **Step 3: Generalize the provider backend predicate minimally**
+- [x] **Step 3: Generalize the provider backend predicate minimally**
 
 In `runtime/src/aurora.cpp`, retain every existing fixed option and replace only the weight clause with.
 
@@ -102,7 +102,7 @@ return fixed_common_options && valid_weight_identity &&
 
 Do not change replay validation, runtime options, cursor state, or scheduler behavior.
 
-- [ ] **Step 4: Run provider GREEN and CUDA regression**
+- [x] **Step 4: Run provider GREEN and CUDA regression**
 
 Run.
 
@@ -114,7 +114,7 @@ ctest --test-dir build-cuda --output-on-failure
 
 Expected: direct resident/transient/bypass parity passes and CUDA CTest remains 23/23.
 
-- [ ] **Step 5: Commit the provider contract**
+- [x] **Step 5: Commit the provider contract**
 
 ```bash
 git add runtime/src/aurora.cpp tests/cuda/test_cuda_aurora_draft.cu

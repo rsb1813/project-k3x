@@ -32,15 +32,20 @@ bool supported_persistent_backend(const ComputeBackend& backend) {
     if (backend.kind() == BackendKind::cpu) return true;
     if (backend.kind() != BackendKind::cuda_custom) return false;
     const auto& options = backend.options();
+    const bool supported_weights =
+        (options.cuda_weights == CudaWeightMode::transient &&
+         options.cuda_resident_bytes == 0) ||
+        (options.cuda_weights == CudaWeightMode::resident &&
+         options.cuda_resident_bytes > 0);
     return options.kind == BackendKind::cuda_custom &&
         options.dense_precision == DensePrecision::fp32 &&
         options.cuda_allocation == CudaAllocationMode::reused &&
-        options.cuda_weights == CudaWeightMode::transient &&
+        supported_weights &&
         options.cuda_batching == CudaBatchingMode::grouped &&
         options.cuda_boundary == CudaBoundaryMode::ffn_block &&
         options.cuda_transfer == CudaTransferMode::synchronous &&
         options.cuda_moe_fusion == CudaMoeFusionMode::none &&
-        options.cuda_resident_bytes == 0 && options.cuda_pinned_bytes == 0;
+        options.cuda_pinned_bytes == 0;
 }
 
 bool valid_update(const DraftVerification& verification,

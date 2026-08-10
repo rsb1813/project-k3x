@@ -330,6 +330,7 @@
 - 상세 TDD 계획은 provider 계약, CLI 소유권, 독립 telemetry, B-0020 측정, 전체 검증과 공개 병합의 다섯 작업으로 고정했습니다.
 - 계획 자체 검토에서 자리표시자와 구현을 막는 모순은 발견되지 않았습니다. 기존 exact `ResidentWeightTable`만 재사용하며 새로운 eviction, kernel, precision 축은 추가하지 않습니다.
 - 활성 정책상 하위 에이전트는 사용하지 않고 주 에이전트가 `executing-plans` 절차로 RED, GREEN, 측정, 문서 동기화를 연결해 수행합니다.
+- Task 1 RED는 8 MiB resident provider 생성이 기존 transient-only gate에서 거부되는 `test_cuda_aurora_draft.cu:85` 실패로 확인했습니다. 최소 GREEN은 transient-zero와 resident-positive만 허용하며, full-fit hit/miss와 zero bypass, one-byte exact bypass, CPU/transient/resident proposal parity를 검증했습니다. 집중 pytest 1개와 CUDA CTest 23/23이 통과했습니다.
 
 ## 2026-08-10 Milestone 17 준비
 
