@@ -302,7 +302,7 @@ git commit -m "feat: report CUDA draft residency telemetry"
 - Consumes: `benchmark_once(..., aurora_draft_resident_bytes=0|8388608)`.
 - Produces: nine raw JSON/CSV pairs, summary JSON/CSV, pair deltas, and canonical SHA-256 evidence.
 
-- [ ] **Step 1: Write the missing-runner RED test**
+- [x] **Step 1: Write the missing-runner RED test**
 
 Create the test with this first line.
 
@@ -324,7 +324,7 @@ Import `CASES`, `PAIRS`, and `run_ablation` from the missing module. Assert exac
 
 The live one-sample test runs only with `K3X_TEST_CUDA=1`. It checks natural target parity, pair proposal/acceptance parity, transient zero residency, resident 8 MiB capacity, positive hits/misses/occupancy, zero bypass, lower resident weight H2D, all 18 raw digests, LF-only CSV, and aggregate/summary digests.
 
-- [ ] **Step 2: Run and witness missing-module RED**
+- [x] **Step 2: Run and witness missing-module RED**
 
 ```bash
 K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 python -m pytest \
@@ -333,7 +333,7 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 python -m pytest \
 
 Expected: `ModuleNotFoundError: tools.ablate_cuda_aurora_residency`.
 
-- [ ] **Step 3: Implement the B-0020 runner**
+- [x] **Step 3: Implement the B-0020 runner**
 
 Create the tool with this first line.
 
@@ -361,11 +361,11 @@ resident["draft_resident_hit_rate"] = (
 )
 ```
 
-- [ ] **Step 4: Run focused GREEN**
+- [x] **Step 4: Run focused GREEN**
 
 Run the Step 2 command. Expected: matrix and live one-sample evidence pass.
 
-- [ ] **Step 5: Commit measurement code before measuring**
+- [x] **Step 5: Commit measurement code before measuring**
 
 ```bash
 git add tools/ablate_cuda_aurora_residency.py \
