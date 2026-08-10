@@ -510,7 +510,7 @@ git commit -m "bench: add resident expert grid ablation"
 - Consumes committed tooling and clean CUDA build.
 - Produces content-addressed B-0021 raw and summary evidence.
 
-- [ ] **Step 1: Run canonical B-0021**
+- [x] **Step 1: Run canonical B-0021**
 
 ```bash
 K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 \
@@ -522,11 +522,11 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 \
 
 Expected: nine graph JSON/CSV pairs plus summary JSON/CSV, exact pair parity, full-fit zero fallback, and no required throughput direction.
 
-- [ ] **Step 2: Add committed-evidence validation**
+- [x] **Step 2: Add committed-evidence validation**
 
 Require exact file count, recompute every raw JSON/CSV SHA-256, summary CSV digest, canonical aggregate, pair deltas, launch reductions, H2D, cache and grid counters, token/state/route parity, and LF bytes.
 
-- [ ] **Step 3: Run evidence tests**
+- [x] **Step 3: Run evidence tests**
 
 ```bash
 /home/jolib/.venvs/k3x-m1/bin/python -m pytest -q \
@@ -535,7 +535,7 @@ Require exact file count, recompute every raw JSON/CSV SHA-256, summary CSV dige
 
 Expected: fake, live-gated, and committed-evidence tests pass.
 
-- [ ] **Step 4: Commit measured evidence**
+- [x] **Step 4: Commit measured evidence**
 
 ```bash
 git add results/b0021-cuda-aurora-grid-wsl \
