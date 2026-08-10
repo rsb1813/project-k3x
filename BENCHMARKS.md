@@ -718,6 +718,8 @@ Raw JSON/CSV and independently cross-checked summaries are under `results/b0019-
 
 Verification passes CPU CTest 14/14 and pytest 278/50, liburing/direct CTest 15/15 and pytest 284/44, ASan/UBSan liburing CTest 15/15, and CUDA CTest 23/23 with pytest 319/9. Compute Sanitizer reports `ERROR SUMMARY: 0 errors` for the exact CUDA draft plus CPU expert-major target path.
 
+Public push and pull-request correctness runs `31343260116` and `31343261633` passed. PR #25 was rebase-merged at public integration head `7899a7ae`, and post-merge `main` correctness run `31343401178` passed.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.

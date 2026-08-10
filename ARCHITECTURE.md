@@ -312,6 +312,8 @@ The target and draft data paths have separate `Profiler`, `BackendMemoryStats`, 
 
 B-0019 keeps the natural target on CPU and changes only draft placement. Fixed/adaptive token-major and expert-major CPU/CUDA pairs preserve proposals, acceptance, generated tokens, final KDA/MLA state, and committed routing. Transient synchronous CUDA drafting regresses paired decode by 96.22% to 97.00%, so the CUDA path remains an exact experimental diagnostic and is rejected as a default. Bounded draft residency, persistent multi-token/multi-expert kernels, reduced precision, and learned drafting remain separate proposed axes.
 
+This implementation is published on public `main` through PR #25 at integration head `7899a7ae`. Its push, pull-request, and post-merge correctness runs all passed; publication does not change the rejected-default status above.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

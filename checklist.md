@@ -199,7 +199,7 @@
 - [x] Implement draft backend preflight, ownership, and runtime validation through witnessed RED/GREEN cycles.
 - [x] Add separated draft CUDA telemetry and benchmark schema coverage.
 - [x] Run B-0019, the full verification matrix, sanitizer coverage, and evidence cross-checks.
-- [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
+- [x] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
 
 ## Milestone 14 — Exact expert-major speculative verification
 

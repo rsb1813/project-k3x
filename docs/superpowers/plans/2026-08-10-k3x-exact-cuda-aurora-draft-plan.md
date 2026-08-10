@@ -498,6 +498,6 @@ git commit -m "docs: publish exact CUDA AURORA evidence"
 
 Review `origin/main...HEAD` for CPU default compatibility, replay CPU-only behavior, canonical CUDA identity, target/draft counter separation, CUDA failure propagation, proposal/target parity, raw-summary digests, measured-versus-proposed language, and accidental full-checkpoint/cloud work. Apply at most one focused correction batch and rerun affected tests.
 
-- [ ] **Step 7: Publish and verify public main**
+- [x] **Step 7: Publish and verify public main**
 
 Push `codex/milestone-eighteen-cuda-aurora-draft`, open a ready public PR, wait for push and PR correctness, rebase-merge, and wait for the post-merge `main` run. If publication leaves a stale active-branch statement, use one small reconciliation PR and verify its post-merge `main` run.

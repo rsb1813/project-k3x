@@ -45,9 +45,9 @@ flowchart LR
 | Milestone 15 | [PR #17 merged](https://github.com/rsb1813/project-k3x/pull/17) at `c18df33` | B-0016 exact CUDA expert-major execution |
 | Milestone 16 | [PR #20 merged](https://github.com/rsb1813/project-k3x/pull/20) at `df5c07d` | B-0017 measured AURORA replay reference; exact and non-default |
 | Milestone 17 | [PR #23 merged](https://github.com/rsb1813/project-k3x/pull/23) at `30bbf7a8` | B-0018 persistent AURORA state; exact and non-default |
-| Milestone 18 | [PR #25 open](https://github.com/rsb1813/project-k3x/pull/25) on `codex/milestone-eighteen-cuda-aurora-draft` | B-0019 exact transient CUDA AURORA draft; measured regression, non-default |
+| Milestone 18 | [PR #25 merged](https://github.com/rsb1813/project-k3x/pull/25) at `7899a7ae` | B-0019 exact transient CUDA AURORA draft; measured regression, non-default |
 
-PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 17 integration head `30bbf7a8`; its branch and pull-request correctness runs `31340338639` and `31340340063` passed, followed by successful post-merge `main` run `31340476396`.
+PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 18 integration head `7899a7ae`; its push and pull-request correctness runs `31343260116` and `31343261633` passed, followed by successful post-merge `main` run `31343401178`.
 
 ## Why a dedicated engine
 
