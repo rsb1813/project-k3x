@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use K3X in research or engineering work, please cite this repository."
+title: "K3X: Kimi K3 engineered for one consumer PC"
+type: software
+authors:
+  - name: "rsb1813"
+repository-code: "https://github.com/rsb1813/project-k3x"
+url: "https://github.com/rsb1813/project-k3x"
+license: Apache-2.0
