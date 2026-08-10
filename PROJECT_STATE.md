@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 20 resident multi-token multi-expert CUDA grid is implemented, measured, fully verified, and public through PR #29 at integration head `90b20c87`. The opt-in boundary uses exact resident native MXFP4 weights and four grid-wide launches while preserving separate expert/token outputs and stable CPU accumulation. CPU drafting and grouped CUDA execution remain the defaults.
+Milestone 21 exact resident MoE-layer CUDA execution is in accepted-design state on branch `codex/milestone-twenty-one-resident-moe-layer`; it is not yet implemented or benchmarked. The selected boundary keeps routing on the CPU but joins routed-down, resident expert grid, ordered contribution mixing, RMSNorm, routed-up, shared SiTU MLP, and final addition on one CUDA stream. Milestone 20 remains the latest implemented runtime and is public through PR #29 at integration head `90b20c87`.
 
-State audited on 2026-08-10 against public integration head `90b20c87` and successful post-merge `main` correctness run `31351649761`. Fresh local verification passes CPU CTest 14/14 with Python 290 passed/55 skipped, liburing/direct CTest 15/15 with Python 296 passed/49 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 24/24 with Python 336 passed/9 skipped. Direct expert-grid Compute Sanitizer checks report zero errors. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 against public documentation head `7728acd0`; its post-merge `main` correctness run `31352046040` passed. The unchanged Milestone 20 implementation previously passed CPU CTest 14/14 with Python 290 passed/55 skipped, liburing/direct CTest 15/15 with Python 296 passed/49 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 24/24 with Python 336 passed/9 skipped. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
@@ -92,6 +92,8 @@ State audited on 2026-08-10 against public integration head `90b20c87` and succe
 
 ## Work in progress
 
+- Milestone 21 runtime/backend inspection, official CUDA Graph constraint review, alternative comparison, accepted design, D-046, checklist, and context notes are complete. The detailed TDD plan, implementation, B-0022, full verification, and publication remain.
+- `moe-layer` is not implemented. Its accepted contract is exact FP32/native-MXFP4, resident-only, all-or-nothing before launch, and non-default. CUDA Graph caching and a complete device-resident token graph remain deferred alternatives.
 - Milestone 20 design, implementation, B-0021, full verification, sanitizer coverage, evidence cross-checks, final review, public PR integration, post-merge CI, README, and TITAN Ledger synchronization are complete.
 - `resident-grid` remains exact, opt-in, and non-default. CUDA Graph caching, a cooperative persistent kernel, device-resident KDA/MLA/router state, reduced precision, and dynamic eviction remain outside this milestone.
 - Milestone 19 implementation, B-0020, full verification, sanitizer coverage, evidence cross-checks, final self-review, public PR integration, post-merge CI, and TITAN Ledger synchronization are complete.
@@ -131,8 +133,10 @@ State audited on 2026-08-10 against public integration head `90b20c87` and succe
 
 ## Next concrete tasks
 
-1. Isolate a device-resident draft layer/token boundary that removes activation round trips and host orchestration without combining reduced precision or dynamic eviction.
-2. Update GitHub Actions dependencies to remove the observed Node.js 20 deprecation warning without changing the correctness workflow contract.
+1. Write and self-review the detailed Milestone 21 TDD implementation plan.
+2. Implement the CPU oracle and CUDA layer kernels, then connect exact runtime fallback, AURORA ownership, CLI, and telemetry through witnessed RED/GREEN cycles.
+3. Implement and run B-0022 before deciding whether CUDA Graph caching or a larger device token graph is the next boundary.
+4. Update GitHub Actions dependencies to remove the observed Node.js 20 deprecation warning without changing the correctness workflow contract.
 
 ## Hardware assumptions
 
@@ -161,6 +165,7 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Last known-good state
 
+- Public documentation reconciliation head `7728acd0` records the Milestone 20 PR #29 publication across README and the TITAN Ledger. PR #30 push/PR correctness runs `31351873585`/`31351882562` and post-merge `main` run `31352046040` succeeded.
 - Public Milestone 20 integration head `90b20c87` includes the exact resident grid implementation, B-0021 evidence, English README, and synchronized TITAN Ledger. PR #29 push/PR correctness runs `31351465644`/`31351486146` and post-merge `main` correctness run `31351649761` succeeded.
 - Public Milestone 20 evidence head `8e85ff3` contains the B-0021 runner lineage, 9 rows, and 20 result files under `results/b0021-cuda-aurora-grid-wsl/`.
 - Fresh Milestone 20 verification passes CPU CTest 14/14 and pytest 290 passed/55 skipped, liburing/direct CTest 15/15 and pytest 296 passed/49 skipped, ASan/UBSan liburing CTest 15/15, and CUDA CTest 24/24 with pytest 336 passed/9 skipped. Direct expert-grid and 4x4 benchmark Compute Sanitizer runs report `ERROR SUMMARY: 0 errors`.
@@ -216,4 +221,4 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 ## Proposed component status
 
-AURORA's replay reference, persistent reduced-Top-K CPU state, adaptive scheduler, exact transient CUDA draft, bounded exact resident CUDA draft, exact resident expert grid, target feedback, CLI, separated telemetry, and B-0017 through B-0021 are implemented and measured as experimental non-default paths. Transient CUDA is rejected as a default; bounded residency and the resident grid remain opt-in. Reduced precision, eviction-capable residency, a device-resident draft layer/token graph, and learned drafting remain proposed. APOLLO, TITAN COUNCIL, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None of the proposed-only components is claimed as implemented or benchmarked.
+AURORA's replay reference, persistent reduced-Top-K CPU state, adaptive scheduler, exact transient CUDA draft, bounded exact resident CUDA draft, exact resident expert grid, target feedback, CLI, separated telemetry, and B-0017 through B-0021 are implemented and measured as experimental non-default paths. Transient CUDA is rejected as a default; bounded residency and the resident grid remain opt-in. The exact resident MoE-layer boundary is accepted design only and is not implemented or benchmarked. Reduced precision, eviction-capable residency, a complete device-resident token graph, and learned drafting remain proposed. APOLLO, TITAN COUNCIL, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None of the proposed-only components is claimed as implemented or benchmarked.

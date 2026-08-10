@@ -127,6 +127,18 @@
 - [x] Run B-0021, the complete verification matrix, sanitizer, and evidence cross-checks.
 - [x] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
 
+## Milestone 21 — Exact resident MoE-layer CUDA boundary
+
+- [x] Re-read the public charter, architecture, project state, D-045, and B-0021 evidence.
+- [x] Inspect the split MoE runtime/backend path and current CUDA synchronization/traffic ownership.
+- [x] Compare resident MoE-layer execution, routed-set CUDA Graph caching, and a complete device token graph.
+- [x] Write and self-review the accepted dependency-closed design.
+- [ ] Write and self-review the detailed TDD implementation plan.
+- [ ] Implement the CPU oracle and resident CUDA MoE-layer contract through witnessed RED/GREEN cycles.
+- [ ] Integrate runtime, AURORA, CLI, exact fallback, and target/draft telemetry.
+- [ ] Implement and run B-0022 plus the complete verification and sanitizer matrices.
+- [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
+
 ## Milestone 12 — Fused routed accumulation CUDA kernel
 
 - [x] TITAN Ledger, 현재 CUDA 경계, 원 구현 근거 재확인.
