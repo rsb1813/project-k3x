@@ -887,6 +887,25 @@ def test_cuda_expert_major_speculation_preserves_exact_state_and_unions_h2d(
             "speculative mode none does not accept speculative options",
         ),
         (
+            ["--speculative-mode", "none",
+             "--aurora-draft-resident-bytes", "1"],
+            "speculative mode none does not accept speculative options",
+        ),
+        (
+            ["--speculative-mode", "aurora-replay",
+             "--aurora-draft-resident-bytes", "1"],
+            "AURORA draft residency requires persistent cuda-custom draft backend",
+        ),
+        (
+            ["--speculative-mode", "aurora-persistent",
+             "--aurora-draft-resident-bytes", "1"],
+            "AURORA draft residency requires persistent cuda-custom draft backend",
+        ),
+        (
+            ["--aurora-draft-resident-bytes", "-1"],
+            "invalid AURORA draft resident byte capacity: -1",
+        ),
+        (
             [
                 "--speculative-mode", "aurora-replay",
                 "--speculative-block-size", "2",

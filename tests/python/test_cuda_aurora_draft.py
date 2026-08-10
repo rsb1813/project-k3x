@@ -39,6 +39,7 @@ def test_cpu_build_rejects_cuda_draft_without_fallback(
             "--speculative-block-size", "2",
             "--aurora-draft-k", "4",
             "--aurora-draft-backend", "cuda-custom",
+            "--aurora-draft-resident-bytes", "8388608",
             "--json", str(output),
         ],
         capture_output=True,
@@ -51,7 +52,9 @@ def test_cpu_build_rejects_cuda_draft_without_fallback(
     assert not output.exists()
 
 
+@pytest.mark.parametrize("verification", ["token-major", "expert-major"])
 def test_cuda_draft_matches_cpu_persistent_target_execution(
+    verification: str,
     tmp_path: Path,
 ) -> None:
     if Path(os.environ.get("K3X_BUILD_DIR", "build")).name != "build-cuda":
@@ -66,29 +69,40 @@ def test_cuda_draft_matches_cpu_persistent_target_execution(
         "--diagnostics", "true",
         "--backend", "cpu",
         "--speculative-mode", "aurora-persistent",
-        "--speculative-verification", "token-major",
+        "--speculative-verification", verification,
         "--speculative-block-size", "2",
         "--aurora-draft-k", "4",
     ]
 
     for policy in ("fixed", "adaptive"):
         results: dict[str, dict] = {}
-        for draft_backend in ("cpu", "cuda-custom"):
-            output = tmp_path / f"{policy}-{draft_backend}.json"
+        identities = (
+            ("cpu", "cpu", []),
+            ("transient", "cuda-custom", []),
+            (
+                "resident",
+                "cuda-custom",
+                ["--aurora-draft-resident-bytes", "8388608"],
+            ),
+        )
+        for identity, draft_backend, extra in identities:
+            output = tmp_path / f"{verification}-{policy}-{identity}.json"
             subprocess.run(
                 [
                     *common,
                     "--aurora-block-policy", policy,
                     "--aurora-draft-backend", draft_backend,
+                    *extra,
                     "--json", str(output),
                 ],
                 check=True,
             )
-            results[draft_backend] = json.loads(
+            results[identity] = json.loads(
                 output.read_text(encoding="utf-8")
             )
         cpu = results["cpu"]
-        cuda = results["cuda-custom"]
+        cuda = results["transient"]
+        resident = results["resident"]
         assert cpu["aurora_draft_backend"] == "cpu"
         assert cuda["aurora_draft_backend"] == "cuda-custom"
         assert cpu["draft_device"] == "CPU"
@@ -97,6 +111,7 @@ def test_cuda_draft_matches_cpu_persistent_target_execution(
         assert cpu["draft_peak_vram_bytes"] == 0
         assert cuda["draft_cuda_allocation"] == "reused"
         assert cuda["draft_cuda_weights"] == "transient"
+        assert resident["draft_cuda_weights"] == "resident"
         assert cuda["draft_cuda_batching"] == "grouped"
         assert cuda["draft_cuda_boundary"] == "ffn-block"
         assert cuda["draft_cuda_transfer"] == "synchronous"
@@ -129,3 +144,4 @@ def test_cuda_draft_matches_cpu_persistent_target_execution(
             "draft_kda_checkpoint_bytes",
         ):
             assert cuda[field] == cpu[field]
+            assert resident[field] == cpu[field]

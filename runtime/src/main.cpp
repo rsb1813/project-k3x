@@ -145,9 +145,11 @@ int main(int argc, char** argv) {
     std::string aurora_draft_k_text = "0";
     std::string aurora_block_policy_name = "fixed";
     std::string aurora_draft_backend_name = "cpu";
+    std::string aurora_draft_resident_bytes_text = "0";
     bool aurora_draft_k_supplied = false;
     bool aurora_block_policy_supplied = false;
     bool aurora_draft_backend_supplied = false;
+    bool aurora_draft_resident_bytes_supplied = false;
     bool diagnostics = false;
     std::size_t count = 0;
     for (int index = 1; index + 1 < argc; index += 2) {
@@ -201,6 +203,10 @@ int main(int argc, char** argv) {
             aurora_draft_backend_name = value;
             aurora_draft_backend_supplied = true;
         }
+        else if (key == "--aurora-draft-resident-bytes") {
+            aurora_draft_resident_bytes_text = value;
+            aurora_draft_resident_bytes_supplied = true;
+        }
         else { std::cerr << "unknown argument: " << key << '\n'; return 2; }
     }
 
@@ -245,6 +251,21 @@ int main(int argc, char** argv) {
                   << '\n';
         return 2;
     }
+    std::uint64_t aurora_draft_resident_bytes = 0;
+    const auto* draft_resident_begin =
+        aurora_draft_resident_bytes_text.data();
+    const auto* draft_resident_end = draft_resident_begin +
+        aurora_draft_resident_bytes_text.size();
+    const auto draft_resident_parse = std::from_chars(
+        draft_resident_begin, draft_resident_end,
+        aurora_draft_resident_bytes);
+    if (aurora_draft_resident_bytes_text.empty() ||
+        draft_resident_parse.ec != std::errc{} ||
+        draft_resident_parse.ptr != draft_resident_end) {
+        std::cerr << "invalid AURORA draft resident byte capacity: "
+                  << aurora_draft_resident_bytes_text << '\n';
+        return 2;
+    }
     if (speculative_mode_name != "none" &&
         speculative_mode_name != "scripted-reference" &&
         speculative_mode_name != "aurora-replay" &&
@@ -285,14 +306,22 @@ int main(int argc, char** argv) {
     }
     if (speculative_mode_name == "none" &&
         (aurora_draft_k_supplied || aurora_block_policy_supplied ||
-         aurora_draft_backend_supplied)) {
+         aurora_draft_backend_supplied ||
+         aurora_draft_resident_bytes_supplied)) {
         std::cerr << "speculative mode none does not accept speculative options\n";
         return 2;
     }
     if (speculative_mode_name == "scripted-reference" &&
         (aurora_draft_k_supplied || aurora_block_policy_supplied ||
-         aurora_draft_backend_supplied)) {
+         aurora_draft_backend_supplied ||
+         aurora_draft_resident_bytes_supplied)) {
         std::cerr << "scripted-reference does not accept AURORA options\n";
+        return 2;
+    }
+    if (aurora_draft_resident_bytes_supplied &&
+        (speculative_mode_name != "aurora-persistent" ||
+         aurora_draft_backend_name != "cuda-custom")) {
+        std::cerr << "AURORA draft residency requires persistent cuda-custom draft backend\n";
         return 2;
     }
     if (speculative_mode_name == "aurora-replay" &&
@@ -868,7 +897,9 @@ int main(int argc, char** argv) {
             draft_backend_options.cuda_allocation =
                 k3x::CudaAllocationMode::reused;
             draft_backend_options.cuda_weights =
-                k3x::CudaWeightMode::transient;
+                aurora_draft_resident_bytes == 0
+                    ? k3x::CudaWeightMode::transient
+                    : k3x::CudaWeightMode::resident;
             draft_backend_options.cuda_batching =
                 k3x::CudaBatchingMode::grouped;
             draft_backend_options.cuda_boundary =
@@ -877,6 +908,8 @@ int main(int argc, char** argv) {
                 k3x::CudaTransferMode::synchronous;
             draft_backend_options.cuda_moe_fusion =
                 k3x::CudaMoeFusionMode::none;
+            draft_backend_options.cuda_resident_bytes =
+                aurora_draft_resident_bytes;
             auto created_backend = k3x::make_cuda_backend(
                 draft_backend_options, &aurora_profiler);
             if (!created_backend) {

@@ -136,7 +136,7 @@ git commit -m "feat: accept bounded resident AURORA drafts"
 - Consumes: Task 1 provider predicate.
 - Produces: `--aurora-draft-resident-bytes N` and backend construction that maps zero to transient and positive to resident.
 
-- [ ] **Step 1: Write CLI preflight RED assertions**
+- [x] **Step 1: Write CLI preflight RED assertions**
 
 Add exact cases.
 
@@ -163,11 +163,11 @@ Add exact cases.
 
 Extend the CPU-build no-fallback test so persistent CUDA with `--aurora-draft-resident-bytes 8388608` returns code 4, emits `BACKEND_UNAVAILABLE: CUDA backend is disabled at build time`, and creates no output.
 
-- [ ] **Step 2: Extend end-to-end CUDA parity RED assertions**
+- [x] **Step 2: Extend end-to-end CUDA parity RED assertions**
 
 For each fixed/adaptive and token/expert target case, run three draft identities: CPU, transient CUDA, and resident CUDA with 8 MiB. Assert proposal, acceptance, target tokens, final state, committed routes, and cursor counters are equal. Assert resident JSON identifies `draft_cuda_weights == "resident"` while transient remains `transient`.
 
-- [ ] **Step 3: Run and witness CLI RED**
+- [x] **Step 3: Run and witness CLI RED**
 
 Run.
 
@@ -181,7 +181,7 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 python -m pytest \
 
 Expected failure: the runner reports `unknown argument: --aurora-draft-resident-bytes`.
 
-- [ ] **Step 4: Parse and validate the draft-only capacity**
+- [x] **Step 4: Parse and validate the draft-only capacity**
 
 In `main.cpp`, add a default string `"0"`, a supplied flag, and parse through `std::from_chars` into `std::uint64_t aurora_draft_resident_bytes`. Include the supplied flag in the existing `none` and `scripted-reference` rejection sets. Add this preflight after mode and backend parsing.
 
@@ -203,11 +203,11 @@ draft_backend_options.cuda_weights = aurora_draft_resident_bytes == 0
 draft_backend_options.cuda_resident_bytes = aurora_draft_resident_bytes;
 ```
 
-- [ ] **Step 5: Run CLI GREEN and regressions**
+- [x] **Step 5: Run CLI GREEN and regressions**
 
 Run the Step 3 commands plus CPU/CUDA CTest. Expected: prior commands remain transient, resident commands are exact, and unavailable builds do not fall back.
 
-- [ ] **Step 6: Commit CLI ownership**
+- [x] **Step 6: Commit CLI ownership**
 
 ```bash
 git add runtime/src/main.cpp tests/python/test_cpp_parity.py \
