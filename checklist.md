@@ -207,7 +207,7 @@
 - [x] Compare static residency, dynamic L0 eviction, and persistent-kernel alternatives as separate experiment axes.
 - [x] Write and self-review the bounded exact draft-residency design.
 - [x] Write and self-review the detailed TDD implementation plan.
-- [ ] Implement provider, CLI, telemetry, and benchmark contracts through witnessed RED/GREEN cycles.
+- [x] Implement provider, CLI, telemetry, and benchmark contracts through witnessed RED/GREEN cycles.
 - [ ] Run B-0020, the full verification matrix, sanitizer coverage, and evidence cross-checks.
 - [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
 

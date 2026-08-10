@@ -114,6 +114,9 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert payload["draft_weight_cache_hits"] == 0
     assert payload["draft_weight_cache_misses"] == 0
     assert payload["draft_weight_cache_bypasses"] == 0
+    assert payload["draft_cuda_resident_bytes"] == 0
+    assert payload["draft_resident_weight_bytes"] == 0
+    assert payload["draft_peak_resident_weight_bytes"] == 0
     assert payload["draft_proposal_calls"] == 0
     assert payload["draft_candidate_tokens"] == 0
     assert payload["draft_replayed_context_tokens"] == 0
@@ -226,6 +229,9 @@ def test_benchmark_json_and_csv_preserve_schema(tmp_path: Path) -> None:
     assert row["draft_kernel_nanoseconds"] == "0"
     assert row["draft_weight_h2d_bytes"] == "0"
     assert row["draft_peak_vram_bytes"] == "0"
+    assert row["draft_cuda_resident_bytes"] == "0"
+    assert row["draft_resident_weight_bytes"] == "0"
+    assert row["draft_peak_resident_weight_bytes"] == "0"
     assert row["draft_reader_completed_bytes"] == "0"
     assert row["draft_context_prefill_tokens"] == "0"
     assert row["draft_incremental_forward_calls"] == "0"
@@ -561,6 +567,43 @@ def test_benchmark_once_collects_aurora_replay_telemetry(
     assert record.device_overlap is False
     assert record.max_absolute_error == 0.0
     assert record.max_relative_error == 0.0
+
+
+def test_benchmark_once_collects_resident_cuda_aurora_draft_telemetry(
+    tmp_path: Path,
+) -> None:
+    if Path(os.environ.get("K3X_BUILD_DIR", "build")).name != "build-cuda":
+        pytest.skip("CUDA draft residency is exercised only against build-cuda")
+    config = SyntheticK3Config.default().replace(num_experts=24, top_k=16)
+    source = tmp_path / "source-resident-draft-top16"
+    write_source_checkpoint(source, config=config)
+    artifact = tmp_path / "resident-draft-top16.k3x"
+    convert(source, artifact, chunk_bytes=257)
+    record = benchmark_once(
+        artifact,
+        cpp_binary("k3x_run"),
+        warmup=0,
+        iterations=1,
+        speculative_mode="aurora-persistent",
+        speculative_block_size=2,
+        aurora_draft_k=4,
+        aurora_block_policy="fixed",
+        aurora_draft_backend="cuda-custom",
+        aurora_draft_resident_bytes=8388608,
+    )
+    assert record.draft_cuda_weights == "resident"
+    assert record.draft_cuda_resident_bytes == 8388608
+    assert 0 < record.draft_resident_weight_bytes <= 8388608
+    assert (
+        record.draft_resident_weight_bytes
+        <= record.draft_peak_resident_weight_bytes
+        <= 8388608
+    )
+    assert record.draft_weight_cache_hits > 0
+    assert record.draft_weight_cache_misses > 0
+    assert record.draft_weight_cache_bypasses == 0
+    assert record.resident_weight_bytes == 0
+    assert record.peak_resident_weight_bytes == 0
 
 
 def test_benchmark_once_reports_static_l1_and_reader_accounting(

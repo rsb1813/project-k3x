@@ -332,6 +332,7 @@
 - 활성 정책상 하위 에이전트는 사용하지 않고 주 에이전트가 `executing-plans` 절차로 RED, GREEN, 측정, 문서 동기화를 연결해 수행합니다.
 - Task 1 RED는 8 MiB resident provider 생성이 기존 transient-only gate에서 거부되는 `test_cuda_aurora_draft.cu:85` 실패로 확인했습니다. 최소 GREEN은 transient-zero와 resident-positive만 허용하며, full-fit hit/miss와 zero bypass, one-byte exact bypass, CPU/transient/resident proposal parity를 검증했습니다. 집중 pytest 1개와 CUDA CTest 23/23이 통과했습니다.
 - Task 2 RED는 새 옵션의 다섯 경계가 모두 `unknown argument: --aurora-draft-resident-bytes`로 실패하고 기존 20개 preflight 사례는 통과하는 것으로 확인했습니다. GREEN은 unsigned 64-bit 파싱, mode/backend 소유권, CPU build 무폴백, zero-transient/positive-resident backend 구성을 추가했습니다. CPU 두 파일은 96 passed/34 skipped, CUDA 파일은 2 passed/1 skipped, CPU/CUDA CTest는 14/14와 23/23으로 통과했습니다.
+- Task 3 RED는 ordinary schema와 CUDA resident 실행 모두 새 세 필드의 `KeyError`로 실패했습니다. GREEN은 `draft_cuda_resident_bytes`, `draft_resident_weight_bytes`, `draft_peak_resident_weight_bytes`를 C++ JSON, `BenchmarkRecord`, 모든 process call, deterministic/options 검증, JSON/CSV CLI에 연결했습니다. 8 MiB resident benchmark는 bounded 점유, cache hit/miss, zero bypass, target residency zero를 보였고 CPU 12 passed/7 skipped·CTest 14/14, CUDA 5 passed/1 skipped·CTest 23/23이 통과했습니다.
 
 ## 2026-08-10 Milestone 17 준비
 

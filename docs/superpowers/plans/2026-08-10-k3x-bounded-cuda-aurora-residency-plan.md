@@ -231,7 +231,7 @@ git commit -m "feat: configure bounded CUDA draft residency"
 - Consumes: Task 2 effective draft backend options and runtime stats.
 - Produces: `draft_cuda_resident_bytes`, `draft_resident_weight_bytes`, and `draft_peak_resident_weight_bytes` in runtime and benchmark JSON/CSV.
 
-- [ ] **Step 1: Write schema RED assertions**
+- [x] **Step 1: Write schema RED assertions**
 
 Add zero defaults to ordinary records and CSV.
 
@@ -243,7 +243,7 @@ assert payload["draft_peak_resident_weight_bytes"] == 0
 
 In the CUDA integration test assert transient values are zero. For the resident row assert configured capacity equals 8,388,608, current and peak resident bytes are positive and bounded, cache misses and hits are positive, bypasses are zero, and resident weight H2D is lower than transient weight H2D. Target residency fields remain zero.
 
-- [ ] **Step 2: Run and witness telemetry RED**
+- [x] **Step 2: Run and witness telemetry RED**
 
 Run.
 
@@ -256,7 +256,7 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 python -m pytest \
 
 Expected failure: the three new fields are absent.
 
-- [ ] **Step 3: Serialize effective capacity and occupancy**
+- [x] **Step 3: Serialize effective capacity and occupancy**
 
 In `main.cpp`, serialize.
 
@@ -271,15 +271,15 @@ output << ",\"draft_cuda_resident_bytes\":"
 
 Use the existing zero `default_draft_options` and zero `BackendRuntimeStats` outside AURORA.
 
-- [ ] **Step 4: Extend benchmark invocation and aggregation**
+- [x] **Step 4: Extend benchmark invocation and aggregation**
 
 Add defaulted dataclass fields and `aurora_draft_resident_bytes: int = 0` to `_run_process` and `benchmark_once`. Append `--aurora-draft-resident-bytes` only when the value is positive. Propagate it through every process call, option consistency tuple, argparse, and `BenchmarkRecord` construction. Treat capacity/current/peak/cache counters and H2D bytes as deterministic fields; aggregate only draft kernel timing by median.
 
-- [ ] **Step 5: Run telemetry GREEN**
+- [x] **Step 5: Run telemetry GREEN**
 
 Run CPU benchmark schema, CUDA draft integration, persistent AURORA, and CTest suites. Expected: resident H2D reduction and bounded occupancy are observed without target counter contamination.
 
-- [ ] **Step 6: Commit telemetry**
+- [x] **Step 6: Commit telemetry**
 
 ```bash
 git add runtime/src/main.cpp tools/benchmark_synthetic.py \

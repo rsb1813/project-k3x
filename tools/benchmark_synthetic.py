@@ -159,6 +159,7 @@ class BenchmarkRecord:
     aurora_draft_k: int = 0
     aurora_block_policy: str = "none"
     aurora_draft_backend: str = "none"
+    draft_cuda_resident_bytes: int = 0
     draft_device: str = "CPU"
     draft_cuda_allocation: str = "per-operation"
     draft_cuda_weights: str = "transient"
@@ -177,6 +178,8 @@ class BenchmarkRecord:
     draft_weight_cache_hits: int = 0
     draft_weight_cache_misses: int = 0
     draft_weight_cache_bypasses: int = 0
+    draft_resident_weight_bytes: int = 0
+    draft_peak_resident_weight_bytes: int = 0
     draft_proposal_calls: int = 0
     draft_candidate_tokens: int = 0
     draft_replayed_context_tokens: int = 0
@@ -292,6 +295,7 @@ def _run_process(
     aurora_draft_k: int = 0,
     aurora_block_policy: str = "fixed",
     aurora_draft_backend: str = "cpu",
+    aurora_draft_resident_bytes: int = 0,
     diagnostics: bool = False,
 ) -> tuple[dict, int, float]:
     command = [
@@ -329,6 +333,11 @@ def _run_process(
             "--aurora-draft-k", str(aurora_draft_k),
             "--aurora-block-policy", aurora_block_policy,
             "--aurora-draft-backend", aurora_draft_backend,
+        ])
+    if aurora_draft_resident_bytes > 0:
+        command.extend([
+            "--aurora-draft-resident-bytes",
+            str(aurora_draft_resident_bytes),
         ])
     if runtime_metadata:
         command.extend(["--runtime-metadata", runtime_metadata])
@@ -441,6 +450,7 @@ def benchmark_once(
     aurora_draft_k: int = 0,
     aurora_block_policy: str = "fixed",
     aurora_draft_backend: str = "cpu",
+    aurora_draft_resident_bytes: int = 0,
 ) -> BenchmarkRecord:
     if warmup < 0 or iterations <= 0:
         raise ValueError("warmup must be non-negative and iterations must be positive")
@@ -497,6 +507,7 @@ def benchmark_once(
                 aurora_draft_k=aurora_draft_k,
                 aurora_block_policy=aurora_block_policy,
                 aurora_draft_backend=aurora_draft_backend,
+                aurora_draft_resident_bytes=aurora_draft_resident_bytes,
             )
             _, ttft_peak, ttft = _run_process(
                 artifact,
@@ -539,6 +550,7 @@ def benchmark_once(
                 aurora_draft_k=aurora_draft_k,
                 aurora_block_policy=aurora_block_policy,
                 aurora_draft_backend=aurora_draft_backend,
+                aurora_draft_resident_bytes=aurora_draft_resident_bytes,
             )
             if index >= warmup:
                 samples.append(sample)
@@ -581,6 +593,7 @@ def benchmark_once(
                 aurora_draft_k=aurora_draft_k,
                 aurora_block_policy=aurora_block_policy,
                 aurora_draft_backend=aurora_draft_backend,
+                aurora_draft_resident_bytes=aurora_draft_resident_bytes,
                 diagnostics=True,
             )
             if diagnostic["token_ids"] != samples[0]["token_ids"]:
@@ -626,6 +639,7 @@ def benchmark_once(
                 aurora_draft_k=aurora_draft_k,
                 aurora_block_policy=aurora_block_policy,
                 aurora_draft_backend=aurora_draft_backend,
+                aurora_draft_resident_bytes=aurora_draft_resident_bytes,
                 diagnostics=True,
             )
             candidate, _, _ = _run_process(
@@ -662,6 +676,7 @@ def benchmark_once(
                 aurora_draft_k=aurora_draft_k,
                 aurora_block_policy=aurora_block_policy,
                 aurora_draft_backend=aurora_draft_backend,
+                aurora_draft_resident_bytes=aurora_draft_resident_bytes,
                 diagnostics=True,
             )
             max_absolute_error, max_relative_error = _numerical_errors(
@@ -712,6 +727,7 @@ def benchmark_once(
                 aurora_draft_k=aurora_draft_k,
                 aurora_block_policy=aurora_block_policy,
                 aurora_draft_backend=aurora_draft_backend,
+                aurora_draft_resident_bytes=aurora_draft_resident_bytes,
             )
             if (
                 materialized["token_ids"] != samples[0]["token_ids"]
@@ -816,6 +832,7 @@ def benchmark_once(
         "aurora_draft_k",
         "aurora_block_policy",
         "aurora_draft_backend",
+        "draft_cuda_resident_bytes",
         "draft_device",
         "draft_cuda_allocation",
         "draft_cuda_weights",
@@ -833,6 +850,8 @@ def benchmark_once(
         "draft_weight_cache_hits",
         "draft_weight_cache_misses",
         "draft_weight_cache_bypasses",
+        "draft_resident_weight_bytes",
+        "draft_peak_resident_weight_bytes",
         "draft_proposal_calls",
         "draft_candidate_tokens",
         "draft_replayed_context_tokens",
@@ -903,6 +922,7 @@ def benchmark_once(
         aurora_draft_backend
         if speculative_mode in ("aurora-replay", "aurora-persistent")
         else "none",
+        aurora_draft_resident_bytes,
     )
     option_fields = (
         "backend",
@@ -933,6 +953,7 @@ def benchmark_once(
         "aurora_draft_k",
         "aurora_block_policy",
         "aurora_draft_backend",
+        "draft_cuda_resident_bytes",
     )
     observed_options = tuple(samples[0][field] for field in option_fields)
     float_option_fields = {"routing_mass_target", "routing_min_boundary_gap"}
@@ -1164,6 +1185,7 @@ def benchmark_once(
         aurora_draft_k=samples[0]["aurora_draft_k"],
         aurora_block_policy=samples[0]["aurora_block_policy"],
         aurora_draft_backend=samples[0]["aurora_draft_backend"],
+        draft_cuda_resident_bytes=samples[0]["draft_cuda_resident_bytes"],
         draft_device=samples[0]["draft_device"],
         draft_cuda_allocation=samples[0]["draft_cuda_allocation"],
         draft_cuda_weights=samples[0]["draft_cuda_weights"],
@@ -1188,6 +1210,12 @@ def benchmark_once(
         draft_weight_cache_hits=samples[0]["draft_weight_cache_hits"],
         draft_weight_cache_misses=samples[0]["draft_weight_cache_misses"],
         draft_weight_cache_bypasses=samples[0]["draft_weight_cache_bypasses"],
+        draft_resident_weight_bytes=samples[0][
+            "draft_resident_weight_bytes"
+        ],
+        draft_peak_resident_weight_bytes=samples[0][
+            "draft_peak_resident_weight_bytes"
+        ],
         draft_proposal_calls=samples[0]["draft_proposal_calls"],
         draft_candidate_tokens=samples[0]["draft_candidate_tokens"],
         draft_replayed_context_tokens=samples[0][
@@ -1341,6 +1369,7 @@ def main() -> int:
         "--aurora-draft-backend", choices=("cpu", "cuda-custom"),
         default="cpu",
     )
+    parser.add_argument("--aurora-draft-resident-bytes", type=int, default=0)
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--csv", type=Path, required=True)
     args = parser.parse_args()
@@ -1378,6 +1407,7 @@ def main() -> int:
         aurora_draft_k=args.aurora_draft_k,
         aurora_block_policy=args.aurora_block_policy,
         aurora_draft_backend=args.aurora_draft_backend,
+        aurora_draft_resident_bytes=args.aurora_draft_resident_bytes,
     )
     write_results(result, args.json, args.csv)
     print(json.dumps(asdict(result), sort_keys=True, separators=(",", ":")))
