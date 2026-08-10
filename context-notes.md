@@ -549,3 +549,8 @@
 - Review found that `PurePosixPath` normalized repeated and dot path segments before validation. Witnessed RED cases reached shard-set comparison instead of failing as invalid index input; `ef37b96` validates original slash-separated segments first and the affected parser suite passes 71 tests.
 - Review also showed that mutually consistent JSON/CSV rehashing could alter deterministic repository, snapshot, config, index, expert-layout, or artifact identities because the strict verifier checked only a subset. Nine witnessed RED mutations now fail against independent B-0027 constants in `fb7fb49`; the committed evidence still verifies.
 - Fresh final-review gates pass CPU CTest 15/15 with pytest 462 passed/70 skipped, liburing/direct CTest 16/16 with pytest 464 passed/68 skipped, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 516 passed/16 skipped. No C++ or CUDA production path changed after the existing zero-error Compute Sanitizer run.
+
+## 2026-08-10 — Milestone 26 public integration
+
+- Public PR #44 passed both branch and pull-request correctness plus all CodeQL checks and was rebase-merged at implementation head `5b6345db`.
+- Post-merge `main` correctness `31386873905` and CodeQL `31386873928` succeeded. Node.js 20 and CodeQL Action v3 deprecation annotations remain workflow maintenance rather than correctness failures.
