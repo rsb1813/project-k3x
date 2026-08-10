@@ -753,6 +753,18 @@ Fresh verification passes CPU CTest 14/14 with pytest 284 passed/53 skipped, lib
 
 Public push and pull-request correctness runs `31346575341` and `31346587586` passed. PR #27 was rebase-merged at public integration head `c88456c0`, and post-merge `main` correctness run `31346725071` passed.
 
+### Post-B-0020 Nsight launch diagnostic
+
+- Date: 2026-08-10.
+- Commit: public documentation head `01eac162`; runtime implementation is the unchanged Milestone 19 integration.
+- Hardware: AMD Ryzen 7 9800X3D and NVIDIA GeForce RTX 5080 under WSL2 Ubuntu, CUDA 13.3 native `sm_120`, Nsight Systems 2026.1.3.
+- Model/checkpoint: B-0020 Top-16 executable synthetic artifact.
+- Mode: one instrumented fixed block-2 token-major run, CPU target, persistent CUDA Top-4 draft, exact 8 MiB resident weights, four prompt tokens and six generated tokens. No warmup or throughput sample is claimed because instrumentation changes timing.
+- Observed CUDA API counts: 1,040 kernel launches, 1,346 `cudaMemcpyAsync`, 410 `cudaStreamSynchronize`, 1,288 event creates, and 389 allocation/free pairs.
+- Observed GPU kernel instances: 520 cuBLAS GEMV, 360 native MXFP4 matvec, and 160 SiTU kernels; aggregate GPU kernel duration was approximately 1.13 ms.
+- Instrumented host API totals: approximately 35.03 ms in `cudaLaunchKernel`, 71.55 ms in `cudaMemcpyAsync`, and 0.94 ms in `cudaStreamSynchronize`. These are diagnostic attribution values, not decode/prefill TPS or uninstrumented latency.
+- Interpretation: after exact weight residency, fine-grained launches and activation copies are a stronger next boundary than stream-wait duration alone. No full-model, native-Linux, utilization, bandwidth, physical PCIe, physical NVMe, or quality claim is made.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.

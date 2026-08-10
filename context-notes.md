@@ -375,3 +375,10 @@
 - Milestone 19는 B-0019의 5,843,840~6,428,224 draft H2D bytes와 410~451 sync를 분리하기 위해 FP32 exact static residency만 바꾼다. 기존 `ResidentWeightTable` 재사용을 선택하고, dynamic L0 eviction은 policy 축으로, persistent multi-token/expert kernel은 launch 축으로, reduced precision은 quality 축으로 각각 미뤘다. Canonical B-0020은 8 MiB full-fit capacity를 사용하되 zero bypass와 actual occupancy로 full-fit을 검증하며, 속도 개선 방향은 gate로 강제하지 않는다.
 - Milestone 19 합병 직전 검증은 CPU CTest 14/14·pytest 284/53, liburing/direct CTest 15/15·pytest 290/47, ASan/UBSan CTest 15/15, CUDA CTest 23/23·pytest 328/9를 통과했다. Compute Sanitizer full-fit와 1-byte exact-bypass는 모두 `ERROR SUMMARY: 0 errors`였고 동일 토큰을 생성했다. 최종 읽기 전용 검토는 B-0016 Git blob의 raw JSON/CSV 9쌍과 summary CSV digest까지 재계산해 일치를 확인했으며 새 Critical/Important 문제를 발견하지 않았다.
 - Milestone 19 push/PR correctness run `31346575341`/`31346587586`이 통과했고 PR #27을 공개 integration head `c88456c0`로 rebase merge했다. 병합 후 `main` correctness run `31346725071`도 통과했다. README와 TITAN Ledger는 실제 공개 상태를 별도 문서 정합성 변경으로 기록한다.
+
+## 2026-08-10 Milestone 20 준비
+
+- 공개 `main` head `01eac162`에서 `codex/milestone-twenty-resident-grid` 브랜치를 시작했다. 수정 전 baseline은 CPU CTest 14/14·pytest 284 passed/53 skipped와 CUDA CTest 23/23을 통과했다.
+- B-0020 exact 8 MiB resident fixed-token 경로를 Nsight Systems 2026.1.3으로 한 번 진단했다. 5 context-prefill과 5 incremental draft forward에서 kernel launch 1,040회, async memcpy 1,346회, stream sync 410회가 발생했지만 GPU kernel 총시간은 약 1.13 ms였다. 계측된 host API 총시간은 launch 약 35.03 ms, async memcpy 약 71.55 ms, stream sync 약 0.94 ms였다. 이는 throughput 측정이 아니라 다음 경계 선택용 attribution이다.
+- 자기회귀 draft token은 이전 draft logit의 argmax에 의존하므로 여러 후보 token을 동시에 실행한다는 해석을 기각했다. 대신 동일 K3 shape의 resident expert와 독립 token 입력을 `[expert, token, row]` grid로 처리하는 계약을 선택한다. AURORA runtime은 token count 1로 multi-expert 이득만 사용하고, direct backend test가 token count 2/4를 검증한다.
+- CUDA Graph cache는 ordered routing-set 재사용률과 bounded cache policy가 미측정이라 보류했고, 전체 device-resident KDA/MLA/router/argmax graph는 correctness 변경 범위가 너무 넓어 후속 단계로 분리했다. Resident grid는 four-launch, separate output, stable CPU accumulation, whole-request serial fallback을 핵심 불변식으로 둔다.

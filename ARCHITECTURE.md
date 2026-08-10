@@ -324,6 +324,12 @@ B-0020 compares transient/resident pairs for fixed/adaptive token-major and expe
 
 This implementation is published on public `main` through PR #27 at integration head `c88456c0`. Its push, pull-request, and post-merge correctness runs all passed; publication does not promote bounded residency to a default.
 
+## Milestone 20 accepted resident expert-grid design
+
+Milestone 20 is accepted for implementation but is not yet implemented or benchmarked. The selected boundary adds an opt-in rectangular native-MXFP4 CUDA grid over resident experts and token inputs. One gate launch, one up launch, one SiTU launch, and one down launch produce separate expert/token outputs; the existing CPU router-slot loop retains exact contribution order. AURORA uses token count one because its candidates remain causally autoregressive, while direct backend tests exercise multiple tokens for later expert-major consumers.
+
+The identity requires `cuda-custom + ffn-block + reused + resident + synchronous + fusion-none`. A hard-cap miss falls back for the complete grid to the existing exact serial group path; CUDA failures do not silently fall back to CPU. CUDA Graphs, a cooperative persistent kernel, device-resident KDA/MLA/router state, reduced precision, and dynamic eviction remain separate later axes. The normative accepted design is in [`docs/superpowers/specs/2026-08-10-k3x-resident-expert-grid-design.md`](docs/superpowers/specs/2026-08-10-k3x-resident-expert-grid-design.md).
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

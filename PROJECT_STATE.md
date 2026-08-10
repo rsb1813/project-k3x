@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 19 bounded exact CUDA AURORA residency is implemented, measured, fully verified, final-reviewed, and published on public `main` through PR #27 at integration head `c88456c0`. The path is opt-in, persistent-only, fail-closed, and preserves the transient proposal/acceptance/target contract. B-0020 reduces draft weight H2D by 88.81% to 89.78%, but paired decode ranges from -2.56% to +22.67%, so CPU drafting remains the default, replay remains CPU-only, and the natural strict target verifier remains authoritative.
+Milestone 20 resident multi-token multi-expert CUDA grid is in accepted-design state on branch `codex/milestone-twenty-resident-grid`; it is not yet implemented or benchmarked. The selected opt-in boundary uses exact resident native MXFP4 weights and four grid-wide launches while preserving separate expert/token outputs and stable CPU accumulation. Milestone 19 remains the latest implemented and public runtime through PR #27 at integration head `c88456c0`.
 
-State audited on 2026-08-10 against public Milestone 19 integration head `c88456c0` and evidence head `f676957`. Fresh matrices pass CPU CTest 14/14 with Python 284 passed/53 skipped, liburing/direct CTest 15/15 with Python 290 passed/47 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 23/23 with Python 328 passed/9 skipped. Compute Sanitizer reports zero errors for both full-fit and exact-bypass resident paths. Final review found no Critical or Important issue, and public push, pull-request, and post-merge correctness runs all passed. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 against public head `01eac162` before Milestone 20 implementation. Baseline CPU CTest 14/14 with Python 284 passed/53 skipped and CUDA CTest 23/23 pass. The post-B-0020 Nsight diagnostic attributes 1,040 kernel launches and 1,346 async copies across ten draft forwards but is not a throughput benchmark. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
@@ -88,6 +88,8 @@ State audited on 2026-08-10 against public Milestone 19 integration head `c88456
 
 ## Work in progress
 
+- Milestone 20 accepted design and launch diagnostic are complete. Detailed TDD planning, implementation, B-0021, full verification, and publication remain.
+- `resident-grid` is not implemented. CUDA Graph caching, a cooperative persistent kernel, device-resident KDA/MLA/router state, reduced precision, and dynamic eviction remain outside this milestone.
 - Milestone 19 implementation, B-0020, full verification, sanitizer coverage, evidence cross-checks, final self-review, public PR integration, post-merge CI, and TITAN Ledger synchronization are complete.
 - Exact bounded CUDA residency remains opt-in and no-eviction. No default, draft precision, scheduler threshold, routing rule, or target verifier changed in Milestone 19.
 - Milestone 18 implementation, B-0019, full verification, sanitizer coverage, evidence cross-checks, TITAN Ledger synchronization, final self-review, public integration, and post-merge CI are complete.
