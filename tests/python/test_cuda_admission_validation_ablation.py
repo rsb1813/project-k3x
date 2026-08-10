@@ -1,4 +1,6 @@
 # CUDA admission validation 18행 ablation의 행렬과 증거 계약을 검증합니다.
+import csv
+import hashlib
 import json
 from pathlib import Path
 
@@ -34,7 +36,7 @@ def _payload(boundary: str, experts: int, validation: str, profiler: bool) -> di
             86_016 if not layer else 28_672 + experts * 52
         ),
         "device_to_host_bytes": iterations * (
-            57_344 + experts * 28_672 if not layer else 28_672
+            71_680 + experts * 14_336 if not layer else 28_672
         ),
         "stream_synchronization_count": iterations * (1 if layer else 4),
         "resident_weight_bytes": 100,
@@ -96,4 +98,71 @@ def test_admission_validation_ablation_cross_checks_all_rows(
     assert written["summary_csv_sha256"] == summary["summary_csv_sha256"]
     for record in summary["records"]:
         assert len(record["raw_json_sha256"]) == 64
-        assert len(record["raw_csv_sha256"]) == 64
+    assert len(list(output.glob("*.json"))) == 19
+    assert [path.name for path in output.glob("*.csv")] == ["summary.csv"]
+
+
+def test_committed_b0024_evidence_is_self_consistent() -> None:
+    root = Path(__file__).parents[2]
+    evidence = root / "results" / "b0024-cuda-admission-validation-wsl"
+    summary = json.loads(
+        (evidence / "summary.json").read_text(encoding="utf-8")
+    )
+    assert summary["benchmark"] == "B-0024"
+    assert summary["warmup"] == 3
+    assert summary["iterations"] == 20
+    assert len(list(evidence.glob("*.json"))) == 19
+    assert [path.name for path in evidence.glob("*.csv")] == ["summary.csv"]
+    records = summary["records"]
+    assert [record["name"] for record in records] == [case[0] for case in CASES]
+    for record, case in zip(records, CASES, strict=True):
+        name, boundary, experts, validation, profiler = case
+        raw_path = evidence / f"{name}.json"
+        digest = hashlib.sha256(raw_path.read_bytes()).hexdigest()
+        assert record["raw_json_sha256"] == digest
+        raw = json.loads(raw_path.read_text(encoding="utf-8"))
+        assert all(record[key] == value for key, value in raw.items())
+        layer = boundary == "moe-layer"
+        assert raw["immutable_validation_scans"] == (
+            120 if layer and validation == "per-call" else 0
+        )
+        assert raw["immutable_validation_hits"] == (
+            120 if layer and validation == "admission" else 0
+        )
+        assert raw["immutable_validation_bytes"] == (
+            20 * 469_776_384
+            if layer and validation == "per-call" else 0
+        )
+        if profiler:
+            assert isinstance(raw["kernel_nanoseconds"], int)
+            assert raw["kernel_nanoseconds"] > 0
+        else:
+            assert raw["kernel_nanoseconds"] is None
+        assert raw["maximum_absolute_error"] <= 1.0e-5
+        assert raw["weight_h2d_bytes"] == 0
+    canonical = json.dumps(
+        records, sort_keys=True, separators=(",", ":")
+    ).encode()
+    assert summary["aggregate_sha256"] == hashlib.sha256(canonical).hexdigest()
+    csv_bytes = (evidence / "summary.csv").read_bytes()
+    assert b"\r\n" not in csv_bytes
+    assert summary["summary_csv_sha256"] == hashlib.sha256(csv_bytes).hexdigest()
+    with (evidence / "summary.csv").open(
+        newline="", encoding="utf-8"
+    ) as stream:
+        csv_rows = list(csv.DictReader(stream))
+    assert [row["name"] for row in csv_rows] == [case[0] for case in CASES]
+    for experts in (1, 4, 16):
+        for profiler_name in ("off", "on"):
+            by_name = {record["name"]: record for record in records}
+            reference = by_name[
+                f"layer-{experts}-per-call-profiler-{profiler_name}"
+            ]
+            admission = by_name[
+                f"layer-{experts}-admission-profiler-{profiler_name}"
+            ]
+            expected = (
+                admission["latency_nanoseconds_median"]
+                / reference["latency_nanoseconds_median"] - 1.0
+            ) * 100.0
+            assert admission["paired_admission_latency_delta_percent"] == expected

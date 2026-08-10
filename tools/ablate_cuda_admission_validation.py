@@ -54,15 +54,6 @@ def _write_json(path: Path, payload: dict) -> None:
     )
 
 
-def _write_csv(path: Path, payload: dict) -> None:
-    with path.open("w", newline="", encoding="utf-8") as stream:
-        writer = csv.DictWriter(
-            stream, fieldnames=list(payload), lineterminator="\n"
-        )
-        writer.writeheader()
-        writer.writerow(payload)
-
-
 def _run_case(
     artifact: Path,
     runner: Path,
@@ -146,7 +137,7 @@ def _validate_record(
         86_016 if split else 28_672 + experts * 52
     )
     expected_d2h = iterations * (
-        57_344 + experts * 28_672 if split else 28_672
+        71_680 + experts * 14_336 if split else 28_672
     )
     expected_sync = iterations * (4 if split else 1)
     if (
@@ -229,14 +220,11 @@ def run_ablation(
             warmup=warmup, iterations=iterations,
         )
         json_path = output_dir / f"{name}.json"
-        csv_path = output_dir / f"{name}.csv"
         _write_json(json_path, raw)
-        _write_csv(csv_path, raw)
         records.append({
             **raw,
             "name": name,
             "raw_json_sha256": _sha256(json_path),
-            "raw_csv_sha256": _sha256(csv_path),
         })
     by_name = {record["name"]: record for record in records}
     parity_fields = (
