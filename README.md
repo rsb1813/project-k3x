@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2021-measured-20a46b?style=flat-square)](#milestone-21--resident-cuda-moe-layer)
+[![Milestone](https://img.shields.io/badge/milestone%2022-measured-20a46b?style=flat-square)](#milestone-22--released-dimension-moe-layer-boundary)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -49,6 +49,7 @@ flowchart LR
 | Milestone 19 | [PR #27 merged](https://github.com/rsb1813/project-k3x/pull/27) at `c88456c0` | B-0020 bounded exact CUDA AURORA residency; H2D reduction measured, non-default |
 | Milestone 20 | [PR #29 merged](https://github.com/rsb1813/project-k3x/pull/29) at `90b20c87` | B-0021 resident CUDA expert grid; four matched pairs preserve exact target behavior and reduce MoE launches 75% |
 | Milestone 21 | [PR #31 merged](https://github.com/rsb1813/project-k3x/pull/31) at `97eb3e4e` | B-0022 resident CUDA MoE layer; exact target behavior and lower sync/H2D/D2H, mixed decode result |
+| Milestone 22 | Current branch | B-0023 released-dimension MoE boundary; exact traffic gates pass, complete layer latency is 4.43×–15.83× split |
 
 PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 21 integration head `97eb3e4e`; its branch and pull-request correctness runs `31355460022` and `31355471896` passed, followed by successful post-merge `main` run `31355678835`.
 
@@ -302,6 +303,23 @@ Paired synthetic decode changes are **+5.62%**, **-2.75%**, **-1.22%**, and **+3
 python tools/ablate_cuda_aurora_moe_layer.py \
   --runner build-cuda/k3x_run \
   --output-dir build-results/b0022-cuda-aurora-moe-layer \
+  --warmup 3 \
+  --iterations 20
+```
+
+## Milestone 22 — released-dimension MoE-layer boundary
+
+`k3x_cuda_moe_layer_bench` loads the existing 17,547,264-byte released expert fixture, creates deterministic FP32 tensors at hidden 7,168, routed latent 3,584, and expert intermediate 3,072, and compares the split resident-grid path with the complete resident `moe-layer` path at 1, 4, and 16 repeated-view experts. The Top-16 layer occupies 750,532,608 resident weight bytes inside an explicit 1 GiB hard cap. This is a direct layer-boundary measurement with `routing_semantics=false`, not token throughput or a full checkpoint.
+
+B-0023 confirms maximum error 0, zero fallback/bypass, zero warm weight H2D, exactly 80→20 synchronizations per 20 iterations, lower activation H2D and D2H, and an exact 14,336-byte routed-norm cold/resident delta in all three pairs. Median complete-layer latency nevertheless regresses by **+1483.27%**, **+843.70%**, and **+342.62%** at 1, 4, and 16 experts.
+
+The complete boundary therefore remains diagnostic and non-default. Code inspection shows that it scans all immutable dense weights for finiteness on every call, an O(weight-bytes) host-side check absent from the split hot path. That is the next attribution target, not a measured causal conclusion yet. K3X will remove or relocate repeated validation only with admission-time correctness tests and remeasure before choosing CUDA Graph caching or a larger device-resident token boundary.
+
+```bash
+python tools/ablate_cuda_released_moe_layer.py \
+  --artifact build-fixtures/released-expert.k3x \
+  --runner build-cuda/k3x_cuda_moe_layer_bench \
+  --output-dir build-results/b0023-cuda-released-moe-layer \
   --warmup 3 \
   --iterations 20
 ```
@@ -598,6 +616,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Exact opt-in bounded CUDA AURORA draft residency with hard-cap transient bypass, separated occupancy telemetry, and B-0020 evidence.
 - [x] Exact opt-in resident multi-expert CUDA grid with all-or-nothing serial fallback, direct 1/2/4-token coverage, and B-0021 evidence.
 - [x] Exact opt-in resident CUDA MoE-layer boundary with one-result synchronization, exact split fallback, and B-0022 evidence.
+- [x] Released-dimension 1/4/16-expert MoE-layer boundary benchmark with cold/warm traffic separation, digest-backed B-0023 evidence, and no token-throughput claim.
 - [ ] Learned drafting, acceptance-aware block sizing, and cost-aware verification experiments.
 - [ ] Sensitivity-calibrated mixed trunk quantization.
 - [ ] SKYFORGE shard compiler for explicitly provisioned cloud jobs.
@@ -626,7 +645,7 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - Reusable scratch, bounded static weight residency, and same-input grouping are implemented, but activations and results still cross the host/device boundary and asynchronous overlap is not implemented.
 - Static residency has no eviction and is not the future three-tier expert cache.
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
-- Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0022 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; transient, bounded-resident, resident-grid, and resident MoE-layer CUDA drafts are exact opt-in experiments. B-0022 reduces synchronization and transfer traffic but has mixed paired decode timing, so it does not change defaults and is not full-model evidence. There is no learned DSpark drafter, reduced-precision draft path, eviction-capable draft residency, device-resident whole-token graph, or full-model speculative speedup claim.
+- Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0023 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; transient, bounded-resident, resident-grid, and resident MoE-layer CUDA drafts are exact opt-in experiments. B-0022 reduces synchronization and transfer traffic, while released-dimension B-0023 shows complete-layer latency at 4.43×–15.83× split despite the same traffic direction. Neither changes defaults or constitutes full-model evidence. There is no learned DSpark drafter, reduced-precision draft path, eviction-capable draft residency, device-resident whole-token graph, or full-model speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
 - The converter has not processed the full Kimi K3 checkpoint.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.

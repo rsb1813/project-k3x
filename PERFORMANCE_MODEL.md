@@ -160,6 +160,20 @@ The complete layer reduces activation H2D by 496 bytes per call on this fixture 
 
 Paired decode changes are mixed from -2.75% to +5.62%. Therefore reduced traffic and synchronization are established, while a throughput default is not. The next model must distinguish host orchestration/launch overhead from transfer savings at representative dimensions rather than projecting a TPS gain from bytes alone.
 
+## Milestone 22 released-dimension MoE-layer model
+
+The bounded released-size fixture fixes hidden width 7,168, routed latent width 3,584, and expert intermediate width 3,072. Its FP32 dense/vector layer weights occupy 469,776,384 bytes. Adding repeated-view native MXFP4 experts gives 487,323,648 resident bytes at one expert, 539,965,440 at four, and 750,532,608 at sixteen. The split path is exactly 14,336 bytes smaller because its routed RMSNorm remains on the CPU.
+
+| Experts | Split median | Layer median | Layer delta | Kernel total split → layer | Activation H2D reduction | D2H reduction |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 1,215,986 ns | 19,252,393 ns | +1483.274% | 15,029,568 → 19,694,880 ns | 1,145,840 B | 1,146,880 B |
+| 4 | 2,151,240 ns | 20,301,321 ns | +843.703% | 24,182,720 → 27,700,864 ns | 1,142,720 B | 2,007,040 B |
+| 16 | 5,325,364 ns | 23,571,319 ns | +342.624% | 58,867,456 → 61,588,192 ns | 1,130,240 B | 5,447,680 B |
+
+Every row uses 20 measured iterations after three warmups. Split synchronization is 80 and layer synchronization is 20; measured warm weight H2D is zero; maximum error, capacity bypass, and fallback are zero. The table is a layer-boundary measurement and has no token, prefill, TTFT, physical PCIe, or NVMe interpretation.
+
+The layer wall regression is much larger than its aggregate kernel-time increase. Source inspection identifies one unamortized term: each complete-layer call performs finiteness scans across all 469,776,384 immutable dense/vector bytes before resident lookup and launch. This is an evidence-backed hypothesis for the next attribution benchmark, not a measured decomposition. Admission-time validation must retain the same malformed/non-finite rejection contract before repeated scans can be removed.
+
 ## Required production measurements
 
 Before selecting a default storage or kernel path, the Linux target must record decode and prefill rates, TTFT, GPU utilization and memory bandwidth, VRAM and host RAM, NVMe and RAM-to-GPU GB/token, expert-cache hit rate, speculative acceptance, unique experts per block, adaptive Top-K, cold rescues, per-kernel time, and I/O stall time. Every result must carry an ablation configuration and quality mode.

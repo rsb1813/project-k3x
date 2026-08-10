@@ -335,15 +335,15 @@ git commit -m "bench: measure released MoE layers"
 - Consumes: implementation and B-0023 evidence.
 - Produces: synchronized public state and the evidence-based next boundary decision.
 
-- [ ] **Step 1: Run complete verification**
+- [x] **Step 1: Run complete verification**
 
 Run CPU, liburing/direct, ASan/UBSan, CUDA CTest and pytest matrices plus Compute Sanitizer for the new binary. Record actual counts.
 
-- [ ] **Step 2: Cross-check evidence and defaults**
+- [x] **Step 2: Cross-check evidence and defaults**
 
 Run `git diff --check`, focused B-0023 digest tests, all `CudaBoundaryMode` searches, and verify that no token/TPS field appears in B-0023.
 
-- [ ] **Step 3: Synchronize the TITAN Ledger**
+- [x] **Step 3: Synchronize the TITAN Ledger**
 
 Record measured latency, cold/warm traffic, synchronization, resident/VRAM footprint, error, and missing metrics. Accept or reject the next CUDA Graph/device-token boundary only from evidence. Update `PROJECT_STATE.md` last.
 

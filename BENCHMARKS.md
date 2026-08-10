@@ -821,6 +821,36 @@ Fresh verification passes CPU CTest 14/14 with pytest 295 passed/56 skipped, lib
 
 Public branch and pull-request correctness runs `31355460022` and `31355471896` passed, as did CodeQL run `31355471922`. PR #31 was rebase-merged at public integration head `97eb3e4e`, and post-merge `main` correctness run `31355678835` passed.
 
+## B-0023 — Milestone 22 released-dimension resident MoE-layer boundary
+
+- Date: 2026-08-10.
+- Commit: runner head `2ca2d66`; committed evidence head `7eb546e`.
+- Hardware: AMD Ryzen 7 9800X3D and NVIDIA GeForce RTX 5080 16,303 MiB under WSL2 Ubuntu 24.04.4, driver 591.86, CUDA 13.3.1 native `sm_120`.
+- Model/checkpoint: one non-executable released-dimension storage expert reused under unique logical IDs, K3X SHA-256 `e087ff78284e99760a7d113cf744562878537a6379e7a63be95585eec8b9f1be`; deterministic FP32 released-size dense/vector fixture.
+- Mode: `cuda-custom + fp32 + reused + resident + resident-grid + synchronous + fusion-none`, split `ffn-block` versus complete `moe-layer`, 1 GiB hard capacity, 3 warmups and 20 measured iterations.
+- Context length: not applicable; direct layer-boundary invocation with `routing_semantics=false`.
+- Decode tok/s, prefill tok/s, TTFT: not measured and not emitted.
+- System RAM, physical NVMe GB/token, GPU utilization, GPU memory bandwidth, and cache hit rate: not measured.
+- Average Top-K, speculative acceptance, unique experts per verification block, and cold rescue count: not applicable to this direct boundary.
+- Quality: separate split CUDA oracle; maximum absolute error 0 in all rows; no full-model or coding-quality claim.
+- Enabled optimizations: exact FP32 dense residency, native MXFP4 expert residency, resident expert grid, allocation reuse, synchronous transfer, and complete resident layer only in the layer rows.
+
+| Experts | Split median | Layer median | Layer delta | Sync split → layer | Activation H2D split → layer | D2H split → layer | Resident bytes split → layer | Peak VRAM split → layer |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 1,215,986 ns | 19,252,393 ns | +1483.274% | 80 → 20 | 1,720,320 → 574,480 B | 1,720,320 → 573,440 B | 487,309,312 → 487,323,648 B | 575,555,632 → 487,569,460 B |
+| 4 | 2,151,240 ns | 20,301,321 ns | +843.703% | 80 → 20 | 1,720,320 → 577,600 B | 2,580,480 → 573,440 B | 539,951,104 → 539,965,440 B | 628,336,832 → 540,365,008 B |
+| 16 | 5,325,364 ns | 23,571,319 ns | +342.624% | 80 → 20 | 1,720,320 → 590,080 B | 6,021,120 → 573,440 B | 750,518,272 → 750,532,608 B | 839,518,976 → 751,547,200 B |
+
+Every selected row records zero warm weight H2D, zero weight-cache bypass, zero resident-grid fallback, and zero resident-layer fallback. Split rows execute 20 grid calls, 80 grid launches, four synchronizations per iteration, and no complete-layer calls. Layer rows execute 20 grid calls, 80 grid launches, 20 complete-layer calls, 260 layer launches, and one synchronization per iteration. The layer-minus-split cold-weight and resident-weight deltas are both exactly 14,336 bytes at every expert count.
+
+The complete layer reduces measured activation H2D by 1,145,840/1,142,720/1,130,240 bytes and D2H by 1,146,880/2,007,040/5,447,680 bytes. Median latency nevertheless rises sharply. Aggregate kernel time across 20 iterations is 15,029,568→19,694,880 ns at one expert, 24,182,720→27,700,864 ns at four, and 58,867,456→61,588,192 ns at sixteen. The larger wall/kernel gap is consistent with, but does not independently prove, the per-call full dense-weight finiteness scan identified in source review.
+
+Raw JSON and summaries are under `results/b0023-cuda-released-moe-layer-wsl/`. Runner SHA-256 is `8beb1e640a36a353967d6ff6d11d6714c3ee051e2d705eb0bfe1573703ffbecc`; canonical aggregate SHA-256 is `3107101326ba5c8453a80b77d2c9673980734da09649a01dd30180385a750861`; summary JSON/CSV SHA-256 is `fd80868d232977eda1ff56ae5dc1f4eed315a6b4cff21a8c81446d1bdf4be192` / `dbe5fd62610babcf53eaa40ae0703a142a0a8507d379a0325abf525807d62f1e`. Committed-evidence tests recompute all six raw digests, the aggregate, the summary CSV digest, every pair gate, and every reported percentage.
+
+Fresh verification passes CPU CTest 14/14 with pytest 305 passed/67 skipped, liburing/direct CTest 15/15 with pytest 307 passed/65 skipped, ASan/UBSan liburing CTest 15/15, and CUDA CTest 26/26 with pytest 362 passed/10 skipped. The released one-expert complete-layer Compute Sanitizer run reports `ERROR SUMMARY: 0 errors`.
+
+The result rejects a default change and does not select CUDA Graphs. The next benchmark must preserve immutable-tensor validation while removing its repeated hot-path scan, then distinguish host validation, launch, synchronization, and kernel time before broadening the execution boundary.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
@@ -833,5 +863,6 @@ Public branch and pull-request correctness runs `31355460022` and `31355471896` 
 - Representative native-Linux persistent AURORA measurement with physical I/O, realistic acceptance, coding quality, and resident-expert pressure before any self-speculative default claim.
 - Persistent multi-token/multi-expert CUDA execution after B-0020 removes most repeated weight H2D; keep dynamic eviction/prediction and reduced precision as separate policy and quality axes.
 - Native-Linux and representative-dimension repetition of B-0022 before selecting a MoE-layer boundary or CUDA Graph strategy as a default.
+- Admission-time immutable-tensor validation plus profiler-on/off attribution and a B-0023 rerun before selecting CUDA Graphs or a larger device-resident token boundary.
 - Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.
