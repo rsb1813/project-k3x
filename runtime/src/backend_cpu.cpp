@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <unordered_set>
 #include <utility>
 
 namespace k3x {
@@ -182,6 +183,81 @@ public:
                     output.error(), output.message());
             }
             outputs.push_back(std::move(output.value().front()));
+        }
+        return Result<std::vector<std::vector<float>>>::success(
+            std::move(outputs));
+    }
+
+    Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_grid(
+        std::span<const float> inputs, std::size_t token_count,
+        std::span<const Mxfp4MlpView> experts, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) override {
+        const auto multiply_fits = [](std::size_t left, std::size_t right) {
+            return right == 0 ||
+                   left <= std::numeric_limits<std::size_t>::max() / right;
+        };
+        if (token_count == 0 || experts.empty() ||
+            experts.front().gate.cols == 0 ||
+            !multiply_fits(token_count, experts.front().gate.cols) ||
+            inputs.size() != token_count * experts.front().gate.cols ||
+            !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
+            (situ_linear &&
+             (!std::isfinite(*situ_linear) || *situ_linear <= 0.0F))) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+
+        const auto input_width = experts.front().gate.cols;
+        const auto intermediate_width = experts.front().gate.rows;
+        const auto output_width = experts.front().down.rows;
+        std::unordered_set<std::uint64_t> tensor_ids;
+        for (const auto& expert : experts) {
+            if (expert.gate.cols != input_width ||
+                expert.gate.rows != intermediate_width ||
+                expert.up.cols != input_width ||
+                expert.up.rows != intermediate_width ||
+                expert.down.cols != intermediate_width ||
+                expert.down.rows != output_width ||
+                !valid_mxfp4_mlp(inputs.first(input_width), expert)) {
+                return Result<std::vector<std::vector<float>>>::failure(
+                    ErrorCode::invalid_mxfp4);
+            }
+            for (const auto tensor_id : {
+                     expert.gate.tensor_id,
+                     expert.up.tensor_id,
+                     expert.down.tensor_id}) {
+                if (tensor_id == 0 || !tensor_ids.insert(tensor_id).second) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        ErrorCode::invalid_mxfp4);
+                }
+            }
+        }
+        if (!multiply_fits(token_count, output_width)) {
+            return Result<std::vector<std::vector<float>>>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+
+        std::vector<std::vector<float>> outputs;
+        outputs.reserve(experts.size());
+        for (const auto& expert : experts) {
+            std::vector<float> expert_outputs;
+            expert_outputs.reserve(token_count * output_width);
+            const std::span<const Mxfp4MlpView> one_expert(&expert, 1);
+            for (std::size_t token = 0; token < token_count; ++token) {
+                const auto input = inputs.subspan(
+                    token * input_width, input_width);
+                auto output = mxfp4_situ_mlp_group(
+                    input, one_expert, situ_beta, situ_linear, layer, phase);
+                if (!output) {
+                    return Result<std::vector<std::vector<float>>>::failure(
+                        output.error(), output.message());
+                }
+                expert_outputs.insert(
+                    expert_outputs.end(), output.value().front().begin(),
+                    output.value().front().end());
+            }
+            outputs.push_back(std::move(expert_outputs));
         }
         return Result<std::vector<std::vector<float>>>::success(
             std::move(outputs));

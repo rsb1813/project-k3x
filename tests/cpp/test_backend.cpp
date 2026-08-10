@@ -281,6 +281,71 @@ int main() {
         profiler.events().size() != batch_event_count) {
         return 75;
     }
+
+    const auto grid = backend->mxfp4_situ_mlp_grid(
+        flat_expert_inputs, 2, expert_mlps, 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    const std::array<std::array<float, 2>, 2> expected_grid{{
+        {0.8818111F, 0.26973557F},
+        {1.7636222F, 0.53947115F},
+    }};
+    if (!grid || grid.value().size() != expected_grid.size()) return 76;
+    for (std::size_t expert = 0; expert < expected_grid.size(); ++expert) {
+        if (grid.value()[expert].size() != expected_grid[expert].size()) {
+            return 77;
+        }
+        for (std::size_t token = 0;
+             token < expected_grid[expert].size(); ++token) {
+            if (std::abs(grid.value()[expert][token] -
+                         expected_grid[expert][token]) > 1.0e-6F) {
+                return 78;
+            }
+        }
+    }
+
+    auto duplicate_grid_experts = expert_mlps;
+    duplicate_grid_experts[1] = duplicate_grid_experts[0];
+    auto mismatched_grid_experts = expert_mlps;
+    mismatched_grid_experts[1].down.rows = 2;
+    auto zero_id_grid_experts = expert_mlps;
+    zero_id_grid_experts[0].gate.tensor_id = 0;
+    const auto grid_event_count = profiler.events().size();
+    const auto rejected_empty_grid = backend->mxfp4_situ_mlp_grid(
+        {}, 0, expert_mlps, 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    const auto rejected_no_experts_grid = backend->mxfp4_situ_mlp_grid(
+        flat_expert_inputs, 2, {}, 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    const auto rejected_short_grid = backend->mxfp4_situ_mlp_grid(
+        std::span<const float>(flat_expert_inputs).first(63), 2,
+        expert_mlps, 2.0F, 1.5F, 14, k3x::ProfilePhase::decode);
+    const auto rejected_overflow_grid = backend->mxfp4_situ_mlp_grid(
+        {}, std::numeric_limits<std::size_t>::max(), expert_mlps,
+        2.0F, 1.5F, 14, k3x::ProfilePhase::decode);
+    const auto rejected_duplicate_grid = backend->mxfp4_situ_mlp_grid(
+        flat_expert_inputs, 2, duplicate_grid_experts, 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    const auto rejected_mismatched_grid = backend->mxfp4_situ_mlp_grid(
+        flat_expert_inputs, 2, mismatched_grid_experts, 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    const auto rejected_zero_id_grid = backend->mxfp4_situ_mlp_grid(
+        flat_expert_inputs, 2, zero_id_grid_experts, 2.0F, 1.5F, 14,
+        k3x::ProfilePhase::decode);
+    if (rejected_empty_grid || rejected_no_experts_grid ||
+        rejected_short_grid || rejected_overflow_grid ||
+        rejected_duplicate_grid || rejected_mismatched_grid ||
+        rejected_zero_id_grid ||
+        rejected_empty_grid.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        rejected_no_experts_grid.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        rejected_short_grid.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        rejected_overflow_grid.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        rejected_duplicate_grid.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        rejected_mismatched_grid.error() !=
+            k3x::ErrorCode::invalid_mxfp4 ||
+        rejected_zero_id_grid.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        profiler.events().size() != grid_event_count) {
+        return 79;
+    }
     const std::array<float, 2> contributions{0.25F, -0.5F};
     const auto mixed = backend->mxfp4_situ_moe(
         mxfp4_input, expert_mlps, contributions, 2.0F, 1.5F, 14,
