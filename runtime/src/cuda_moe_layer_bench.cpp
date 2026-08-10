@@ -30,6 +30,7 @@ constexpr float kSituBeta = 4.0F;
 constexpr float kSituLinear = 25.0F;
 
 enum class Boundary { ffn_block, moe_layer };
+enum class Trace { stable_1, alternating_2, rotating_5 };
 
 struct Arguments {
     std::filesystem::path model;
@@ -44,6 +45,8 @@ struct Arguments {
     std::string graph_name{"disabled"};
     k3x::CudaGraphMode graph{k3x::CudaGraphMode::disabled};
     std::size_t graph_entries{};
+    std::string trace_name{"stable-1"};
+    Trace trace{Trace::stable_1};
     bool profiler{true};
 };
 
@@ -120,6 +123,8 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
                 return std::nullopt;
             }
             arguments.graph_entries = *parsed;
+        } else if (key == "--trace") {
+            arguments.trace_name = value;
         } else if (key == "--profiler") {
             if (value == "on") arguments.profiler = true;
             else if (value == "off") arguments.profiler = false;
@@ -175,6 +180,22 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
         (arguments.graph == k3x::CudaGraphMode::cache &&
          arguments.graph_entries == 0)) {
         std::cerr << "invalid graph entry capacity\n";
+        return std::nullopt;
+    }
+    if (arguments.trace_name == "stable-1") {
+        arguments.trace = Trace::stable_1;
+    } else if (arguments.trace_name == "alternating-2") {
+        arguments.trace = Trace::alternating_2;
+    } else if (arguments.trace_name == "rotating-5") {
+        arguments.trace = Trace::rotating_5;
+    } else {
+        std::cerr << "unknown trace: " << arguments.trace_name << '\n';
+        return std::nullopt;
+    }
+    if (arguments.trace != Trace::stable_1 &&
+        (arguments.boundary != Boundary::moe_layer ||
+         arguments.experts != 4)) {
+        std::cerr << "non-stable trace requires four-expert moe-layer boundary\n";
         return std::nullopt;
     }
     if (arguments.graph != k3x::CudaGraphMode::disabled &&
@@ -248,6 +269,38 @@ Fixture make_fixture(
     return fixture;
 }
 
+std::size_t trace_period(Trace trace) {
+    if (trace == Trace::stable_1) return 1;
+    if (trace == Trace::alternating_2) return 2;
+    return 5;
+}
+
+std::vector<std::vector<k3x::Mxfp4MlpView>> make_expert_sets(
+    const Fixture& fixture, Trace trace) {
+    static constexpr std::size_t kOrders[5][4] = {
+        {0, 1, 2, 3},
+        {1, 0, 2, 3},
+        {2, 0, 1, 3},
+        {3, 0, 1, 2},
+        {0, 2, 1, 3},
+    };
+    std::vector<std::vector<k3x::Mxfp4MlpView>> sets;
+    sets.reserve(trace_period(trace));
+    for (std::size_t set_index = 0; set_index < trace_period(trace);
+         ++set_index) {
+        std::vector<k3x::Mxfp4MlpView> experts;
+        experts.reserve(fixture.experts.size());
+        for (std::size_t slot = 0; slot < fixture.experts.size(); ++slot) {
+            const auto source = fixture.experts.size() == 4
+                ? kOrders[set_index][slot]
+                : slot;
+            experts.push_back(fixture.experts[source]);
+        }
+        sets.push_back(std::move(experts));
+    }
+    return sets;
+}
+
 std::vector<float> ordered_mix(
     const std::vector<std::vector<float>>& outputs,
     std::span<const float> contributions) {
@@ -315,9 +368,10 @@ k3x::Result<std::vector<float>> execute_split(
 }
 
 k3x::Result<std::vector<float>> execute_layer(
-    k3x::ComputeBackend& backend, const Fixture& fixture) {
+    k3x::ComputeBackend& backend, const Fixture& fixture,
+    std::span<const k3x::Mxfp4MlpView> experts) {
     auto result = backend.resident_mxfp4_moe_layer(
-        fixture.input, fixture.layer, fixture.experts, fixture.contributions,
+        fixture.input, fixture.layer, experts, fixture.contributions,
         kEpsilon, kSituBeta, kSituLinear, 1, k3x::ProfilePhase::decode);
     if (!result) {
         return k3x::Result<std::vector<float>>::failure(
@@ -371,6 +425,13 @@ std::uint64_t median(std::vector<std::uint64_t> values) {
               (values[middle] - values[middle - 1]) / 2;
 }
 
+std::uint64_t percentile(
+    std::vector<std::uint64_t> values, std::size_t numerator) {
+    std::sort(values.begin(), values.end());
+    const auto index = (values.size() - 1) * numerator / 10;
+    return values[index];
+}
+
 float maximum_error(
     std::span<const float> actual, std::span<const float> expected) {
     float result = 0.0F;
@@ -399,6 +460,7 @@ int main(int argc, char** argv) {
         return 4;
     }
     auto fixture = make_fixture(loaded.value(), arguments->experts);
+    auto expert_sets = make_expert_sets(fixture, arguments->trace);
 
     std::vector<float> oracle;
     std::uint64_t oracle_peak_vram_bytes{};
@@ -428,9 +490,12 @@ int main(int argc, char** argv) {
         write_error(backend.error(), backend.message());
         return 4;
     }
+    std::size_t trace_index{};
     const auto execute = [&]() {
+        const auto& experts = expert_sets[trace_index % expert_sets.size()];
+        ++trace_index;
         return arguments->boundary == Boundary::moe_layer
-            ? execute_layer(*backend.value(), fixture)
+            ? execute_layer(*backend.value(), fixture, experts)
             : execute_split(*backend.value(), fixture);
     };
 
@@ -492,11 +557,17 @@ int main(int argc, char** argv) {
               << ",\"validation\":\"" << arguments->validation_name << "\""
               << ",\"cuda_graph\":\"" << arguments->graph_name << "\""
               << ",\"cuda_graph_entries\":" << arguments->graph_entries
+              << ",\"trace\":\"" << arguments->trace_name << "\""
+              << ",\"trace_period\":" << trace_period(arguments->trace)
               << ",\"profiler\":"
               << (arguments->profiler ? "true" : "false")
               << ",\"maximum_absolute_error\":"
               << observed_maximum_error
               << ",\"latency_nanoseconds_median\":" << median(samples)
+              << ",\"latency_nanoseconds_p10\":"
+              << percentile(samples, 1)
+              << ",\"latency_nanoseconds_p90\":"
+              << percentile(samples, 9)
               << ",\"kernel_nanoseconds\":";
     if (arguments->profiler) {
         std::cout << profile_after.device_nanoseconds -
