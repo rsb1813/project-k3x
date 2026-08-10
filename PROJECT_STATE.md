@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 23 admission-time immutable-weight validation is implemented, measured, documented, Critical/Important re-reviewed, and publicly integrated through PR #38 at `e24cac2`. The opt-in exact resident MoE-layer path performs one transactional six-view preflight and constant-time identity hits while the general reference default remains `per-call`. Final review found and corrected one CUDA AURORA draft ownership omission; focused re-review found no remaining Critical/Important issue. B-0024 contains 18 released-dimension profiler/validation rows and no token-throughput interpretation. The next engineering gate is a bounded routed-set reuse and CUDA Graph cost study, not an automatic graph-default change.
+Milestone 24 bounded CUDA Graph cache attribution is in progress on `codex/milestone-twenty-four-cuda-graph-cache`. The accepted design keeps the exact resident MoE-layer direct path as `disabled`, separates whole-graph `update` from a hard-capped ordered-set `cache`, and requires strict failure, lifecycle, traffic, and target/draft ownership evidence before any default decision. No production graph code or B-0025 measurement is claimed yet.
 
-State audited on 2026-08-10 at public Milestone 23 integration head `e24cac2`. Fresh local verification passes CPU CTest 14/14 with Python 311 passed/68 skipped, liburing/direct CTest 15/15 with Python 313 passed/66 skipped, ASan/UBSan CTest 15/15, and CUDA CTest 26/26 with Python 369 passed/10 skipped. The post-review ownership fix also passes direct released synthetic CUDA execution and CUDA CTest 26/26. Push/PR correctness `31363433423`/`31363437230`, PR CodeQL `31363437226`, and post-merge `main` correctness/CodeQL `31363673811`/`31363673857` all passed. Focused committed-evidence verification passes 3/3, and both Compute Sanitizer paths report zero errors. No paid cloud resource or full Kimi K3 checkpoint is in use.
+State audited on 2026-08-10 at Milestone 24 design head `f41b93b` plus the current implementation plan. The isolated CUDA 13.3.73 native `sm_120` baseline passes CTest 26/26. Milestone 23 remains the latest measured public implementation at `e24cac2`, and publication reconciliation is on public `main` `08b769c`. No paid cloud resource or full Kimi K3 checkpoint is in use.
 
 ## Completed work
 
