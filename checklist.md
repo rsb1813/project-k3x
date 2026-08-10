@@ -134,7 +134,8 @@
 - [x] Compare resident MoE-layer execution, routed-set CUDA Graph caching, and a complete device token graph.
 - [x] Write and self-review the accepted dependency-closed design.
 - [x] Write and self-review the detailed TDD implementation plan.
-- [ ] Implement the CPU oracle and resident CUDA MoE-layer contract through witnessed RED/GREEN cycles.
+- [x] Implement the portable whole-layer API and exact CPU oracle through a witnessed RED/GREEN cycle.
+- [ ] Implement the low-level primitives and complete resident CUDA MoE-layer backend through witnessed RED/GREEN cycles.
 - [ ] Integrate runtime, AURORA, CLI, exact fallback, and target/draft telemetry.
 - [ ] Implement and run B-0022 plus the complete verification and sanitizer matrices.
 - [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.

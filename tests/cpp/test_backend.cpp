@@ -374,5 +374,128 @@ int main() {
         return 65;
     }
     if (profiler.events().size() != block_event_count) return 66;
+
+    std::array<float, 96> routed_down_values{};
+    routed_down_values[3] = 1.0F;
+    const std::array<float, 1> routed_norm_values{1.25F};
+    const std::array<float, 3> routed_up_values{1.0F, -0.5F, 2.0F};
+    const std::array<float, 6> shared_down_values{
+        1.0F, 2.0F, -1.0F, 0.5F, 0.25F, -0.75F};
+    const k3x::ResidentMoeLayerView layer_weights{
+        {501, routed_down_values, 32, 3},
+        {502, routed_norm_values},
+        {503, routed_up_values, 3, 1},
+        {
+            {504, dense_gate, 2, 3},
+            {505, dense_up, 2, 3},
+            {506, shared_down_values, 3, 2},
+        },
+    };
+    const std::array<float, 2> layer_contributions{0.75F, -0.25F};
+
+    const auto expected_latent = backend->dense_matvec(
+        dense_input, layer_weights.routed_down, 16,
+        k3x::ProfilePhase::decode);
+    if (!expected_latent) return 80;
+    const auto expected_experts = backend->mxfp4_situ_mlp_group(
+        expected_latent.value(), expert_mlps, 2.0F, 1.5F, 16,
+        k3x::ProfilePhase::decode);
+    if (!expected_experts) return 81;
+    std::array<float, 1> expected_mixed{};
+    for (std::size_t slot = 0; slot < expert_mlps.size(); ++slot) {
+        expected_mixed[0] +=
+            layer_contributions[slot] * expected_experts.value()[slot][0];
+    }
+    std::array<float, 1> expected_normalized{};
+    k3x::rms_norm(expected_normalized, expected_mixed, routed_norm_values,
+                  1.0e-5F);
+    const auto expected_routed = backend->dense_matvec(
+        expected_normalized, layer_weights.routed_up, 16,
+        k3x::ProfilePhase::decode);
+    const auto expected_shared = backend->dense_situ_mlp(
+        dense_input, layer_weights.shared, 2.0F, 1.5F, 16,
+        k3x::ProfilePhase::decode);
+    if (!expected_routed || !expected_shared) return 82;
+    std::array<float, 3> expected_layer_output{};
+    for (std::size_t row = 0; row < expected_layer_output.size(); ++row) {
+        expected_layer_output[row] =
+            expected_routed.value()[row] + expected_shared.value()[row];
+    }
+
+    const auto layer_result = backend->resident_mxfp4_moe_layer(
+        dense_input, layer_weights, expert_mlps, layer_contributions,
+        1.0e-5F, 2.0F, 1.5F, 16, k3x::ProfilePhase::decode);
+    if (!layer_result || !layer_result.value().executed ||
+        layer_result.value().output.size() != expected_layer_output.size()) {
+        return 83;
+    }
+    for (std::size_t row = 0; row < expected_layer_output.size(); ++row) {
+        if (std::abs(layer_result.value().output[row] -
+                     expected_layer_output[row]) > 1.0e-6F) {
+            return 84;
+        }
+    }
+
+    auto malformed_routed = layer_weights;
+    malformed_routed.routed_up.cols = 2;
+    auto malformed_shared = layer_weights;
+    malformed_shared.shared.down.rows = 2;
+    auto short_norm = layer_weights;
+    short_norm.routed_norm.values = {};
+    auto duplicate_id = layer_weights;
+    duplicate_id.routed_up.tensor_id = duplicate_id.routed_down.tensor_id;
+    auto zero_id = layer_weights;
+    zero_id.routed_norm.tensor_id = 0;
+    const std::array<float, 1> short_contributions{1.0F};
+    const std::array<float, 2> nonfinite_contributions{
+        0.75F, std::numeric_limits<float>::infinity()};
+    const auto rejected_empty_experts = backend->resident_mxfp4_moe_layer(
+        dense_input, layer_weights, {}, {}, 1.0e-5F, 2.0F, 1.5F, 16,
+        k3x::ProfilePhase::decode);
+    const auto rejected_short_contributions =
+        backend->resident_mxfp4_moe_layer(
+            dense_input, layer_weights, expert_mlps, short_contributions,
+            1.0e-5F, 2.0F, 1.5F, 16, k3x::ProfilePhase::decode);
+    const auto rejected_nonfinite = backend->resident_mxfp4_moe_layer(
+        dense_input, layer_weights, expert_mlps, nonfinite_contributions,
+        1.0e-5F, 2.0F, 1.5F, 16, k3x::ProfilePhase::decode);
+    const auto rejected_epsilon = backend->resident_mxfp4_moe_layer(
+        dense_input, layer_weights, expert_mlps, layer_contributions, 0.0F,
+        2.0F, 1.5F, 16, k3x::ProfilePhase::decode);
+    const auto rejected_routed = backend->resident_mxfp4_moe_layer(
+        dense_input, malformed_routed, expert_mlps, layer_contributions,
+        1.0e-5F, 2.0F, 1.5F, 16, k3x::ProfilePhase::decode);
+    const auto rejected_shared = backend->resident_mxfp4_moe_layer(
+        dense_input, malformed_shared, expert_mlps, layer_contributions,
+        1.0e-5F, 2.0F, 1.5F, 16, k3x::ProfilePhase::decode);
+    const auto rejected_norm = backend->resident_mxfp4_moe_layer(
+        dense_input, short_norm, expert_mlps, layer_contributions, 1.0e-5F,
+        2.0F, 1.5F, 16, k3x::ProfilePhase::decode);
+    const auto rejected_duplicate_id = backend->resident_mxfp4_moe_layer(
+        dense_input, duplicate_id, expert_mlps, layer_contributions, 1.0e-5F,
+        2.0F, 1.5F, 16, k3x::ProfilePhase::decode);
+    const auto rejected_zero_id = backend->resident_mxfp4_moe_layer(
+        dense_input, zero_id, expert_mlps, layer_contributions, 1.0e-5F,
+        2.0F, 1.5F, 16, k3x::ProfilePhase::decode);
+    const std::array rejected_layers{
+        &rejected_empty_experts, &rejected_short_contributions,
+        &rejected_nonfinite, &rejected_epsilon, &rejected_routed,
+        &rejected_shared, &rejected_norm, &rejected_duplicate_id,
+        &rejected_zero_id,
+    };
+    for (const auto* rejected_layer : rejected_layers) {
+        if (*rejected_layer ||
+            rejected_layer->error() != k3x::ErrorCode::invalid_mxfp4) {
+            return 85;
+        }
+    }
+    const auto layer_stats = backend->runtime_stats();
+    if (layer_stats.resident_moe_layer_calls != 0 ||
+        layer_stats.resident_moe_layer_experts != 0 ||
+        layer_stats.resident_moe_layer_kernel_launches != 0 ||
+        layer_stats.resident_moe_layer_fallbacks != 0 ||
+        layer_stats.resident_moe_layer_contribution_h2d_bytes != 0) {
+        return 86;
+    }
     return 0;
 }

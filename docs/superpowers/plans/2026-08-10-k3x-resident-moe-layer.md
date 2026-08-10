@@ -51,7 +51,7 @@
 - Produces: `ComputeBackend::resident_mxfp4_moe_layer(...)`.
 - Produces: five zero-default `BackendRuntimeStats::resident_moe_layer_*` counters.
 
-- [ ] **Step 1: Write the failing CPU value and validation tests**
+- [x] **Step 1: Write the failing CPU value and validation tests**
 
 Add a literal two-expert fixture to `test_backend.cpp`. Build the expected result only from existing public CPU calls and `rms_norm`, then invoke the wished-for whole-layer API.
 
@@ -71,7 +71,7 @@ assert_vector_close(layer.value().output, expected, 1.0e-6F);
 
 Add separate assertions for empty experts, mismatched contribution count, non-finite contribution, zero epsilon, malformed routed/shared dimensions, short norm vector, duplicate tensor ID, and zero tensor ID. Each must return `invalid_mxfp4` and leave all new counters zero.
 
-- [ ] **Step 2: Run RED and witness the missing API failure**
+- [x] **Step 2: Run RED and witness the missing API failure**
 
 Run:
 
@@ -81,7 +81,7 @@ cmake --build build -j 12 --target test_backend
 
 Expected: compile failure naming missing `ResidentMoeLayerView` or `resident_mxfp4_moe_layer`.
 
-- [ ] **Step 3: Add the public types, virtual contract, and zero-default counters**
+- [x] **Step 3: Add the public types, virtual contract, and zero-default counters**
 
 Add these exact public shapes to `backend.hpp`.
 
@@ -118,7 +118,7 @@ std::uint64_t resident_moe_layer_contribution_h2d_bytes{};
 
 Give the virtual method a default `backend_unavailable` body so CPU-only CUDA stubs do not need duplicate boilerplate.
 
-- [ ] **Step 4: Implement the minimal CPU oracle**
+- [x] **Step 4: Implement the minimal CPU oracle**
 
 In `backend_cpu.cpp`, prevalidate the full request and unique tensor IDs before calling any child operation. Then execute the operations in this order.
 
@@ -146,7 +146,7 @@ return Result<ResidentMoeLayerResult>::success(
 
 The CPU oracle does not increment the CUDA-specific resident-layer counters.
 
-- [ ] **Step 5: Run GREEN and the portable suite**
+- [x] **Step 5: Run GREEN and the portable suite**
 
 Run:
 
@@ -157,7 +157,7 @@ ctest --test-dir build -R "backend|ops|profile" --output-on-failure
 
 Expected: selected CTest cases pass and the new oracle validation is covered.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add runtime/include/k3x/backend.hpp runtime/src/backend_cpu.cpp tests/cpp/test_backend.cpp
