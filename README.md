@@ -49,9 +49,9 @@ flowchart LR
 | Milestone 19 | [PR #27 merged](https://github.com/rsb1813/project-k3x/pull/27) at `c88456c0` | B-0020 bounded exact CUDA AURORA residency; H2D reduction measured, non-default |
 | Milestone 20 | [PR #29 merged](https://github.com/rsb1813/project-k3x/pull/29) at `90b20c87` | B-0021 resident CUDA expert grid; four matched pairs preserve exact target behavior and reduce MoE launches 75% |
 | Milestone 21 | [PR #31 merged](https://github.com/rsb1813/project-k3x/pull/31) at `97eb3e4e` | B-0022 resident CUDA MoE layer; exact target behavior and lower sync/H2D/D2H, mixed decode result |
-| Milestone 22 | Current branch | B-0023 released-dimension MoE boundary; exact traffic gates pass, complete layer latency is 4.30×–16.69× split |
+| Milestone 22 | [PR #36 merged](https://github.com/rsb1813/project-k3x/pull/36) at `e4820a18` | B-0023 released-dimension MoE boundary; exact traffic gates pass, complete layer latency is 4.30×–16.69× split |
 
-PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 21 integration head `97eb3e4e`; its branch and pull-request correctness runs `31355460022` and `31355471896` passed, followed by successful post-merge `main` run `31355678835`.
+PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 22 integration head `e4820a18`; its branch and pull-request correctness runs `31358991710` and `31359003481` passed, followed by successful post-merge `main` correctness run `31359158926` and CodeQL run `31359158878`.
 
 ## Why a dedicated engine
 

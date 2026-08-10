@@ -849,6 +849,8 @@ Raw JSON and summaries are under `results/b0023-cuda-released-moe-layer-wsl/`. R
 
 Fresh pre-review verification passes CPU CTest 14/14 with pytest 305 passed/67 skipped, liburing/direct CTest 15/15 with pytest 307 passed/65 skipped, ASan/UBSan liburing CTest 15/15, and CUDA CTest 26/26 with pytest 362 passed/10 skipped. After the oracle-lifetime correction, CUDA CTest passes 26/26, focused live/evidence pytest passes 22/22, and the released one-expert complete-layer Compute Sanitizer run reports `ERROR SUMMARY: 0 errors`.
 
+Public branch and pull-request correctness runs `31358991710` and `31359003481` passed, as did CodeQL run `31359003436`. PR #36 was rebase-merged at public integration head `e4820a18`, followed by successful post-merge `main` correctness run `31359158926` and CodeQL run `31359158878`.
+
 The result rejects a default change and does not select CUDA Graphs. The next benchmark must preserve immutable-tensor validation while removing its repeated hot-path scan, then distinguish host validation, launch, synchronization, and kernel time before broadening the execution boundary.
 
 ## Pending benchmark gates

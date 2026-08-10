@@ -437,3 +437,8 @@
 - 회귀 테스트는 새 `oracle_peak_vram_bytes` 계약과 전체 peak의 oracle 포함을 먼저 요구해 RED를 확인했다. 수정 후 focused CUDA 22개 테스트가 통과했으며 B-0023 6행을 다시 측정했다.
 - 교정 B-0023의 layer 대비 split median 변화는 1/4/16 experts에서 +1568.624%/+783.911%/+329.883%다. Aggregate digest는 `88c51b6a58340a4325b2b09faa0fb63d1bc5f4439542261383f6070dbe526ade`, summary CSV digest는 `4a95494381c87862aa6933811248f1fd2ff35a28d88e576917da57e50e87d621`다.
 - 교정 후 최종 publication gate는 CUDA CTest 26/26, focused live/evidence pytest 22/22, released one-expert Compute Sanitizer 0 errors로 통과했다.
+
+## 2026-08-10 Milestone 22 공개 통합
+
+- 구현 PR #36의 branch/PR correctness `31358991710`/`31359003481`과 CodeQL `31359003436`이 통과했다. PR #36은 `e4820a18`로 rebase merge됐다.
+- 공개 `main`의 post-merge correctness `31359158926`과 CodeQL `31359158878`도 통과했다. README와 TITAN Ledger를 PR #36 및 공개 head 기준으로 정합화한다.
