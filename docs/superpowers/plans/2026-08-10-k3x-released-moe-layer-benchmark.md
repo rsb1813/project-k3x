@@ -33,7 +33,7 @@
 - Produces: `k3x_cuda_moe_layer_bench --model --boundary --experts --warmup --iterations`.
 - Produces internally: `Fixture make_fixture(const LoadedStorageExpert&, std::size_t)` and `Result<std::vector<float>> execute_split(ComputeBackend&, const Fixture&)`.
 
-- [ ] **Step 1: Write CLI and capability RED tests**
+- [x] **Step 1: Write CLI and capability RED tests**
 
 Create a CUDA-gated Python test that generates the bounded storage fixture and invokes both boundaries with one expert, zero warmups, and one iteration.
 
@@ -53,7 +53,7 @@ def test_released_moe_layer_bench_executes(boundary: str, tmp_path: Path) -> Non
 
 Add non-CUDA-independent argument cases for unknown boundary, experts 0/2/17, missing model, and zero iterations. Require exit 2 and exact messages.
 
-- [ ] **Step 2: Run RED and witness missing binary**
+- [x] **Step 2: Run RED and witness missing binary**
 
 Run:
 
@@ -65,7 +65,7 @@ K3X_BUILD_DIR=build-cuda K3X_TEST_CUDA=1 \
 
 Expected: live cases fail because `k3x_cuda_moe_layer_bench` does not exist.
 
-- [ ] **Step 3: Add the CUDA-only target and strict parser**
+- [x] **Step 3: Add the CUDA-only target and strict parser**
 
 Add the target only inside `if(K3X_ENABLE_CUDA)` and link `k3x_runtime`.
 
@@ -87,7 +87,7 @@ bool valid_expert_count(std::size_t value) {
 }
 ```
 
-- [ ] **Step 4: Build deterministic released-size views**
+- [x] **Step 4: Build deterministic released-size views**
 
 Define one owning fixture. Dense values use a bounded repeating pattern that is finite and nonzero but avoids overflow.
 
@@ -108,7 +108,7 @@ struct Fixture {
 
 Fill dense matrices with `((index % 17) - 8) * 1.0e-4F`, norm with `1.0F`, input with `((index % 19) - 9) * 0.01F`, and contributions with `1.0F / experts`. Reuse the loaded packed/scales spans but assign tensor IDs `1000 + expert * 3 + projection`; dense IDs occupy 100 through 105.
 
-- [ ] **Step 5: Implement exact split execution**
+- [x] **Step 5: Implement exact split execution**
 
 Execute in this order using the same backend.
 
@@ -125,11 +125,11 @@ return add(routed.value(), shared.value());
 
 The host mix loops expert-first then row-second. RMSNorm accumulates squares in `double` and uses the same epsilon order as the CPU oracle.
 
-- [ ] **Step 6: Run focused GREEN**
+- [x] **Step 6: Run focused GREEN**
 
 Build the target and run the argument plus one-expert live tests. Expected: both boundaries execute; numerical and telemetry assertions are added in Task 2.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add CMakeLists.txt runtime/src/cuda_moe_layer_bench.cpp \
