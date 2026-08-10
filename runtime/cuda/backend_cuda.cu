@@ -5,6 +5,7 @@
 #include "async_mxfp4_pipeline.cuh"
 #include "device_memory.cuh"
 #include "mxfp4.cuh"
+#include "moe_layer.cuh"
 #include "resident_weights.cuh"
 #include "situ.cuh"
 
@@ -156,7 +157,23 @@ public:
           mxfp4_scales_scratch_(&memory_stats_, &runtime_stats_),
           mxfp4_output_scratch_(&memory_stats_, &runtime_stats_),
           mxfp4_group_output_scratch_(&memory_stats_, &runtime_stats_),
-          mxfp4_descriptor_scratch_(&memory_stats_, &runtime_stats_) {
+          mxfp4_descriptor_scratch_(&memory_stats_, &runtime_stats_),
+          layer_input_scratch_(&memory_stats_, &runtime_stats_),
+          layer_routed_latent_scratch_(&memory_stats_, &runtime_stats_),
+          layer_descriptor_scratch_(&memory_stats_, &runtime_stats_),
+          layer_expert_gate_scratch_(&memory_stats_, &runtime_stats_),
+          layer_expert_up_scratch_(&memory_stats_, &runtime_stats_),
+          layer_expert_activation_scratch_(&memory_stats_, &runtime_stats_),
+          layer_expert_output_scratch_(&memory_stats_, &runtime_stats_),
+          layer_contribution_scratch_(&memory_stats_, &runtime_stats_),
+          layer_mixed_scratch_(&memory_stats_, &runtime_stats_),
+          layer_normalized_scratch_(&memory_stats_, &runtime_stats_),
+          layer_routed_hidden_scratch_(&memory_stats_, &runtime_stats_),
+          layer_shared_gate_scratch_(&memory_stats_, &runtime_stats_),
+          layer_shared_up_scratch_(&memory_stats_, &runtime_stats_),
+          layer_shared_activation_scratch_(&memory_stats_, &runtime_stats_),
+          layer_shared_hidden_scratch_(&memory_stats_, &runtime_stats_),
+          layer_final_hidden_scratch_(&memory_stats_, &runtime_stats_) {
         runtime_stats_.async_engine_count = async_engine_count;
         runtime_stats_.device_overlap = device_overlap;
         if (options_.cuda_weights == CudaWeightMode::resident) {
@@ -1134,7 +1151,8 @@ public:
         const auto operation_start = std::chrono::steady_clock::now();
         const auto precision = numeric_precision();
         if (options_.kind != BackendKind::cuda_custom ||
-            options_.cuda_boundary != CudaBoundaryMode::ffn_block ||
+            (options_.cuda_boundary != CudaBoundaryMode::ffn_block &&
+             options_.cuda_boundary != CudaBoundaryMode::moe_layer) ||
             !valid_dense_mlp(input, weights) || !std::isfinite(situ_beta) ||
             situ_beta <= 0.0F ||
             (situ_linear &&
@@ -1432,7 +1450,8 @@ public:
                    left <= std::numeric_limits<std::size_t>::max() / right;
         };
         if (options_.kind != BackendKind::cuda_custom ||
-            options_.cuda_boundary != CudaBoundaryMode::ffn_block ||
+            (options_.cuda_boundary != CudaBoundaryMode::ffn_block &&
+             options_.cuda_boundary != CudaBoundaryMode::moe_layer) ||
             options_.cuda_allocation != CudaAllocationMode::reused ||
             options_.cuda_weights != CudaWeightMode::resident ||
             options_.cuda_transfer != CudaTransferMode::synchronous ||
@@ -1707,6 +1726,483 @@ public:
             std::move(outputs));
     }
 
+    Result<ResidentMoeLayerResult> resident_mxfp4_moe_layer(
+        std::span<const float> input, ResidentMoeLayerView weights,
+        std::span<const Mxfp4MlpView> experts,
+        std::span<const float> contributions, float epsilon, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) override {
+        const auto operation_start = std::chrono::steady_clock::now();
+        constexpr auto dense_precision = NumericPrecision::fp32;
+        constexpr auto expert_precision = NumericPrecision::mxfp4_e2m1_e8m0;
+        const auto all_finite = [](std::span<const float> values) {
+            return std::all_of(values.begin(), values.end(),
+                               [](float value) { return std::isfinite(value); });
+        };
+        const auto multiply_fits = [](std::size_t left, std::size_t right) {
+            return right == 0 ||
+                   left <= std::numeric_limits<std::size_t>::max() / right;
+        };
+        if (options_.kind != BackendKind::cuda_custom ||
+            options_.dense_precision != DensePrecision::fp32 ||
+            options_.cuda_boundary != CudaBoundaryMode::moe_layer ||
+            options_.cuda_allocation != CudaAllocationMode::reused ||
+            options_.cuda_weights != CudaWeightMode::resident ||
+            options_.cuda_transfer != CudaTransferMode::synchronous ||
+            options_.cuda_batching != CudaBatchingMode::resident_grid ||
+            options_.cuda_moe_fusion != CudaMoeFusionMode::none ||
+            options_.cuda_resident_bytes == 0 || resident_weights_ == nullptr ||
+            input.empty() || experts.empty() || experts.size() > 65535 ||
+            experts.size() != contributions.size() ||
+            !std::isfinite(epsilon) || epsilon <= 0.0F ||
+            !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
+            (situ_linear &&
+             (!std::isfinite(*situ_linear) || *situ_linear <= 0.0F)) ||
+            !all_finite(input) || !all_finite(contributions) ||
+            !all_finite(weights.routed_down.values) ||
+            !all_finite(weights.routed_norm.values) ||
+            !all_finite(weights.routed_up.values) ||
+            !all_finite(weights.shared.gate.values) ||
+            !all_finite(weights.shared.up.values) ||
+            !all_finite(weights.shared.down.values) ||
+            !valid_dense(input, weights.routed_down) ||
+            !valid_dense_mlp(input, weights.shared)) {
+            return Result<ResidentMoeLayerResult>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+
+        const auto hidden_width = input.size();
+        const auto latent_width = weights.routed_down.rows;
+        const auto routed_width = experts.front().down.rows;
+        const auto intermediate_width = experts.front().gate.rows;
+        const auto shared_width = weights.shared.gate.rows;
+        if (latent_width == 0 || routed_width == 0 ||
+            intermediate_width == 0 || shared_width == 0 ||
+            latent_width > 65535 || routed_width > 65535 ||
+            intermediate_width > 65535 ||
+            weights.routed_norm.values.size() != routed_width ||
+            !valid_dense_size(routed_width, weights.routed_up) ||
+            weights.routed_up.rows != hidden_width ||
+            weights.shared.down.rows != hidden_width ||
+            !multiply_fits(experts.size(), intermediate_width) ||
+            !multiply_fits(experts.size(), routed_width)) {
+            return Result<ResidentMoeLayerResult>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+
+        std::unordered_set<std::uint64_t> tensor_ids;
+        const auto insert_id = [&tensor_ids](std::uint64_t tensor_id) {
+            return tensor_id != 0 && tensor_ids.insert(tensor_id).second;
+        };
+        if (!insert_id(weights.routed_down.tensor_id) ||
+            !insert_id(weights.routed_norm.tensor_id) ||
+            !insert_id(weights.routed_up.tensor_id) ||
+            !insert_id(weights.shared.gate.tensor_id) ||
+            !insert_id(weights.shared.up.tensor_id) ||
+            !insert_id(weights.shared.down.tensor_id)) {
+            return Result<ResidentMoeLayerResult>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+        for (const auto& expert : experts) {
+            if (expert.gate.cols != latent_width ||
+                expert.gate.rows != intermediate_width ||
+                expert.up.cols != latent_width ||
+                expert.up.rows != intermediate_width ||
+                expert.down.cols != intermediate_width ||
+                expert.down.rows != routed_width ||
+                expert.gate.group_size != 32 || expert.up.group_size != 32 ||
+                expert.down.group_size != 32 ||
+                !valid_mxfp4_size(latent_width, expert.gate) ||
+                !valid_mxfp4_size(latent_width, expert.up) ||
+                !valid_mxfp4_size(intermediate_width, expert.down) ||
+                !insert_id(expert.gate.tensor_id) ||
+                !insert_id(expert.up.tensor_id) ||
+                !insert_id(expert.down.tensor_id)) {
+                return Result<ResidentMoeLayerResult>::failure(
+                    ErrorCode::invalid_mxfp4);
+            }
+        }
+
+        const std::array dense_views{
+            weights.routed_down,
+            DenseWeightView{weights.routed_norm.tensor_id,
+                            weights.routed_norm.values, 1, routed_width},
+            weights.routed_up,
+            weights.shared.gate,
+            weights.shared.up,
+            weights.shared.down,
+        };
+        std::array<cuda::ResidentAcquisition, 6> dense_members{};
+        std::uint64_t weight_transfer_bytes = 0;
+        bool bypass = false;
+        for (std::size_t index = 0; index < dense_views.size(); ++index) {
+            const auto& view = dense_views[index];
+            const auto acquired = resident_weights_->acquire(
+                {view.tensor_id, cuda::WeightRepresentation::dense_fp32,
+                 view.rows, view.cols, 0},
+                std::as_bytes(view.values), {});
+            if (!acquired) {
+                return Result<ResidentMoeLayerResult>::failure(
+                    acquired.error(), acquired.message());
+            }
+            dense_members[index] = acquired.value();
+            bypass |= acquired.value().disposition ==
+                      cuda::ResidentDisposition::bypass;
+            weight_transfer_bytes += acquired.value().uploaded_bytes;
+        }
+
+        std::vector<cuda::Mxfp4DeviceMatrix> descriptors(experts.size() * 3);
+        for (std::size_t expert_index = 0;
+             expert_index < experts.size(); ++expert_index) {
+            const std::array expert_weights{
+                experts[expert_index].gate,
+                experts[expert_index].up,
+                experts[expert_index].down,
+            };
+            for (std::size_t projection = 0;
+                 projection < expert_weights.size(); ++projection) {
+                const auto& view = expert_weights[projection];
+                const auto acquired = resident_weights_->acquire(
+                    {view.tensor_id, cuda::WeightRepresentation::mxfp4,
+                     view.rows, view.cols, view.group_size},
+                    view.packed, view.scales);
+                if (!acquired) {
+                    return Result<ResidentMoeLayerResult>::failure(
+                        acquired.error(), acquired.message());
+                }
+                bypass |= acquired.value().disposition ==
+                          cuda::ResidentDisposition::bypass;
+                weight_transfer_bytes += acquired.value().uploaded_bytes;
+                if (acquired.value().disposition !=
+                    cuda::ResidentDisposition::bypass) {
+                    descriptors[projection * experts.size() + expert_index] = {
+                        static_cast<const std::uint8_t*>(
+                            acquired.value().primary),
+                        static_cast<const std::uint8_t*>(
+                            acquired.value().secondary),
+                    };
+                }
+            }
+        }
+        if (bypass) {
+            ++runtime_stats_.resident_moe_layer_fallbacks;
+            if (weight_transfer_bytes != 0) {
+                runtime_stats_.weight_h2d_bytes += weight_transfer_bytes;
+                record(phase, ProfileOperation::weight_host_to_device,
+                       dense_precision, layer, operation_start, 0,
+                       weight_transfer_bytes, 0, true);
+            }
+            return Result<ResidentMoeLayerResult>::success({false, {}});
+        }
+
+        std::array<DensePlan*, 5> plans{};
+        const std::array plan_views{
+            dense_views[0], dense_views[2], dense_views[3], dense_views[4],
+            dense_views[5],
+        };
+        for (std::size_t index = 0; index < plan_views.size(); ++index) {
+            const auto& view = plan_views[index];
+            const DensePlanKey key{view.rows, view.cols,
+                                   static_cast<int>(CUDA_R_32F),
+                                   static_cast<int>(CUDA_R_32F)};
+            const auto found = dense_plans_.find(key);
+            if (found != dense_plans_.end()) {
+                plans[index] = found->second.get();
+            } else {
+                auto candidate = std::make_unique<DensePlan>();
+                if (!initialize_dense_plan(*candidate, view.rows, view.cols,
+                                           CUDA_R_32F, CUDA_R_32F)) {
+                    return Result<ResidentMoeLayerResult>::failure(
+                        ErrorCode::backend_unavailable,
+                        "resident MoE layer dense plan creation failed");
+                }
+                plans[index] = candidate.get();
+                dense_plans_.emplace(key, std::move(candidate));
+            }
+        }
+
+        const auto input_bytes = input.size_bytes();
+        const auto latent_bytes = latent_width * sizeof(float);
+        const auto descriptor_bytes =
+            descriptors.size() * sizeof(cuda::Mxfp4DeviceMatrix);
+        const auto expert_intermediate_count =
+            experts.size() * intermediate_width;
+        const auto expert_intermediate_bytes =
+            expert_intermediate_count * sizeof(float);
+        const auto expert_output_count = experts.size() * routed_width;
+        const auto expert_output_bytes = expert_output_count * sizeof(float);
+        const auto contribution_bytes = contributions.size_bytes();
+        const auto routed_bytes = routed_width * sizeof(float);
+        const auto hidden_bytes = hidden_width * sizeof(float);
+        const auto shared_bytes = shared_width * sizeof(float);
+        if (layer_input_scratch_.reserve(input_bytes) != cudaSuccess ||
+            layer_routed_latent_scratch_.reserve(latent_bytes) != cudaSuccess ||
+            layer_descriptor_scratch_.reserve(descriptor_bytes) != cudaSuccess ||
+            layer_expert_gate_scratch_.reserve(expert_intermediate_bytes) !=
+                cudaSuccess ||
+            layer_expert_up_scratch_.reserve(expert_intermediate_bytes) !=
+                cudaSuccess ||
+            layer_expert_activation_scratch_.reserve(
+                expert_intermediate_bytes) != cudaSuccess ||
+            layer_expert_output_scratch_.reserve(expert_output_bytes) !=
+                cudaSuccess ||
+            layer_contribution_scratch_.reserve(contribution_bytes) !=
+                cudaSuccess ||
+            layer_mixed_scratch_.reserve(routed_bytes) != cudaSuccess ||
+            layer_normalized_scratch_.reserve(routed_bytes) != cudaSuccess ||
+            layer_routed_hidden_scratch_.reserve(hidden_bytes) != cudaSuccess ||
+            layer_shared_gate_scratch_.reserve(shared_bytes) != cudaSuccess ||
+            layer_shared_up_scratch_.reserve(shared_bytes) != cudaSuccess ||
+            layer_shared_activation_scratch_.reserve(shared_bytes) !=
+                cudaSuccess ||
+            layer_shared_hidden_scratch_.reserve(hidden_bytes) != cudaSuccess ||
+            layer_final_hidden_scratch_.reserve(hidden_bytes) != cudaSuccess) {
+            return Result<ResidentMoeLayerResult>::failure(
+                ErrorCode::backend_unavailable,
+                "resident MoE layer scratch allocation failed");
+        }
+        for (auto& event : resident_moe_layer_events_) {
+            if (event.ensure() != cudaSuccess) {
+                return Result<ResidentMoeLayerResult>::failure(
+                    ErrorCode::backend_unavailable,
+                    "resident MoE layer event creation failed");
+            }
+        }
+
+        auto* device_input = static_cast<float*>(layer_input_scratch_.get());
+        auto* device_latent =
+            static_cast<float*>(layer_routed_latent_scratch_.get());
+        auto* device_descriptors = static_cast<cuda::Mxfp4DeviceMatrix*>(
+            layer_descriptor_scratch_.get());
+        auto* device_expert_gate =
+            static_cast<float*>(layer_expert_gate_scratch_.get());
+        auto* device_expert_up =
+            static_cast<float*>(layer_expert_up_scratch_.get());
+        auto* device_expert_activation =
+            static_cast<float*>(layer_expert_activation_scratch_.get());
+        auto* device_expert_output =
+            static_cast<float*>(layer_expert_output_scratch_.get());
+        auto* device_contributions =
+            static_cast<float*>(layer_contribution_scratch_.get());
+        auto* device_mixed = static_cast<float*>(layer_mixed_scratch_.get());
+        auto* device_normalized =
+            static_cast<float*>(layer_normalized_scratch_.get());
+        auto* device_routed =
+            static_cast<float*>(layer_routed_hidden_scratch_.get());
+        auto* device_shared_gate =
+            static_cast<float*>(layer_shared_gate_scratch_.get());
+        auto* device_shared_up =
+            static_cast<float*>(layer_shared_up_scratch_.get());
+        auto* device_shared_activation =
+            static_cast<float*>(layer_shared_activation_scratch_.get());
+        auto* device_shared =
+            static_cast<float*>(layer_shared_hidden_scratch_.get());
+        auto* device_final =
+            static_cast<float*>(layer_final_hidden_scratch_.get());
+        const auto h2d_start = std::chrono::steady_clock::now();
+        if (cudaMemcpyAsync(device_input, input.data(), input_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+            cudaMemcpyAsync(device_contributions, contributions.data(),
+                            contribution_bytes, cudaMemcpyHostToDevice,
+                            stream_) != cudaSuccess ||
+            cudaMemcpyAsync(device_descriptors, descriptors.data(),
+                            descriptor_bytes, cudaMemcpyHostToDevice,
+                            stream_) != cudaSuccess) {
+            return Result<ResidentMoeLayerResult>::failure(
+                ErrorCode::backend_unavailable,
+                "resident MoE layer upload failed");
+        }
+
+        constexpr float alpha = 1.0F;
+        constexpr float beta = 0.0F;
+        const auto launch_dense = [&](std::size_t pair, DensePlan* plan,
+                                      const void* weight, const float* source,
+                                      float* output) {
+            auto& start = resident_moe_layer_events_[pair * 2];
+            auto& end = resident_moe_layer_events_[pair * 2 + 1];
+            return cudaEventRecord(start.get(), stream_) == cudaSuccess &&
+                   cublasLtMatmul(
+                       handle_, plan->operation.get(), &alpha, weight,
+                       plan->weight_layout.get(), source,
+                       plan->input_layout.get(), &beta, output,
+                       plan->output_layout.get(), output,
+                       plan->output_layout.get(), &plan->heuristic.algo,
+                       nullptr, 0, stream_) == CUBLAS_STATUS_SUCCESS &&
+                   cudaEventRecord(end.get(), stream_) == cudaSuccess;
+        };
+        const auto launch_grid = [&](std::size_t pair,
+                                     std::size_t projection,
+                                     const float* source, float* output,
+                                     std::size_t rows, std::size_t cols,
+                                     cuda::ExpertGridInputLayout layout) {
+            auto& start = resident_moe_layer_events_[pair * 2];
+            auto& end = resident_moe_layer_events_[pair * 2 + 1];
+            return cudaEventRecord(start.get(), stream_) == cudaSuccess &&
+                   cuda::launch_mxfp4_matvec_grid(
+                       source,
+                       device_descriptors + projection * experts.size(),
+                       output, rows, cols, experts.size(), 1, layout,
+                       stream_) == cudaSuccess &&
+                   cudaEventRecord(end.get(), stream_) == cudaSuccess;
+        };
+        const auto launch_simple = [&](std::size_t pair, auto&& launch) {
+            auto& start = resident_moe_layer_events_[pair * 2];
+            auto& end = resident_moe_layer_events_[pair * 2 + 1];
+            return cudaEventRecord(start.get(), stream_) == cudaSuccess &&
+                   launch() == cudaSuccess &&
+                   cudaEventRecord(end.get(), stream_) == cudaSuccess;
+        };
+        if (!launch_dense(0, plans[0], dense_members[0].primary,
+                          device_input, device_latent) ||
+            !launch_grid(1, 0, device_latent, device_expert_gate,
+                         intermediate_width, latent_width,
+                         cuda::ExpertGridInputLayout::shared_token_major) ||
+            !launch_grid(2, 1, device_latent, device_expert_up,
+                         intermediate_width, latent_width,
+                         cuda::ExpertGridInputLayout::shared_token_major) ||
+            !launch_simple(3, [&] {
+                return cuda::launch_situ_glu(
+                    device_expert_gate, device_expert_up,
+                    device_expert_activation, expert_intermediate_count,
+                    situ_beta, situ_linear.has_value(),
+                    situ_linear.value_or(0.0F), false, stream_);
+            }) ||
+            !launch_grid(4, 2, device_expert_activation,
+                         device_expert_output, routed_width,
+                         intermediate_width,
+                         cuda::ExpertGridInputLayout::expert_token_major) ||
+            !launch_simple(5, [&] {
+                return cuda::launch_ordered_expert_mix(
+                    device_expert_output, device_contributions,
+                    contributions, device_mixed, routed_width, stream_);
+            }) ||
+            !launch_simple(6, [&] {
+                return cuda::launch_strict_rms_norm(
+                    device_mixed,
+                    static_cast<const float*>(dense_members[1].primary),
+                    device_normalized, routed_width, epsilon, stream_);
+            }) ||
+            !launch_dense(7, plans[1], dense_members[2].primary,
+                          device_normalized, device_routed) ||
+            !launch_dense(8, plans[2], dense_members[3].primary,
+                          device_input, device_shared_gate) ||
+            !launch_dense(9, plans[3], dense_members[4].primary,
+                          device_input, device_shared_up) ||
+            !launch_simple(10, [&] {
+                return cuda::launch_situ_glu(
+                    device_shared_gate, device_shared_up,
+                    device_shared_activation, shared_width, situ_beta,
+                    situ_linear.has_value(), situ_linear.value_or(0.0F),
+                    false, stream_);
+            }) ||
+            !launch_dense(11, plans[4], dense_members[5].primary,
+                          device_shared_activation, device_shared) ||
+            !launch_simple(12, [&] {
+                return cuda::launch_vector_add(
+                    device_routed, device_shared, device_final,
+                    hidden_width, stream_);
+            })) {
+            return Result<ResidentMoeLayerResult>::failure(
+                ErrorCode::backend_unavailable,
+                "resident MoE layer launch failed");
+        }
+
+        std::vector<float> output(hidden_width);
+        const auto d2h_start = std::chrono::steady_clock::now();
+        if (cudaMemcpyAsync(output.data(), device_final, hidden_bytes,
+                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+            cudaStreamSynchronize(stream_) != cudaSuccess) {
+            return Result<ResidentMoeLayerResult>::failure(
+                ErrorCode::backend_unavailable,
+                "resident MoE layer output or synchronization failed");
+        }
+        std::array<std::uint64_t, 13> durations{};
+        for (std::size_t pair = 0; pair < durations.size(); ++pair) {
+            float milliseconds = 0.0F;
+            if (cudaEventElapsedTime(
+                    &milliseconds,
+                    resident_moe_layer_events_[pair * 2].get(),
+                    resident_moe_layer_events_[pair * 2 + 1].get()) !=
+                cudaSuccess) {
+                return Result<ResidentMoeLayerResult>::failure(
+                    ErrorCode::backend_unavailable,
+                    "resident MoE layer timing failed");
+            }
+            durations[pair] = static_cast<std::uint64_t>(std::llround(
+                static_cast<double>(milliseconds) * 1.0e6));
+        }
+
+        std::array<std::uint64_t, 3> expert_logical_bytes{};
+        for (const auto& expert : experts) {
+            const std::array expert_weights{
+                expert.gate, expert.up, expert.down};
+            for (std::size_t projection = 0; projection < 3; ++projection) {
+                expert_logical_bytes[projection] +=
+                    expert_weights[projection].packed.size_bytes() +
+                    expert_weights[projection].scales.size_bytes();
+            }
+        }
+        const auto activation_transfer_bytes =
+            input_bytes + contribution_bytes + descriptor_bytes;
+        ++runtime_stats_.stream_synchronization_count;
+        runtime_stats_.activation_h2d_bytes += activation_transfer_bytes;
+        runtime_stats_.weight_h2d_bytes += weight_transfer_bytes;
+        ++runtime_stats_.resident_moe_layer_calls;
+        runtime_stats_.resident_moe_layer_experts += experts.size();
+        runtime_stats_.resident_moe_layer_kernel_launches += 13;
+        runtime_stats_.resident_moe_layer_contribution_h2d_bytes +=
+            contribution_bytes;
+        ++runtime_stats_.resident_grid_calls;
+        runtime_stats_.resident_grid_experts += experts.size();
+        ++runtime_stats_.resident_grid_tokens;
+        runtime_stats_.resident_grid_expert_tokens += experts.size();
+        runtime_stats_.resident_grid_kernel_launches += 4;
+        runtime_stats_.resident_grid_descriptor_h2d_bytes += descriptor_bytes;
+        record(phase, ProfileOperation::activation_host_to_device,
+               dense_precision, layer, h2d_start, 0,
+               activation_transfer_bytes, 0, true);
+        record(phase, ProfileOperation::weight_host_to_device,
+               dense_precision, layer, operation_start, 0,
+               weight_transfer_bytes, 0, true);
+        record(phase, ProfileOperation::device_to_host, dense_precision, layer,
+               d2h_start, 0, hidden_bytes, 0, true);
+        const std::array operations{
+            ProfileOperation::dense_matvec,
+            ProfileOperation::mxfp4_matvec,
+            ProfileOperation::mxfp4_matvec,
+            ProfileOperation::situ_glu,
+            ProfileOperation::mxfp4_matvec,
+            ProfileOperation::moe_mix,
+            ProfileOperation::rms_norm,
+            ProfileOperation::dense_matvec,
+            ProfileOperation::dense_matvec,
+            ProfileOperation::dense_matvec,
+            ProfileOperation::situ_glu,
+            ProfileOperation::dense_matvec,
+            ProfileOperation::residual_add,
+        };
+        const std::array logical_bytes{
+            dense_views[0].values.size_bytes(), expert_logical_bytes[0],
+            expert_logical_bytes[1], expert_intermediate_bytes,
+            expert_logical_bytes[2], expert_output_bytes + contribution_bytes,
+            routed_bytes + dense_views[1].values.size_bytes(),
+            dense_views[2].values.size_bytes(),
+            dense_views[3].values.size_bytes(),
+            dense_views[4].values.size_bytes(), shared_bytes,
+            dense_views[5].values.size_bytes(), hidden_bytes * 2,
+        };
+        for (std::size_t index = 0; index < operations.size(); ++index) {
+            const auto precision = index >= 1 && index <= 4 && index != 3
+                                       ? expert_precision
+                                       : dense_precision;
+            record(phase, operations[index], precision, layer,
+                   operation_start, logical_bytes[index], 0,
+                   durations[index], true);
+        }
+        return Result<ResidentMoeLayerResult>::success(
+            {true, std::move(output)});
+    }
+
     Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_batch(
         std::span<const float> inputs, std::size_t batch_size,
         Mxfp4MlpView expert, float situ_beta,
@@ -1934,7 +2430,8 @@ public:
         constexpr auto precision = NumericPrecision::mxfp4_e2m1_e8m0;
         const bool fuse_outputs = !contributions.empty();
         if (options_.kind != BackendKind::cuda_custom ||
-            options_.cuda_boundary != CudaBoundaryMode::ffn_block ||
+            (options_.cuda_boundary != CudaBoundaryMode::ffn_block &&
+             options_.cuda_boundary != CudaBoundaryMode::moe_layer) ||
             (fuse_outputs && contributions.size() != experts.size()) ||
             !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
             (situ_linear &&
@@ -2709,6 +3206,22 @@ private:
     cuda::ScratchBuffer mxfp4_output_scratch_;
     cuda::ScratchBuffer mxfp4_group_output_scratch_;
     cuda::ScratchBuffer mxfp4_descriptor_scratch_;
+    cuda::ScratchBuffer layer_input_scratch_;
+    cuda::ScratchBuffer layer_routed_latent_scratch_;
+    cuda::ScratchBuffer layer_descriptor_scratch_;
+    cuda::ScratchBuffer layer_expert_gate_scratch_;
+    cuda::ScratchBuffer layer_expert_up_scratch_;
+    cuda::ScratchBuffer layer_expert_activation_scratch_;
+    cuda::ScratchBuffer layer_expert_output_scratch_;
+    cuda::ScratchBuffer layer_contribution_scratch_;
+    cuda::ScratchBuffer layer_mixed_scratch_;
+    cuda::ScratchBuffer layer_normalized_scratch_;
+    cuda::ScratchBuffer layer_routed_hidden_scratch_;
+    cuda::ScratchBuffer layer_shared_gate_scratch_;
+    cuda::ScratchBuffer layer_shared_up_scratch_;
+    cuda::ScratchBuffer layer_shared_activation_scratch_;
+    cuda::ScratchBuffer layer_shared_hidden_scratch_;
+    cuda::ScratchBuffer layer_final_hidden_scratch_;
     EventOwner dense_event_start_;
     EventOwner dense_event_end_;
     EventOwner mxfp4_event_start_;
@@ -2718,6 +3231,7 @@ private:
     std::vector<std::unique_ptr<EventOwner>> mxfp4_group_event_starts_;
     std::vector<std::unique_ptr<EventOwner>> mxfp4_group_event_ends_;
     std::array<EventOwner, 8> resident_grid_events_;
+    std::array<EventOwner, 26> resident_moe_layer_events_;
     std::map<DensePlanKey, std::unique_ptr<DensePlan>> dense_plans_;
     std::unique_ptr<cuda::ResidentWeightTable> resident_weights_;
     std::unique_ptr<cuda::AsyncMxfp4Pipeline> async_pipeline_;

@@ -493,7 +493,7 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-044 — Implement a resident rectangular expert grid before CUDA Graphs or a whole-device draft graph
 
 - Date: 2026-08-10.
-- Status: accepted; portable contract, exact CPU oracle, and low-level CUDA primitives implemented, complete CUDA path not yet implemented or benchmarked.
+- Status: accepted; portable contract, exact CPU oracle, low-level CUDA primitives, and complete resident backend implemented, runtime integration and benchmark pending.
 - Decision: add an opt-in `resident-grid` CUDA batching identity that evaluates equal-shaped native MXFP4 experts and token inputs with four grid-wide launches while returning separate expert/token outputs for the existing stable CPU accumulation order. Require exact resident weights and use whole-request serial fallback on any hard-cap bypass.
 - Alternatives considered: cache a CUDA Graph for every ordered routed-expert set; move KDA, MLA, routing, argmax, and draft state to a complete device-resident graph; first implement the smaller dependency-closed resident expert grid.
 - Evidence: B-0020 retains 410 to 451 synchronizations after removing most weight H2D. An Nsight Systems diagnostic at public head `01eac162` observed 1,040 kernel launches and 1,346 async copies across ten CUDA draft forwards, while aggregate GPU kernel duration was only about 1.13 ms. This supports reducing operation granularity before adding routing-set graph-cache policy.
@@ -526,3 +526,13 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason graph cache deferred: ordered expert-set reuse, pointer-update cost, graph count, and bounded eviction are unmeasured. Combining those policies with a new execution boundary would prevent clean attribution.
 - Reason whole-token graph deferred: KDA/MLA state, residuals, routing, logits, argmax, and rollback would all change at once.
 - Revisit: use B-0022 to decide whether the next boundary should be a CUDA Graph over the stable MoE layer or a larger device-resident token graph. Do not combine reduced precision or dynamic eviction with the first layer measurement.
+
+## D-047 — Account for the routed norm as a real L0 weight
+
+- Date: 2026-08-10.
+- Status: accepted implementation correction; benchmark pending.
+- Decision: admit the routed RMSNorm vector through the resident weight table and count its uploaded bytes as weight H2D. Compare the layer-minus-split weight-H2D delta with the resident-weight-byte delta, and gate B-0022 on lower total H2D rather than equal weight H2D.
+- Alternatives considered: exclude the norm upload from weight telemetry; classify it as activation traffic; force the split path to upload an unused norm vector; record the physical cold admission honestly.
+- Evidence: the split path executes routed RMSNorm on CPU, while exact layer execution consumes the norm on GPU. Therefore only the layer path requires the norm in L0, and equal weight H2D cannot be true on a cold process.
+- Reason accepted: reclassifying or hiding the upload would corrupt the physical traffic model, and adding an unused split upload would distort the reference merely to satisfy a benchmark gate.
+- Revisit: B-0022 must confirm the positive weight delta equals the positive resident-byte delta and that activation savings still reduce total H2D. Warm-session measurements may later separate first-admission and steady-state traffic.
