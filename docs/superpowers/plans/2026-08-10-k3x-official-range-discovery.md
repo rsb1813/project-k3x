@@ -63,7 +63,7 @@
 
 - [ ] **Step 4: Run the transport GREEN and regression gates.**
 
-  Run `python -m pytest tests/python/test_official_transport.py -q` and `python -m pytest tests/python/test_converter_source.py tests/python/test_safetensors_reader.py -q`.
+  Run `python -m pytest tests/python/test_official_transport.py -q` and `python -m pytest tests/python/test_source_manifest_integrity.py tests/python/test_safetensors_integrity.py -q`.
 
 - [ ] **Step 5: Write failing snapshot tests.**
 
@@ -86,7 +86,7 @@
 **Files:**
 - Modify: `converter/k3x_converter/safetensors_reader.py`
 - Modify: `converter/k3x_converter/official_source.py`
-- Modify: `tests/python/test_safetensors_reader.py`
+- Modify: `tests/python/test_safetensors_integrity.py`
 - Modify: `tests/python/test_official_source.py`
 
 **Interfaces:**
@@ -102,7 +102,7 @@
 
 - [ ] **Step 2: Run the parser RED gate.**
 
-  Run `python -m pytest tests/python/test_safetensors_reader.py -k parse_safetensors_header -q` and confirm the import fails for the missing helper.
+  Run `python -m pytest tests/python/test_safetensors_integrity.py -k parse_safetensors_header -q` and confirm the import fails for the missing helper.
 
 - [ ] **Step 3: Extract the shared parser minimally.**
 
@@ -110,7 +110,7 @@
 
 - [ ] **Step 4: Run parser GREEN and all source-reader regressions.**
 
-  Run `python -m pytest tests/python/test_safetensors_reader.py tests/python/test_converter_source.py tests/python/test_converter_resume.py -q`.
+  Run `python -m pytest tests/python/test_safetensors_integrity.py tests/python/test_source_manifest_integrity.py tests/python/test_converter_resume.py -q`.
 
 - [ ] **Step 5: Write failing index/config tests.**
 
@@ -138,7 +138,7 @@
 
 - [ ] **Step 11: Run Task 2 GREEN and commit.**
 
-  Run `python -m pytest tests/python/test_safetensors_reader.py tests/python/test_converter_source.py tests/python/test_converter_resume.py tests/python/test_official_source.py -q`, then commit with `feat: plan exact official expert ranges`.
+  Run `python -m pytest tests/python/test_safetensors_integrity.py tests/python/test_source_manifest_integrity.py tests/python/test_converter_resume.py tests/python/test_official_source.py -q`, then commit with `feat: plan exact official expert ranges`.
 
 ### Task 3: Atomic real-byte materialization and K3X round trip
 
@@ -245,7 +245,7 @@
 
 - [ ] **Step 1: Run focused Python verification.**
 
-  Run `python -m pytest tests/python/test_official_transport.py tests/python/test_official_source.py tests/python/test_official_discovery_cli.py tests/python/test_safetensors_reader.py tests/python/test_storage_fixture.py tests/python/test_k3x_format.py -q`.
+  Run `python -m pytest tests/python/test_official_transport.py tests/python/test_official_source.py tests/python/test_official_discovery_cli.py tests/python/test_safetensors_integrity.py tests/python/test_storage_fixture.py tests/python/test_k3x_format.py -q`.
 
 - [ ] **Step 2: Run the full CPU matrix.**
 
