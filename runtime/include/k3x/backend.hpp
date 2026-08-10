@@ -22,6 +22,7 @@ enum class CudaBatchingMode { scalar, grouped, resident_grid };
 enum class CudaBoundaryMode { operation, ffn_block, moe_layer };
 enum class CudaTransferMode { synchronous, prefetch };
 enum class CudaMoeFusionMode { none, routed_accumulate };
+enum class CudaWeightValidationMode { per_call, admission };
 
 struct BackendOptions {
     BackendKind kind{BackendKind::cpu};
@@ -32,6 +33,8 @@ struct BackendOptions {
     CudaBoundaryMode cuda_boundary{CudaBoundaryMode::operation};
     CudaTransferMode cuda_transfer{CudaTransferMode::synchronous};
     CudaMoeFusionMode cuda_moe_fusion{CudaMoeFusionMode::none};
+    CudaWeightValidationMode cuda_weight_validation{
+        CudaWeightValidationMode::per_call};
     std::uint64_t cuda_resident_bytes{};
     std::uint64_t cuda_pinned_bytes{};
 };
@@ -50,6 +53,10 @@ struct BackendRuntimeStats {
     std::uint64_t weight_cache_bypasses{};
     std::uint64_t resident_weight_bytes{};
     std::uint64_t peak_resident_weight_bytes{};
+    std::uint64_t immutable_validation_scans{};
+    std::uint64_t immutable_validation_hits{};
+    std::uint64_t immutable_validation_bytes{};
+    std::uint64_t immutable_validation_nanoseconds{};
     std::uint64_t scratch_bytes{};
     std::uint64_t peak_scratch_bytes{};
     std::uint64_t weight_h2d_bytes{};

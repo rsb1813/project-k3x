@@ -38,6 +38,10 @@ struct Arguments {
     std::size_t experts{1};
     std::size_t warmup{};
     std::size_t iterations{1};
+    std::string validation_name{"per-call"};
+    k3x::CudaWeightValidationMode validation{
+        k3x::CudaWeightValidationMode::per_call};
+    bool profiler{true};
 };
 
 struct Fixture {
@@ -102,6 +106,15 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
                 return std::nullopt;
             }
             arguments.iterations = *parsed;
+        } else if (key == "--validation") {
+            arguments.validation_name = value;
+        } else if (key == "--profiler") {
+            if (value == "on") arguments.profiler = true;
+            else if (value == "off") arguments.profiler = false;
+            else {
+                std::cerr << "unknown profiler mode: " << value << '\n';
+                return std::nullopt;
+            }
         } else {
             std::cerr << "invalid option: " << key << '\n';
             return std::nullopt;
@@ -117,6 +130,20 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
     }
     if (!valid_expert_count(arguments.experts)) {
         std::cerr << "experts must be one of 1, 4, or 16\n";
+        return std::nullopt;
+    }
+    if (arguments.validation_name == "per-call") {
+        arguments.validation = k3x::CudaWeightValidationMode::per_call;
+    } else if (arguments.validation_name == "admission") {
+        arguments.validation = k3x::CudaWeightValidationMode::admission;
+    } else {
+        std::cerr << "unknown validation mode: "
+                  << arguments.validation_name << '\n';
+        return std::nullopt;
+    }
+    if (arguments.validation == k3x::CudaWeightValidationMode::admission &&
+        arguments.boundary != Boundary::moe_layer) {
+        std::cerr << "admission validation requires moe-layer boundary\n";
         return std::nullopt;
     }
     if (arguments.iterations == 0) {
@@ -274,7 +301,10 @@ void write_error(k3x::ErrorCode code, const std::string& message) {
     std::cerr << '\n';
 }
 
-k3x::BackendOptions backend_options(Boundary boundary) {
+k3x::BackendOptions backend_options(
+    Boundary boundary,
+    k3x::CudaWeightValidationMode validation =
+        k3x::CudaWeightValidationMode::per_call) {
     k3x::BackendOptions options;
     options.kind = k3x::BackendKind::cuda_custom;
     options.dense_precision = k3x::DensePrecision::fp32;
@@ -286,6 +316,7 @@ k3x::BackendOptions backend_options(Boundary boundary) {
         : k3x::CudaBoundaryMode::ffn_block;
     options.cuda_transfer = k3x::CudaTransferMode::synchronous;
     options.cuda_moe_fusion = k3x::CudaMoeFusionMode::none;
+    options.cuda_weight_validation = validation;
     options.cuda_resident_bytes = kResidentCapacity;
     return options;
 }
@@ -349,7 +380,8 @@ int main(int argc, char** argv) {
 
     k3x::Profiler profiler;
     auto backend = k3x::make_cuda_backend(
-        backend_options(arguments->boundary), &profiler);
+        backend_options(arguments->boundary, arguments->validation),
+        arguments->profiler ? &profiler : nullptr);
     if (!backend) {
         write_error(backend.error(), backend.message());
         return 4;
@@ -415,12 +447,20 @@ int main(int argc, char** argv) {
               << ",\"resident_capacity_bytes\":" << kResidentCapacity
               << ",\"warmup\":" << arguments->warmup
               << ",\"iterations\":" << arguments->iterations
+              << ",\"validation\":\"" << arguments->validation_name << "\""
+              << ",\"profiler\":"
+              << (arguments->profiler ? "true" : "false")
               << ",\"maximum_absolute_error\":"
               << observed_maximum_error
               << ",\"latency_nanoseconds_median\":" << median(samples)
-              << ",\"kernel_nanoseconds\":"
-              << profile_after.device_nanoseconds -
-                     profile_before.device_nanoseconds
+              << ",\"kernel_nanoseconds\":";
+    if (arguments->profiler) {
+        std::cout << profile_after.device_nanoseconds -
+                         profile_before.device_nanoseconds;
+    } else {
+        std::cout << "null";
+    }
+    std::cout
               << ",\"activation_h2d_bytes\":"
               << runtime_after.activation_h2d_bytes -
                      runtime_before.activation_h2d_bytes
@@ -436,6 +476,24 @@ int main(int argc, char** argv) {
               << ",\"cold_weight_h2d_bytes\":"
               << cold_runtime_after.weight_h2d_bytes -
                      cold_runtime_before.weight_h2d_bytes
+              << ",\"cold_immutable_validation_scans\":"
+              << cold_runtime_after.immutable_validation_scans -
+                     cold_runtime_before.immutable_validation_scans
+              << ",\"cold_immutable_validation_bytes\":"
+              << cold_runtime_after.immutable_validation_bytes -
+                     cold_runtime_before.immutable_validation_bytes
+              << ",\"immutable_validation_scans\":"
+              << runtime_after.immutable_validation_scans -
+                     runtime_before.immutable_validation_scans
+              << ",\"immutable_validation_hits\":"
+              << runtime_after.immutable_validation_hits -
+                     runtime_before.immutable_validation_hits
+              << ",\"immutable_validation_bytes\":"
+              << runtime_after.immutable_validation_bytes -
+                     runtime_before.immutable_validation_bytes
+              << ",\"immutable_validation_nanoseconds\":"
+              << runtime_after.immutable_validation_nanoseconds -
+                     runtime_before.immutable_validation_nanoseconds
               << ",\"resident_weight_bytes\":"
               << runtime_after.resident_weight_bytes
               << ",\"peak_resident_weight_bytes\":"

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 
 namespace {
@@ -94,6 +95,10 @@ k3x::BackendOptions options(std::size_t capacity) {
     return result;
 }
 
+constexpr std::uint64_t immutable_bytes =
+    (latent_width * hidden_width + 1 + hidden_width +
+     2 * hidden_width + 2 * hidden_width + hidden_width * 2) * sizeof(float);
+
 bool close(float actual, float expected) {
     return std::abs(actual - expected) <= 1.0e-6F;
 }
@@ -133,7 +138,11 @@ int run_full_fit(std::size_t expert_count) {
         stats.resident_grid_calls != 1 ||
         stats.resident_grid_kernel_launches != 4 ||
         stats.stream_synchronization_count != 1 ||
-        stats.activation_h2d_bytes == 0) {
+        stats.activation_h2d_bytes == 0 ||
+        stats.immutable_validation_scans != 6 ||
+        stats.immutable_validation_hits != 0 ||
+        stats.immutable_validation_bytes != immutable_bytes ||
+        stats.immutable_validation_nanoseconds == 0) {
         return 5;
     }
     if (profiler.summary().device_to_host_bytes !=
@@ -176,10 +185,59 @@ int test_bypass_and_validation() {
     return 0;
 }
 
+int test_admission_validation() {
+    const Fixture fixture;
+    auto admission_options = options(8U * 1024U * 1024U);
+    admission_options.cuda_weight_validation =
+        k3x::CudaWeightValidationMode::admission;
+    auto backend = k3x::make_cuda_backend(admission_options);
+    if (!backend) return 20;
+    for (int call = 0; call < 2; ++call) {
+        const auto result = backend.value()->resident_mxfp4_moe_layer(
+            fixture.input, fixture.layer(), std::span(fixture.experts).first(1),
+            std::span(fixture.contributions).first(1), 1.0e-5F, 2.0F, 1.5F,
+            7, k3x::ProfilePhase::decode);
+        if (!result || !result.value().executed) return 21 + call;
+    }
+    const auto stats = backend.value()->runtime_stats();
+    if (stats.immutable_validation_scans != 6 ||
+        stats.immutable_validation_hits != 6 ||
+        stats.immutable_validation_bytes != immutable_bytes ||
+        stats.immutable_validation_nanoseconds == 0) return 23;
+
+    const Fixture different_allocation;
+    const auto resident_before = stats.resident_weight_bytes;
+    const auto rejected = backend.value()->resident_mxfp4_moe_layer(
+        different_allocation.input, different_allocation.layer(),
+        std::span(different_allocation.experts).first(1),
+        std::span(different_allocation.contributions).first(1), 1.0e-5F,
+        2.0F, 1.5F, 7, k3x::ProfilePhase::decode);
+    if (rejected || rejected.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        backend.value()->runtime_stats().resident_weight_bytes != resident_before) {
+        return 24;
+    }
+
+    Fixture nonfinite;
+    nonfinite.shared_down.back() = std::numeric_limits<float>::quiet_NaN();
+    auto atomic = k3x::make_cuda_backend(admission_options);
+    if (!atomic) return 25;
+    const auto invalid = atomic.value()->resident_mxfp4_moe_layer(
+        nonfinite.input, nonfinite.layer(), std::span(nonfinite.experts).first(1),
+        std::span(nonfinite.contributions).first(1), 1.0e-5F, 2.0F, 1.5F,
+        7, k3x::ProfilePhase::decode);
+    const auto invalid_stats = atomic.value()->runtime_stats();
+    if (invalid || invalid.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        invalid_stats.resident_weight_bytes != 0 ||
+        invalid_stats.immutable_validation_scans != 6 ||
+        invalid_stats.immutable_validation_bytes != immutable_bytes) return 26;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
     if (const auto result = run_full_fit(1)) return result;
     if (const auto result = run_full_fit(4)) return result + 20;
-    return test_bypass_and_validation();
+    if (const auto result = test_bypass_and_validation()) return result;
+    return test_admission_validation();
 }

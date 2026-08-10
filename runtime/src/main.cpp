@@ -124,6 +124,7 @@ int main(int argc, char** argv) {
     std::string cuda_boundary_name = "operation";
     std::string cuda_transfer_name = "synchronous";
     std::string cuda_moe_fusion_name = "none";
+    std::string cuda_weight_validation_name = "per-call";
     std::string cuda_resident_bytes_text = "0";
     std::string cuda_pinned_bytes_text = "0";
     std::string l1_expert_cache_name = "disabled";
@@ -173,6 +174,7 @@ int main(int argc, char** argv) {
         else if (key == "--cuda-boundary") cuda_boundary_name = value;
         else if (key == "--cuda-transfer") cuda_transfer_name = value;
         else if (key == "--cuda-moe-fusion") cuda_moe_fusion_name = value;
+        else if (key == "--cuda-weight-validation") cuda_weight_validation_name = value;
         else if (key == "--cuda-resident-bytes") cuda_resident_bytes_text = value;
         else if (key == "--cuda-pinned-bytes") cuda_pinned_bytes_text = value;
         else if (key == "--l1-expert-cache") l1_expert_cache_name = value;
@@ -701,6 +703,17 @@ int main(int argc, char** argv) {
                   << cuda_moe_fusion_name << '\n';
         return 2;
     }
+    if (cuda_weight_validation_name == "per-call") {
+        backend_options.cuda_weight_validation =
+            k3x::CudaWeightValidationMode::per_call;
+    } else if (cuda_weight_validation_name == "admission") {
+        backend_options.cuda_weight_validation =
+            k3x::CudaWeightValidationMode::admission;
+    } else {
+        std::cerr << "unknown CUDA weight validation mode: "
+                  << cuda_weight_validation_name << '\n';
+        return 2;
+    }
     const auto* resident_begin = cuda_resident_bytes_text.data();
     const auto* resident_end = resident_begin + cuda_resident_bytes_text.size();
     const auto resident_parse = std::from_chars(
@@ -733,6 +746,23 @@ int main(int argc, char** argv) {
         pinned_parse.ptr != pinned_end) {
         std::cerr << "invalid CUDA pinned byte capacity: "
                   << cuda_pinned_bytes_text << '\n';
+        return 2;
+    }
+    if (backend_options.cuda_weight_validation ==
+            k3x::CudaWeightValidationMode::admission &&
+        (backend_options.kind != k3x::BackendKind::cuda_custom ||
+         backend_options.dense_precision != k3x::DensePrecision::fp32 ||
+         backend_options.cuda_allocation != k3x::CudaAllocationMode::reused ||
+         backend_options.cuda_weights != k3x::CudaWeightMode::resident ||
+         backend_options.cuda_batching !=
+             k3x::CudaBatchingMode::resident_grid ||
+         backend_options.cuda_boundary != k3x::CudaBoundaryMode::moe_layer ||
+         backend_options.cuda_transfer !=
+             k3x::CudaTransferMode::synchronous ||
+         backend_options.cuda_moe_fusion != k3x::CudaMoeFusionMode::none ||
+         backend_options.cuda_resident_bytes == 0)) {
+        std::cerr << "admission CUDA weight validation requires resident "
+                     "cuda-custom moe-layer execution\n";
         return 2;
     }
     if (backend_options.kind == k3x::BackendKind::cpu &&
@@ -1134,6 +1164,11 @@ int main(int argc, char** argv) {
                 k3x::CudaMoeFusionMode::routed_accumulate
             ? "routed-accumulate"
             : "none";
+    const auto draft_weight_validation_name =
+        effective_draft_options.cuda_weight_validation ==
+                k3x::CudaWeightValidationMode::admission
+            ? "admission"
+            : "per-call";
     output << std::setprecision(9);
     output << "{\"backend\":";
     write_json_string(output, backend_name);
@@ -1153,6 +1188,8 @@ int main(int argc, char** argv) {
     write_json_string(output, cuda_transfer_name);
     output << ",\"cuda_moe_fusion\":";
     write_json_string(output, cuda_moe_fusion_name);
+    output << ",\"cuda_weight_validation\":";
+    write_json_string(output, cuda_weight_validation_name);
     output << ",\"cuda_resident_bytes\":"
            << effective_options.cuda_resident_bytes;
     output << ",\"cuda_pinned_bytes\":"
@@ -1209,6 +1246,8 @@ int main(int argc, char** argv) {
     write_json_string(output, draft_transfer_name);
     output << ",\"draft_cuda_moe_fusion\":";
     write_json_string(output, draft_moe_fusion_name);
+    output << ",\"draft_cuda_weight_validation\":";
+    write_json_string(output, draft_weight_validation_name);
     output << ",\"draft_kernel_nanoseconds\":"
            << draft_profile.device_nanoseconds
            << ",\"draft_host_to_device_bytes\":"
@@ -1237,6 +1276,14 @@ int main(int argc, char** argv) {
            << draft_runtime.resident_weight_bytes
            << ",\"draft_peak_resident_weight_bytes\":"
            << draft_runtime.peak_resident_weight_bytes
+           << ",\"draft_immutable_validation_scans\":"
+           << draft_runtime.immutable_validation_scans
+           << ",\"draft_immutable_validation_hits\":"
+           << draft_runtime.immutable_validation_hits
+           << ",\"draft_immutable_validation_bytes\":"
+           << draft_runtime.immutable_validation_bytes
+           << ",\"draft_immutable_validation_nanoseconds\":"
+           << draft_runtime.immutable_validation_nanoseconds
            << ",\"draft_resident_grid_calls\":"
            << draft_runtime.resident_grid_calls
            << ",\"draft_resident_grid_experts\":"
@@ -1436,6 +1483,14 @@ int main(int argc, char** argv) {
            << ",\"resident_weight_bytes\":" << runtime.resident_weight_bytes
            << ",\"peak_resident_weight_bytes\":"
            << runtime.peak_resident_weight_bytes
+           << ",\"immutable_validation_scans\":"
+           << runtime.immutable_validation_scans
+           << ",\"immutable_validation_hits\":"
+           << runtime.immutable_validation_hits
+           << ",\"immutable_validation_bytes\":"
+           << runtime.immutable_validation_bytes
+           << ",\"immutable_validation_nanoseconds\":"
+           << runtime.immutable_validation_nanoseconds
            << ",\"scratch_bytes\":" << runtime.scratch_bytes
            << ",\"peak_scratch_bytes\":" << runtime.peak_scratch_bytes
            << ",\"grouped_projection_calls\":"
