@@ -333,11 +333,11 @@ git commit -m "runtime: separate target and draft graph caches"
 - Runner emits canonical raw JSON, `summary.json`, and LF-only `summary.csv`.
 - Summary records artifact, runner, aggregate, raw, JSON, and CSV SHA-256 digests.
 
-- [ ] **Step 1: Write RED canonical-matrix tests**
+- [x] **Step 1: Write RED canonical-matrix tests**
 
 The fake runner test must assert case order, command arguments, formulas, and failures for one mutated field each: output error, graph hit/miss count, eviction count, warm weight H2D, synchronization, logical kernel count, activation H2D, and fallback.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -347,11 +347,11 @@ python -m pytest -q tests/python/test_cuda_graph_cache_ablation.py
 
 Expected: import failure because the runner does not exist.
 
-- [ ] **Step 3: Implement the 15-row matrix**
+- [x] **Step 3: Implement the 15-row matrix**
 
 For each of the three traces emit direct disabled, update-1, cache-1, cache-2, and cache-4. Require 3 warmups and 20 measured calls for formal evidence. Recompute all graph expectations from the trace and capacity rather than hardcoding summary claims.
 
-- [ ] **Step 4: Run GREEN and live one-iteration smoke**
+- [x] **Step 4: Run GREEN and live one-iteration smoke**
 
 Run:
 
