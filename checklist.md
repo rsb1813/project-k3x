@@ -202,8 +202,8 @@
 - [x] Compare API-only, full-shard-first, and pinned exact-range approaches.
 - [x] Write and self-review the accepted official range-discovery design under the standing pre-Cloud-Run approval.
 - [x] Write and self-review the detailed TDD implementation plan.
-- [ ] Implement bounded snapshot/index/config discovery through witnessed RED/GREEN cycles.
-- [ ] Implement exact expert planning and atomic range materialization through witnessed RED/GREEN cycles.
+- [x] Implement bounded snapshot/index/config discovery through witnessed RED/GREEN cycles.
+- [x] Implement exact expert planning and atomic range materialization through witnessed RED/GREEN cycles.
 - [ ] Convert and verify one live official expert slice without committing real bytes.
 - [ ] Record B-0027, run the full verification matrix, complete Critical/Important review, synchronize documentation, publish, merge, and verify public `main`.
 
