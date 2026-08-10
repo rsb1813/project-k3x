@@ -358,6 +358,14 @@ The preflight is transactional. It classifies all six immutable dense/vector vie
 
 Runtime telemetry reports immutable validation scans, identity hits, bytes, and host nanoseconds for target and draft backends. B-0024 confirms the released layer performs six cold scans and no warm scan in admission mode while retaining exact output and physical traffic parity. The result removes validation as the dominant host term but does not select CUDA Graphs or a larger token boundary.
 
+## Milestone 24 bounded ordered-set CUDA Graph execution
+
+Milestone 24 implements three explicit resident MoE-layer execution identities. `disabled` preserves the direct thirteen-operation stream and remains the default. `update` captures a fresh graph per call and attempts `cudaGraphExecUpdate` against one executable. `cache` stores a hard-capped LRU set keyed by ordered expert tensor IDs, fixed tensor identities and dimensions, scalar parameters, and scratch pointer/capacity identity. Target and persistent CUDA AURORA draft backends own separate graph mode, capacity, entries, and telemetry.
+
+Each graph entry owns the captured definition, executable, fixed page-locked input/contribution/descriptor/output staging, and timing events. Capture first validates the linear 3-H2D + 13-operation + 1-D2H topology, then inserts explicit timing event nodes around the operations. Entry publication occurs only after instantiation, execution, output copy, and timing succeed. Scratch growth clears update/cache state before reuse. Capacity eviction destroys all graph and staging resources through RAII. Capture, update, launch, allocation, and CUDA errors fail closed without direct fallback.
+
+B-0025 measures stable-one, alternating-two, and rotating-five ordered identities across direct, update-one, and cache capacities one/two/four. All 15 rows preserve exact output, zero warm weight H2D, zero fallback/bypass, one synchronization, and thirteen logical kernels per call. Stable cache rows remain 2.81%–6.48% slower than direct; rotating cache rows with 20/20 misses and evictions are 10.72%–15.86% slower. Alternating cache-four is 4.19% faster in this bounded WSL2 layer trace, but this isolated result does not justify a default. CUDA Graph execution remains implemented, experimental, and opt-in; real K3 ordered-set reuse, native-Linux end-to-end timing, dynamic residency interaction, and a whole-token device graph remain unmeasured.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.
@@ -369,7 +377,7 @@ Status meanings are strict. `Implemented` requires code and passing tests. `Expe
 | CHRONOS | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
 | BLACKSTAR | Responsibility has not been supplied or accepted | Reserved, proposed/undefined |
 | PROMETHEUS-X | DSpark-compatible speculative decoding extended with MoE-aware expert-cost scheduling | Proposed |
-| AURORA | Self-speculative K3 fast-path drafter using reduced Top-K, reduced precision, and resident experts while retaining target verification | Experimental replay, persistent reduced-Top-K CPU state, exact transient CUDA draft, bounded exact residency, resident expert-grid, resident MoE-layer execution, and admission validation implemented; CUDA paths remain non-default after B-0019 through B-0024; reduced precision, eviction-capable residency, and learned drafting proposed |
+| AURORA | Self-speculative K3 fast-path drafter using reduced Top-K, reduced precision, and resident experts while retaining target verification | Experimental replay, persistent reduced-Top-K CPU state, exact transient CUDA draft, bounded exact residency, resident expert-grid, resident MoE-layer execution, admission validation, and independent bounded CUDA Graph ownership implemented; CUDA paths remain non-default after B-0019 through B-0025; reduced precision, eviction-capable residency, and learned drafting proposed |
 | ORBIT | Multi-layer lookahead expert residency and prefetch prediction | Proposed |
 | MERCURY | Dynamic CPU/GPU expert placement using predicted transfer-plus-compute latency | Proposed |
 | HELIOS | Automatic hardware/workload tuning for cache, Top-K, speculation, I/O, and placement parameters | Proposed |

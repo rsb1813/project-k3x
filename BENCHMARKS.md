@@ -880,6 +880,43 @@ Public push and pull-request correctness runs `31363433423` and `31363437230` pa
 
 The measurement establishes repeated host validation as the dominant B-0023 wall term and accepts admission validation as an exact opt-in path. It does not promote the general default because unchanged-pointer in-place mutation is outside the admission contract, and it does not select CUDA Graphs without ordered routed-set reuse and bounded graph-cache evidence.
 
+## B-0025 — Milestone 24 bounded CUDA Graph cache attribution
+
+- Date: 2026-08-10.
+- Commit: implementation and canonical runner `77b461a`; committed evidence and verifier `708e555`.
+- Hardware: AMD Ryzen 7 9800X3D and NVIDIA GeForce RTX 5080 16,303 MiB under WSL2 Ubuntu 24.04.4, CUDA 13.3 native `sm_120`.
+- Model/checkpoint: the existing non-executable released expert fixture, SHA-256 `e087ff78284e99760a7d113cf744562878537a6379e7a63be95585eec8b9f1be`, reused as four resident logical views with five deterministic ordered permutations; released FP32 dense/vector tensors.
+- Mode: exact `cuda-custom + fp32 + reused + resident + resident-grid + moe-layer + synchronous + fusion-none + admission`; direct `disabled`, whole-executable `update-1`, and ordered-set `cache-1|2|4`; 3 warmups and 20 measured iterations.
+- Context length, decode tok/s, prefill tok/s, TTFT, average Top-K, speculative acceptance, and cold rescue: not applicable and not emitted because this directly invokes one released-dimension layer with `routing_semantics=false`.
+- System RAM, physical NVMe GB/token, physical PCIe counters, GPU utilization, GPU memory bandwidth, and coding/agentic quality: not measured.
+- Quality: maximum absolute error 0 against the separately scoped split CUDA oracle in all 15 rows.
+
+| Trace | Mode | Median | Delta vs trace direct | Hits | Misses | Evictions | Update successes |
+|---|---|---:|---:|---:|---:|---:|---:|
+| stable-1 | disabled | 1,902,148 ns | 0% | 0 | 0 | 0 | 0 |
+| stable-1 | update-1 | 2,089,830 ns | +9.867% | 0 | 0 | 0 | 20 |
+| stable-1 | cache-1 | 2,025,378 ns | +6.478% | 20 | 0 | 0 | 0 |
+| stable-1 | cache-2 | 1,955,560 ns | +2.808% | 20 | 0 | 0 | 0 |
+| stable-1 | cache-4 | 2,008,826 ns | +5.608% | 20 | 0 | 0 | 0 |
+| alternating-2 | disabled | 1,995,395 ns | 0% | 0 | 0 | 0 | 0 |
+| alternating-2 | update-1 | 2,077,815 ns | +4.131% | 0 | 0 | 0 | 20 |
+| alternating-2 | cache-1 | 2,121,700 ns | +6.330% | 0 | 20 | 20 | 0 |
+| alternating-2 | cache-2 | 1,978,799 ns | -0.832% | 20 | 0 | 0 | 0 |
+| alternating-2 | cache-4 | 1,911,701 ns | -4.194% | 20 | 0 | 0 | 0 |
+| rotating-5 | disabled | 1,903,307 ns | 0% | 0 | 0 | 0 | 0 |
+| rotating-5 | update-1 | 2,047,679 ns | +7.585% | 0 | 0 | 0 | 20 |
+| rotating-5 | cache-1 | 2,115,963 ns | +11.173% | 0 | 20 | 20 | 0 |
+| rotating-5 | cache-2 | 2,205,244 ns | +15.864% | 0 | 20 | 20 | 0 |
+| rotating-5 | cache-4 | 2,107,248 ns | +10.715% | 0 | 20 | 20 | 0 |
+
+Every row records zero measured warm weight H2D, zero cache bypass, zero grid/layer fallback, 577,600 activation-H2D bytes, 573,440 D2H bytes, 20 synchronizations, 20 complete-layer calls, 80 expert-grid launches, and 260 logical MoE-layer kernel launches. Ordered permutation changes graph identity without changing resident tensor IDs, so cache churn is not confounded by weight admission. Update succeeds on all 20 measured calls after the pre-measurement executable is established.
+
+Raw JSON/CSV and summaries are under `results/b0025-cuda-graph-cache-wsl/`. Runner SHA-256 is `6e544dd0cc24d8bfcce6524b72a5f75bd7113392a7e0c71a64ca177a50b230bd`; canonical aggregate SHA-256 is `afac1037c613ff5dcf6f625ec1ca513865adc2f19ba490218d32f9296a64f3be`; summary JSON/CSV SHA-256 is `80703c8088be99b95794142ead4df90ae433011ea619cf6fd818671ea00e2f1f` / `e1c5e57062f24330859dc5845dfbb3bf167e5c60625d879313cbf2e88514d0fb`. The independent verifier recomputes every raw JSON/CSV digest, payload, graph formula, aggregate, summary CSV digest, case order, and artifact/runner digest. Staged Git blobs were separately checked for LF-only digest parity.
+
+Fresh verification passes CPU CTest 15/15 with pytest 332 passed/70 skipped, liburing/direct CTest 16/16 with pytest 334 passed/68 skipped, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 386 passed/16 skipped. Compute Sanitizer reports `ERROR SUMMARY: 0 errors` for both a stable cache hit and an alternating capacity-one miss/eviction.
+
+The result retains direct execution as the default. Stable reuse does not overcome graph host/update overhead, and rotating churn is consistently slower. Alternating cache-four is favorable in this bounded trace, but real K3 routed-set reuse, native-Linux end-to-end token timing, dynamic residency interaction, utilization, physical traffic, and quality remain unmeasured.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
@@ -892,6 +929,6 @@ The measurement establishes repeated host validation as the dominant B-0023 wall
 - Representative native-Linux persistent AURORA measurement with physical I/O, realistic acceptance, coding quality, and resident-expert pressure before any self-speculative default claim.
 - Persistent multi-token/multi-expert CUDA execution after B-0020 removes most repeated weight H2D; keep dynamic eviction/prediction and reduced precision as separate policy and quality axes.
 - Native-Linux and representative-dimension repetition of B-0022 before selecting a MoE-layer boundary or CUDA Graph strategy as a default.
-- Ordered routed-set reuse, graph update/re-instantiation cost, and bounded graph-cache policy before selecting CUDA Graphs or a larger device-resident token boundary.
+- Real K3 ordered routed-set reuse, native-Linux end-to-end graph timing, and dynamic residency interaction before reconsidering CUDA Graphs or a larger device-resident token boundary; B-0025 keeps direct execution as the default.
 - Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.

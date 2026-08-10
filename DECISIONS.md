@@ -564,3 +564,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: opt-in ownership captures the measured speedup without weakening the reference contract or expanding the public API. Transactional six-view preflight and conflict tests preserve failure atomicity before CUDA mutation.
 - Publication: PR #38 was rebase-merged at public integration head `e24cac2`; push and pull-request correctness runs `31363433423`/`31363437230`, pull-request CodeQL `31363437226`, and post-merge `main` correctness/CodeQL `31363673811`/`31363673857` all passed.
 - Revisit: promote admission only when runtime-owned checkpoint allocations carry an enforceable immutable/prepared identity, or introduce a narrowly scoped prepared-layer handle with lifetime ownership.
+
+## D-050 — Retain bounded CUDA Graph execution as opt-in
+
+- Date: 2026-08-10.
+- Status: accepted, implemented, and measured as an experimental non-default path.
+- Decision: keep direct `disabled` execution as the default. Expose whole-executable `update` and hard-capped ordered-set `cache` only for exact FP32, reused-allocation, resident, resident-grid, admission-validated MoE-layer execution. Keep target and persistent CUDA AURORA draft ownership independent.
+- Alternatives considered: replace direct launches with one mutable graph; enable an unbounded graph per routed set; graph the whole token including KDA/MLA/router; retain only direct execution; measure one-executable update and bounded capacities one/two/four against direct execution.
+- Evidence: CUDA 13.3 graph update requires compatible topology, graph objects are not thread-safe, and the existing layer has stable resident weights and grow-only scratch but variable ordered expert identities. The implementation validates the captured 3-H2D + 13-operation + 1-D2H topology, inserts explicit timing nodes, invalidates on scratch identity changes, and owns graph resources with bounded RAII entries.
+- Benchmark result: B-0025 preserves maximum error 0, zero warm weight H2D, zero bypass/fallback, one synchronization, and thirteen logical kernels per call across 15 rows. Stable cache capacities are 2.808%–6.478% slower than direct; update is 4.131%–9.867% slower; rotating cache capacities with 20 misses and 20 evictions are 10.715%–15.864% slower. Alternating cache-two/four improve 0.832%/4.194% in the isolated WSL2 layer trace.
+- Reason accepted: the bounded implementation supplies exact lifecycle and attribution evidence without weakening the reference path. The mixed result and severe churn penalty do not support a default change.
+- Rejected default: neither the isolated alternating improvement nor synthetic AURORA ownership establishes real K3 ordered-set reuse, end-to-end token throughput, physical PCIe/NVMe traffic, or coding quality.
+- Revisit: collect real K3 routing traces and native-Linux end-to-end timing, then test interaction with dynamic L0 residency. Consider a larger device-token graph only as a separate correctness and performance decision.
