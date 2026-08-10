@@ -88,7 +88,7 @@ State audited on 2026-08-10 against public head `01eac162` before Milestone 20 i
 
 ## Work in progress
 
-- Milestone 20 accepted design and launch diagnostic are complete. Detailed TDD planning, implementation, B-0021, full verification, and publication remain.
+- Milestone 20 accepted design, launch diagnostic, and detailed TDD implementation plan are complete. Implementation, B-0021, full verification, and publication remain.
 - `resident-grid` is not implemented. CUDA Graph caching, a cooperative persistent kernel, device-resident KDA/MLA/router state, reduced precision, and dynamic eviction remain outside this milestone.
 - Milestone 19 implementation, B-0020, full verification, sanitizer coverage, evidence cross-checks, final self-review, public PR integration, post-merge CI, and TITAN Ledger synchronization are complete.
 - Exact bounded CUDA residency remains opt-in and no-eviction. No default, draft precision, scheduler threshold, routing rule, or target verifier changed in Milestone 19.
