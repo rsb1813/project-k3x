@@ -721,7 +721,7 @@ git commit -m "bench: measure resident MoE layers"
 - Consumes: all implementation commits and B-0022 evidence.
 - Produces: synchronized public evidence with no projected value presented as measured.
 
-- [ ] **Step 1: Run the complete local verification matrix**
+- [x] **Step 1: Run the complete local verification matrix**
 
 Run:
 
@@ -741,15 +741,15 @@ compute-sanitizer --tool memcheck --error-exitcode 99 build-cuda/test_cuda_moe_l
 
 Expected: every suite passes; sanitizer reports zero errors. If any count differs from the ledger, record the actual fresh count.
 
-- [ ] **Step 2: Cross-check evidence and defaults**
+- [x] **Step 2: Cross-check evidence and defaults**
 
 Run `git diff --check`, all B-0022 digest tests, and focused CLI ownership tests. Search every `CudaBoundaryMode` switch and every target/draft schema consumer. Confirm CPU, grouped, `ffn-block`, natural routing, and speculation-none defaults are unchanged.
 
-- [ ] **Step 3: Synchronize the TITAN Ledger**
+- [x] **Step 3: Synchronize the TITAN Ledger**
 
 Document actual code and measured B-0022 values. `PERFORMANCE_MODEL.md` must separate weight bytes from activation/descriptor/contribution traffic. `BENCHMARKS.md` must include missing metrics as not measured. `DECISIONS.md` must accept or reject default promotion from evidence. Update `PROJECT_STATE.md` last with the current public/local heads and next measured bottleneck.
 
-- [ ] **Step 4: Commit documentation**
+- [x] **Step 4: Commit documentation**
 
 ```bash
 git add README.md ARCHITECTURE.md PERFORMANCE_MODEL.md DECISIONS.md BENCHMARKS.md PROJECT_STATE.md checklist.md context-notes.md
