@@ -334,7 +334,7 @@ AURORA integrates the grid at token count one because draft candidates remain ca
 
 ## Milestone 21 resident MoE-layer implementation
 
-Milestone 21 is partially implemented and is not yet benchmarked. The public backend contract now defines `moe-layer`, immutable dense/vector/expert views, an explicit executed/bypass result, and zero-default CUDA telemetry. The exact CPU oracle prevalidates dimensions, finite parameters, native group-32 payloads, and unique nonzero tensor IDs before executing the complete routed-plus-shared layer. The CUDA implementation and runtime dispatch remain pending.
+Milestone 21 is partially implemented and is not yet benchmarked. The public backend contract now defines `moe-layer`, immutable dense/vector/expert views, an explicit executed/bypass result, and zero-default CUDA telemetry. The exact CPU oracle prevalidates dimensions, finite parameters, native group-32 payloads, and unique nonzero tensor IDs before executing the complete routed-plus-shared layer. Literal-tested CUDA primitives now provide router-slot ordered expert mixing, CPU-order double-accumulation RMSNorm, and final vector addition; their focused Compute Sanitizer run reports zero errors. The complete resident backend and runtime dispatch remain pending.
 
 The selected CUDA boundary keeps routing and target authority on the CPU while joining routed-down projection, the exact resident expert grid, router-slot ordered weighting, RMSNorm, routed-up projection, the shared SiTU MLP, and routed-plus-shared addition on one CUDA stream. A successful call uploads one hidden input plus contributions/descriptors, returns one hidden-width result, and synchronizes once.
 
