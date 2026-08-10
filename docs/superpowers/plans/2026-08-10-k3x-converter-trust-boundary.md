@@ -190,7 +190,7 @@ rtk git commit -m "fix: bind tensors to contained source shards"
 - Preserves: `iter_tensor_chunks(tensor: SourceTensor, chunk_bytes: int) -> Iterator[bytes]`.
 - Adds no payload residency and no new dependency.
 
-- [ ] **Step 1: Write safetensors RED tests**
+- [x] **Step 1: Write safetensors RED tests**
 
 Use a small raw shard helper so malformed headers are not normalized by the safetensors library.
 
@@ -223,7 +223,7 @@ def test_rejects_f32_shape_extent_length_mismatch(tmp_path: Path) -> None:
 
 Add one-behavior tests for duplicate JSON tensor keys, non-object root, non-object tensor metadata, missing/extra metadata keys, empty/reserved tensor name, boolean/negative shape dimension, invalid offset types, a gap before/between/after tensors, overlap, and `U8` byte-count mismatch.
 
-- [ ] **Step 2: Run Task 2 RED**
+- [x] **Step 2: Run Task 2 RED**
 
 Run:
 
@@ -235,13 +235,13 @@ Also declare a header length above the official safetensors 100 MB default witho
 
 Expected: length, duplicate-key, negative-shape, gap, and oversized-header cases pass incorrectly or leak generic exceptions.
 
-- [ ] **Step 3: Implement structural validation**
+- [x] **Step 3: Implement structural validation**
 
 In `safetensors_reader.py`, parse with a duplicate-key rejecting hook that translates all syntax/schema failures to `INVALID_SOURCE_HEADER`. Require exact tensor metadata keys, string dtype, list shape, two-item offset list, and non-boolean integers. For `F32` and `U8`, compute expected bytes with checked multiplication and require exact agreement with `end - start`. Sort ranges and require exact contiguous coverage from `data_start` through `size`; overlap or holes raise `INVALID_SOURCE_EXTENT` except overlap retains `OVERLAPPING_SOURCE_EXTENT`.
 
 Do not read payload bytes. Reject a declared header larger than the official safetensors 100 MB default before allocating or reading it; do not invent a smaller project-specific cap.
 
-- [ ] **Step 4: Run Task 2 GREEN and source regressions**
+- [x] **Step 4: Run Task 2 GREEN and source regressions**
 
 ```powershell
 rtk .\.venv\Scripts\python.exe -m pytest tests/python/test_safetensors_integrity.py tests/python/test_source_manifest_integrity.py tests/python/test_k3x_format.py tests/python/test_storage_fixture.py -q
@@ -249,7 +249,7 @@ rtk .\.venv\Scripts\python.exe -m pytest tests/python/test_safetensors_integrity
 
 Expected: all pass and valid synthetic/bounded shards remain accepted.
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2**
 
 ```powershell
 rtk git add converter/k3x_converter/safetensors_reader.py tests/python/test_safetensors_integrity.py
