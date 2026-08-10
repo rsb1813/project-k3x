@@ -1,0 +1,334 @@
+// released 크기의 resident CUDA MoE layer 경계를 직접 측정합니다.
+#include "k3x/backend.hpp"
+#include "k3x/reader.hpp"
+#include "k3x/storage_slice.hpp"
+
+#include <charconv>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <iostream>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+namespace {
+
+constexpr std::size_t kHidden = 7168;
+constexpr std::size_t kLatent = 3584;
+constexpr std::size_t kIntermediate = 3072;
+constexpr std::uint64_t kResidentCapacity = 1ULL << 30;
+constexpr float kEpsilon = 1.0e-6F;
+constexpr float kSituBeta = 4.0F;
+constexpr float kSituLinear = 25.0F;
+
+enum class Boundary { ffn_block, moe_layer };
+
+struct Arguments {
+    std::filesystem::path model;
+    std::string boundary_name{"ffn-block"};
+    Boundary boundary{Boundary::ffn_block};
+    std::size_t experts{1};
+    std::size_t warmup{};
+    std::size_t iterations{1};
+};
+
+struct Fixture {
+    std::vector<float> input;
+    std::vector<float> routed_down;
+    std::vector<float> routed_norm;
+    std::vector<float> routed_up;
+    std::vector<float> shared_gate;
+    std::vector<float> shared_up;
+    std::vector<float> shared_down;
+    std::vector<k3x::Mxfp4MlpView> experts;
+    std::vector<float> contributions;
+    k3x::ResidentMoeLayerView layer{};
+};
+
+std::optional<std::size_t> parse_size(std::string_view text) {
+    std::size_t value{};
+    const auto parsed =
+        std::from_chars(text.data(), text.data() + text.size(), value);
+    if (text.empty() || parsed.ec != std::errc{} ||
+        parsed.ptr != text.data() + text.size()) {
+        return std::nullopt;
+    }
+    return value;
+}
+
+bool valid_expert_count(std::size_t value) {
+    return value == 1 || value == 4 || value == 16;
+}
+
+std::optional<Arguments> parse_arguments(int argc, char** argv) {
+    Arguments arguments;
+    for (int index = 1; index < argc; index += 2) {
+        if (index + 1 >= argc) {
+            std::cerr << "missing option value\n";
+            return std::nullopt;
+        }
+        const std::string key = argv[index];
+        const std::string value = argv[index + 1];
+        if (key == "--model") {
+            arguments.model = value;
+        } else if (key == "--boundary") {
+            arguments.boundary_name = value;
+        } else if (key == "--experts") {
+            const auto parsed = parse_size(value);
+            if (!parsed) {
+                std::cerr << "invalid option: --experts\n";
+                return std::nullopt;
+            }
+            arguments.experts = *parsed;
+        } else if (key == "--warmup") {
+            const auto parsed = parse_size(value);
+            if (!parsed) {
+                std::cerr << "invalid option: --warmup\n";
+                return std::nullopt;
+            }
+            arguments.warmup = *parsed;
+        } else if (key == "--iterations") {
+            const auto parsed = parse_size(value);
+            if (!parsed) {
+                std::cerr << "invalid option: --iterations\n";
+                return std::nullopt;
+            }
+            arguments.iterations = *parsed;
+        } else {
+            std::cerr << "invalid option: " << key << '\n';
+            return std::nullopt;
+        }
+    }
+    if (arguments.boundary_name == "ffn-block") {
+        arguments.boundary = Boundary::ffn_block;
+    } else if (arguments.boundary_name == "moe-layer") {
+        arguments.boundary = Boundary::moe_layer;
+    } else {
+        std::cerr << "unknown boundary: " << arguments.boundary_name << '\n';
+        return std::nullopt;
+    }
+    if (!valid_expert_count(arguments.experts)) {
+        std::cerr << "experts must be one of 1, 4, or 16\n";
+        return std::nullopt;
+    }
+    if (arguments.iterations == 0) {
+        std::cerr << "iterations must be positive\n";
+        return std::nullopt;
+    }
+    if (arguments.model.empty()) {
+        std::cerr << "model path is required\n";
+        return std::nullopt;
+    }
+    return arguments;
+}
+
+void fill_dense(std::vector<float>& values) {
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        values[index] =
+            static_cast<float>(static_cast<int>(index % 17) - 8) * 1.0e-4F;
+    }
+}
+
+Fixture make_fixture(
+    const k3x::StorageExpertLoad& loaded, std::size_t expert_count) {
+    Fixture fixture;
+    fixture.input.resize(kHidden);
+    fixture.routed_down.resize(kLatent * kHidden);
+    fixture.routed_norm.assign(kLatent, 1.0F);
+    fixture.routed_up.resize(kHidden * kLatent);
+    fixture.shared_gate.resize(kIntermediate * kHidden);
+    fixture.shared_up.resize(kIntermediate * kHidden);
+    fixture.shared_down.resize(kHidden * kIntermediate);
+    for (std::size_t index = 0; index < fixture.input.size(); ++index) {
+        fixture.input[index] =
+            static_cast<float>(static_cast<int>(index % 19) - 9) * 0.01F;
+    }
+    fill_dense(fixture.routed_down);
+    fill_dense(fixture.routed_up);
+    fill_dense(fixture.shared_gate);
+    fill_dense(fixture.shared_up);
+    fill_dense(fixture.shared_down);
+
+    fixture.experts.reserve(expert_count);
+    for (std::size_t expert = 0; expert < expert_count; ++expert) {
+        const auto base = 1000 + expert * 3;
+        fixture.experts.push_back({
+            {base, loaded.extents[0], loaded.extents[1],
+             kIntermediate, kLatent, 32},
+            {base + 1, loaded.extents[2], loaded.extents[3],
+             kIntermediate, kLatent, 32},
+            {base + 2, loaded.extents[4], loaded.extents[5],
+             kLatent, kIntermediate, 32},
+        });
+    }
+    fixture.contributions.assign(
+        expert_count, 1.0F / static_cast<float>(expert_count));
+    fixture.layer = {
+        {100, fixture.routed_down, kLatent, kHidden},
+        {106, fixture.routed_norm},
+        {101, fixture.routed_up, kHidden, kLatent},
+        {
+            {102, fixture.shared_gate, kIntermediate, kHidden},
+            {103, fixture.shared_up, kIntermediate, kHidden},
+            {104, fixture.shared_down, kHidden, kIntermediate},
+        },
+    };
+    return fixture;
+}
+
+std::vector<float> ordered_mix(
+    const std::vector<std::vector<float>>& outputs,
+    std::span<const float> contributions) {
+    std::vector<float> result(outputs.front().size(), 0.0F);
+    for (std::size_t expert = 0; expert < outputs.size(); ++expert) {
+        for (std::size_t row = 0; row < result.size(); ++row) {
+            result[row] += contributions[expert] * outputs[expert][row];
+        }
+    }
+    return result;
+}
+
+std::vector<float> strict_rms_norm(
+    std::span<const float> input, std::span<const float> weight) {
+    double square_sum = 0.0;
+    for (const auto value : input) {
+        square_sum += static_cast<double>(value) * value;
+    }
+    const auto inverse = 1.0F /
+        std::sqrt(static_cast<float>(square_sum / input.size()) + kEpsilon);
+    std::vector<float> result(input.size());
+    for (std::size_t index = 0; index < input.size(); ++index) {
+        result[index] = input[index] * inverse * weight[index];
+    }
+    return result;
+}
+
+k3x::Result<std::vector<float>> execute_split(
+    k3x::ComputeBackend& backend, const Fixture& fixture) {
+    auto latent = backend.dense_matvec(
+        fixture.input, fixture.layer.routed_down, 1,
+        k3x::ProfilePhase::decode);
+    if (!latent) {
+        return k3x::Result<std::vector<float>>::failure(
+            latent.error(), latent.message());
+    }
+    auto shared = backend.dense_situ_mlp(
+        fixture.input, fixture.layer.shared, kSituBeta, kSituLinear, 1,
+        k3x::ProfilePhase::decode);
+    if (!shared) {
+        return k3x::Result<std::vector<float>>::failure(
+            shared.error(), shared.message());
+    }
+    auto expert_outputs = backend.mxfp4_situ_mlp_grid(
+        latent.value(), 1, fixture.experts, kSituBeta, kSituLinear, 1,
+        k3x::ProfilePhase::decode);
+    if (!expert_outputs) {
+        return k3x::Result<std::vector<float>>::failure(
+            expert_outputs.error(), expert_outputs.message());
+    }
+    auto normalized = strict_rms_norm(
+        ordered_mix(expert_outputs.value(), fixture.contributions),
+        fixture.routed_norm);
+    auto routed = backend.dense_matvec(
+        normalized, fixture.layer.routed_up, 1, k3x::ProfilePhase::decode);
+    if (!routed) {
+        return k3x::Result<std::vector<float>>::failure(
+            routed.error(), routed.message());
+    }
+    for (std::size_t row = 0; row < routed.value().size(); ++row) {
+        routed.value()[row] += shared.value()[row];
+    }
+    return k3x::Result<std::vector<float>>::success(
+        std::move(routed.value()));
+}
+
+k3x::Result<std::vector<float>> execute_layer(
+    k3x::ComputeBackend& backend, const Fixture& fixture) {
+    auto result = backend.resident_mxfp4_moe_layer(
+        fixture.input, fixture.layer, fixture.experts, fixture.contributions,
+        kEpsilon, kSituBeta, kSituLinear, 1, k3x::ProfilePhase::decode);
+    if (!result) {
+        return k3x::Result<std::vector<float>>::failure(
+            result.error(), result.message());
+    }
+    if (!result.value().executed) {
+        return k3x::Result<std::vector<float>>::failure(
+            k3x::ErrorCode::backend_unavailable,
+            "resident MoE layer bypassed hard capacity");
+    }
+    return k3x::Result<std::vector<float>>::success(
+        std::move(result.value().output));
+}
+
+void write_error(k3x::ErrorCode code, const std::string& message) {
+    std::cerr << k3x::error_code_name(code);
+    if (!message.empty()) std::cerr << ": " << message;
+    std::cerr << '\n';
+}
+
+k3x::BackendOptions backend_options(Boundary boundary) {
+    k3x::BackendOptions options;
+    options.kind = k3x::BackendKind::cuda_custom;
+    options.dense_precision = k3x::DensePrecision::fp32;
+    options.cuda_allocation = k3x::CudaAllocationMode::reused;
+    options.cuda_weights = k3x::CudaWeightMode::resident;
+    options.cuda_batching = k3x::CudaBatchingMode::resident_grid;
+    options.cuda_boundary = boundary == Boundary::moe_layer
+        ? k3x::CudaBoundaryMode::moe_layer
+        : k3x::CudaBoundaryMode::ffn_block;
+    options.cuda_transfer = k3x::CudaTransferMode::synchronous;
+    options.cuda_moe_fusion = k3x::CudaMoeFusionMode::none;
+    options.cuda_resident_bytes = kResidentCapacity;
+    return options;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+    const auto arguments = parse_arguments(argc, argv);
+    if (!arguments) return 2;
+
+    k3x::ReaderOptions reader_options;
+    reader_options.verify = k3x::VerifyMode::metadata_only;
+    auto reader = k3x::Reader::open(arguments->model, reader_options);
+    if (!reader) {
+        write_error(reader.error(), reader.message());
+        return 4;
+    }
+    auto loaded = k3x::load_storage_expert(reader.value(), 1, 0);
+    if (!loaded) {
+        write_error(loaded.error(), loaded.message());
+        return 4;
+    }
+    auto fixture = make_fixture(loaded.value(), arguments->experts);
+    auto backend = k3x::make_cuda_backend(backend_options(arguments->boundary));
+    if (!backend) {
+        write_error(backend.error(), backend.message());
+        return 4;
+    }
+    const auto execute = [&]() {
+        return arguments->boundary == Boundary::moe_layer
+            ? execute_layer(*backend.value(), fixture)
+            : execute_split(*backend.value(), fixture);
+    };
+    for (std::size_t index = 0;
+         index < arguments->warmup + arguments->iterations; ++index) {
+        const auto result = execute();
+        if (!result) {
+            write_error(result.error(), result.message());
+            return 4;
+        }
+    }
+    std::cout << "{\"artifact_kind\":\"released_dimension_moe_layer\""
+              << ",\"routing_semantics\":false"
+              << ",\"boundary\":\"" << arguments->boundary_name << "\""
+              << ",\"experts\":" << arguments->experts
+              << ",\"warmup\":" << arguments->warmup
+              << ",\"iterations\":" << arguments->iterations << "}\n";
+    return 0;
+}

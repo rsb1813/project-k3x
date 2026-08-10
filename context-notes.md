@@ -424,3 +424,4 @@
 - 상세 TDD 계획에서 책임 경계를 고정했다. C++ 바이너리는 bounded released-shape 실행과 원시 telemetry를 소유하고, Python runner는 6행 pair 검증, summary, digest-backed evidence를 소유한다.
 - 구현 순서는 CLI/fixture와 split 실행, cold/warm telemetry 및 numerical parity, B-0023 tooling, 정식 RTX 5080 evidence, 전체 검증과 TITAN Ledger 동기화다.
 - 허용 오차 `1e-5` 이내의 numerical parity, bypass/fallback 0, 측정 구간 warm weight H2D 0, 반복당 split 4회 대 layer 1회의 synchronization, 더 낮은 activation H2D와 D2H, 정확히 14,336-byte인 routed-norm cold/resident delta를 gate로 유지한다. Latency 방향은 기록하되 강제하지 않는다.
+- Task 1 RED는 `k3x_cuda_moe_layer_bench` 부재로 8개 case가 실패하는 것으로 확인했다. CUDA compiler 경로를 `/usr/local/cuda-13.3/bin/nvcc`로 명시해 `sm_120` build를 복원한 뒤, strict CLI, released-size deterministic FP32 fixture, unique logical expert views, exact split 및 complete-layer 실행을 구현했다. 두 live boundary와 6개 오류 계약은 8/8로 통과했다.
