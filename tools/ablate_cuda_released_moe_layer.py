@@ -126,6 +126,12 @@ def _validate_record(
         < record.get("resident_weight_bytes", 0)
     ):
         raise RuntimeError(f"{name} residency telemetry is invalid")
+    if (
+        record.get("oracle_peak_vram_bytes", 0) <= 0
+        or record.get("peak_vram_bytes", 0)
+        < record.get("oracle_peak_vram_bytes", 0)
+    ):
+        raise RuntimeError(f"{name} oracle residency telemetry is invalid")
     if record.get("weight_cache_bypasses") != 0:
         raise RuntimeError(f"{name} capacity bypass occurred")
     if (

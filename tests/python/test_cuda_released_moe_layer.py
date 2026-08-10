@@ -71,6 +71,8 @@ def test_released_moe_layer_bench_executes(
     assert payload["cold_weight_h2d_bytes"] > 0
     assert payload["resident_weight_bytes"] > 0
     assert payload["peak_resident_weight_bytes"] > 0
+    assert payload["oracle_peak_vram_bytes"] > 0
+    assert payload["peak_vram_bytes"] >= payload["oracle_peak_vram_bytes"]
     assert payload["peak_vram_bytes"] >= payload["resident_weight_bytes"]
     assert payload["weight_cache_bypasses"] == 0
     assert payload["resident_grid_calls"] == 1

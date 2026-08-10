@@ -38,6 +38,7 @@ def _record(boundary: str, experts: int) -> dict:
         "cold_weight_h2d_bytes": cold,
         "resident_weight_bytes": cold,
         "peak_resident_weight_bytes": cold,
+        "oracle_peak_vram_bytes": cold + 40_000,
         "peak_vram_bytes": cold + 50_000,
         "weight_cache_bypasses": 0,
         "resident_grid_calls": 20,
@@ -159,6 +160,12 @@ def test_released_moe_layer_ablation_writes_cross_checked_results(
             if b == "moe-layer" and e == 1
             else None,
             "warm weight",
+        ),
+        (
+            lambda r, b, e: r.update(oracle_peak_vram_bytes=0)
+            if b == "moe-layer" and e == 1
+            else None,
+            "oracle residency",
         ),
         (
             lambda r, b, e: r.update(stream_synchronization_count=21)
