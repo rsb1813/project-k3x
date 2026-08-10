@@ -418,3 +418,9 @@
 - Public documentation head `feb17b5a`에서 `codex/milestone-twenty-two-released-moe-layer` 브랜치를 시작했다. B-0022의 traffic/sync 방향은 명확하지만 paired timing이 혼합됐으므로 CUDA Graph 선택 전에 released-dimension bounded evidence를 추가한다.
 - 선택안은 hidden 7,168, routed latent 3,584, expert intermediate 3,072를 그대로 사용하고 기존 17,547,264-byte storage expert를 unique tensor ID의 1/4/16 slots로 반복 참조하는 direct CUDA benchmark다. Full Top-16 layer resident weight는 norm을 포함해 750,532,608 bytes이며 1 GiB hard capacity 안에 들어간다.
 - Split CUDA 결과를 numerical oracle로 한 번 계산하고 별도 selected backend의 cold admission 뒤 warm 3/sample 20을 측정한다. B-0023은 boundary latency이며 token TPS가 아니다. Warm weight H2D 0, split/layer sync 4:1, activation/D2H 감소, norm cold/resident delta 14,336 bytes, zero fallback을 gate로 고정하고 latency 방향은 강제하지 않는다.
+
+## 2026-08-10 Milestone 22 구현 계획
+
+- 상세 TDD 계획에서 책임 경계를 고정했다. C++ 바이너리는 bounded released-shape 실행과 원시 telemetry를 소유하고, Python runner는 6행 pair 검증, summary, digest-backed evidence를 소유한다.
+- 구현 순서는 CLI/fixture와 split 실행, cold/warm telemetry 및 numerical parity, B-0023 tooling, 정식 RTX 5080 evidence, 전체 검증과 TITAN Ledger 동기화다.
+- 허용 오차 `1e-5` 이내의 numerical parity, bypass/fallback 0, 측정 구간 warm weight H2D 0, 반복당 split 4회 대 layer 1회의 synchronization, 더 낮은 activation H2D와 D2H, 정확히 14,336-byte인 routed-norm cold/resident delta를 gate로 유지한다. Latency 방향은 기록하되 강제하지 않는다.
