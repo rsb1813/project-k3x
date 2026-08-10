@@ -473,6 +473,6 @@ git commit -m "docs: publish CUDA AURORA residency evidence"
 
 Review `origin/main...HEAD` for default compatibility, replay CPU-only behavior, hard capacity, exact bypass, target/draft counter separation, proposal/target parity, raw-summary digests, measured-versus-proposed language, and accidental cloud/full-checkpoint work. Apply at most one focused correction batch and rerun affected checks.
 
-- [ ] **Step 7: Publish and verify public main**
+- [x] **Step 7: Publish and verify public main**
 
 Push `codex/milestone-nineteen-aurora-residency`, open a ready public PR, wait for push and PR correctness, rebase-merge, and wait for the post-merge `main` run. If publication leaves stale branch status, use one documentation-only reconciliation PR and verify its post-merge run.
