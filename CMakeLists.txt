@@ -139,6 +139,12 @@ else()
     set_target_properties(test_cuda_mxfp4 PROPERTIES CUDA_ARCHITECTURES "120-real")
     add_test(NAME cuda_mxfp4 COMMAND test_cuda_mxfp4)
 
+    add_executable(test_cuda_expert_grid tests/cuda/test_cuda_expert_grid.cu)
+    target_link_libraries(test_cuda_expert_grid PRIVATE k3x_runtime)
+    target_include_directories(test_cuda_expert_grid PRIVATE runtime/cuda)
+    set_target_properties(test_cuda_expert_grid PROPERTIES CUDA_ARCHITECTURES "120-real")
+    add_test(NAME cuda_expert_grid COMMAND test_cuda_expert_grid)
+
     add_executable(test_cuda_memory tests/cuda/test_cuda_memory.cu)
     target_link_libraries(test_cuda_memory PRIVATE k3x_runtime)
     target_include_directories(test_cuda_memory PRIVATE runtime/cuda)

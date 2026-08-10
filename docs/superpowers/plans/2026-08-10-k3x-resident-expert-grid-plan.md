@@ -144,7 +144,7 @@ git commit -m "feat: add exact expert grid oracle"
 - Produces `cuda::ExpertGridInputLayout::{shared_token_major,expert_token_major}`.
 - Produces `launch_mxfp4_matvec_grid(...)` with checked expert and token counts.
 
-- [ ] **Step 1: Add a failing direct kernel test**
+- [x] **Step 1: Add a failing direct kernel test**
 
 Create `tests/cuda/test_cuda_expert_grid.cu` with the required Korean first-line role comment. Upload two descriptor entries and literal packed/scales fixtures. Test 1×1, 1×4, 2×2, and 4×4 grids for both shared and expert-major input layouts against hand-derived literal output vectors. Also assert zero experts, zero tokens, and a grid dimension above 65,535 return `cudaErrorInvalidValue` without launching.
 
@@ -158,7 +158,7 @@ require_close(downloaded, std::array<float, 4>{
     1.0F, -2.0F, 2.0F, -4.0F});
 ```
 
-- [ ] **Step 2: Register the test and witness RED**
+- [x] **Step 2: Register the test and witness RED**
 
 Add the executable and `add_test(NAME cuda_expert_grid ...)`, then run:
 
@@ -171,7 +171,7 @@ cmake --build build-cuda --parallel 8
 
 Expected: NVCC compile failure because the grid descriptor and launcher are missing.
 
-- [ ] **Step 3: Implement the minimal 3D grid kernel**
+- [x] **Step 3: Implement the minimal 3D grid kernel**
 
 Use `blockIdx.z` for expert, `blockIdx.y` for token, and `blockIdx.x` for output row. Reuse the existing E2M1 decode and identical 256-thread reduction order.
 
@@ -188,7 +188,7 @@ const auto output_base = (expert * token_count + token) * rows;
 
 Reject rows, tokens, or experts that exceed CUDA grid limits before launch.
 
-- [ ] **Step 4: Run the direct CUDA test and Compute Sanitizer**
+- [x] **Step 4: Run the direct CUDA test and Compute Sanitizer**
 
 Run:
 
@@ -201,7 +201,7 @@ ctest --test-dir build-cuda -R '^cuda_expert_grid$' --output-on-failure
 
 Expected: CTest passes and Compute Sanitizer reports `ERROR SUMMARY: 0 errors`.
 
-- [ ] **Step 5: Commit the kernel primitive**
+- [x] **Step 5: Commit the kernel primitive**
 
 ```bash
 git add runtime/cuda/mxfp4.cuh runtime/cuda/mxfp4.cu \
