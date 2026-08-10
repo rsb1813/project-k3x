@@ -1137,7 +1137,13 @@ int main(int argc, char** argv) {
            << ",\"draft_weight_cache_misses\":"
            << draft_runtime.weight_cache_misses
            << ",\"draft_weight_cache_bypasses\":"
-           << draft_runtime.weight_cache_bypasses;
+           << draft_runtime.weight_cache_bypasses
+           << ",\"draft_cuda_resident_bytes\":"
+           << effective_draft_options.cuda_resident_bytes
+           << ",\"draft_resident_weight_bytes\":"
+           << draft_runtime.resident_weight_bytes
+           << ",\"draft_peak_resident_weight_bytes\":"
+           << draft_runtime.peak_resident_weight_bytes;
     output << ",\"draft_proposal_calls\":"
            << result.value().draft_proposal_calls
            << ",\"draft_candidate_tokens\":"

@@ -112,6 +112,26 @@ def test_cuda_draft_matches_cpu_persistent_target_execution(
         assert cuda["draft_cuda_allocation"] == "reused"
         assert cuda["draft_cuda_weights"] == "transient"
         assert resident["draft_cuda_weights"] == "resident"
+        assert cuda["draft_cuda_resident_bytes"] == 0
+        assert cuda["draft_resident_weight_bytes"] == 0
+        assert cuda["draft_peak_resident_weight_bytes"] == 0
+        assert resident["draft_cuda_resident_bytes"] == 8388608
+        assert 0 < resident["draft_resident_weight_bytes"] <= 8388608
+        assert (
+            resident["draft_resident_weight_bytes"]
+            <= resident["draft_peak_resident_weight_bytes"]
+            <= 8388608
+        )
+        assert resident["draft_weight_cache_hits"] > 0
+        assert resident["draft_weight_cache_misses"] > 0
+        assert resident["draft_weight_cache_bypasses"] == 0
+        assert (
+            resident["draft_weight_h2d_bytes"]
+            < cuda["draft_weight_h2d_bytes"]
+        )
+        assert resident["cuda_resident_bytes"] == 0
+        assert resident["resident_weight_bytes"] == 0
+        assert resident["peak_resident_weight_bytes"] == 0
         assert cuda["draft_cuda_batching"] == "grouped"
         assert cuda["draft_cuda_boundary"] == "ffn-block"
         assert cuda["draft_cuda_transfer"] == "synchronous"
