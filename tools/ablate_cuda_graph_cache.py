@@ -304,6 +304,86 @@ def run_ablation(
     return summary
 
 
+def verify_evidence(
+    evidence_dir: Path,
+    *,
+    artifact: Path | None = None,
+    runner: Path | None = None,
+) -> dict:
+    evidence_dir = Path(evidence_dir)
+    summary = json.loads(
+        (evidence_dir / "summary.json").read_text(encoding="utf-8")
+    )
+    if (
+        summary.get("benchmark") != "B-0025"
+        or summary.get("evidence") != "measured"
+        or summary.get("scope") != "released-dimension-bounded-cuda-graph-cache"
+    ):
+        raise RuntimeError("summary identity diverged")
+    warmup = summary.get("warmup")
+    iterations = summary.get("iterations")
+    records = summary.get("records")
+    if not isinstance(warmup, int) or not isinstance(iterations, int):
+        raise RuntimeError("summary iteration identity diverged")
+    if not isinstance(records, list) or len(records) != len(case_matrix()):
+        raise RuntimeError("summary record count diverged")
+
+    for record, (name, trace, graph, entries) in zip(
+        records, case_matrix(), strict=True
+    ):
+        if record.get("name") != name:
+            raise RuntimeError("summary case order diverged")
+        _validate_record(
+            record, name=name, trace=trace, graph=graph, entries=entries,
+            warmup=warmup, iterations=iterations,
+        )
+        raw_json = evidence_dir / f"{name}.json"
+        raw_csv = evidence_dir / f"{name}.csv"
+        if record.get("raw_json_sha256") != _sha256(raw_json):
+            raise RuntimeError(f"{name} raw JSON digest diverged")
+        if record.get("raw_csv_sha256") != _sha256(raw_csv):
+            raise RuntimeError(f"{name} raw CSV digest diverged")
+        raw_payload = json.loads(raw_json.read_text(encoding="utf-8"))
+        expected_raw = {
+            field: value for field, value in record.items()
+            if field not in {"name", "raw_json_sha256", "raw_csv_sha256"}
+        }
+        if raw_payload != expected_raw:
+            raise RuntimeError(f"{name} raw JSON payload diverged")
+        with raw_csv.open(newline="", encoding="utf-8") as stream:
+            csv_rows = list(csv.DictReader(stream))
+        if len(csv_rows) != 1 or set(csv_rows[0]) != set(expected_raw):
+            raise RuntimeError(f"{name} raw CSV shape diverged")
+        for field, value in expected_raw.items():
+            serialized = "" if value is None else str(value)
+            if csv_rows[0][field] != serialized:
+                raise RuntimeError(f"{name} raw CSV payload diverged")
+
+    aggregate = json.dumps(
+        records, sort_keys=True, separators=(",", ":")
+    ).encode()
+    if summary.get("aggregate_sha256") != hashlib.sha256(aggregate).hexdigest():
+        raise RuntimeError("aggregate digest diverged")
+    summary_csv = evidence_dir / "summary.csv"
+    if summary.get("summary_csv_sha256") != _sha256(summary_csv):
+        raise RuntimeError("summary CSV digest diverged")
+    with summary_csv.open(newline="", encoding="utf-8") as stream:
+        summary_rows = list(csv.DictReader(stream))
+    if [row.get("name") for row in summary_rows] != [
+        row[0] for row in case_matrix()
+    ]:
+        raise RuntimeError("summary CSV case order diverged")
+    if artifact is not None and summary.get("artifact_sha256") != _sha256(
+        Path(artifact)
+    ):
+        raise RuntimeError("artifact digest diverged")
+    if runner is not None and summary.get("runner_sha256") != _sha256(
+        Path(runner)
+    ):
+        raise RuntimeError("runner digest diverged")
+    return summary
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--artifact", type=Path, required=True)
@@ -311,7 +391,13 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--iterations", type=int, default=20)
+    parser.add_argument("--verify-only", action="store_true")
     args = parser.parse_args()
+    if args.verify_only:
+        verify_evidence(
+            args.output_dir, artifact=args.artifact, runner=args.runner
+        )
+        return
     run_ablation(
         args.artifact, args.runner, output_dir=args.output_dir,
         warmup=args.warmup, iterations=args.iterations,

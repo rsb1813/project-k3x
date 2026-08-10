@@ -10,6 +10,7 @@ from tools.ablate_cuda_graph_cache import (
     case_matrix,
     expected_graph_counters,
     run_ablation,
+    verify_evidence,
 )
 
 
@@ -158,6 +159,12 @@ def test_run_ablation_writes_digest_backed_lf_evidence(
             newline="", encoding="utf-8"
         ) as stream:
             assert len(list(csv.DictReader(stream))) == 1
+    assert verify_evidence(output, artifact=artifact, runner=runner) == summary
+
+    raw = output / "stable-1-disabled.json"
+    raw.write_bytes(raw.read_bytes() + b" ")
+    with pytest.raises(RuntimeError, match="raw JSON digest diverged"):
+        verify_evidence(output, artifact=artifact, runner=runner)
 
 
 @pytest.mark.parametrize(
