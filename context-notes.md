@@ -489,3 +489,9 @@
 - Host-time 교정 후 CUDA CTest 27/27과 pytest 386 passed/16 skipped를 다시 통과했고 stable hit 및 capacity-one eviction Compute Sanitizer가 모두 0 errors를 보고했다. Focused final review는 `3292524..27feced`에서 Critical/Important를 발견하지 않았고 raw JSON/CSV 30개, aggregate, summary와 문서 digest parity를 확인했다.
 - Review head `27feced`를 공개 branch에 push하고 ready PR #40을 열었다. Merge 및 pull-request/post-merge correctness/CodeQL은 아직 완료로 기록하지 않는다.
 - 문서 동기화 head의 branch/pull-request correctness `31371133295`/`31371136825`와 pull-request CodeQL `31371136804`가 통과했다. PR #40은 public integration head `13a403f`로 rebase merge됐고 post-merge `main` correctness `31371387067`과 CodeQL `31371387081`도 통과했다.
+
+## 2026-08-10 Milestone 25 준비
+
+- Public documentation head `aa0f935`에서 `codex/milestone-twenty-five-converter-integrity` 브랜치를 시작했다. 사용자의 Cloud Run 전 자율 진행 승인을 설계 gate에 적용하되 비용·공개 format 변경·실제 weight 다운로드는 범위 밖으로 유지한다.
+- `PROJECT_STATE.md`의 converter hash/ledger gap은 현재 코드와 D-028 증거에 비해 stale했다. Current writer는 bounded fixture의 declared shard/tensor SHA-256, canonical extent prefix, source CRC, partial CRC를 이미 검증한다. M25는 이를 중복 구현하지 않고 generic external manifest containment, exact tensor-to-shard ownership, strict safetensors/ledger schema, uncommitted partial suffix recovery를 다룬다.
+- 세 접근을 비교했다. D-028만 반복하는 no-op은 실제 진전이 없어 기각했고, signed manifest v2는 M26 real checkpoint discovery보다 앞서 형식을 고정하므로 보류했다. 기존 K3X v1과 source format을 유지하는 narrow trust-boundary hardening을 선택했다.

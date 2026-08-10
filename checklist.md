@@ -182,6 +182,19 @@
 - [x] Run the full CPU/liburing/ASan/CUDA/sanitizer verification matrix.
 - [x] Complete Critical/Important review, synchronize README/TITAN Ledger, publish, merge, and verify public `main`.
 
+## Milestone 25 — Converter trust-boundary integrity
+
+- [x] Re-read the charter, architecture, project state, D-003/D-028, B-0008, current writer, safetensors reader, resume ledger, and integrity regressions.
+- [x] Resolve the stale-state contradiction: D-028 already closes bounded fixture hash and canonical extent-prefix findings.
+- [x] Compare a D-028 no-op, narrow generic trust-boundary hardening, and premature signed-manifest v2.
+- [x] Write and self-review the accepted converter trust-boundary design.
+- [ ] Write and self-review the detailed TDD implementation plan.
+- [ ] Harden source manifest containment and exact tensor-to-shard ownership through witnessed RED/GREEN cycles.
+- [ ] Harden safetensors metadata and resume-ledger schema through witnessed RED/GREEN cycles.
+- [ ] Recover uncommitted partial suffixes without weakening committed-prefix validation.
+- [ ] Run the full verification matrix and record measured resource/correctness evidence.
+- [ ] Complete Critical/Important review, synchronize README/TITAN Ledger, publish, merge, and verify public `main`.
+
 ## Milestone 12 — Fused routed accumulation CUDA kernel
 
 - [x] TITAN Ledger, 현재 CUDA 경계, 원 구현 근거 재확인.
