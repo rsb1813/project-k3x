@@ -9,6 +9,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from k3x_converter.format import SUPERBLOCK_BYTES
 from k3x_converter.reader import K3XReader
 from k3x_converter.resume import read_resume_manifest
 from k3x_converter.writer import convert
@@ -127,7 +128,7 @@ def _resume_record(
     committed_prefix = (
         ledger.completed[-1].offset + ledger.completed[-1].length
         if ledger.completed
-        else 4096
+        else SUPERBLOCK_BYTES
     )
     if orphan_suffix_bytes:
         with output.with_suffix(".k3x.partial").open("ab") as stream:
@@ -285,8 +286,13 @@ def verify_evidence(
     json_path = evidence_dir / "summary.json"
     csv_path = evidence_dir / "summary.csv"
     try:
-        summary = json.loads(json_path.read_text(encoding="utf-8"))
+        json_bytes = json_path.read_bytes()
         csv_bytes = csv_path.read_bytes()
+        _require(b"\r" not in json_bytes, "summary JSON is not LF-only")
+        _require(json_bytes.endswith(b"\n"), "summary JSON is not LF-terminated")
+        _require(b"\r" not in csv_bytes, "CSV is not LF-only")
+        _require(csv_bytes.endswith(b"\n"), "CSV is not LF-terminated")
+        summary = json.loads(json_bytes)
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise ValueError("invalid audit evidence") from error
     _require(isinstance(summary, dict) and set(summary) == _SUMMARY_KEYS, "invalid summary keys")
@@ -300,7 +306,6 @@ def verify_evidence(
     _require(_is_hex_digest(summary["runner_sha256"]), "invalid runner digest")
     _require(_is_hex_digest(summary["aggregate_sha256"]), "invalid aggregate digest")
     _require(_is_hex_digest(summary["summary_csv_sha256"]), "invalid CSV digest")
-    _require(b"\r" not in csv_bytes, "CSV is not LF-only")
     records = summary["records"]
     _require(isinstance(records, list) and len(records) == len(_SCENARIOS), "invalid records")
     _require([record.get("scenario") if isinstance(record, dict) else None for record in records] == list(_SCENARIOS), "invalid scenario order")
