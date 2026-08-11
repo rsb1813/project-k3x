@@ -934,3 +934,10 @@
 - Existing single-layer manufacture and CLI schemas remain frozen. The new two-layer path gets a dedicated orchestrator and benchmark executable so M29 through M32 evidence identities do not drift.
 - The two-layer source remains `k3-official-moe-slice-v1`; its existing `tensor_order` authority already controls K3X physical order and K3X v1 already emits per-layer directories. A two-layer metadata envelope is additive and the production optional-feature guard remains unchanged.
 - The first implementation task is payload-free planner TDD. New official payload is permitted only after the metadata-only dry-run, portable/tiny gates, and explicit bounded byte checks pass.
+
+## 2026-08-12 — Milestone 33 Task 1 bounded layer-2 planning
+
+- The controlled RED produced exactly two intended failures: layer-2 MoE and KDA plans were rejected by the literal layer-1 guards. Layer IDs 0 and 3 already failed closed.
+- Commit `2a938ef` changes only the two planner guards to accept `(1, 2)`. Follow-up test commit `752972a` binds wrong-shard and missing-KDA-identity failures found during self-review. The existing layer-1 materializer, fixed inputs, manifests, artifact name, and production guard are unchanged.
+- Final Task 1 verification passes 111 tests across official MoE/layer/source, source-manifest integrity, and converter resume. Python compilation and `git diff --check` pass.
+- No tensor payload, complete shard, checkpoint, benchmark, or paid resource was used. Task 2 begins with an import-level RED for the dependency-ordered two-layer orchestrator.

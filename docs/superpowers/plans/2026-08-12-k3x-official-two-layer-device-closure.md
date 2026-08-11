@@ -37,11 +37,11 @@
 - Every canonical name, shard binding, range, shape, dtype, payload byte count, source blob, and KDA-layer identity remains strict.
 - Existing single-layer materialization remains fixed to layer 1 and produces byte-compatible historical manifests.
 
-- [ ] **Step 1: Write layer-2 planner RED tests.**
+- [x] **Step 1: Write layer-2 planner RED tests.**
 
 Clone the pure metadata fixture with layer-2 canonical names and a distinct shard/header identity. Require exact tensor order and byte counts for layer 2, and rejection of layer 0, layer 3, mixed-layer metadata, wrong shard bindings, and non-KDA configuration. Require the historical layer-1 plan to remain equal to its current value.
 
-- [ ] **Step 2: Witness focused RED.**
+- [x] **Step 2: Witness focused RED.**
 
 Run:
 
@@ -51,15 +51,15 @@ rtk wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/c/Users/jolib/Documents/project-k3x
 
 Expected result: only the new layer-2 cases fail with `INVALID_OFFICIAL_MOE_CONFIG` or `INVALID_OFFICIAL_LAYER`.
 
-- [ ] **Step 3: Implement the minimum bounded generalization.**
+- [x] **Step 3: Implement the minimum bounded generalization.**
 
 Replace the literal layer-1 planner guard with a shared exact `{1, 2}` identity check. Do not alter fixed inputs, single-layer route-manifest format, artifact name, or `materialize_official_kda_layer`'s layer-1-only transaction.
 
-- [ ] **Step 4: Run GREEN and source-integrity regressions.**
+- [x] **Step 4: Run GREEN and source-integrity regressions.**
 
 Run the focused suite plus `tests/python/test_official_source.py`, `test_source_manifest_integrity.py`, and `test_converter_resume.py`. Run Python compile validation and `git diff --check`.
 
-- [ ] **Step 5: Self-review and commit.**
+- [x] **Step 5: Self-review and commit.**
 
 Commit message: `feat: plan bounded official layer two`.
 
