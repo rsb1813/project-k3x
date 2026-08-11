@@ -208,6 +208,6 @@ Run CPU CTest/Python, capability-aware liburing/direct, ASan/UBSan, CUDA CTest/l
 
 Record measured values and limitations in README, architecture, performance model, decisions, benchmarks, checklist, and context notes. Update `PROJECT_STATE.md` last. Commit as `docs: record Milestone 32 results`.
 
-- [ ] **Step 6: Publish and verify**
+- [x] **Step 6: Publish and verify**
 
 Push a public ready PR, require branch/PR correctness and C++/Python CodeQL, rebase-merge, and verify post-merge `main` correctness and CodeQL. Do not create paid cloud resources.

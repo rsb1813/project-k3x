@@ -59,9 +59,9 @@ flowchart LR
 | Milestone 29 | [PR #50 merged](https://github.com/rsb1813/project-k3x/pull/50) at `2a4bfaf` | B-0030 executes the bounded official layer-1 KDA transformer boundary and isolates a host-orchestration gap |
 | Milestone 30 | [PR #52 merged](https://github.com/rsb1813/project-k3x/pull/52) at `51182575` | B-0031 measures exact immutable KDA admission validation without changing the default |
 | Milestone 31 | [PR #54 merged](https://github.com/rsb1813/project-k3x/pull/54) at `e1233891` | B-0032 measures exact single-slot KDA device-state handoff without changing the host default |
-| Milestone 32 | Local implementation and B-0033 complete; publication pending | Exact device residual/router preparation preserves routing and yields a mixed bounded result |
+| Milestone 32 | [PR #56 merged](https://github.com/rsb1813/project-k3x/pull/56) at `ab0ecb19` | Exact device residual/router preparation preserves routing and yields a mixed bounded result |
 
-The latest audited public implementation baseline is Milestone 31 integration head `e1233891`. PR #54 branch correctness `31501537039`, pull-request correctness `31501569778`, and pull-request CodeQL `31501569789` passed before merge; post-merge `main` correctness `31501949124` and CodeQL `31501949081` also succeeded.
+The latest audited public implementation baseline is Milestone 32 integration head `ab0ecb19`. PR #56 branch correctness `31510344481`, pull-request correctness `31510368444`, and pull-request CodeQL `31510368390` passed before merge; post-merge `main` correctness `31510749958` and CodeQL `31510749973` also succeeded.
 
 ## Why a dedicated engine
 

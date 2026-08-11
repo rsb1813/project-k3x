@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 31 is publicly complete through implementation PR #54 and publication PR #55. Milestone 32 implementation, formal B-0033, strict evidence verification, sanitizer, production guard, and the complete local matrix are finished; public PR integration remains. Exact device route preparation is experimental and host routing remains the default after a mixed one-layer result. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
+Milestone 32 is publicly complete through PR #56 at `ab0ecb19ade01e7989bcba9f6dbcd1c853c43432`. Exact device route preparation is experimental and host routing remains the default after a mixed one-layer result. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists. M33 bounded multi-layer closure is next.
 
-State audited last on 2026-08-12 on `codex/milestone-thirty-two-device-routing`; the public baseline remains M31 publication head `c46d6139673d442a83858e637d268e0d92a7784a`. Local B-0033 evidence commit `3d5d96c` is sealed. Fresh verification passes CPU CTest 19/19 plus Python 597/128, liburing/direct CTest 20/20 plus Python 603/122, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus Python 710/15, evidence regressions 65/65, actual device-route Compute Sanitizer with zero errors, and the production non-executable guard. No complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-12 at public M32 implementation head `ab0ecb19ade01e7989bcba9f6dbcd1c853c43432`. PR #56 branch/PR correctness and CodeQL passed; post-merge correctness `31510749958` and CodeQL `31510749973` also succeeded. Local verification passes CPU CTest 19/19 plus Python 597/128, liburing/direct CTest 20/20 plus Python 603/122, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus Python 710/15, evidence regressions 65/65, actual device-route Compute Sanitizer with zero errors, and the production non-executable guard. No complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -179,9 +179,9 @@ State audited last on 2026-08-12 on `codex/milestone-thirty-two-device-routing`;
 
 ## Next concrete tasks
 
-1. Commit the synchronized M32 documentation and perform a final diff/status review.
-2. Push a public ready PR, require correctness and CodeQL, rebase-merge, and verify post-merge `main` checks.
-3. Begin M33 bounded multi-layer closure after public integration. Do not download a complete shard/checkpoint or create paid cloud resources.
+1. Design M33 bounded multi-layer closure from the measured four-kernel/two-sync route boundary.
+2. Define the smallest exact two-layer fixture and opaque activation/state lifetime before code changes.
+3. Keep full checkpoint download and paid Cloud Run work deferred until the explicitly authorized later milestone.
 
 ## Hardware assumptions
 
@@ -206,6 +206,7 @@ D-070 retains device route preparation as an explicit experiment but does not se
 
 ## Last known-good state
 
+- Public M32 implementation head `ab0ecb19ade01e7989bcba9f6dbcd1c853c43432` contains PR #56. Branch correctness `31510344481`, pull-request correctness `31510368444`, pull-request CodeQL `31510368390`, post-merge correctness `31510749958`, and post-merge CodeQL `31510749973` succeeded.
 - Local M32 evidence commit `3d5d96c` records B-0033 with aggregate SHA-256 `709fe13d67d144d025f32e17d6cafdfeef3d6e52e901d4234b7e54d7c9342d61`, summary JSON `86cb016d1764747233536614137566cfa8098cbfcfb10bdf5d5dc596d37c9ace`, and summary CSV `d83d7cd34bc6601e39af3b55635d1ffb00f4eac79c742152ee669dd29915ee1d`. Strict and independent verification pass.
 - Fresh M32 gates pass CPU CTest 19/19 plus Python 597/128, liburing/direct CTest 20/20 plus Python 603/122, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus Python 710/15, and evidence regressions 65/65. Actual device-route Compute Sanitizer reports zero errors; production `k3x_run` remains fail-closed.
 - Public M31 publication head `c46d6139673d442a83858e637d268e0d92a7784a` contains PR #55. Post-merge correctness `31503260596` and CodeQL `31503260599` succeeded.
