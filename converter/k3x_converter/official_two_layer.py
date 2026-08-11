@@ -7,13 +7,31 @@ import math
 import struct
 from typing import Callable
 
+import torch
+
+from k3x_ref.mxfp4 import mxfp4_matmul
+from k3x_ref.official_kda import (
+    OfficialKdaConfig,
+    OfficialKdaState,
+    OfficialKdaWeights,
+    official_kda,
+)
+
 from .format import K3XError
 from .official_layer import (
     OFFICIAL_KDA_SOURCE_BLOB_ID,
     OfficialLayerInput,
     OfficialLayerPlan,
+    _attention_residual,
+    _rms_norm,
+    _state_digest,
+    _tensor_digest,
 )
-from .official_moe import OfficialMoeRoute
+from .official_moe import (
+    OfficialMoeRoute,
+    prepare_official_moe_hidden,
+    route_official_hidden,
+)
 
 
 _LAYER_IDS = (1, 2)
@@ -40,6 +58,42 @@ class OfficialTwoLayerState:
 
 
 @dataclass(frozen=True)
+class OfficialSourceTensorBytes:
+    dtype: str
+    shape: tuple[int, ...]
+    payload: bytes
+
+
+@dataclass(frozen=True)
+class OfficialMxfp4MatrixBytes:
+    packed: bytes
+    scales: bytes
+    rows: int
+    cols: int
+    group_size: int = 32
+
+
+@dataclass(frozen=True)
+class OfficialMxfp4ExpertBytes:
+    expert_id: int
+    gate: OfficialMxfp4MatrixBytes
+    up: OfficialMxfp4MatrixBytes
+    down: OfficialMxfp4MatrixBytes
+
+
+@dataclass(frozen=True)
+class OfficialLayerSourceBytes:
+    layer_id: int
+    kda_config: OfficialKdaConfig
+    tensors: tuple[tuple[str, OfficialSourceTensorBytes], ...]
+    experts: tuple[OfficialMxfp4ExpertBytes, ...]
+    top_k: int
+    rms_norm_epsilon: float
+    situ_beta: float
+    situ_linear_beta: float | None
+
+
+@dataclass(frozen=True)
 class OfficialTwoLayerStepExecution:
     output: tuple[float, ...]
     state: OfficialTwoLayerState
@@ -57,6 +111,7 @@ class OfficialTwoLayerTraceStep:
     state_sha256: str
     kda_output_sha256: str
     route: OfficialMoeRoute
+    contribution_sha256: str
     output_sha256: str
 
 
@@ -84,6 +139,12 @@ def _float_digest(values: tuple[float, ...]) -> str:
     return hashlib.sha256(struct.pack(f"<{len(values)}f", *values)).hexdigest()
 
 
+def _contribution_digest(route: OfficialMoeRoute) -> str:
+    payload = struct.pack(f"<{len(route.expert_ids)}I", *route.expert_ids)
+    payload += struct.pack(f"<{len(route.contributions)}f", *route.contributions)
+    return hashlib.sha256(payload).hexdigest()
+
+
 def _valid_digest(value: str) -> bool:
     if len(value) != 64:
         return False
@@ -91,6 +152,273 @@ def _valid_digest(value: str) -> bool:
         return bytes.fromhex(value).hex() == value
     except ValueError:
         return False
+
+
+def official_two_layer_state(value: OfficialKdaState) -> OfficialTwoLayerState:
+    return OfficialTwoLayerState(value, _state_digest(value))
+
+
+def _decode_source_tensor(source: OfficialSourceTensorBytes) -> torch.Tensor:
+    dtype = {"BF16": torch.bfloat16, "F32": torch.float32}.get(source.dtype)
+    if (
+        dtype is None
+        or not source.shape
+        or any(dimension <= 0 for dimension in source.shape)
+    ):
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE")
+    expected = math.prod(source.shape) * (2 if dtype == torch.bfloat16 else 4)
+    if len(source.payload) != expected:
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE")
+    return torch.frombuffer(bytearray(source.payload), dtype=dtype).reshape(
+        source.shape
+    ).clone()
+
+
+def _bf16_matvec(value: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
+    if (
+        value.ndim != 1
+        or weight.ndim != 2
+        or weight.dtype != torch.bfloat16
+        or weight.shape[1] != value.shape[0]
+        or not torch.isfinite(value).all()
+        or not torch.isfinite(weight).all()
+    ):
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE")
+    return (weight.float() @ value.float()).to(torch.bfloat16)
+
+
+def _situ(
+    gate: torch.Tensor,
+    up: torch.Tensor,
+    beta: float,
+    linear_beta: float | None,
+) -> torch.Tensor:
+    gate_float = gate.float()
+    up_float = up.float()
+    bounded_gate = (
+        beta * torch.tanh(gate_float / beta) * torch.sigmoid(gate_float)
+    )
+    if linear_beta is not None:
+        up_float = linear_beta * torch.tanh(up_float / linear_beta)
+    return bounded_gate * up_float
+
+
+def _dense_ffn(
+    value: torch.Tensor,
+    gate: torch.Tensor,
+    up: torch.Tensor,
+    down: torch.Tensor,
+    beta: float,
+    linear_beta: float | None,
+) -> torch.Tensor:
+    return _bf16_matvec(
+        _situ(
+            _bf16_matvec(value, gate),
+            _bf16_matvec(value, up),
+            beta,
+            linear_beta,
+        ),
+        down,
+    )
+
+
+def _mxfp4_forward(
+    value: torch.Tensor,
+    expert: OfficialMxfp4ExpertBytes,
+    beta: float,
+    linear_beta: float | None,
+) -> torch.Tensor:
+    def project(
+        source: torch.Tensor, matrix: OfficialMxfp4MatrixBytes
+    ) -> torch.Tensor:
+        try:
+            return mxfp4_matmul(
+                source,
+                matrix.packed,
+                matrix.scales,
+                matrix.rows,
+                matrix.cols,
+                matrix.group_size,
+            )
+        except ValueError as error:
+            raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE") from error
+
+    gate = project(value, expert.gate)
+    up = project(value, expert.up)
+    if gate.shape != up.shape:
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE")
+    return project(_situ(gate, up, beta, linear_beta), expert.down).to(
+        torch.bfloat16
+    )
+
+
+def _execute_official_source_bytes(
+    layer: OfficialLayerPlan,
+    item: OfficialLayerInput,
+    state: OfficialTwoLayerState,
+    source: OfficialLayerSourceBytes,
+) -> OfficialTwoLayerStepExecution:
+    if (
+        layer.layer_id != source.layer_id
+        or not isinstance(state.value, OfficialKdaState)
+        or state.sha256 != _state_digest(state.value)
+        or isinstance(source.top_k, bool)
+        or not 0 < source.top_k <= len(source.experts)
+        or not math.isfinite(source.rms_norm_epsilon)
+        or source.rms_norm_epsilon <= 0.0
+        or not math.isfinite(source.situ_beta)
+        or source.situ_beta <= 0.0
+        or (
+            source.situ_linear_beta is not None
+            and (
+                not math.isfinite(source.situ_linear_beta)
+                or source.situ_linear_beta <= 0.0
+            )
+        )
+    ):
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE")
+    roles = dict(source.tensors)
+    if len(roles) != len(source.tensors):
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE")
+    required = {
+        "self_res_norm",
+        "self_res_proj",
+        "input_norm",
+        "kda_q_proj",
+        "kda_k_proj",
+        "kda_v_proj",
+        "kda_q_conv",
+        "kda_k_conv",
+        "kda_v_conv",
+        "kda_f_a",
+        "kda_f_b",
+        "kda_a_log",
+        "kda_dt_bias",
+        "kda_beta",
+        "kda_output_gate",
+        "kda_output_norm",
+        "kda_output_proj",
+        "mlp_res_norm",
+        "mlp_res_proj",
+        "post_attention_norm",
+        "router",
+        "router_correction",
+        "routed_down",
+        "routed_norm",
+        "routed_up",
+        "shared_gate",
+        "shared_up",
+        "shared_down",
+    }
+    if set(roles) != required:
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE")
+    fp32_roles = {
+        "kda_q_conv",
+        "kda_k_conv",
+        "kda_v_conv",
+        "kda_a_log",
+        "kda_dt_bias",
+        "kda_output_norm",
+        "router_correction",
+    }
+    if any(
+        value.dtype != ("F32" if role in fp32_roles else "BF16")
+        for role, value in roles.items()
+    ):
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE")
+    tensors = {role: _decode_source_tensor(value) for role, value in roles.items()}
+    config = source.kda_config
+    hidden = torch.tensor(item.hidden_input, dtype=torch.bfloat16)
+    block = torch.tensor(item.block_source, dtype=torch.bfloat16)
+    residual = _attention_residual(
+        hidden, block, tensors["self_res_norm"], tensors["self_res_proj"]
+    )
+    kda_input = _rms_norm(residual, tensors["input_norm"])
+    weights = OfficialKdaWeights(
+        tensors["kda_q_proj"], tensors["kda_k_proj"], tensors["kda_v_proj"],
+        tensors["kda_q_conv"], tensors["kda_k_conv"], tensors["kda_v_conv"],
+        tensors["kda_f_a"], tensors["kda_f_b"], tensors["kda_a_log"],
+        tensors["kda_dt_bias"], tensors["kda_beta"],
+        tensors["kda_output_gate"], tensors["kda_output_norm"],
+        tensors["kda_output_proj"],
+    )
+    try:
+        kda = official_kda(
+            kda_input.reshape(1, 1, -1), weights, state.value, config
+        )
+    except ValueError as error:
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE") from error
+    kda_output = kda.output.reshape(-1)
+    prefix = (hidden.float() + kda_output.float()).to(torch.bfloat16)
+    prepared = prepare_official_moe_hidden(
+        prefix,
+        block,
+        tensors["mlp_res_norm"],
+        tensors["mlp_res_proj"].reshape(-1),
+        tensors["post_attention_norm"],
+        rms_norm_eps=source.rms_norm_epsilon,
+    )
+    route = route_official_hidden(
+        prepared,
+        tensors["router"],
+        tensors["router_correction"],
+        top_k=source.top_k,
+    )
+    expert_by_id = {expert.expert_id: expert for expert in source.experts}
+    if (
+        len(expert_by_id) != len(source.experts)
+        or any(not 0 <= expert_id < 896 for expert_id in expert_by_id)
+        or any(expert_id not in expert_by_id for expert_id in route.expert_ids)
+    ):
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE")
+    latent = _bf16_matvec(prepared, tensors["routed_down"])
+    shared = _dense_ffn(
+        prepared,
+        tensors["shared_gate"],
+        tensors["shared_up"],
+        tensors["shared_down"],
+        source.situ_beta,
+        source.situ_linear_beta,
+    )
+    mixed = torch.zeros_like(latent, dtype=torch.float32)
+    for expert_id, contribution in zip(route.expert_ids, route.contributions):
+        mixed += contribution * _mxfp4_forward(
+            latent,
+            expert_by_id[expert_id],
+            source.situ_beta,
+            source.situ_linear_beta,
+        ).float()
+    mixed = mixed.to(torch.bfloat16)
+    routed_norm = _rms_norm(mixed, tensors["routed_norm"])
+    routed = _bf16_matvec(routed_norm, tensors["routed_up"])
+    combined = (routed.float() + shared.float()).to(torch.bfloat16)
+    output = (prefix.float() + combined.float()).to(torch.bfloat16)
+    return OfficialTwoLayerStepExecution(
+        tuple(float(value) for value in output.float()),
+        official_two_layer_state(kda.state),
+        _tensor_digest(kda_output, b"kda-output-bf16\0"),
+        route,
+    )
+
+
+def make_official_source_byte_executor(
+    sources: tuple[OfficialLayerSourceBytes, OfficialLayerSourceBytes],
+) -> OfficialTwoLayerExecutor:
+    by_layer = {source.layer_id: source for source in sources}
+    if len(by_layer) != 2 or set(by_layer) != set(_LAYER_IDS):
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE")
+
+    def execute(
+        layer: OfficialLayerPlan,
+        item: OfficialLayerInput,
+        state: OfficialTwoLayerState,
+    ) -> OfficialTwoLayerStepExecution:
+        source = by_layer.get(layer.layer_id)
+        if source is None:
+            raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE")
+        return _execute_official_source_bytes(layer, item, state, source)
+
+    return execute
 
 
 def plan_official_two_layer(
@@ -188,6 +516,7 @@ def derive_official_two_layer_trace(
                     result.state.sha256,
                     result.kda_output_sha256,
                     result.route,
+                    _contribution_digest(result.route),
                     output_sha256,
                 )
             )

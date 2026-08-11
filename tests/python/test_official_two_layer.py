@@ -6,15 +6,24 @@ import hashlib
 import struct
 
 import pytest
+import torch
+
+from k3x_ref.official_kda import OfficialKdaConfig, zero_official_kda_state
 
 from k3x_converter.format import K3XError
 from k3x_converter.official_layer import OfficialLayerPlan
 from k3x_converter.official_layer import OfficialLayerInput
 from k3x_converter.official_moe import OfficialMoePlan, OfficialMoeRoute
 from k3x_converter.official_two_layer import (
+    OfficialLayerSourceBytes,
+    OfficialMxfp4ExpertBytes,
+    OfficialMxfp4MatrixBytes,
+    OfficialSourceTensorBytes,
     OfficialTwoLayerState,
     OfficialTwoLayerStepExecution,
     derive_official_two_layer_trace,
+    make_official_source_byte_executor,
+    official_two_layer_state,
     plan_official_two_layer,
 )
 
@@ -51,6 +60,84 @@ def _layer_plan(layer_id: int) -> OfficialLayerPlan:
         moe,
         1_267_744_256,
         1_829_256_704,
+    )
+
+
+def _source_tensor(value: torch.Tensor) -> OfficialSourceTensorBytes:
+    contiguous = value.contiguous()
+    return OfficialSourceTensorBytes(
+        "BF16" if contiguous.dtype == torch.bfloat16 else "F32",
+        tuple(contiguous.shape),
+        contiguous.view(torch.uint8).numpy().tobytes(),
+    )
+
+
+def _tiny_source(layer_id: int) -> OfficialLayerSourceBytes:
+    hidden = 2
+    projection = 2
+    latent = 32
+    roles = {
+        "self_res_norm": torch.ones(hidden, dtype=torch.bfloat16),
+        "self_res_proj": torch.tensor([[0.25, -0.125]], dtype=torch.bfloat16),
+        "input_norm": torch.ones(hidden, dtype=torch.bfloat16),
+        "kda_q_proj": torch.tensor(
+            [[0.25, 0.0], [0.0, 0.25]], dtype=torch.bfloat16
+        ),
+        "kda_k_proj": torch.tensor(
+            [[0.125, 0.0], [0.0, 0.125]], dtype=torch.bfloat16
+        ),
+        "kda_v_proj": torch.tensor(
+            [[0.5, 0.0], [0.0, 0.5]], dtype=torch.bfloat16
+        ),
+        "kda_q_conv": torch.full((projection, 2), 0.5, dtype=torch.float32),
+        "kda_k_conv": torch.full((projection, 2), 0.5, dtype=torch.float32),
+        "kda_v_conv": torch.full((projection, 2), 0.5, dtype=torch.float32),
+        "kda_f_a": torch.tensor(
+            [[0.125, -0.125], [0.25, 0.125]], dtype=torch.bfloat16
+        ),
+        "kda_f_b": torch.eye(projection, dtype=torch.bfloat16),
+        "kda_a_log": torch.zeros(projection, dtype=torch.float32),
+        "kda_dt_bias": torch.zeros(projection, dtype=torch.float32),
+        "kda_beta": torch.tensor([[0.25, 0.25]], dtype=torch.bfloat16),
+        "kda_output_gate": torch.eye(projection, dtype=torch.bfloat16),
+        "kda_output_norm": torch.ones(projection, dtype=torch.float32),
+        "kda_output_proj": torch.eye(hidden, dtype=torch.bfloat16),
+        "mlp_res_norm": torch.ones(hidden, dtype=torch.bfloat16),
+        "mlp_res_proj": torch.tensor([[0.125, -0.25]], dtype=torch.bfloat16),
+        "post_attention_norm": torch.ones(hidden, dtype=torch.bfloat16),
+        "router": torch.tensor(
+            [[1.0, -0.5], [-0.5, 1.0]], dtype=torch.bfloat16
+        ) if layer_id == 1 else torch.tensor(
+            [[-0.5, 1.0], [1.0, -0.5]], dtype=torch.bfloat16
+        ),
+        "router_correction": torch.zeros(2, dtype=torch.float32),
+        "routed_down": torch.full((latent, hidden), 0.015625, dtype=torch.bfloat16),
+        "routed_norm": torch.ones(latent, dtype=torch.bfloat16),
+        "routed_up": torch.full((hidden, latent), 0.0078125, dtype=torch.bfloat16),
+        "shared_gate": torch.full((2, hidden), 0.03125, dtype=torch.bfloat16),
+        "shared_up": torch.full((2, hidden), 0.015625, dtype=torch.bfloat16),
+        "shared_down": torch.full((hidden, 2), 0.0625, dtype=torch.bfloat16),
+    }
+    matrix = OfficialMxfp4MatrixBytes(
+        bytes([0x11]) * (latent * latent // 2),
+        bytes([120]) * (latent * latent // 32),
+        latent,
+        latent,
+        32,
+    )
+    experts = tuple(
+        OfficialMxfp4ExpertBytes(expert_id, matrix, matrix, matrix)
+        for expert_id in range(2)
+    )
+    return OfficialLayerSourceBytes(
+        layer_id,
+        OfficialKdaConfig(hidden, 1, projection, 2, 1.0e-5, -5.0),
+        tuple((role, _source_tensor(value)) for role, value in roles.items()),
+        experts,
+        1,
+        1.0e-5,
+        4.0,
+        25.0,
     )
 
 
@@ -166,3 +253,83 @@ def test_official_two_layer_trace_interleaves_positions_and_layer_states() -> No
         _text_digest("layer-2-b"),
     )
     assert trace.outputs == ((4.0, 5.0), (6.0, 7.0))
+
+
+def test_official_two_layer_source_bytes_execute_exact_interleaved_trace() -> None:
+    config = OfficialKdaConfig(2, 1, 2, 2, 1.0e-5, -5.0)
+    zero_1 = zero_official_kda_state(config, 1, torch.device("cpu"))
+    zero_2 = zero_official_kda_state(config, 1, torch.device("cpu"))
+    states = (official_two_layer_state(zero_1), official_two_layer_state(zero_2))
+    inputs = (
+        OfficialLayerInput(
+            "a",
+            (0.5, -0.25),
+            (0.125, 0.375),
+            _float_digest((0.5, -0.25)),
+            _float_digest((0.125, 0.375)),
+        ),
+        OfficialLayerInput(
+            "b",
+            (-0.375, 0.625),
+            (0.25, -0.125),
+            _float_digest((-0.375, 0.625)),
+            _float_digest((0.25, -0.125)),
+        ),
+    )
+    execute = make_official_source_byte_executor((_tiny_source(1), _tiny_source(2)))
+
+    trace = derive_official_two_layer_trace(
+        plan_official_two_layer(_layer_plan(1), _layer_plan(2)),
+        inputs,
+        states,
+        execute,
+    )
+    assert tuple((step.position, step.layer_id) for step in trace.steps) == (
+        ("a", 1),
+        ("a", 2),
+        ("b", 1),
+        ("b", 2),
+    )
+    assert trace.steps[1].hidden_input_sha256 == trace.steps[0].output_sha256
+    assert trace.steps[3].hidden_input_sha256 == trace.steps[2].output_sha256
+    assert trace.steps[2].consumes_state_sha256 == trace.steps[0].state_sha256
+    assert trace.steps[3].consumes_state_sha256 == trace.steps[1].state_sha256
+    for step in trace.steps:
+        contribution_payload = struct.pack(
+            f"<{len(step.route.expert_ids)}I", *step.route.expert_ids
+        ) + struct.pack(
+            f"<{len(step.route.contributions)}f", *step.route.contributions
+        )
+        assert step.contribution_sha256 == hashlib.sha256(
+            contribution_payload
+        ).hexdigest()
+    assert trace.selected_experts == ((0, 1), (1,))
+    assert trace.outputs == (
+        (2.765625, -0.267578125),
+        (1.296875, 1.6171875),
+    )
+
+
+def test_official_source_byte_executor_rejects_truncated_dense_payload() -> None:
+    source = _tiny_source(1)
+    role, tensor = source.tensors[0]
+    damaged = replace(
+        source,
+        tensors=((role, replace(tensor, payload=tensor.payload[:-1])),)
+        + source.tensors[1:],
+    )
+    execute = make_official_source_byte_executor((damaged, _tiny_source(2)))
+    config = source.kda_config
+    state = official_two_layer_state(
+        zero_official_kda_state(config, 1, torch.device("cpu"))
+    )
+    item = OfficialLayerInput(
+        "a",
+        (0.5, -0.25),
+        (0.125, 0.375),
+        _float_digest((0.5, -0.25)),
+        _float_digest((0.125, 0.375)),
+    )
+
+    with pytest.raises(K3XError, match="INVALID_OFFICIAL_TWO_LAYER_SOURCE"):
+        execute(_layer_plan(1), item, state)
