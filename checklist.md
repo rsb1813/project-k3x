@@ -407,6 +407,7 @@
 - [x] Implement native BF16 CUDA residency and the official MoE boundary.
 - [x] Implement the pinned fixture harness.
 - [x] Implement strict B-0029 tooling.
-- [ ] Materialize the bounded real fixture without a full shard or checkpoint.
-- [ ] Run correctness, sanitizer, B-0029, full verification, and evidence cross-checks.
-- [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
+- [x] Materialize the bounded real fixture without a full shard or checkpoint.
+- [x] Run correctness, sanitizer, B-0029, full verification, and evidence cross-checks.
+- [x] Synchronize the TITAN Ledger and complete final self-review.
+- [ ] Publish, merge, and verify public `main`.

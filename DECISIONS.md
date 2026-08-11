@@ -620,11 +620,11 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-054 — Close a real MoE FFN sublayer before a full transformer layer
 
 - Date: 2026-08-11.
-- Status: accepted; bounded storage planning/materialization, the portable CPU oracle, and the synthetic CUDA execution boundary are implemented through `bb634e1`, while official fixture execution and B-0029 remain pending.
+- Status: accepted, implemented, and measured through B-0029; public integration is pending.
 - Decision: the next real-weight boundary binds the official router, computes all 896 scores, preserves natural Top-16 selection, materializes and executes the exact selected routed experts, executes the real shared expert, and verifies the complete mixing/residual FFN sublayer against an independent reference.
 - Alternatives considered: repeat the single expert with more IDs; benchmark a caller-selected four-expert set; close the real MoE FFN sublayer; download enough attention/KDA/MLA tensors for a complete transformer layer immediately.
 - Evidence: B-0028 proves exact single-expert CUDA execution and shows that warm exact residency removes 350,945,280 measured weight-H2D bytes over twenty calls, but it has no routing, shared-expert, changing-set, or output-mixing semantics. A repeated or caller-selected set would not close those correctness gaps, while a complete transformer layer would widen source and graph dependencies before the MoE boundary is independently proven.
-- Benchmark result: B-0028; no token, full-layer, quality, physical NVMe, or native-Linux result is implied.
+- Benchmark result: B-0029 measures 97,095,781 ns transient and 10,153,939 ns resident medians for route A, plus a 20,201,466 ns resident median for an alternating A+B sequence. It implies no token, full-layer, quality, physical NVMe, or native-Linux result.
 - Reason accepted: the real FFN sublayer is the smallest boundary that tests natural routing and exact selected-weight residency without conflating it with attention and recurrent-state integration.
 - Rejected claims: this decision does not authorize a complete shard/full checkpoint download, paid cloud execution, a residency default, or a full-model TPS projection.
 - Revisit: after the real FFN sublayer passes parity and traffic gates, choose between full transformer-layer closure and multi-layer routing/residency traces from measured evidence.
@@ -632,13 +632,13 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-055 — Persist routes before fetching the selected expert union
 
 - Date: 2026-08-11.
-- Status: accepted and implemented at `0b0c944`; no real payload has been materialized yet.
+- Status: accepted, implemented, and exercised by the bounded official fixture.
 - Decision: manufacture the M28 fixture in two durable phases. First persist all always-active objects and the exact natural A/B route manifest. Then fetch only the first-use selected expert union, assemble gate/up/down physical order, and convert one non-executable K3X fixture.
 - Alternatives considered: fetch all possible experts before routing; keep routes only in process memory; split trunk and experts into separate K3X artifacts; persist one dependency-closed fixture.
 - Evidence: the official-source and converter recovery matrix passes 149 tests. Focused orchestration and CLI coverage passes 27 tests, including an assertion that the route manifest exists before the first expert plan/fetch. Content-object tests distinguish fresh download, damaged-partial restart, complete-partial finalization, and verified completed-object reuse.
-- Benchmark result: none. These are correctness and recovery tests with controlled local transports, not a performance measurement or B-0029.
+- Benchmark result: the first materialization transferred exactly 941,412,864 tensor-payload bytes; a verified reuse run transferred zero. These are manufacturing counters, not token throughput or physical NVMe measurements.
 - Reason accepted: a durable route boundary makes restart reuse deterministic and prevents speculative or preferred-expert substitution, while one fixture preserves a single Reader and identity transaction for the later CPU/CUDA oracle.
-- Rejected claims: implemented materialization does not mean the official fixture has been downloaded, executed, measured, or validated for token throughput or coding quality.
+- Rejected claims: bounded materialization and sublayer execution do not mean a complete shard/checkpoint, token generation, or coding quality has been validated.
 - Revisit: after the one authorized bounded fixture is materialized, compare observed selected-union size and actual downloaded bytes with the 32-expert upper bound before changing packing or concurrency.
 
 ## D-056 — Separate natural route derivation from pure portable MoE execution
@@ -656,11 +656,11 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-057 — Keep the official MoE CUDA boundary byte-native and opt-in
 
 - Date: 2026-08-11.
-- Status: accepted and implemented at `bb634e1`; official full-size validation is pending.
+- Status: accepted, implemented, and validated on the bounded official 32-expert artifact.
 - Decision: add one dedicated CUDA method that consumes Task 3 prepared hidden/prefix data, canonical routes, raw BF16 views, and native MXFP4 experts. Keep both transient and bounded exact resident modes, one final output D2H, and no production dispatch/default change.
 - Alternatives considered: convert BF16 tensors to host FP32 and reuse generic dense calls; compose existing public backend calls with intermediate D2H transfers; add a dependency-closed byte-native CUDA boundary.
 - Evidence: the focused transient/resident fixture matches the portable oracle within `2e-2`, selected order is exact, caller buffers are unchanged, malformed aliases/routes/capacity fail, and the second resident call adds zero weight H2D while increasing cache hits. CPU CTest passes 17/17, CUDA CTest passes 30/30, and Compute Sanitizer reports `ERROR SUMMARY: 0 errors`.
-- Benchmark result: none. The fixture is tiny and records correctness/traffic invariants only; no B-0029, latency distribution, token rate, quality, physical PCIe, or NVMe result exists.
+- Benchmark result: B-0029 records official released-dimension sublayer latency and logical CUDA-copy traffic. It records no token rate, quality, physical PCIe, or NVMe result.
 - Reason accepted: this closes the execution contract needed by the pinned fixture without hiding BF16 expansion in host memory or weakening the fail-closed production artifact boundary.
 - Rejected claims: this does not prove official full-size parity, changing Top-16 residency pressure, end-to-end token generation, quality, or a CUDA default.
 - Revisit: evaluate kernel fusion, residency policy, and a wider device boundary only after the pinned official B-0029 result exposes real dimensions and traffic.
@@ -671,8 +671,8 @@ Post-review note: final read-only review found that partial-submit or completion
 - Status: accepted and implemented at `a109409` and consumed by `bdab0da`.
 - Decision: preserve the pre-fetch route-manifest publication, then atomically add a final artifact record containing filename, K3X root, source digest, and per-source-tensor digests only after conversion and Reader verification succeed.
 - Alternatives considered: hard-code a root before materialization; trust a caller-supplied artifact independently from its routes; create a second execution manifest; finalize the existing route manifest after conversion.
-- Evidence: the materializer test proves the route manifest exists before expert planning and that the successful final record carries the Reader-observed root. The harness independently rejects malformed/fixed-identity manifests and a generic storage fixture before CUDA construction; 18 synthetic tests pass and three real-fixture smoke cases remain skipped.
-- Benchmark result: none. This is an identity and recovery contract, not B-0029.
+- Evidence: the materializer test proves the route manifest exists before expert planning and that the successful final record carries the Reader-observed root. The harness independently rejects malformed/fixed-identity manifests and a generic storage fixture before CUDA construction; 18 synthetic tests and all three actual-fixture smoke cases pass.
+- Benchmark result: the B-0029 artifact and route manifest are bound by root `1287d84bbfa02e849ab786808107fbfbfe14459477bf79e3048b2ebb6bdff288` and source digest `d9e4425a11ca71b53abce52b8f120bd257740fc93cbe63df4c1fc3b7465cee35`.
 - Reason accepted: the same manifest now binds route derivation and exact artifact bytes without weakening restart durability or inventing a root before the real bytes exist.
 - Rejected claims: a self-consistent transport-pinned manifest is not a complete-shard signature, publisher attestation, official full-size execution, or performance result.
 - Revisit: consider a separate signed execution manifest only if production manufacturing needs immutable pre- and post-conversion records with distinct retention policies.
@@ -680,11 +680,23 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-059 — Fix B-0029 to three non-ranking evidence rows
 
 - Date: 2026-08-11.
-- Status: accepted and implemented at `ba3a0d2`; formal evidence is pending.
+- Status: accepted, implemented, and measured at `bf147fa` after two documented fail-closed corrections.
 - Decision: run exactly A transient, A resident, and alternating resident with one process per row, 3 warmups, and 20 measured iterations. Validate each row before writing and never rerun or rank timings.
 - Alternatives considered: add B transient; search over warmups/iterations; rank repeated runs; keep the smallest matrix that isolates exact residency and changing-route union behavior.
-- Evidence: the controlled runner/verifier suite plus harness suite passes 28 tests with 3 real-fixture skips. It rejects forbidden token/quality/NVMe claims, identity/parity/traffic mutations, resident warm H2D, raw/aggregate/CSV/case-order divergence, and strict iteration drift.
-- Benchmark result: none. B-0029 has not yet run.
+- Evidence: the first attempted formal run stopped before output because the verifier required exact floating-point contribution equality instead of the accepted `1e-6` tolerance. The second stopped before output because the transient allocation formula omitted 64 per-call temporary allocations. Both defects were corrected before the sole published matrix. Strict verification now rehashes and validates all three raw rows, aggregate, summary JSON, and LF CSV.
+- Benchmark result: A transient/resident medians are 97,095,781/10,153,939 ns; alternating resident is 20,201,466 ns per A+B sequence. Both resident rows have zero warm weight H2D. Maximum absolute error is zero for A and `0.00048828125` for alternating.
 - Reason accepted: the three rows answer the immediate correctness and residency questions without turning the formal run into a timing search.
 - Rejected claims: tool implementation is not measured evidence, official execution, token throughput, quality, or physical traffic.
 - Revisit: add B transient only if the first formal matrix exposes a case-specific transient attribution that A cannot represent.
+
+## D-060 — Advance to one complete official transformer-layer boundary
+
+- Date: 2026-08-11.
+- Status: accepted as the next milestone; not implemented.
+- Decision: after publishing M28, close one layer-1 transformer boundary by adding the smallest dependency-complete KDA/MLA/Attention Residual inputs around the measured MoE FFN. Keep the resulting artifact non-executable in the production token loop until whole-layer parity passes.
+- Alternatives considered: optimize the current FFN kernels immediately; collect multi-layer routing traces without attention state; close one complete transformer layer first.
+- Evidence: B-0029 establishes exact natural Top-16 routing, shared-expert execution, contribution mixing, residual output, and resident traffic at the FFN boundary. It still begins after attention output and therefore cannot expose KDA/MLA state traffic, full-layer scheduling, or token-loop latency. Optimizing the isolated FFN now risks improving a boundary that may not dominate once recurrent-attention work is included.
+- Benchmark result: B-0029 resident A spends about 7.40 ms per call in measured CUDA kernels and about 2.76 ms in remaining boundary orchestration, but there is no full-layer or token timing.
+- Reason accepted: one complete layer is the smallest next boundary that can identify whether compute, orchestration, state movement, or weight residency dominates before broader checkpoint manufacturing.
+- Rejected claims: this decision does not authorize a full checkpoint download, Cloud Run execution, end-to-end TPS projection, or production default change.
+- Revisit: after one complete official layer has independent parity and measured traffic, decide whether to optimize/fuse the layer locally or proceed to multi-layer routing and cache traces.

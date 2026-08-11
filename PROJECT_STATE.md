@@ -2,13 +2,14 @@
 
 ## Current milestone
 
-Milestone 28 dependency-closed real MoE FFN sublayer is the active engineering boundary. Native BF16 K3X support, exact official tensor planning, deterministic natural route derivation, content-addressed two-phase selected-union materialization, source assembly, portable BF16/MXFP4 CPU/CUDA execution, final artifact/root binding, the strict pinned harness, and the B-0029 runner/verifier are implemented. The ignored real fixture and formal B-0029 measurement remain pending.
+Milestone 28 dependency-closed real MoE FFN sublayer is locally complete and awaiting public integration. Native BF16 K3X support, exact official tensor planning, deterministic natural route derivation, content-addressed two-phase selected-union materialization, source assembly, portable BF16/MXFP4 CPU/CUDA execution, final artifact/root binding, the strict pinned harness, the B-0029 runner/verifier, the bounded ignored fixture, formal B-0029 evidence, and the full verification matrix are complete. D-060 selects one dependency-complete official transformer layer as Milestone 29's next engineering boundary.
 
-State audited last on 2026-08-11 after M28 Task 6 commit `ba3a0d2` passed the combined runner/harness suite 28 tests with 3 ignored-real-fixture skips. CUDA CTest remains 30/30 and focused Compute Sanitizer reports zero errors. The M28 multi-expert fixture has not been downloaded. No complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-11 after evidence commit `bf147fa` and integrity-fixture correction `bdfc0b6`. Fresh verification passes CPU CTest 17/17 plus Python 507/97, liburing CTest 18/18 plus Python 509/95, ASan/UBSan CTest 18/18, CUDA CTest 30/30 plus actual-artifact Python 592/12, and actual alternating resident Compute Sanitizer with zero errors. The bounded fixture contains eleven always-active tensors and a 32-expert union; no complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
 - Milestone 0 deterministic synthetic K3-compatible PyTorch graph, K3X v1 streaming converter, strict Python/C++ readers, and independent portable C++20 runtime.
+- Milestone 28 bounded official layer-1 MoE FFN manufacturing, exact natural Top-16 A/B routing, 32-expert union, portable/CUDA parity, exact residency, B-0029 evidence, and full local verification without a complete shard or checkpoint.
 - Milestone 25 strict generic source containment and ownership, bounded canonical safetensors metadata, exact resume-ledger schema, committed-prefix validation, and fail-atomic orphan-suffix recovery without changing K3X v1.
 - Milestone 26 fixed-authority HTTPS discovery, content-addressed snapshot/index/config/header identity, exact official expert planning, atomic real-byte materialization, K3X round-trip, and strict B-0027 JSON/CSV verification.
 - B-0027 official layer-1 expert-0 conversion with 59,799,719 metadata bytes, 818,704 header bytes, 17,547,264 tensor-payload bytes, Reader validity, and explicit `transport-pinned-range` provenance.
@@ -113,8 +114,8 @@ State audited last on 2026-08-11 after M28 Task 6 commit `ba3a0d2` passed the co
 - M28 Task 2 is complete at `0b0c944`: the route manifest is durable before expert fetching, only the natural A/B first-use union is planned, object reuse is rehashed, response bytes are measured separately from logical source bytes, and production generation remains fail-closed.
 - M28 Task 3 is complete at `8a13cf5`: the dimension-driven CPU oracle preserves explicit BF16 boundaries, validates the natural route before execution, decodes native MXFP4 experts exactly, and matches independent PyTorch intermediate values without production dispatch.
 - M28 Task 4 is complete at `bb634e1`: the opt-in CUDA method executes the routed/shared BF16 and selected native-MXFP4 FFN boundary on one stream, returns one final D2H vector, and reuses byte-native resident weights with zero second-call weight H2D.
-- M28 Task 5 is implemented at `a109409`/`bdab0da`: final materialization binds the Reader root into the route manifest, and the harness validates pinned identities, exact tensor metadata/order, recomputed routes, portable oracles, CUDA parity, and traffic formulas. Actual official smoke remains pending by design.
-- M28 Task 6 is complete at `ba3a0d2`: the fixed three-row evidence tool validates raw schema, formulas, parity, digests, aggregate, LF-only CSV, and strict 3/20 identity without rerunning or ranking timings.
+- M28 Task 5 is complete at `a109409`/`bdab0da`: final materialization binds the Reader root into the route manifest, and the harness validates pinned identities, exact tensor metadata/order, recomputed routes, portable oracles, CUDA parity, and traffic formulas. All three actual official smoke cases pass.
+- M28 Tasks 6–7 are complete through `bf147fa`/`bdfc0b6`: the fixed three-row evidence tool validates raw schema, formulas, parity, digests, aggregate, LF-only CSV, and strict 3/20 identity; the sole published B-0029 matrix and fresh full verification pass. Public PR/merge and post-merge CI remain in progress.
 - Milestone 27 implementation, B-0028, full local verification, README/TITAN Ledger synchronization, D-054 M28 selection, final Critical/Important review, PR #46 merge, and post-merge correctness/CodeQL are complete.
 - Milestone 26 implementation, live dry-run, one exact official expert conversion, B-0027 verifier, full local verification, final Critical/Important review, README/TITAN Ledger synchronization, PR #44 merge, and post-merge CI are complete.
 - The actual official K3X storage fixture still exits 4 with `NON_EXECUTABLE_ARTIFACT` through `k3x_run`; the separate M27 benchmark-only path executes only the pinned expert FFN and does not weaken that production guard.
@@ -143,13 +144,13 @@ State audited last on 2026-08-11 after M28 Task 6 commit `ba3a0d2` passed the co
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Current documentation reconciliation branch: `codex/milestone-twenty-seven-publication` from public Milestone 27 integration head `ec08b827`.
-- Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build`, `build-uring`, `build-uring-asan`, and `build-cuda`.
+- Current integration branch: `codex/milestone-twenty-eight-real-moe-ffn` from public Milestone 27 integration head `ec08b827`.
+- Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build`, `build-liburing`, `build-asan`, and `build-cuda`.
 
 ## Known failures and blockers
 
 - Windows Smart App Control still blocks unsigned `k3x_run.exe`; WSL2 is the verified local CUDA path and native Linux remains the final performance authority.
-- The executable checkpoint is synthetic and tiny. The official artifact contains only one expert range executable through the dedicated benchmark harness; no complete shard or full checkpoint has been downloaded. Neither B-0027 nor the Task 2 validation is token throughput or full-model evidence.
+- The production-executable checkpoint is synthetic and tiny. The bounded official M28 artifact executes only through the dedicated benchmark harness and remains rejected by `k3x_run`; no complete shard or full checkpoint has been downloaded. B-0029 is FFN sublayer evidence, not token throughput or full-model evidence.
 - M26 binds transport, snapshot, index, config, shard header, range, tensor, microshard, and K3X identities, but does not recompute the complete shard LFS digest or provide signed publisher provenance. Production conversion needs stronger complete-object or authenticated-chunk verification.
 - The graph remains CPU-driven outside FFN blocks. KDA, MLA, routing, score mixing, residual work, state management, and non-FFN boundaries remain on the host.
 - L1 misses use ordered Reader batches into pageable host vectors. Deadline mode may run one such blocking batch on a worker, but there is no cross-layer asynchronous L2 pipeline, transition predictor, or N/N+1/N+2 triple buffering.
@@ -168,9 +169,9 @@ State audited last on 2026-08-11 after M28 Task 6 commit `ba3a0d2` passed the co
 
 ## Next concrete tasks
 
-1. Materialize only the bounded ignored M28 fixture now that harness and evidence identities are ready, without downloading a full shard or checkpoint.
-2. Run the three pending smoke cases and the resident alternating Compute Sanitizer gate.
-3. Run B-0029 once, followed by strict evidence and the complete verification matrix before any performance claim.
+1. Complete final diff/evidence review, publish the M28 branch through a public PR, and wait for correctness plus CodeQL.
+2. Rebase-merge only when clean, then verify post-merge `main` correctness and CodeQL before beginning M29.
+3. For M29, design the smallest bounded official layer-1 KDA/MLA/Attention Residual closure around the measured FFN; do not download a complete shard/checkpoint or run paid cloud resources without a separate milestone.
 
 ## Hardware assumptions
 
@@ -197,10 +198,14 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 B-0027 closes the immediate official-source compatibility and bounded real-byte conversion gate. Its 14.972839499-second wall time includes public metadata/header/payload transport and local conversion; it is not a runtime bottleneck, TPS measurement, or physical NVMe result. The next concrete bottleneck is the missing dependency-closed real CUDA layer invocation and independent numerical oracle. Peak converter RSS, complete-shard provenance, native-Linux physical storage behavior, and full-model execution remain unmeasured.
 
-B-0028 remains the latest performance measurement. Twenty transient single-expert calls transfer 350,945,280 weight bytes and have a 2,508,377 ns median; exact residency transfers zero measured weight bytes after cold admission and has a 331,868 ns median. Tasks 4–5 close the synthetic complete-FFN CUDA and strict harness contracts only. The next evidence bottleneck is the absent bounded official router-selected Top-16 plus shared-expert fixture and B-0029, not CUDA API availability. Physical L2/L1 traffic, natural routed-set reuse, cache pressure, complete-layer latency, token throughput, and quality remain unmeasured.
+B-0029 is the latest performance measurement. Route A transient/resident medians are 97,095,781/10,153,939 ns per complete official MoE FFN call. Exact residency removes 12,955,299,840 logical warm weight-H2D bytes over twenty A calls and retains 647,764,992 weight bytes. Alternating A+B residency measures 20,201,466 ns per sequence, retains 928,521,216 weight bytes, transfers zero warm weight bytes, and matches the independent oracle within `0.00048828125`.
+
+The immediate measured boundary is approximately 7.40 ms of CUDA kernel work plus 2.76 ms of remaining host/orchestration work per resident A FFN call. The next bottleneck is unknown outside this sublayer because KDA, MLA, Attention Residual, state movement, whole-layer scheduling, and the token loop are absent. Physical L2/L1 traffic, cache pressure across layers, complete-layer latency, token throughput, GPU utilization/bandwidth, native-Linux behavior, and quality remain unmeasured.
 
 ## Last known-good state
 
+- Local M28 final head `bdfc0b6` plus the current synchronized ledger contains the bounded official artifact harness, B-0029 evidence, and complete source-integrity fixture. Fresh CPU, liburing, ASan/UBSan, and CUDA matrices pass with counts recorded above; actual alternating resident Compute Sanitizer reports `ERROR SUMMARY: 0 errors`.
+- Formal B-0029 evidence commit `bf147fa` records three rows with aggregate SHA-256 `2a1a758493791e5a417fda694dc0ee2a3e9adb2d92f71c39e7589fdc2683be39`, summary CSV SHA-256 `b251aea5cccbe8cba2417e4cc3a97f9127cdd52fc1a07904d32d170fc7f64a95`, and strict committed-evidence verification. No token/TPS or quality claim is present.
 - Local M28 Task 6 head `ba3a0d2` implements the strict fixed-matrix B-0029 tool. Combined runner/harness pytest passes 28 with 3 real-fixture skips; compile validation and `git diff --check` pass. No B-0029 measurement was produced.
 - Local M28 Task 5 head `bdab0da` plus manifest binding `a109409` implements the pinned harness. Harness pytest passes 18 with 3 ignored-real-fixture skips; CUDA CTest passes 30/30; focused Compute Sanitizer reports zero errors; strict warning compilation passes. No official M28 payload or performance result was produced.
 - Local M28 Task 4 head `bb634e1` implements the opt-in byte-native official MoE CUDA boundary. CPU CTest passes 17/17, CUDA CTest passes 30/30, and the focused Compute Sanitizer reports `ERROR SUMMARY: 0 errors`. Tiny transient/resident calls match the portable oracle within `2e-2`; the second resident call adds zero weight H2D. No official M28 payload or performance result was produced.

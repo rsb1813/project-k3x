@@ -430,17 +430,19 @@ Resident execution lowers this bounded warm median by 86.77% and removes all mea
 
 The M28 storage path now implements the complete two-phase manufacturing contract without downloading a full shard. Phase 1 materializes and verifies the eleven always-active layer-1 tensors, derives two deterministic natural Top-16 routes from all 896 scores, and atomically persists their first-use union. Phase 2 requests only that selected union, preserves each native MXFP4 expert exactly, repacks expert matrices in gate/up/down execution order, and assembles one BF16/MXFP4 K3X storage fixture.
 
-Every response and local copy is bounded to 8 MiB. Completed objects are rehashed before reuse, verified partials resume, damaged partials restart, and route identity is durable before expert fetching begins. `--scope moe-ffn` remains a zero-payload dry-run by default; payload access additionally requires `--materialize --output-dir`. Reports separate actual downloaded bytes from logical source-object bytes.
+Tensor-payload responses and local copies are bounded to 8 MiB; the separately verified model-index metadata response is 59,764,096 bytes. Completed objects are rehashed before reuse, verified partials resume, damaged partials restart, and route identity is durable before expert fetching begins. `--scope moe-ffn` remains a zero-payload dry-run by default; payload access additionally requires `--materialize --output-dir`. Reports separate actual downloaded bytes from logical source-object bytes.
 
 Commit `0b0c944` passes 27 focused materializer/CLI tests and 149 official-source/converter recovery regressions. Commit `8a13cf5` adds the pure portable CPU oracle with exact BF16 rounding, natural route validation, native-MXFP4 expert execution, routed/shared mixing, and final prefix addition. Every tiny intermediate boundary matches an independent PyTorch calculation; CPU CTest passes 17/17 and the full C++ parity file passes 113 tests with 32 capability skips.
 
 Commit `bb634e1` adds the opt-in byte-native CUDA counterpart. Routed/shared BF16 tensors and selected native-MXFP4 experts stay in their source representation through transient upload or exact bounded residency; the complete FFN boundary executes on one stream and returns one final vector. Tiny transient and resident fixtures match the portable oracle within `2e-2`, a second resident call performs zero additional weight H2D, CUDA CTest passes 30/30, and Compute Sanitizer reports zero errors.
 
-Commits `a109409` and `bdab0da` bind the final K3X root back into the durable route manifest and add the strict official fixture harness. It verifies pinned source identity, exact tensor metadata/order, both recomputed routes, CPU-oracle parity, and transient/resident traffic formulas before emitting the B-0029 input schema. Synthetic coverage passes 18 tests; three official-fixture smoke cases remain skipped until bounded materialization.
+Commits `a109409` and `bdab0da` bind the final K3X root back into the durable route manifest and add the strict official fixture harness. It verifies pinned source identity, exact tensor metadata/order, both recomputed routes, CPU-oracle parity, and transient/resident traffic formulas before emitting the B-0029 input schema. Synthetic coverage passes 18 tests, and all three official-fixture smoke cases pass on the bounded ignored artifact.
 
-Commit `ba3a0d2` adds the non-ranking B-0029 evidence pipeline for exactly A transient, A resident, and alternating resident. It verifies every schema, traffic, parity, digest, aggregate, and LF-only CSV boundary before publication. The tooling passes controlled tests, but B-0029 itself has not run.
+Commit `ba3a0d2` adds the non-ranking B-0029 evidence pipeline for exactly A transient, A resident, and alternating resident. It verifies every schema, traffic, parity, digest, aggregate, and LF-only CSV boundary before publication. The bounded run selected two disjoint natural Top-16 routes, materialized their exact 32-expert union plus eleven always-active tensors, and transferred 941,412,864 tensor-payload bytes without downloading a complete shard or checkpoint. A verified reuse run transferred zero payload bytes.
 
-This remains correctness-only evidence. The bounded official M28 fixture has not been downloaded, B-0029 tooling and bounded materialization are next, and no token-rate, quality, physical-NVMe, or full-layer result is claimed.
+B-0029 now measures a 97.096 ms transient median and a 10.154 ms exact-resident median for route A. The resident A row transfers zero warm weight bytes and keeps 647.765 MB resident. Alternating A+B residency measures 20.201 ms per sequence, keeps 928.521 MB resident, transfers zero warm weight bytes, and matches the independent oracle within `0.00048828125`. These are complete official MoE FFN sublayer measurements on RTX 5080 under WSL2. They are not token-rate, quality, physical-NVMe/PCIe, complete-layer, or native-Linux results.
+
+The full M28 verification matrix passes CPU CTest 17/17 with Python 507 passed and 97 skipped, liburing CTest 18/18 with Python 509 passed and 95 skipped, ASan/UBSan CTest 18/18, and CUDA CTest 30/30 with Python 592 passed and 12 skipped. Compute Sanitizer reports zero errors on the actual alternating resident path. The next boundary is one complete official transformer layer, adding KDA/MLA/Attention Residual around the now-validated FFN before any end-to-end token claim.
 
 ## Quick start
 
@@ -718,6 +720,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Opt-in native BF16/MXFP4 official MoE CUDA boundary with transient/resident parity and sanitizer coverage.
 - [x] Strict pinned official MoE fixture harness with root binding, route recomputation, and fail-closed synthetic coverage.
 - [x] Strict three-row B-0029 runner/verifier with digest-backed JSON/CSV evidence contracts.
+- [x] Bounded 32-expert official MoE fixture, actual parity/sanitizer gates, and formal RTX 5080 B-0029 evidence.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.
@@ -768,13 +771,13 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 ## Current limitations
 
 - The executable model is synthetic and text-only.
-- The runtime implements synthetic dimensions; the CUDA backend accelerates only dense and MXFP4 matrix operations while the graph remains host-driven.
+- The production runtime remains synthetic and host-driven outside FFN blocks. A dedicated non-default harness executes one bounded official layer-1 MoE FFN sublayer at released dimensions, but KDA/MLA/attention and the token loop are not connected to that artifact.
 - Reusable scratch, bounded static weight residency, and same-input grouping are implemented, but activations and results still cross the host/device boundary and asynchronous overlap is not implemented.
 - Static residency has no eviction and is not the future three-tier expert cache.
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
 - Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0025 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; transient, bounded-resident, resident-grid, resident MoE-layer, admission-validation, and CUDA Graph paths are exact opt-in experiments. B-0025 finds mixed stable/alternating deltas and rotating churn 6.09%–11.57% slower, so no graph default changes. There is no learned DSpark drafter, reduced-precision draft path, eviction-capable draft residency, device-resident whole-token graph, or full-model speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
-- The converter and dedicated CUDA harness have processed and executed one bounded official Kimi K3 expert range. M28 now implements natural-route derivation, restartable selected-union manufacturing, a portable complete-FFN oracle, and its synthetic CUDA boundary, but the new official multi-expert fixture has not yet been downloaded or executed. No complete real layer, complete shard, or full checkpoint has been processed. Provenance remains transport-pinned range identity, not recomputed full-object LFS verification or signed publisher provenance.
+- The converter and dedicated CUDA harness have processed and executed a bounded official Kimi K3 layer-1 MoE FFN slice with two natural Top-16 routes and a 32-expert union. No complete transformer layer, complete shard, or full checkpoint has been processed. Provenance remains transport-pinned range identity, not recomputed full-object LFS verification or signed publisher provenance.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.
 - No open-source license has been selected yet; public visibility does not itself grant reuse rights.
 

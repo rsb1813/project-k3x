@@ -197,7 +197,21 @@ B-0028 replaces the released repeated-view fixture with one pinned official laye
 
 The resident warm median is 86.77% lower in this bounded run, or 7.56 times the transient median. The single cold resident call is 8.78% slower than the single cold transient call, so residency is valuable only when reuse occurs. These wall and kernel observations come from one deterministic WSL2 run and must not be projected to a full layer or tok/s.
 
-The arithmetic natural Top-16 routed payload remains `16E = 280,756,224` bytes per MoE layer before shared-expert, router, descriptor, activation, and workspace bytes. B-0028 proves that one real expert can occupy exact L0 residency and avoid repeated H2D; it does not prove that a changing natural Top-16 set fits a useful L0 policy or avoids L1/L2 traffic. M28 must therefore measure a real router-selected Top-16 set plus the real shared-expert path as one dependency-closed FFN sublayer before extrapolating cache hit rate or layer latency.
+The arithmetic natural Top-16 routed payload remains `16E = 280,756,224` bytes per MoE layer before shared-expert, router, descriptor, activation, and workspace bytes. B-0028 proves that one real expert can occupy exact L0 residency and avoid repeated H2D; it does not prove that a changing natural Top-16 set fits a useful L0 policy or avoids L1/L2 traffic.
+
+## Milestone 28 official MoE FFN traffic model
+
+B-0029 closes one dependency-complete layer-1 FFN sublayer over two deterministic hidden inputs. Their natural Top-16 routes are disjoint, so the selected union contains 32 experts. The final K3X artifact is 941,453,568 bytes and the resident working sets are 647,764,992 bytes for route A and 928,521,216 bytes for the A+B union.
+
+| Case | Median boundary latency | Kernel time over measured iterations | Warm weight H2D | Activation H2D | D2H | Resident weights |
+|---|---:|---:|---:|---:|---:|---:|
+| A transient, 20 calls | 97,095,781 ns/call | 147,674,816 ns | 12,955,299,840 B | 1,163,520 B | 573,440 B | 0 B |
+| A resident, 20 calls | 10,153,939 ns/call | 147,954,240 ns | 0 B | 1,163,520 B | 573,440 B | 647,764,992 B |
+| Alternating resident, 20 A+B sequences | 20,201,466 ns/sequence | 294,440,320 ns | 0 B | 2,327,040 B | 1,146,880 B | 928,521,216 B |
+
+The resident A median is 89.54% lower than transient A in this single WSL2 run. Its measured kernel total is nearly unchanged, demonstrating that residency removes repeated weight upload and allocation work rather than changing the mathematical kernel. Dividing the aggregate kernel counters gives about 7.40 ms per FFN call; the resident A wall median leaves about 2.76 ms per call for routing setup, launch/orchestration, activation copies, synchronization, and final D2H at this boundary.
+
+The tool's H2D counters are logical CUDA copy bytes, not independently observed PCIe bus traffic. The fixture begins after attention output and ends after the FFN residual boundary, so these values cannot be multiplied into tok/s without KDA, MLA, Attention Residual, layer scheduling, cache pressure across layers, and token-loop measurements. Physical NVMe and RAM-to-GPU GB/token, GPU utilization, memory bandwidth, and quality remain unmeasured.
 
 ## Required production measurements
 
