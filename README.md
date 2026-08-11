@@ -434,7 +434,9 @@ Every response and local copy is bounded to 8 MiB. Completed objects are rehashe
 
 Commit `0b0c944` passes 27 focused materializer/CLI tests and 149 official-source/converter recovery regressions. Commit `8a13cf5` adds the pure portable CPU oracle with exact BF16 rounding, natural route validation, native-MXFP4 expert execution, routed/shared mixing, and final prefix addition. Every tiny intermediate boundary matches an independent PyTorch calculation; CPU CTest passes 17/17 and the full C++ parity file passes 113 tests with 32 capability skips.
 
-This remains correctness-only evidence. The bounded official M28 fixture has not been downloaded, the native BF16 CUDA boundary is still next, and no B-0029, token-rate, quality, physical-NVMe, or full-layer result is claimed.
+Commit `bb634e1` adds the opt-in byte-native CUDA counterpart. Routed/shared BF16 tensors and selected native-MXFP4 experts stay in their source representation through transient upload or exact bounded residency; the complete FFN boundary executes on one stream and returns one final vector. Tiny transient and resident fixtures match the portable oracle within `2e-2`, a second resident call performs zero additional weight H2D, CUDA CTest passes 30/30, and Compute Sanitizer reports zero errors.
+
+This remains correctness-only evidence. The bounded official M28 fixture has not been downloaded, the pinned harness and B-0029 are next, and no token-rate, quality, physical-NVMe, or full-layer result is claimed.
 
 ## Quick start
 
@@ -709,6 +711,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Pinned official expert CPU-oracle/RTX 5080 execution with strict transient/resident B-0028 evidence.
 - [x] Two-phase bounded official MoE planning, natural-route persistence, exact selected-union materialization, and non-executable K3X assembly.
 - [x] Dimension-driven portable BF16/MXFP4 official MoE oracle with independent PyTorch boundary parity.
+- [x] Opt-in native BF16/MXFP4 official MoE CUDA boundary with transient/resident parity and sanitizer coverage.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.
@@ -765,7 +768,7 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
 - Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0025 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; transient, bounded-resident, resident-grid, resident MoE-layer, admission-validation, and CUDA Graph paths are exact opt-in experiments. B-0025 finds mixed stable/alternating deltas and rotating churn 6.09%–11.57% slower, so no graph default changes. There is no learned DSpark drafter, reduced-precision draft path, eviction-capable draft residency, device-resident whole-token graph, or full-model speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
-- The converter and dedicated CUDA harness have processed and executed one bounded official Kimi K3 expert range. M28 now implements natural-route derivation and restartable selected-union manufacturing, but the new multi-expert fixture has not yet been downloaded or executed. No complete real layer, complete shard, or full checkpoint has been processed. Provenance remains transport-pinned range identity, not recomputed full-object LFS verification or signed publisher provenance.
+- The converter and dedicated CUDA harness have processed and executed one bounded official Kimi K3 expert range. M28 now implements natural-route derivation, restartable selected-union manufacturing, a portable complete-FFN oracle, and its synthetic CUDA boundary, but the new official multi-expert fixture has not yet been downloaded or executed. No complete real layer, complete shard, or full checkpoint has been processed. Provenance remains transport-pinned range identity, not recomputed full-object LFS verification or signed publisher provenance.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.
 - No open-source license has been selected yet; public visibility does not itself grant reuse rights.
 
