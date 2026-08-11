@@ -1073,5 +1073,46 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Hardware/model: controlled fake runner records plus the synthetic harness suite; no official M28 multi-expert payload.
 - Mode: fixed A transient, A resident, and alternating resident orchestration with strict raw/summary/CSV schema, traffic, parity, digest, and case-order verification.
 - Verification result: combined runner/harness pytest passes 28 tests with 3 ignored-real-fixture skips. Python compile validation and `git diff --check` pass.
-- All performance and quality fields: not measured. No B-0029 rows exist yet.
-- Interpretation: this is evidence-pipeline correctness only. The formal run must not be reported until the bounded fixture, three smoke cases, and strict 3/20 execution complete.
+- At this tooling-only commit, all performance and quality fields were not measured and no B-0029 rows existed yet.
+- Interpretation: this historical entry records evidence-pipeline correctness before the formal run documented below.
+
+## B-0029 — Official layer-1 MoE FFN sublayer
+
+- Date: 2026-08-11.
+- Evidence commit: `bf147fa`; final verification fix: `bdfc0b6`.
+- Hardware: AMD Ryzen 7 9800X3D, NVIDIA GeForce RTX 5080 16,303 MiB, driver 591.86, CUDA 13.3.1, WSL2 Ubuntu 24.04.4 on Windows 11.
+- Model/checkpoint: bounded non-executable layer-1 artifact from public `moonshotai/Kimi-K3` commit `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`; two deterministic natural Top-16 routes with a 32-expert union; K3X root `1287d84bbfa02e849ab786808107fbfbfe14459477bf79e3048b2ebb6bdff288`.
+- Mode: byte-native official BF16 trunk/shared tensors, native MXFP4 experts, FP32 accumulation, exact natural routing, 3 warmups, 20 measured iterations, one subprocess per row.
+
+| Case | Median | p05 | p95 | Kernel total | Weight H2D | Activation H2D | D2H | Resident weights | Hits | Peak VRAM | Max error |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| A transient | 97,095,781 ns/call | 89,552,049 ns | 104,365,582 ns | 147,674,816 ns | 12,955,299,840 B | 1,163,520 B | 573,440 B | 0 B | 0 | 648,845,120 B | 0 |
+| A resident | 10,153,939 ns/call | 9,856,963 ns | 10,613,355 ns | 147,954,240 ns | 0 B | 1,163,520 B | 573,440 B | 647,764,992 B | 1,080 | 648,845,120 B | 0 |
+| Alternating resident | 20,201,466 ns/A+B sequence | 19,769,028 ns | 20,888,597 ns | 294,440,320 ns | 0 B | 2,327,040 B | 1,146,880 B | 928,521,216 B | 2,160 | 929,601,344 B | 0.00048828125 |
+
+- A transient weight split: 7,340,175,360 BF16 bytes and 5,615,124,480 MXFP4 bytes over twenty calls. Its transient device allocation count is 2,040 after the corrected 102-per-call accounting.
+- A resident median is 89.54% lower than A transient in this single formal run. This is a measured FFN sublayer comparison, not a projected token speedup.
+- Formal-run audit: the first attempt stopped before writing output when contribution validation incorrectly required exact float equality. The second attempt also stopped before output when the transient allocation formula omitted per-call temporaries. Commits `7bfd152` and `1afda75` corrected those fail-closed defects. The third run produced the sole published matrix; it was not rerun to select timing.
+- Evidence SHA-256: artifact `96b2919cce9a0c8bc835cb6707753a550dc3728528eda80cbc2d57c52d85c4d5`; manifest `7116a03b79fb14d25c8b7d71de0bb4333aa869ff7d4b1a8a5eb2ec01e119ee27`; runner `59b90d6b2da4498f2b8cb0c5057462e802729b0149fe957efd1f3c0711c86f9e`; aggregate `2a1a758493791e5a417fda694dc0ee2a3e9adb2d92f71c39e7589fdc2683be39`; summary JSON file `0518bbda69d7f3b0040446c8ba8e7d1847bd8a0a14c782352e2a8f8adf202cfb`; summary CSV `b251aea5cccbe8cba2417e4cc3a97f9127cdd52fc1a07904d32d170fc7f64a95`.
+- Raw SHA-256: A transient `c0d197bc366772e06f792dc8829002246c82e5590d8bd955d187392a70ac6994`; A resident `1c349fdef629cf286734a3cf6e3ebdb665e914859313733f78e7b17a7591d588`; alternating resident `e6de5bfa0b6f2a7567c8736b5e8fa5c1287dee191073bfc7f99c7f6a685bb059`.
+- Decode tok/s: not measured.
+- Prefill tok/s: not measured.
+- TTFT: not measured.
+- System RAM: not measured by the benchmark schema.
+- NVMe GB/token and physical RAM-to-GPU GB/token: not measured. H2D fields above are logical CUDA-copy counters.
+- Expert-cache hit rate: not emitted as a percentage; exact hit counts are shown above and misses/bypasses are zero in measured resident iterations.
+- Average Top-K: fixed natural Top-16, not adaptive.
+- Speculative acceptance and unique experts per verification block: not applicable; speculation is disabled.
+- Quality benchmark, GPU utilization, and GPU memory bandwidth: not measured.
+- Enabled optimizations: exact CUDA residency only in resident rows. No proxy, pruning, adaptive Top-K, speculative verification, CUDA Graph default, or lossy quantization is enabled.
+- Interpretation: B-0029 proves one dependency-complete official MoE FFN sublayer with exact routing, real shared-expert tensors, two changing routes, bounded exact residency, and independent parity. It does not include KDA, MLA, attention, a complete transformer layer, tokens, coding quality, physical storage traffic, or native-Linux performance authority.
+
+## Milestone 28 final verification matrix
+
+- Date: 2026-08-11.
+- CPU: CTest 17/17; Python 507 passed, 97 skipped.
+- liburing/direct capability build: CTest 18/18; Python 509 passed, 95 skipped.
+- ASan/UBSan: CTest 18/18.
+- CUDA with actual bounded artifact: CTest 30/30; Python 592 passed, 12 skipped.
+- Actual alternating resident Compute Sanitizer: `ERROR SUMMARY: 0 errors`; maximum absolute error `0.00048828125`; warm weight H2D zero.
+- A full-matrix precursor exposed two incomplete BF16 source-integrity fields in a Python test helper. Commit `bdfc0b6` added the source/tensor digests and canonical tensor order; focused CPU and liburing BF16 tests then passed 2/2 before this fresh matrix.

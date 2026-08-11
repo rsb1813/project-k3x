@@ -483,31 +483,31 @@ git commit -m "bench: add official MoE ablation"
 - Consumes: Tasks 1-6 and the pinned public source.
 - Produces: one ignored official MoE fixture, canonical B-0029 evidence, synchronized TITAN Ledger, and a public GitHub integration.
 
-- [ ] **Step 1: Run official dry-run and inspect the bounded request plan**
+- [x] **Step 1: Run official dry-run and inspect the bounded request plan**
 
 Run the `moe-ffn` dry-run at the pinned revision. Require zero payload bytes, exact eleven always-active tensors, exact shard identity, estimated always-on bytes 379,900,416, and maximum possible two-case bytes no greater than 941 MiB. Stop if any identity, tensor, dimension, dtype, or shard placement differs from the design.
 
-- [ ] **Step 2: Materialize once and verify every identity**
+- [x] **Step 2: Materialize once and verify every identity**
 
 Run explicit materialization into `artifacts/m28-official-moe/live`. Allow only the planned capped ranges. Verify content objects, route sets differ, union size is 16 through 32, final tensor set equals always-active plus union experts, both optional fixture bits are set, BF16 required bit is set, all CRC/root/source digests pass, and `k3x_run` returns `NON_EXECUTABLE_ARTIFACT`.
 
-- [ ] **Step 3: Run actual correctness and sanitizer gates before timing**
+- [x] **Step 3: Run actual correctness and sanitizer gates before timing**
 
 Run the Task 5 actual-artifact focused tests, direct A/B/alternating smoke, complete CUDA CTest, and Compute Sanitizer on one resident alternating iteration. Require exact routes, contribution error at most `1e-6`, final maximum error at most `2e-2`, all finite output, zero sanitizer errors, and zero resident warm weight H2D.
 
-- [ ] **Step 4: Run B-0029 exactly once**
+- [x] **Step 4: Run B-0029 exactly once**
 
 Invoke the Task 6 tool with the actual artifact/manifest/runner, output directory `results/b0029-official-moe-wsl`, 3 warmups, and 20 iterations. Do not rerun to select timing. Rerun only after documenting a correctness/evidence defect and replace every affected raw/summary file together.
 
-- [ ] **Step 5: Independently cross-check evidence**
+- [x] **Step 5: Independently cross-check evidence**
 
 Run the strict verifier, recompute every tracked file digest from staged Git blob bytes, compare raw rows to summary/CSV, validate formulas and forbidden-field absence, and add a committed-evidence regression binding artifact, manifest, runner, raw, aggregate, and CSV digests.
 
-- [ ] **Step 6: Run the complete verification matrix**
+- [x] **Step 6: Run the complete verification matrix**
 
 Run CPU CTest/pytest, liburing/direct CTest/pytest, ASan/UBSan CTest, CUDA CTest/pytest, actual-artifact focused tests, committed B-0029 tests, and Compute Sanitizer. Record fresh pass/skip counts and exact environment; do not reuse M27 counts.
 
-- [ ] **Step 7: Update README and every TITAN Ledger document**
+- [x] **Step 7: Update README and every TITAN Ledger document**
 
 Record only measured sublayer latency, traffic, residency, routes, parity, and scope. Update architecture status and D-055 or later decision evidence. Mark token metrics, quality, physical NVMe, and full-layer behavior unmeasured. Update `PROJECT_STATE.md` after every other document and identify the next measured bottleneck.
 
