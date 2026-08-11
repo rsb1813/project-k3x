@@ -25,6 +25,88 @@ def cpu_only_build() -> bool:
     return cpp_binary("test_backend_unavailable").is_file()
 
 
+def test_official_moe_portable_boundaries_match_independent_torch() -> None:
+    completed = subprocess.run(
+        [str(cpp_binary("test_official_moe")), "--dump"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    actual = json.loads(completed.stdout)
+
+    prefix = torch.tensor([0.5, -1.0], dtype=torch.bfloat16)
+    block = torch.tensor([1.0, 0.25], dtype=torch.bfloat16)
+    values = torch.stack((block, prefix)).float()
+    score_weight = torch.tensor([0.5, -0.25])
+    normalized = values * torch.rsqrt(values.square().mean(dim=-1, keepdim=True) + 1e-5)
+    attention = (normalized * score_weight).sum(dim=-1).softmax(dim=-1)
+    hidden = (attention[:, None] * values).sum(dim=0).to(torch.bfloat16)
+    hidden = (
+        hidden.float()
+        * torch.rsqrt(hidden.float().square().mean() + 1e-5)
+        * torch.tensor([1.0, 0.5])
+    ).to(torch.bfloat16)
+    router = torch.tensor([[1.0, 0.0], [0.0, 1.0], [-1.0, 1.0]])
+    correction = torch.tensor([0.0, 0.1, -0.05])
+    scores = torch.sigmoid(router @ hidden.float())
+    selected = torch.topk(scores + correction, 2, sorted=False).indices.tolist()
+    selected = sorted(selected, key=lambda expert: (-float(scores[expert] + correction[expert]), expert))
+    contributions = scores[selected] / scores[selected].sum()
+
+    expert_matrices = {
+        0: (
+            torch.tensor([[1.0, 0.5], [0.5, 1.0]]),
+            torch.tensor([[1.0, 1.0], [0.5, 1.5]]),
+            torch.tensor([[1.0, 0.5], [0.5, 1.0]]),
+        ),
+        1: (
+            torch.tensor([[0.5, 1.0], [1.0, 0.5]]),
+            torch.tensor([[1.0, 0.5], [1.5, 1.0]]),
+            torch.tensor([[1.0, 0.5], [1.0, 0.5]]),
+        ),
+    }
+
+    def situ(gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
+        return 4.0 * torch.tanh(gate / 4.0) * torch.sigmoid(gate) * (
+            25.0 * torch.tanh(up / 25.0)
+        )
+
+    latent = hidden.float().to(torch.bfloat16).float()
+    expert_outputs = []
+    for expert_id in selected:
+        gate, up, down = expert_matrices[expert_id]
+        expert_outputs.append(
+            (down @ situ(gate @ latent, up @ latent)).to(torch.bfloat16).float()
+        )
+    mixed = sum(
+        weight * output for weight, output in zip(contributions, expert_outputs)
+    ).to(torch.bfloat16).float()
+    routed = (
+        mixed * torch.rsqrt(mixed.square().mean() + 1e-5)
+    ).to(torch.bfloat16).float()
+    shared = situ(hidden.float(), hidden.float()).to(torch.bfloat16).float()
+    combined = (routed + shared).to(torch.bfloat16).float()
+    output = (prefix.float() + combined).to(torch.bfloat16).float()
+
+    assert actual["expert_ids"] == selected
+    assert actual["contributions"] == pytest.approx(contributions.tolist(), abs=1e-6)
+    for name, expected in {
+        "hidden": hidden.float(),
+        "latent": latent,
+        "mixed_latent": mixed,
+        "routed": routed,
+        "shared": shared,
+        "combined": combined,
+        "output": output,
+    }.items():
+        assert actual[name] == pytest.approx(expected.tolist(), abs=1e-6)
+    assert len(actual["expert_outputs"]) == len(expert_outputs)
+    for actual_output, expected_output in zip(
+        actual["expert_outputs"], expert_outputs
+    ):
+        assert actual_output == pytest.approx(expected_output.tolist(), abs=1e-6)
+
+
 def test_cpp_runner_rejects_storage_fixture_before_graph_execution(
     tmp_path: Path,
 ) -> None:
