@@ -903,3 +903,12 @@
 - The verifier normalizes only the exact device-route deltas before delegating to the complete B-0032 contract: 12,888,064 resident/cold BF16 bytes, 7,168 logit D2H bytes per two-position sequence, two synchronizations, eight validation/cache hits, and the fixed prepare/consume counters.
 - New and historical B-0030 through B-0033 evidence tests pass 65/65. Python compilation passes.
 - An actual 0/1 smoke generated both rows and passed non-official strict verification. The host/device rows retained zero warm weight H2D and resident bytes 1,816,322,048/1,829,210,112; the device row recorded 7,168 logit bytes, two seeds/consumes, and zero discards/invalidations. The CLI then correctly rejected 0/1 as formal evidence through the 3/20 iteration gate.
+
+## 2026-08-12 — Milestone 32 formal B-0033 and final verification
+
+- Actual device-route Compute Sanitizer reports zero errors. Production `k3x_run` rejects the unchanged bounded artifact with `NON_EXECUTABLE_ARTIFACT` and creates no output.
+- The sole fixed 3-warmup/20-sequence B-0033 transaction completed in 152.9 seconds and was sealed at `3d5d96c`. Host/device medians are 64.210407/63.767134 ms, a 0.690344% device reduction.
+- Device route kernel time increases 27.294141%, while orchestration falls 9.279958 ms per sequence. It adds exactly 12,888,064 resident bytes and 7,168 logical D2H bytes per sequence. Exact routes, contributions, output/state digests, zero warm weight H2D, and `0.00048828125` maximum error are preserved.
+- Strict verification, raw/summary hashes, aggregate recomputation, formulas, row order, forbidden fields, and LF CSV all pass. Host routing remains the default because the one-layer WSL2 wall change is small and mixed.
+- Fresh final gates pass CPU CTest 19/19 plus Python 597/128, liburing/direct CTest 20/20 plus Python 603/122, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus Python 710/15, and evidence regressions 65/65.
+- M33 should close a bounded multi-layer device-resident boundary before any full checkpoint or paid Cloud Run work. This is still not token throughput, quality, physical PCIe/NVMe traffic, native-Linux authority, or a production default.

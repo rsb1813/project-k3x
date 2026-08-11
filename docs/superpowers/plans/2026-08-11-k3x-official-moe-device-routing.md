@@ -188,23 +188,23 @@ Commit message: `test: add strict B-0033 device-routing evidence`.
 - Consumes: all Task 1 through Task 4 code, telemetry, tests, and strict evidence gates.
 - Produces: one sealed B-0033 measurement and synchronized public M32 state.
 
-- [ ] **Step 1: Pass pre-measurement gates**
+- [x] **Step 1: Pass pre-measurement gates**
 
 Run actual-artifact host/device parity, prepared-path Compute Sanitizer with `--launch-timeout 0`, production guard, strict verifier dry-run, and a final Critical/Important self-review. Correct findings once and rerun affected gates before measurement.
 
-- [ ] **Step 2: Run B-0033 exactly once**
+- [x] **Step 2: Run B-0033 exactly once**
 
 Execute the fixed two-row transaction with exactly three warmups and twenty measured sequences. Do not rerun or select samples after successful publication.
 
-- [ ] **Step 3: Seal and independently verify evidence**
+- [x] **Step 3: Seal and independently verify evidence**
 
 Rehash artifact, manifest, runner, every raw JSON/CSV, summary JSON/CSV, aggregate digest, LF endings, row order, formulas, and forbidden-field absence. Commit evidence separately as `bench: record B-0033 device-routing results`.
 
-- [ ] **Step 4: Run the complete verification matrix**
+- [x] **Step 4: Run the complete verification matrix**
 
 Run CPU CTest/Python, capability-aware liburing/direct, ASan/UBSan, CUDA CTest/live Python, B-0033 through B-0030 evidence regressions, actual-artifact sanitizer, and production guard. Record exact pass/skip counts without converting theoretical values into measurements.
 
-- [ ] **Step 5: Synchronize the TITAN Ledger last**
+- [x] **Step 5: Synchronize the TITAN Ledger last**
 
 Record measured values and limitations in README, architecture, performance model, decisions, benchmarks, checklist, and context notes. Update `PROJECT_STATE.md` last. Commit as `docs: record Milestone 32 results`.
 

@@ -260,7 +260,9 @@ All three processes keep 1,816,322,048 weight bytes resident and transfer zero w
 
 The explicit device route path adds 12,888,064 resident BF16 bytes for MLP residual norm/projection, post norm, and the 896-by-7,168 router. It returns only 896 FP32 raw logits per position, or 7,168 logical D2H bytes for the fixed two-position sequence. Prefix and prepared hidden vectors remain in one backend-owned slot and are consumed by the resident exact MXFP4 FFN, so the measured warm interval must retain zero weight H2D.
 
-These are exact byte formulas and passing smoke-test counters, not a timing result. B-0033 must measure the host and device route paths under the same bounded sequence before any latency conclusion. The device row necessarily holds 12,888,064 more resident route weights because the host row executes those weights on CPU; evidence must report that footprint difference rather than conceal it.
+Formal B-0033 confirms these formulas. Host/device route medians are 64.210407/63.767134 ms, a -0.690344% change. Device route kernel time rises from 31.551662 to 40.163418 ms per sequence while orchestration falls from 32.877229 to 23.597272 ms. The measured path therefore moves work from CPU orchestration into four extra kernels and two logit synchronization points without a material one-layer wall-time win.
+
+The device row holds exactly 12,888,064 more resident weights and 13,006,336 more tracked peak VRAM, transfers 7,168 additional logical D2H bytes per sequence, and retains zero warm weight H2D. These are one-layer WSL2 counters, not physical PCIe traffic or bytes/token. A multi-layer boundary is required to determine whether activation residency and fewer API transitions can amortize the added kernel/synchronization cost.
 
 ## Required production measurements
 

@@ -1349,3 +1349,37 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Correctness: tiny CUDA wrapper and cleanup test passed; route, missing-expert, and FFN failures each discarded the prepared token and invalidated the KDA token. Compute Sanitizer reported `ERROR SUMMARY: 0 errors`.
 - Actual-artifact smoke: explicit host and device route paths each passed one bounded two-position execution. The device path preserved exact route IDs, contributions, output, and final state, returned 7,168 logical router-logit D2H bytes, consumed two prepared tokens, recorded zero discards/invalidations on success, and transferred zero warm weight bytes.
 - Performance: not measured. The smoke used zero warmups and one correctness iteration, so no latency, TPS, TTFT, quality, utilization, bandwidth, or physical traffic claim is recorded.
+
+## B-0033 — official MoE device route preparation
+
+- Date: 2026-08-12.
+- Evidence commit: `3d5d96c`; implementation commits `34f71cb`, `5b1cf18`, `b9094fa`, and strict evidence commit `53e88a9`.
+- Hardware: AMD Ryzen 7 9800X3D, NVIDIA GeForce RTX 5080 16 GB, driver 591.86, CUDA 13.3.1, WSL2 Ubuntu 24.04.4 on Windows 11.
+- Model/checkpoint: unchanged bounded official layer-1 fixture from `moonshotai/Kimi-K3` revision `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`; no complete shard/checkpoint.
+- Mode: exact AB incremental device KDA state, resident admission, host versus device route preparation, natural Top-16, three warmups, and twenty measured two-position sequences.
+- Context length: two fixed layer-boundary positions. This benchmark has no token semantics.
+
+| Row | Median | p05 | p95 | Kernel / sequence | Orchestration / sequence | Resident weights |
+|---|---:|---:|---:|---:|---:|---:|
+| Host route | 64,210,407 ns | 63,435,171 ns | 65,424,822 ns | 31,551,662.4 ns | 32,877,229.05 ns | 1,816,322,048 B |
+| Device route | 63,767,134 ns | 62,450,616 ns | 64,669,895 ns | 40,163,417.6 ns | 23,597,271.55 ns | 1,829,210,112 B |
+
+- Derived changes: device route median is 443,273 ns or 0.690344% lower. Aggregate kernel time is 27.294141% higher, while orchestration is 9,279,957.5 ns lower per sequence.
+- Correctness: both rows have output SHA-256 `3bc173301781ec02502c29a1d8ac2951139ba51cfef593f858bbac65cd748617`, state SHA-256 `5f0ce4680ca343648838ef274cc3f8526c5174eba9922b44b8f37715c2901073`, exact route/contribution parity, finite output, and maximum error `0.00048828125`.
+- Traffic: both rows transfer zero measured weight H2D and 133,726,720 activation H2D bytes over twenty sequences. Device route adds 143,360 logical D2H bytes total, exactly 7,168 per sequence, and 12,888,064 resident weight bytes. Tracked peak VRAM rises from 1,824,612,416 to 1,837,618,752 bytes.
+- Prepared operations: device route records 40 prepare calls, 80 kernels, 143,360 logit bytes, 40 seeds, 40 consumes, zero discards, and zero invalidations. Host route records zero for every prepared operation.
+- Evidence SHA-256: artifact `9f0c29fcb18b8cdab5aeeec67d8e5e0113b8dffb7352a2dcdac1ae41ae5198c6`; manifest `cf0dd554d5dfc7db640cb3313f7527e6c354a6fd74f9011cd747348b247168d4`; runner `20025307cedb0856f82847e6f57b380d833f3d26a6288160c383d1fac1c256d8`; aggregate `709fe13d67d144d025f32e17d6cafdfeef3d6e52e901d4234b7e54d7c9342d61`; summary JSON `86cb016d1764747233536614137566cfa8098cbfcfb10bdf5d5dc596d37c9ace`; summary CSV `d83d7cd34bc6601e39af3b55635d1ffb00f4eac79c742152ee669dd29915ee1d`.
+- Raw JSON SHA-256: host `82ddb5c5e4b185b3f79f80af366c78a2bf32bb5e3063056509c68085270d0095`; device `67b9d9ee76e9e882377be7ea3d8e0a0014a66e42b75f852781f6cb1a297c2724`.
+- Decode tok/s, prefill tok/s, TTFT, physical NVMe/H2D GB/token, GPU utilization, GPU bandwidth, quality, speculative acceptance, adaptive Top-K, and coding quality: not measured.
+- Decision: retain host route preparation as default. The bounded device path is exact but its 0.690344% wall change is mixed with materially higher kernel time and is not sufficient for a default or full-model claim.
+
+## Milestone 32 final local verification matrix
+
+- Date: 2026-08-12.
+- CPU: CTest 19/19; Python 597 passed, 128 skipped.
+- liburing/direct capability: CTest 20/20; Python 603 passed, 122 skipped with `K3X_TEST_IO_URING=1 K3X_TEST_DIRECT=1`.
+- ASan/UBSan: CTest 20/20.
+- CUDA with actual bounded artifacts: CTest 34/34; Python 710 passed, 15 skipped with `K3X_TEST_CUDA=1`.
+- B-0033/B-0032/B-0031/B-0030 evidence tests: 65/65 passed; strict B-0033 rehash and independent aggregate/formula/LF checks passed.
+- Actual device-route Compute Sanitizer: `ERROR SUMMARY: 0 errors`; exact routes/output/state, 7,168 logit D2H bytes, two seeds/consumes, zero discard/invalidation, and zero warm weight H2D.
+- Production guard: actual bounded artifact returns `NON_EXECUTABLE_ARTIFACT` and creates no output.
