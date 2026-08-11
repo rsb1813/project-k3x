@@ -77,9 +77,9 @@
 - Modify: `checklist.md`
 - Modify: `context-notes.md`
 
-- [ ] Review the implementation and pass actual-artifact host/device parity, Compute Sanitizer, and production guard gates.
-- [ ] Run the fixed three-row B-0032 transaction exactly once with three warmups and twenty measured sequences.
-- [ ] Strictly verify and independently rehash evidence, then commit it separately.
-- [ ] Run CPU, liburing/direct, ASan/UBSan, CUDA, actual-artifact, evidence, sanitizer, and production-guard verification.
-- [ ] Record measured results and limitations, update `PROJECT_STATE.md` last, and commit the Ledger.
+- [x] Review the implementation and pass actual-artifact host/device parity, Compute Sanitizer, and production guard gates.
+- [x] Run the fixed three-row B-0032 transaction exactly once with three warmups and twenty measured sequences.
+- [x] Strictly verify and independently rehash evidence, then commit it separately.
+- [x] Run CPU, liburing/direct, ASan/UBSan, CUDA, actual-artifact, evidence, sanitizer, and production-guard verification.
+- [x] Record measured results and limitations, update `PROJECT_STATE.md` last, and commit the Ledger.
 - [ ] Publish a public PR, require correctness and CodeQL, rebase-merge, and verify post-merge `main` gates.

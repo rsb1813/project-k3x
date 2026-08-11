@@ -242,6 +242,20 @@ The paired aggregate CUDA kernel changes are -0.382490% incremental and -0.38921
 
 These are two-position complete-layer boundary measurements under WSL2. They are not bytes/token, token throughput, physical host-memory bandwidth, PCIe traffic, NVMe traffic, utilization, quality, or native-Linux authority. The exact `per-call` path remains the default until a later production-policy decision has multi-layer and end-to-end evidence.
 
+## Milestone 31 official KDA state-transfer attribution
+
+One layer-1 KDA state is 6,512,640 bytes. Host incremental execution crosses the boundary twice and therefore transfers 13,025,280 state bytes in each direction per two-position sequence. The device-handoff path seeds once, retains the intermediate state in a dedicated allocation, and publishes once, matching full-host execution at 6,512,640 state bytes per direction.
+
+| B-0032 case | Median | Kernel / sequence | Orchestration / sequence | State H2D / D2H per sequence |
+|---|---:|---:|---:|---:|
+| Incremental host | 73.192169 ms | 33.772262 ms | 39.023029 ms | 13,025,280 / 13,025,280 B |
+| Incremental device | 69.835612 ms | 33.887021 ms | 35.815362 ms | 6,512,640 / 6,512,640 B |
+| Full host | 68.224527 ms | 33.734272 ms | 35.167669 ms | 6,512,640 / 6,512,640 B |
+
+The host-to-device-incremental median change is -4.585951%, or -3.356557 ms. Aggregate kernel time changes +0.339801%, while orchestration falls by 3.207668 ms per sequence. This supports the attribution that the eliminated logical state round trip accounts for most of the bounded reduction, but it does not measure physical PCIe traffic or prove causality for every remaining host cost. The device-incremental/full-host gap is 1.611085 ms.
+
+All three processes keep 1,816,322,048 weight bytes resident and transfer zero warm weight bytes. Tracked peak VRAM is 1,824,612,416 bytes for both incremental rows and 1,825,310,016 bytes for full execution. These are one-layer WSL2 counters and timings, not bytes/token or an end-to-end capacity model. Host round trip remains the default.
+
 ## Required production measurements
 
 Before selecting a default storage or kernel path, the Linux target must record decode and prefill rates, TTFT, GPU utilization and memory bandwidth, VRAM and host RAM, NVMe and RAM-to-GPU GB/token, expert-cache hit rate, speculative acceptance, unique experts per block, adaptive Top-K, cold rescues, per-kernel time, and I/O stall time. Every result must carry an ablation configuration and quality mode.

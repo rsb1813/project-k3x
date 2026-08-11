@@ -743,6 +743,20 @@ Admission lowers the incremental median by 59.819421% and the full median by 44.
 
 The complete local matrix passes CPU CTest 19/19 plus Python 558/122, liburing/direct CTest 20/20 plus Python 560/120, ASan/UBSan CTest 20/20, and CUDA CTest 34/34 plus actual-artifact Python 659/21. Admission-mode actual-artifact Compute Sanitizer reports zero errors, and production `k3x_run` still exits 4 with `NON_EXECUTABLE_ARTIFACT`.
 
+## Milestone 31 — exact KDA device-state handoff
+
+M31 adds an explicit, non-default state-residency experiment to the official KDA boundary. One dedicated backend-owned CUDA allocation retains the convolution histories and V-first recurrent state between the two incremental calls. Callers receive only an opaque owner/generation token; stale, consumed, cross-backend, wrong-layer, wrong-config, host-state-bearing continuation, and undefined mode values fail before transfer or launch. A final publication call returns the exact host state. The source-compatible host round trip remains the default.
+
+The fixed B-0032 transaction compares resident-admission incremental host state, incremental device handoff, and full host execution with three warmups and twenty measured two-position sequences. Every row preserves the exact natural routes, contributions, output SHA-256 `3bc173...617`, final-state SHA-256 `5f0ce4...073`, 1,816,322,048 resident weight bytes, zero warm weight H2D, and maximum absolute error `0.00048828125`.
+
+| B-0032 row | Median | Kernel / sequence | State H2D / D2H over 20 sequences |
+|---|---:|---:|---:|
+| Incremental, host round trip | 73.192169 ms | 33.772262 ms | 260,505,600 / 260,505,600 B |
+| Incremental, device handoff | 69.835612 ms | 33.887021 ms | 130,252,800 / 130,252,800 B |
+| Full, host round trip | 68.224527 ms | 33.734272 ms | 130,252,800 / 130,252,800 B |
+
+Device handoff removes exactly one 6,512,640-byte state H2D and D2H per measured sequence and lowers the incremental median by 4.585951%. Its aggregate kernel time is 0.339801% higher, while orchestration falls by 3.207668 ms per sequence; the remaining device-incremental/full median gap is 1.611085 ms. This is a one-layer WSL2 boundary result, not token throughput, quality, physical PCIe/NVMe traffic, native-Linux authority, or support for a default change. The complete local matrix passes CPU CTest 19/19 plus Python 578/125, liburing/direct CTest 20/20 plus Python 584/119, ASan/UBSan CTest 20/20, and CUDA CTest 34/34 plus actual-artifact Python 688/15. Device-state Compute Sanitizer reports zero errors, and production `k3x_run` remains fail-closed.
+
 ## Quality contract
 
 | Mode | Intended semantics |
@@ -783,6 +797,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Bounded 32-expert official MoE fixture, actual parity/sanitizer gates, and formal RTX 5080 B-0029 evidence.
 - [x] Bounded official layer-1 KDA transformer execution, full/incremental state parity, and formal B-0030 evidence.
 - [x] Atomic official KDA immutable-weight admission validation and fixed four-row B-0031 attribution.
+- [x] Opaque exact official KDA device-state handoff and fixed three-row B-0032 attribution.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.

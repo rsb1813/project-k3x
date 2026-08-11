@@ -801,11 +801,11 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-069 — Attribute device-resident KDA state handoff before widening the official graph
 
 - Date: 2026-08-11.
-- Status: accepted; raw backend, official-layer/harness integration, and strict B-0032 tool implemented and tested, with formal B-0032 pending.
+- Status: accepted and measured as an explicit non-default experiment.
 - Decision: keep exact admission opt-in and isolate KDA state residency across incremental calls so token A's state can feed token B without an intermediate 6,512,640-byte D2H plus H2D round trip. Preserve an explicit final-state publication path and the current host-state reference mode.
 - Alternatives considered: materialize a second official layer immediately; fuse host Attention Residual and routing first; make admission the default; start Cloud Run/full-checkpoint work.
 - Evidence: B-0031 admission incremental/full medians are 70.584413/67.236923 ms with nearly identical 33.889030/33.958984 ms kernel time. Incremental performs two state transfers in each direction while full performs one, leaving a 3.347490 ms wall gap after validation is removed.
-- Benchmark result: none for persistent state. B-0031 supplies only the selection evidence and must not be relabeled as a state-residency result.
-- Reason accepted: this is the smallest exact, reversible experiment that targets the remaining measured incremental/full distinction without new model payload, routing changes, or a wider correctness closure.
-- Rejected claims: the 3.347490 ms gap is not proven to be entirely state-copy cost, and this decision does not authorize a default change, token-rate projection, full checkpoint download, or paid cloud resources.
-- Revisit: after a fixed state-residency ablation, choose common host residual/routing orchestration versus wider official multi-layer execution from measured wall/kernel/traffic results.
+- Benchmark result: B-0032 host/device incremental medians are 73.192169/69.835612 ms, a 4.585951% reduction. Device handoff removes exactly 6,512,640 bytes in each state-transfer direction per sequence. Aggregate kernel time changes +0.339801%, orchestration falls 3.207668 ms per sequence, and the device-incremental/full-host median gap is 1.611085 ms.
+- Reason accepted: the opaque single-slot handoff is the smallest exact, reversible boundary that removes the measured transfer without new model payload or routing changes. The result supports retaining the experiment, but not changing the host-round-trip default.
+- Rejected claims: B-0032 logical transfer accounting is not physical PCIe measurement, and its 4.585951% bounded reduction does not authorize a default change, token-rate projection, full checkpoint download, or paid cloud resources.
+- Revisit: after a multi-layer or token-loop boundary exists, compare state lifetime and concurrency policy with wider device-resident residual/routing orchestration. Do not generalize the single-slot design to VAULT or make it default from B-0032 alone.
