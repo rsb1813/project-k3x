@@ -40,6 +40,7 @@ namespace {
 
 std::atomic<std::uint64_t> next_kda_state_owner{1};
 std::atomic<std::uint64_t> next_moe_prepared_owner{1};
+std::atomic<std::uint64_t> next_layer_hidden_owner{1};
 
 class StreamOwner {
 public:
@@ -150,6 +151,15 @@ struct OfficialKdaDeviceStateSlot {
     bool active{};
 };
 
+enum class OfficialLayerHiddenSlotState { free, live, prepared };
+
+struct OfficialLayerHiddenSlot {
+    std::uint64_t generation{};
+    std::uint32_t producing_layer{};
+    std::size_t width{};
+    OfficialLayerHiddenSlotState state{OfficialLayerHiddenSlotState::free};
+};
+
 class CudaBackend final : public ComputeBackend {
 public:
     CudaBackend(BackendOptions options, Profiler* profiler,
@@ -195,7 +205,10 @@ public:
           official_kda_state_one_(&memory_stats_, &runtime_stats_),
           official_kda_state_two_(&memory_stats_, &runtime_stats_),
           official_moe_prepared_(&memory_stats_, &runtime_stats_),
-          official_moe_route_scratch_(&memory_stats_, &runtime_stats_) {
+          official_moe_route_scratch_(&memory_stats_, &runtime_stats_),
+          official_layer_front_scratch_(&memory_stats_, &runtime_stats_),
+          official_layer_hidden_one_(&memory_stats_, &runtime_stats_),
+          official_layer_hidden_two_(&memory_stats_, &runtime_stats_) {
         device_state_owner_ = next_kda_state_owner.fetch_add(
             1, std::memory_order_relaxed);
         if (!device_state_owner_) {
@@ -206,6 +219,12 @@ public:
             1, std::memory_order_relaxed);
         if (!moe_prepared_owner_) {
             moe_prepared_owner_ = next_moe_prepared_owner.fetch_add(
+                1, std::memory_order_relaxed);
+        }
+        layer_hidden_owner_ = next_layer_hidden_owner.fetch_add(
+            1, std::memory_order_relaxed);
+        if (!layer_hidden_owner_) {
+            layer_hidden_owner_ = next_layer_hidden_owner.fetch_add(
                 1, std::memory_order_relaxed);
         }
         runtime_stats_.async_engine_count = async_engine_count;
@@ -2531,6 +2550,7 @@ public:
         std::uint32_t layer, ProfilePhase phase,
         OfficialKdaStateControl state_control) override {
         const auto operation_start = std::chrono::steady_clock::now();
+        const bool device_io = official_kda_device_input_ != nullptr;
         const auto product = [](std::size_t left, std::size_t right,
                                 std::size_t& output) {
             if (right && left > std::numeric_limits<std::size_t>::max() / right) {
@@ -2634,7 +2654,7 @@ public:
                                            std::size_t size) {
             return view.tensor_id && view.values.size() == size;
         };
-        if (!finite_f32(hidden) ||
+        if ((!device_io && !finite_f32(hidden)) ||
             (host_state_input &&
              (!finite_f32(state.recurrent_v_first) ||
               !valid_bf16_state(state.conv_q) ||
@@ -2952,8 +2972,13 @@ public:
             return Result<OfficialKdaCudaResult>::failure(
                 ErrorCode::backend_unavailable);
         };
-        if (cudaMemcpyAsync(device_hidden, hidden.data(), hidden.size_bytes(),
-                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+        if (cudaMemcpyAsync(
+                device_hidden,
+                device_io ? static_cast<const void*>(official_kda_device_input_)
+                          : static_cast<const void*>(hidden.data()),
+                hidden.size_bytes(),
+                device_io ? cudaMemcpyDeviceToDevice : cudaMemcpyHostToDevice,
+                stream_) != cudaSuccess ||
             (host_state_input &&
              (cudaMemcpyAsync(conv_q, state.conv_q.data(), conv_state_bytes,
                               cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
@@ -3045,15 +3070,19 @@ public:
         OfficialKdaCudaResult result;
         result.executed = true;
         result.state_published = publish_state;
-        result.output.resize(sequence_hidden);
+        if (!device_io) result.output.resize(sequence_hidden);
         if (publish_state) {
             result.conv_q.resize(history_count);
             result.conv_k.resize(history_count);
             result.conv_v.resize(history_count);
             result.recurrent_v_first.resize(recurrent_count);
         }
-        if (cudaMemcpyAsync(result.output.data(), output, hidden.size_bytes(),
-                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+        if (cudaMemcpyAsync(
+                device_io ? static_cast<void*>(official_kda_device_output_)
+                          : static_cast<void*>(result.output.data()),
+                output, hidden.size_bytes(),
+                device_io ? cudaMemcpyDeviceToDevice : cudaMemcpyDeviceToHost,
+                stream_) != cudaSuccess ||
             (publish_state &&
              (cudaMemcpyAsync(result.conv_q.data(), conv_q, conv_state_bytes,
                               cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
@@ -3075,13 +3104,16 @@ public:
         const auto state_d2h_bytes = publish_state ? state_bytes : 0;
         ++runtime_stats_.stream_synchronization_count;
         runtime_stats_.weight_h2d_bytes += uploaded_weight_bytes;
-        runtime_stats_.activation_h2d_bytes += hidden.size_bytes() + state_h2d_bytes;
-        runtime_stats_.device_to_host_bytes += hidden.size_bytes() + state_d2h_bytes;
+        runtime_stats_.activation_h2d_bytes +=
+            (device_io ? 0 : hidden.size_bytes()) + state_h2d_bytes;
+        runtime_stats_.device_to_host_bytes +=
+            (device_io ? 0 : hidden.size_bytes()) + state_d2h_bytes;
         ++runtime_stats_.official_kda_calls;
         runtime_stats_.official_kda_kernel_launches += launches;
         runtime_stats_.official_kda_state_h2d_bytes += state_h2d_bytes;
         runtime_stats_.official_kda_state_d2h_bytes += state_d2h_bytes;
-        runtime_stats_.official_kda_output_d2h_bytes += hidden.size_bytes();
+        runtime_stats_.official_kda_output_d2h_bytes +=
+            device_io ? 0 : hidden.size_bytes();
         if (state_mode == OfficialKdaStateMode::device_seed) {
             ++runtime_stats_.official_kda_device_state_seeds;
         } else if (device_continuation) {
@@ -3126,11 +3158,329 @@ public:
         return Result<bool>::success(true);
     }
 
+    Result<OfficialLayerFrontResult> official_layer_front(
+        std::span<const float> host_hidden, std::span<const float> host_block,
+        OfficialLayerHiddenToken input_token, OfficialLayerFrontWeights weights,
+        OfficialKdaCudaStateView state, OfficialKdaCudaConfig config,
+        std::uint32_t layer, ProfilePhase phase,
+        OfficialKdaStateControl state_control) override {
+        const bool host_input = !host_hidden.empty() || !host_block.empty();
+        const bool token_input = input_token.owner || input_token.generation ||
+                                 input_token.producing_layer ||
+                                 input_token.width || input_token.slot;
+        const auto valid_bf16 = [](Bf16WeightView view, std::size_t rows,
+                                   std::size_t cols) {
+            return view.tensor_id && rows && cols && view.rows == rows &&
+                   view.cols == cols && view.values.size() == rows * cols &&
+                   std::all_of(view.values.begin(), view.values.end(),
+                               [](std::uint16_t value) {
+                                   return (value & 0x7f80U) != 0x7f80U;
+                               });
+        };
+        if (options_.kind != BackendKind::cuda_custom ||
+            options_.cuda_boundary != CudaBoundaryMode::moe_layer ||
+            options_.cuda_allocation != CudaAllocationMode::reused ||
+            options_.cuda_transfer != CudaTransferMode::synchronous ||
+            options_.cuda_batching != CudaBatchingMode::resident_grid ||
+            options_.cuda_weights != CudaWeightMode::resident ||
+            options_.cuda_weight_validation !=
+                CudaWeightValidationMode::admission ||
+            !resident_weights_ || layer < 1 || layer > 2 ||
+            !config.hidden_size ||
+            config.hidden_size >
+                std::numeric_limits<std::size_t>::max() /
+                    (4 * sizeof(float)) ||
+            host_input == token_input ||
+            (state_control.mode != OfficialKdaStateMode::device_seed &&
+             state_control.mode != OfficialKdaStateMode::device_continue &&
+             state_control.mode != OfficialKdaStateMode::device_publish) ||
+            (host_input &&
+             (layer != 1 || host_hidden.size() != config.hidden_size ||
+              host_block.size() != config.hidden_size ||
+              !std::all_of(host_hidden.begin(), host_hidden.end(),
+                           [](float value) { return std::isfinite(value); }) ||
+              !std::all_of(host_block.begin(), host_block.end(),
+                           [](float value) { return std::isfinite(value); }))) ||
+            !weights.self_residual_norm.tensor_id ||
+            weights.self_residual_norm.values.size() != config.hidden_size ||
+            !valid_bf16(weights.self_residual_proj, 1, config.hidden_size) ||
+            !weights.input_norm.tensor_id ||
+            weights.input_norm.values.size() != config.hidden_size) {
+            return Result<OfficialLayerFrontResult>::failure(
+                ErrorCode::invalid_extent);
+        }
+        if (moe_prepared_active_) {
+            return Result<OfficialLayerFrontResult>::failure(
+                ErrorCode::invalid_state);
+        }
+
+        std::size_t slot_index = 2;
+        if (host_input) {
+            if (std::any_of(
+                    layer_hidden_slots_.begin(), layer_hidden_slots_.end(),
+                    [](const OfficialLayerHiddenSlot& slot) {
+                        return slot.state !=
+                               OfficialLayerHiddenSlotState::free;
+                    })) {
+                return Result<OfficialLayerFrontResult>::failure(
+                    ErrorCode::invalid_state);
+            }
+            for (std::size_t index = 0; index < layer_hidden_slots_.size();
+                 ++index) {
+                if (layer_hidden_slots_[index].state ==
+                    OfficialLayerHiddenSlotState::free) {
+                    slot_index = index;
+                    break;
+                }
+            }
+        } else {
+            if (input_token.owner != layer_hidden_owner_ ||
+                input_token.generation == 0 || input_token.slot >= 2 ||
+                input_token.producing_layer + 1 != layer ||
+                input_token.width != config.hidden_size) {
+                return Result<OfficialLayerFrontResult>::failure(
+                    ErrorCode::invalid_state);
+            }
+            slot_index = input_token.slot;
+            const auto& slot = layer_hidden_slots_[slot_index];
+            if (slot.state != OfficialLayerHiddenSlotState::live ||
+                slot.generation != input_token.generation ||
+                slot.producing_layer != input_token.producing_layer ||
+                slot.width != input_token.width ||
+                layer_hidden_slots_[1 - slot_index].state !=
+                    OfficialLayerHiddenSlotState::free) {
+                return Result<OfficialLayerFrontResult>::failure(
+                    ErrorCode::invalid_state);
+            }
+        }
+        if (slot_index >= 2) {
+            return Result<OfficialLayerFrontResult>::failure(
+                ErrorCode::invalid_state);
+        }
+        auto* activation = slot_index == 0 ? &official_layer_hidden_one_
+                                           : &official_layer_hidden_two_;
+        const auto hidden_bytes = config.hidden_size * sizeof(float);
+        if (activation->reserve(hidden_bytes * 2) != cudaSuccess ||
+            official_layer_front_scratch_.reserve(hidden_bytes * 4) !=
+                cudaSuccess) {
+            return Result<OfficialLayerFrontResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        auto* device_hidden = static_cast<float*>(activation->get());
+        auto* device_block = device_hidden + config.hidden_size;
+        auto* front_scratch =
+            static_cast<float*>(official_layer_front_scratch_.get());
+        auto* rounded_hidden = front_scratch;
+        auto* normalized_input = rounded_hidden + config.hidden_size;
+        auto* kda_output = normalized_input + config.hidden_size;
+        auto* prefix = kda_output + config.hidden_size;
+
+        const std::array self_views{
+            Bf16WeightView{weights.self_residual_norm.values, 1,
+                           config.hidden_size,
+                           weights.self_residual_norm.tensor_id},
+            weights.self_residual_proj,
+            Bf16WeightView{weights.input_norm.values, 1, config.hidden_size,
+                           weights.input_norm.tensor_id},
+        };
+        std::array<const std::uint16_t*, 3> device_views{};
+        std::unordered_set<std::uint64_t> tensor_ids;
+        std::uint64_t uploaded_weight_bytes{};
+        for (std::size_t index = 0; index < self_views.size(); ++index) {
+            const auto& view = self_views[index];
+            if (!tensor_ids.insert(view.tensor_id).second ||
+                !valid_bf16(view, view.rows, view.cols)) {
+                return Result<OfficialLayerFrontResult>::failure(
+                    ErrorCode::invalid_extent);
+            }
+            const ImmutableWeightIdentity identity{
+                view.values.data(), view.values.size_bytes(), view.rows,
+                view.cols};
+            const auto found = immutable_weights_.find(view.tensor_id);
+            if (found != immutable_weights_.end() &&
+                found->second != identity) {
+                return Result<OfficialLayerFrontResult>::failure(
+                    ErrorCode::invalid_extent);
+            }
+            if (found == immutable_weights_.end()) {
+                ++runtime_stats_.immutable_validation_scans;
+                runtime_stats_.immutable_validation_bytes +=
+                    view.values.size_bytes();
+                immutable_weights_.emplace(view.tensor_id, identity);
+            } else {
+                ++runtime_stats_.immutable_validation_hits;
+            }
+            auto acquired = resident_weights_->acquire(
+                {view.tensor_id, cuda::WeightRepresentation::dense_bf16,
+                 view.rows, view.cols, 0},
+                std::as_bytes(view.values), {});
+            if (!acquired || acquired.value().disposition ==
+                                 cuda::ResidentDisposition::bypass) {
+                return Result<OfficialLayerFrontResult>::failure(
+                    ErrorCode::invalid_extent);
+            }
+            uploaded_weight_bytes += acquired.value().uploaded_bytes;
+            device_views[index] = static_cast<const std::uint16_t*>(
+                acquired.value().primary);
+        }
+        auto& hidden_slot = layer_hidden_slots_[slot_index];
+        hidden_slot.state = OfficialLayerHiddenSlotState::prepared;
+        if (host_input &&
+            (cudaMemcpyAsync(device_hidden, host_hidden.data(), hidden_bytes,
+                             cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+             cudaMemcpyAsync(device_block, host_block.data(), hidden_bytes,
+                             cudaMemcpyHostToDevice, stream_) != cudaSuccess)) {
+            hidden_slot.state = OfficialLayerHiddenSlotState::free;
+            return Result<OfficialLayerFrontResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        if (cuda::launch_official_moe_prepare(
+                device_hidden, device_block, device_views[0], device_views[1],
+                device_views[2], rounded_hidden, normalized_input,
+                config.hidden_size, config.rms_norm_epsilon, stream_) !=
+            cudaSuccess) {
+            hidden_slot.state = OfficialLayerHiddenSlotState::free;
+            return Result<OfficialLayerFrontResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+
+        std::vector<float> shape(config.hidden_size);
+        official_kda_device_input_ = normalized_input;
+        official_kda_device_output_ = kda_output;
+        auto kda = official_kda(shape, weights.kda, state, config, layer,
+                                phase, state_control);
+        official_kda_device_input_ = nullptr;
+        official_kda_device_output_ = nullptr;
+        if (!kda) {
+            hidden_slot.state = OfficialLayerHiddenSlotState::free;
+            return Result<OfficialLayerFrontResult>::failure(
+                kda.error(), kda.message());
+        }
+        const auto discard_kda = [&]() {
+            if (kda.value().device_state.owner) {
+                discard_official_kda_device_state(
+                    kda.value().device_state);
+            }
+        };
+        if (cuda::launch_bf16_vector_add(rounded_hidden, kda_output, prefix,
+                                         config.hidden_size, stream_) !=
+            cudaSuccess) {
+            discard_kda();
+            hidden_slot.state = OfficialLayerHiddenSlotState::free;
+            return Result<OfficialLayerFrontResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        official_moe_route_device_prefix_ = prefix;
+        official_moe_route_device_block_ = device_block;
+        auto route = prepare_official_moe_route(
+            shape, shape, weights.moe, config.rms_norm_epsilon, layer, phase);
+        official_moe_route_device_prefix_ = nullptr;
+        official_moe_route_device_block_ = nullptr;
+        if (!route) {
+            discard_kda();
+            hidden_slot.state = OfficialLayerHiddenSlotState::free;
+            return Result<OfficialLayerFrontResult>::failure(
+                route.error(), route.message());
+        }
+        moe_prepared_hidden_slot_ = static_cast<std::uint32_t>(slot_index);
+        runtime_stats_.weight_h2d_bytes += uploaded_weight_bytes;
+        runtime_stats_.activation_h2d_bytes +=
+            host_input ? hidden_bytes * 2 : 0;
+        return Result<OfficialLayerFrontResult>::success(
+            {true, std::move(kda.value()), std::move(route.value())});
+    }
+
+    Result<OfficialLayerTailResult> official_layer_tail(
+        OfficialMoePreparedToken prepared, OfficialMoeFfnView weights,
+        std::span<const Mxfp4MlpView> experts,
+        std::span<const std::uint32_t> expert_ids,
+        std::span<const float> contributions, float epsilon, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase, bool retain_hidden) override {
+        if (!moe_prepared_active_ || moe_prepared_hidden_slot_ >= 2 ||
+            prepared.owner != moe_prepared_owner_ ||
+            prepared.generation != moe_prepared_generation_ ||
+            moe_prepared_layer_ != layer) {
+            return Result<OfficialLayerTailResult>::failure(
+                ErrorCode::invalid_state);
+        }
+        const auto source_slot = moe_prepared_hidden_slot_;
+        const auto target_slot = static_cast<std::uint32_t>(1 - source_slot);
+        if (layer_hidden_slots_[source_slot].state !=
+                OfficialLayerHiddenSlotState::prepared ||
+            (retain_hidden &&
+             layer_hidden_slots_[target_slot].state !=
+                 OfficialLayerHiddenSlotState::free)) {
+            return Result<OfficialLayerTailResult>::failure(
+                ErrorCode::invalid_state);
+        }
+        official_layer_tail_retain_ = retain_hidden;
+        official_layer_tail_target_slot_ = retain_hidden ? target_slot : 2;
+        auto moe = official_mxfp4_moe_ffn_prepared(
+            prepared, weights, experts, expert_ids, contributions, epsilon,
+            situ_beta, situ_linear, layer, phase);
+        official_layer_tail_retain_ = false;
+        official_layer_tail_target_slot_ = 2;
+        if (!moe) {
+            if (moe_prepared_active_ &&
+                prepared.owner == moe_prepared_owner_ &&
+                prepared.generation == moe_prepared_generation_) {
+                const auto discarded =
+                    discard_official_moe_prepared(prepared);
+                if (!discarded) {
+                    return Result<OfficialLayerTailResult>::failure(
+                        ErrorCode::invalid_state);
+                }
+            } else {
+                layer_hidden_slots_[source_slot].state =
+                    OfficialLayerHiddenSlotState::free;
+                moe_prepared_hidden_slot_ = 2;
+            }
+            return Result<OfficialLayerTailResult>::failure(
+                moe.error(), moe.message());
+        }
+        layer_hidden_slots_[source_slot].state =
+            OfficialLayerHiddenSlotState::free;
+        OfficialLayerHiddenToken hidden;
+        if (retain_hidden) {
+            ++layer_hidden_generation_;
+            if (!layer_hidden_generation_) ++layer_hidden_generation_;
+            auto& target = layer_hidden_slots_[target_slot];
+            target.generation = layer_hidden_generation_;
+            target.producing_layer = layer;
+            target.width = moe_prepared_width_;
+            target.state = OfficialLayerHiddenSlotState::live;
+            hidden = {layer_hidden_owner_, layer_hidden_generation_, layer,
+                      moe_prepared_width_, target_slot};
+        }
+        moe_prepared_hidden_slot_ = 2;
+        return Result<OfficialLayerTailResult>::success(
+            {true, hidden, std::move(moe.value().output),
+             std::move(moe.value().selected_expert_ids)});
+    }
+
+    Result<bool> discard_official_layer_hidden(
+        OfficialLayerHiddenToken token) override {
+        if (token.owner != layer_hidden_owner_ || token.slot >= 2) {
+            return Result<bool>::failure(ErrorCode::invalid_state);
+        }
+        auto& slot = layer_hidden_slots_[token.slot];
+        if (slot.state != OfficialLayerHiddenSlotState::live ||
+            slot.generation != token.generation ||
+            slot.producing_layer != token.producing_layer ||
+            slot.width != token.width) {
+            return Result<bool>::failure(ErrorCode::invalid_state);
+        }
+        slot.state = OfficialLayerHiddenSlotState::free;
+        return Result<bool>::success(true);
+    }
+
     Result<OfficialMoeRoutePrepareResult> prepare_official_moe_route(
         std::span<const float> prefix, std::span<const float> block,
         OfficialMoeRoutePrepareView weights, float epsilon,
         std::uint32_t layer, ProfilePhase phase) override {
         const auto operation_start = std::chrono::steady_clock::now();
+        const bool device_io = official_moe_route_device_prefix_ != nullptr;
         const auto finite_f32 = [](std::span<const float> values) {
             return std::all_of(values.begin(), values.end(),
                                [](float value) { return std::isfinite(value); });
@@ -3149,7 +3499,7 @@ public:
             options_.cuda_batching != CudaBatchingMode::resident_grid ||
             options_.cuda_weights != CudaWeightMode::resident ||
             !resident_weights_ || prefix.empty() || prefix.size() != block.size() ||
-            !finite_f32(prefix) || !finite_f32(block) ||
+            (!device_io && (!finite_f32(prefix) || !finite_f32(block))) ||
             !std::isfinite(epsilon) || epsilon <= 0.0F ||
             !weights.residual_norm.tensor_id ||
             weights.residual_norm.values.size() != prefix.size() ||
@@ -3254,7 +3604,8 @@ public:
         }
         const auto hidden_bytes = prefix.size_bytes();
         const auto logits_bytes = weights.router.rows * sizeof(float);
-        const auto scratch_bytes = hidden_bytes * 2 + logits_bytes;
+        const auto scratch_bytes =
+            (device_io ? 0 : hidden_bytes * 2) + logits_bytes;
         if (official_moe_prepared_.reserve(hidden_bytes * 2) != cudaSuccess ||
             official_moe_route_scratch_.reserve(scratch_bytes) != cudaSuccess ||
             official_moe_route_event_start_.ensure() != cudaSuccess ||
@@ -3263,23 +3614,37 @@ public:
                 ErrorCode::backend_unavailable);
         }
         if (moe_prepared_active_) {
+            if (moe_prepared_hidden_slot_ < 2) {
+                layer_hidden_slots_[moe_prepared_hidden_slot_].state =
+                    OfficialLayerHiddenSlotState::free;
+            }
+            moe_prepared_hidden_slot_ = 2;
             moe_prepared_active_ = false;
             ++runtime_stats_.official_moe_prepared_invalidations;
         }
         auto* prepared_prefix =
             static_cast<float*>(official_moe_prepared_.get());
         auto* prepared_hidden = prepared_prefix + prefix.size();
-        auto* input_prefix =
+        auto* route_scratch =
             static_cast<float*>(official_moe_route_scratch_.get());
-        auto* input_block = input_prefix + prefix.size();
-        auto* device_logits = input_block + block.size();
+        const auto* input_prefix =
+            device_io ? official_moe_route_device_prefix_ : route_scratch;
+        const auto* input_block =
+            device_io ? official_moe_route_device_block_
+                      : route_scratch + prefix.size();
+        auto* device_logits = device_io
+                                  ? route_scratch
+                                  : route_scratch + prefix.size() + block.size();
         OfficialMoeRoutePrepareResult result;
         result.executed = true;
         result.router_logits.resize(weights.router.rows);
-        if (cudaMemcpyAsync(input_prefix, prefix.data(), hidden_bytes,
-                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(input_block, block.data(), hidden_bytes,
-                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+        if ((!device_io &&
+             (cudaMemcpyAsync(const_cast<float*>(input_prefix), prefix.data(),
+                              hidden_bytes, cudaMemcpyHostToDevice, stream_) !=
+                  cudaSuccess ||
+              cudaMemcpyAsync(const_cast<float*>(input_block), block.data(),
+                              hidden_bytes, cudaMemcpyHostToDevice, stream_) !=
+                  cudaSuccess)) ||
             cudaEventRecord(official_moe_route_event_start_.get(), stream_) !=
                 cudaSuccess ||
             cuda::launch_official_moe_prepare(
@@ -3315,7 +3680,8 @@ public:
         result.prepared = {moe_prepared_owner_, moe_prepared_generation_};
         ++runtime_stats_.stream_synchronization_count;
         runtime_stats_.weight_h2d_bytes += uploaded_weight_bytes;
-        runtime_stats_.activation_h2d_bytes += hidden_bytes * 2;
+        runtime_stats_.activation_h2d_bytes +=
+            device_io ? 0 : hidden_bytes * 2;
         runtime_stats_.device_to_host_bytes += logits_bytes;
         ++runtime_stats_.official_moe_route_prepare_calls;
         runtime_stats_.official_moe_route_prepare_kernel_launches += 2;
@@ -3338,6 +3704,11 @@ public:
             token.generation != moe_prepared_generation_) {
             return Result<bool>::failure(ErrorCode::invalid_state);
         }
+        if (moe_prepared_hidden_slot_ < 2) {
+            layer_hidden_slots_[moe_prepared_hidden_slot_].state =
+                OfficialLayerHiddenSlotState::free;
+        }
+        moe_prepared_hidden_slot_ = 2;
         moe_prepared_active_ = false;
         ++runtime_stats_.official_moe_prepared_discards;
         return Result<bool>::success(true);
@@ -3351,6 +3722,11 @@ public:
         std::optional<float> situ_linear, std::uint32_t layer,
         ProfilePhase phase) override {
         if (moe_prepared_active_) {
+            if (moe_prepared_hidden_slot_ < 2) {
+                layer_hidden_slots_[moe_prepared_hidden_slot_].state =
+                    OfficialLayerHiddenSlotState::free;
+            }
+            moe_prepared_hidden_slot_ = 2;
             moe_prepared_active_ = false;
             ++runtime_stats_.official_moe_prepared_invalidations;
         }
@@ -3721,9 +4097,34 @@ public:
                 ErrorCode::backend_unavailable,
                 "official MoE FFN kernel launch failed");
         }
-        std::vector<float> output(hidden_width);
-        if (cudaMemcpyAsync(output.data(), device_routed, hidden_bytes,
-                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+        std::vector<float> output;
+        if (!official_layer_tail_retain_) output.resize(hidden_width);
+        auto* tail_target = official_layer_tail_target_slot_ == 0
+                                ? &official_layer_hidden_one_
+                            : official_layer_tail_target_slot_ == 1
+                                ? &official_layer_hidden_two_
+                                : nullptr;
+        auto* tail_source = moe_prepared_hidden_slot_ == 0
+                                ? &official_layer_hidden_one_
+                            : moe_prepared_hidden_slot_ == 1
+                                ? &official_layer_hidden_two_
+                                : nullptr;
+        if ((official_layer_tail_retain_ &&
+             (!tail_target || !tail_source ||
+              tail_target->reserve(hidden_bytes * 2) != cudaSuccess)) ||
+            (official_layer_tail_retain_
+                 ? (cudaMemcpyAsync(tail_target->get(), device_routed,
+                                    hidden_bytes, cudaMemcpyDeviceToDevice,
+                                    stream_) != cudaSuccess ||
+                    cudaMemcpyAsync(
+                        static_cast<float*>(tail_target->get()) + hidden_width,
+                        static_cast<const float*>(tail_source->get()) +
+                            hidden_width,
+                        hidden_bytes, cudaMemcpyDeviceToDevice, stream_) !=
+                        cudaSuccess)
+                 : cudaMemcpyAsync(output.data(), device_routed, hidden_bytes,
+                                   cudaMemcpyDeviceToHost, stream_) !=
+                       cudaSuccess) ||
             cudaStreamSynchronize(stream_) != cudaSuccess) {
             return Result<OfficialMoeFfnResult>::failure(
                 ErrorCode::backend_unavailable,
@@ -3736,7 +4137,8 @@ public:
         ++runtime_stats_.stream_synchronization_count;
         runtime_stats_.activation_h2d_bytes += activation_bytes;
         runtime_stats_.weight_h2d_bytes += uploaded_weight_bytes;
-        runtime_stats_.device_to_host_bytes += hidden_bytes;
+        runtime_stats_.device_to_host_bytes +=
+            official_layer_tail_retain_ ? 0 : hidden_bytes;
         ++runtime_stats_.resident_moe_layer_calls;
         runtime_stats_.resident_moe_layer_experts += experts.size();
         runtime_stats_.resident_moe_layer_kernel_launches += 17;
@@ -3763,7 +4165,7 @@ public:
                activation_bytes, 0, true);
         record(phase, ProfileOperation::device_to_host,
                NumericPrecision::bf16_rounded, layer, operation_start, 0,
-               hidden_bytes, 0, true);
+               official_layer_tail_retain_ ? 0 : hidden_bytes, 0, true);
         return Result<OfficialMoeFfnResult>::success(
             {true, std::move(output),
              {expert_ids.begin(), expert_ids.end()}});
@@ -4805,6 +5207,9 @@ private:
     cuda::ScratchBuffer official_kda_state_two_;
     cuda::ScratchBuffer official_moe_prepared_;
     cuda::ScratchBuffer official_moe_route_scratch_;
+    cuda::ScratchBuffer official_layer_front_scratch_;
+    cuda::ScratchBuffer official_layer_hidden_one_;
+    cuda::ScratchBuffer official_layer_hidden_two_;
     std::uint64_t device_state_owner_{};
     std::uint64_t device_state_generation_{};
     std::array<OfficialKdaDeviceStateSlot, 2> device_state_slots_{};
@@ -4813,6 +5218,16 @@ private:
     std::uint32_t moe_prepared_layer_{};
     std::size_t moe_prepared_width_{};
     bool moe_prepared_active_{};
+    std::uint32_t moe_prepared_hidden_slot_{2};
+    const float* official_kda_device_input_{};
+    float* official_kda_device_output_{};
+    const float* official_moe_route_device_prefix_{};
+    const float* official_moe_route_device_block_{};
+    std::uint32_t official_layer_tail_target_slot_{2};
+    bool official_layer_tail_retain_{};
+    std::uint64_t layer_hidden_owner_{};
+    std::uint64_t layer_hidden_generation_{};
+    std::array<OfficialLayerHiddenSlot, 2> layer_hidden_slots_{};
     EventOwner dense_event_start_;
     EventOwner dense_event_end_;
     EventOwner mxfp4_event_start_;

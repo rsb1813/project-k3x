@@ -269,6 +269,37 @@ struct OfficialKdaCudaResult {
     std::vector<float> recurrent_v_first;
 };
 
+struct OfficialLayerHiddenToken {
+    std::uint64_t owner{};
+    std::uint64_t generation{};
+    std::uint32_t producing_layer{};
+    std::size_t width{};
+    std::uint32_t slot{};
+
+    bool operator==(const OfficialLayerHiddenToken&) const = default;
+};
+
+struct OfficialLayerFrontWeights {
+    Bf16VectorView self_residual_norm;
+    Bf16WeightView self_residual_proj;
+    Bf16VectorView input_norm;
+    OfficialKdaCudaView kda;
+    OfficialMoeRoutePrepareView moe;
+};
+
+struct OfficialLayerFrontResult {
+    bool executed{};
+    OfficialKdaCudaResult kda;
+    OfficialMoeRoutePrepareResult route;
+};
+
+struct OfficialLayerTailResult {
+    bool executed{};
+    OfficialLayerHiddenToken hidden;
+    std::vector<float> output;
+    std::vector<std::uint32_t> selected_expert_ids;
+};
+
 struct ResidentMoeLayerView {
     DenseWeightView routed_down;
     DenseVectorView routed_norm;
@@ -377,6 +408,26 @@ public:
     }
     virtual Result<bool> discard_official_kda_device_state(
         OfficialKdaDeviceStateToken) {
+        return Result<bool>::failure(ErrorCode::backend_unavailable);
+    }
+    virtual Result<OfficialLayerFrontResult> official_layer_front(
+        std::span<const float>, std::span<const float>,
+        OfficialLayerHiddenToken, OfficialLayerFrontWeights,
+        OfficialKdaCudaStateView, OfficialKdaCudaConfig, std::uint32_t,
+        ProfilePhase, OfficialKdaStateControl) {
+        return Result<OfficialLayerFrontResult>::failure(
+            ErrorCode::backend_unavailable);
+    }
+    virtual Result<OfficialLayerTailResult> official_layer_tail(
+        OfficialMoePreparedToken, OfficialMoeFfnView,
+        std::span<const Mxfp4MlpView>, std::span<const std::uint32_t>,
+        std::span<const float>, float, float, std::optional<float>,
+        std::uint32_t, ProfilePhase, bool) {
+        return Result<OfficialLayerTailResult>::failure(
+            ErrorCode::backend_unavailable);
+    }
+    virtual Result<bool> discard_official_layer_hidden(
+        OfficialLayerHiddenToken) {
         return Result<bool>::failure(ErrorCode::backend_unavailable);
     }
     virtual Result<Mxfp4PrefetchToken> prefetch_mxfp4_situ_mlp_group(
