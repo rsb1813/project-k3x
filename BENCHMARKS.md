@@ -1138,3 +1138,14 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Negative coverage: `A_log[96]`, malformed layer-list schemas, config drift, tensor metadata drift, source blob drift, and shard/range drift fail closed before payload use.
 - All performance, traffic, memory, state-parity, route, quality, and token fields: not measured.
 - Interpretation: this is a planning correctness gate only. It is not official tensor materialization, KDA execution, complete-layer parity, or B-0030.
+
+## Milestone 29 Task 2 verification — independent scalar KDA oracle
+
+- Date: 2026-08-11.
+- Hardware/model: CPU PyTorch tiny literal fixture with `hidden=4`, `heads=2`, `head_dim=2`, and convolution width 3; no official tensor payload.
+- Mode: BF16 projection and convolution boundaries, F32 channel-wise decay, scalar-per-head beta, FP32 recurrence, V-first state publication, and full two-token versus incremental A-then-B execution.
+- Verification: focused official/synthetic KDA and model pytest passes 17 tests in 2.10 seconds. The combined official source/MoE/layer/CLI plus KDA/model regression passes 81 tests in 4.46 seconds; Python compile validation and `git diff --check` pass.
+- Parity: BF16 outputs and convolution histories match exactly; final FP32 recurrence matches within absolute and relative tolerance `1e-6`. A separate nonzero-state calculation independently reconstructs the paper recurrence and verifies unchanged input state.
+- Negative coverage: weight dtype/shape, non-finite values, convolution-history width, empty sequence, and recurrent-state layout fail closed.
+- Decode tok/s, prefill tok/s, TTFT, VRAM, system RAM, NVMe GB/token, H2D GB/token, cache hit rate, average Top-K, speculative acceptance, quality, official layer latency, utilization, and bandwidth: not measured.
+- Interpretation: this is a tiny correctness gate. It is not official payload execution, complete-layer parity, CUDA evidence, B-0030, or a performance benchmark.
