@@ -390,7 +390,7 @@ This is implemented storage/conversion compatibility, not real graph execution. 
 
 ## Milestone 27 official expert CUDA execution
 
-Milestone 27 is accepted and designed but not yet implemented. It adds a dedicated benchmark-only official-expert path that binds the B-0027 K3X root and gate/up/down ordered digest before constructing a CPU or CUDA backend. The path executes one exact layer-1 expert-0 FFN, compares all 3,584 outputs with the portable CPU backend, and separately measures transient and exact-capacity resident CUDA behavior.
+Milestone 27's pinned identity and dedicated benchmark-only official-expert path are implemented and locally verified. The path binds the B-0027 K3X root, gate/up/down ordered digest, optional features, layer/expert IDs, payload bytes, and shapes before constructing a CPU or CUDA backend. It executes one exact layer-1 expert-0 FFN, compares all 3,584 outputs with the portable CPU backend, and separately exposes transient and exact-capacity resident CUDA traffic and latency. The strict B-0028 runner, formal measurement, and public integration remain in progress.
 
 The executable remains outside `k3x_run`; `OPTIONAL_STORAGE_FIXTURE` generation continues to fail with `NON_EXECUTABLE_ARTIFACT`. M27 does not claim a full MoE layer because routed projections, normalization, shared experts, routing, and the surrounding trunk are not real official weights. That dependency closure remains a separate M28 decision after B-0028.
 

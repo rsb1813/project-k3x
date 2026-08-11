@@ -330,6 +330,7 @@ int test_exact_mxfp4_group() {
         after.ffn_block_experts - before.ffn_block_experts != 2) return 50;
     if (after_profile.device_to_host_bytes -
             before_profile.device_to_host_bytes != 8) return 51;
+    if (after.device_to_host_bytes - before.device_to_host_bytes != 8) return 58;
 
     auto invalid_experts = experts;
     auto invalid_scales = fixture.intermediate_scales;

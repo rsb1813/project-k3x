@@ -608,10 +608,10 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-053 — Prove one official expert FFN before widening real-weight closure
 
 - Date: 2026-08-10.
-- Status: accepted and designed; implementation and B-0028 are pending.
+- Status: accepted and implemented locally; formal B-0028 and public integration are pending.
 - Decision: add a dedicated benchmark-only path that hard-binds the B-0027 K3X root and ordered expert digest, uses the portable CPU backend as oracle, and measures transient and resident RTX 5080 execution without changing `k3x_run`.
 - Alternatives considered: reuse the released-dimension executable unchanged; add caller-selected official labels to that executable; add a pinned official-expert harness.
-- Evidence: a read-only exploratory run of the existing CPU/CUDA path against the ignored official artifact completed with `3.0267983675e-9` maximum absolute error. Its schema and identity checks are insufficient for formal evidence, so its timing is not B-0028.
+- Evidence: the dedicated harness passes all six synthetic/actual-artifact cases, CUDA CTest 28/28, and a resident official-expert Compute Sanitizer run with zero errors. Direct transient/resident validation both report `3.0267983675e-9` maximum absolute error, while transient measured one 17,547,264-byte weight transfer and resident measured zero after cold admission. These timings are validation evidence, not B-0028.
 - Reason accepted: the dedicated harness is the smallest boundary that proves actual official MXFP4 CUDA computation while keeping synthetic released evidence, production generation, and official provenance distinct.
 - Rejected claims: one expert FFN is not a real full MoE layer, routing result, token throughput, full-checkpoint runtime, physical NVMe measurement, or quality result.
 - Revisit: B-0028 transient/resident traffic, latency, and parity determine the smallest real multi-expert or complete-layer closure for M28.
