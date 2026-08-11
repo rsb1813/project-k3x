@@ -119,6 +119,7 @@ State audited last on 2026-08-11 at public M31 publication head `c46d6139673d442
 - All B-0032 rows preserve exact route/output/state identity, zero warm weight H2D, 1,816,322,048 resident bytes, and `0.00048828125` maximum error. The device row records 20 seeds, continuations, and publications with zero invalidations.
 - Publicly integrated D-068 retains per-call as the default and admission as opt-in. D-069 retains host round trip as the default and device state as an exact single-slot experiment; multi-session policy, VAULT persistence, and a production state registry remain unimplemented.
 - D-070 and the M32 design are accepted. Device route preparation is still proposed only; no backend interface, CUDA kernel, test, benchmark, or default change exists yet.
+- M32 Task 1 now provides one canonical raw-logit routing authority while preserving exact existing route fields. CUDA preparation/token work has not started.
 
 - M28 Task 2 is complete at `0b0c944`: the route manifest is durable before expert fetching, only the natural A/B first-use union is planned, object reuse is rehashed, response bytes are measured separately from logical source bytes, and production generation remains fail-closed.
 - M28 Task 3 is complete at `8a13cf5`: the dimension-driven CPU oracle preserves explicit BF16 boundaries, validates the natural route before execution, decodes native MXFP4 experts exactly, and matches independent PyTorch intermediate values without production dispatch.
@@ -178,8 +179,8 @@ State audited last on 2026-08-11 at public M31 publication head `c46d6139673d442
 
 ## Next concrete tasks
 
-1. Implement Task 1 with a witnessed CPU RED and shared canonical raw-logit routing helper.
-2. Implement Task 2 with a witnessed CUDA RED, deterministic preparation kernels, and fail-closed opaque-token lifetime.
+1. Implement Task 2 with a witnessed CUDA RED, deterministic preparation kernels, and fail-closed opaque-token lifetime.
+2. Run focused CUDA GREEN, non-CUDA stubs, and Compute Sanitizer before exposing the wrapper control.
 3. Add wrapper, harness, and evidence modes only after tiny parity passes. Keep the artifact non-executable and do not download a complete shard/checkpoint or create paid cloud resources.
 
 ## Hardware assumptions

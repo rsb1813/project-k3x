@@ -875,3 +875,9 @@
 - The GPU will return raw router logits, while the existing canonical host rule retains sigmoid, correction, natural Top-16 tie breaking, and contribution normalization. This prevents the attribution experiment from silently changing routing policy.
 - Prepared prefix/hidden vectors remain backend-owned behind one opaque single-use token and are consumed only by exact resident MXFP4 FFN. Host routing, host state, per-call validation, production non-executability, and all historical schemas remain defaults.
 - The M32 implementation plan fixes five reviewable units: canonical raw-logit routing, CUDA preparation/token lifetime, wrapper/CLI ownership, strict B-0033 evidence, and formal verification/publication. Each unit has a witnessed RED, focused GREEN, self-review, and semantic commit boundary.
+
+## 2026-08-11 — Milestone 32 Task 1 canonical routing
+
+- The initial command used the stale distro label `Ubuntu` and failed before compilation with `WSL_E_DISTRO_NOT_FOUND`. The registered distro is `Ubuntu-24.04`; the plan commands were corrected before the actual RED.
+- The controlled RED failed because `route_official_moe_logits` was undeclared. GREEN moves only sigmoid, correction, natural Top-K ordering/tie breaking, selected mass, and contribution normalization into the shared helper.
+- The existing BF16 router matvec delegates to the helper and returns bit-identical route fields on the tiny fixture. Explicit tie, non-finite, length, Top-K, and zero-mass cases fail or pass as required. Portable official expert/MoE/KDA/layer CTest passes 4/4.

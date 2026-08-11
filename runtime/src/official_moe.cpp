@@ -208,30 +208,20 @@ Result<std::vector<float>> prepare_official_moe_input(
     return normalized(hidden, weights.post_norm, epsilon);
 }
 
-Result<OfficialRoute> route_official_moe(
-    std::span<const float> hidden, Bf16WeightView router,
-    std::span<const float> correction, std::size_t top_k) {
-    if (!valid(router) || router.cols != hidden.size() ||
-        correction.size() != router.rows || !top_k || top_k > router.rows ||
-        !finite(hidden) || !finite(correction)) {
+Result<OfficialRoute> route_official_moe_logits(
+    std::span<const float> logits, std::span<const float> correction,
+    std::size_t top_k) {
+    if (logits.empty() || correction.size() != logits.size() || !top_k ||
+        top_k > logits.size() || !finite(logits) || !finite(correction)) {
         return Result<OfficialRoute>::failure(ErrorCode::invalid_extent);
     }
-    std::vector<float> scores(router.rows);
-    std::vector<float> adjusted(router.rows);
-    for (std::size_t row = 0; row < router.rows; ++row) {
-        double sum = 0.0;
-        for (std::size_t column = 0; column < router.cols; ++column) {
-            const auto weight = decode_bf16_word(
-                router.values[row * router.cols + column]);
-            if (!std::isfinite(weight)) {
-                return Result<OfficialRoute>::failure(ErrorCode::invalid_extent);
-            }
-            sum += static_cast<double>(weight) * hidden[column];
-        }
-        scores[row] = 1.0F / (1.0F + std::exp(-static_cast<float>(sum)));
+    std::vector<float> scores(logits.size());
+    std::vector<float> adjusted(logits.size());
+    for (std::size_t row = 0; row < logits.size(); ++row) {
+        scores[row] = 1.0F / (1.0F + std::exp(-logits[row]));
         adjusted[row] = scores[row] + correction[row];
     }
-    std::vector<std::uint32_t> order(router.rows);
+    std::vector<std::uint32_t> order(logits.size());
     std::iota(order.begin(), order.end(), 0U);
     std::partial_sort(
         order.begin(), order.begin() + static_cast<std::ptrdiff_t>(top_k),
@@ -245,10 +235,37 @@ Result<OfficialRoute> route_official_moe(
     double total = 0.0;
     for (std::size_t index = 0; index < top_k; ++index)
         total += scores[order[index]];
+    if (!std::isfinite(total) || total <= 0.0) {
+        return Result<OfficialRoute>::failure(ErrorCode::invalid_extent);
+    }
     for (std::size_t index = 0; index < top_k; ++index)
         contributions[index] = static_cast<float>(scores[order[index]] / total);
     return Result<OfficialRoute>::success(
         {std::move(order), std::move(contributions), std::move(scores)});
+}
+
+Result<OfficialRoute> route_official_moe(
+    std::span<const float> hidden, Bf16WeightView router,
+    std::span<const float> correction, std::size_t top_k) {
+    if (!valid(router) || router.cols != hidden.size() ||
+        correction.size() != router.rows || !top_k || top_k > router.rows ||
+        !finite(hidden) || !finite(correction)) {
+        return Result<OfficialRoute>::failure(ErrorCode::invalid_extent);
+    }
+    std::vector<float> logits(router.rows);
+    for (std::size_t row = 0; row < router.rows; ++row) {
+        double sum = 0.0;
+        for (std::size_t column = 0; column < router.cols; ++column) {
+            const auto weight = decode_bf16_word(
+                router.values[row * router.cols + column]);
+            if (!std::isfinite(weight)) {
+                return Result<OfficialRoute>::failure(ErrorCode::invalid_extent);
+            }
+            sum += static_cast<double>(weight) * hidden[column];
+        }
+        logits[row] = static_cast<float>(sum);
+    }
+    return route_official_moe_logits(logits, correction, top_k);
 }
 
 Result<OfficialMoeResult> official_moe_cpu(
