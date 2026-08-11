@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <span>
 #include <vector>
 
@@ -87,7 +88,10 @@ struct Fixture {
     }
 };
 
-k3x::BackendOptions options(k3x::CudaWeightMode mode, std::uint64_t capacity) {
+k3x::BackendOptions options(
+    k3x::CudaWeightMode mode, std::uint64_t capacity,
+    k3x::CudaWeightValidationMode validation =
+        k3x::CudaWeightValidationMode::per_call) {
     k3x::BackendOptions value;
     value.kind = k3x::BackendKind::cuda_custom;
     value.cuda_allocation = k3x::CudaAllocationMode::reused;
@@ -95,8 +99,12 @@ k3x::BackendOptions options(k3x::CudaWeightMode mode, std::uint64_t capacity) {
     value.cuda_batching = k3x::CudaBatchingMode::resident_grid;
     value.cuda_boundary = k3x::CudaBoundaryMode::moe_layer;
     value.cuda_resident_bytes = capacity;
+    value.cuda_weight_validation = validation;
     return value;
 }
+
+constexpr std::uint64_t kImmutableViews = 14;
+constexpr std::uint64_t kImmutableBytes = 384;
 
 int run(k3x::CudaWeightMode mode) {
     const Fixture fixture;
@@ -145,6 +153,10 @@ int run(k3x::CudaWeightMode mode) {
                                           2 * 2 * 2 * sizeof(float);
     if (first_stats.official_kda_calls != 1 ||
         second_stats.official_kda_calls != 3 ||
+        second_stats.immutable_validation_scans != 3 * kImmutableViews ||
+        second_stats.immutable_validation_hits != 0 ||
+        second_stats.immutable_validation_bytes != 3 * kImmutableBytes ||
+        second_stats.immutable_validation_nanoseconds == 0 ||
         first_stats.official_kda_state_h2d_bytes != one_state_bytes ||
         first_stats.official_kda_state_d2h_bytes != one_state_bytes ||
         first_stats.official_kda_output_d2h_bytes !=
@@ -200,10 +212,123 @@ int invalid() {
     return 0;
 }
 
+int admission_validation() {
+    const Fixture fixture;
+    const auto zero = k3x::zero_official_kda_state(fixture.cpu_config);
+    const k3x::OfficialKdaCudaStateView state{
+        zero.conv_q, zero.conv_k, zero.conv_v, zero.recurrent_v_first};
+    auto transient = k3x::make_cuda_backend(options(
+        k3x::CudaWeightMode::transient, 0,
+        k3x::CudaWeightValidationMode::admission));
+    if (!transient) return 29;
+    const auto unsupported = transient.value()->official_kda(
+        fixture.hidden, fixture.cuda_weights(), state, fixture.cuda_config,
+        1, k3x::ProfilePhase::decode);
+    const auto unsupported_stats = transient.value()->runtime_stats();
+    if (unsupported || unsupported.error() != k3x::ErrorCode::invalid_extent ||
+        unsupported_stats.immutable_validation_scans != 0 ||
+        unsupported_stats.official_kda_calls != 0 ||
+        unsupported_stats.official_kda_kernel_launches != 0) return 29;
+    auto backend = k3x::make_cuda_backend(options(
+        k3x::CudaWeightMode::resident, 1 << 20,
+        k3x::CudaWeightValidationMode::admission));
+    if (!backend) return 30;
+    const auto first = backend.value()->official_kda(
+        fixture.hidden, fixture.cuda_weights(), state, fixture.cuda_config,
+        1, k3x::ProfilePhase::decode);
+    if (!first) return 31;
+    const auto first_stats = backend.value()->runtime_stats();
+    if (first_stats.immutable_validation_scans != kImmutableViews ||
+        first_stats.immutable_validation_hits != 0 ||
+        first_stats.immutable_validation_bytes != kImmutableBytes ||
+        first_stats.immutable_validation_nanoseconds == 0) return 32;
+    const auto second = backend.value()->official_kda(
+        fixture.hidden, fixture.cuda_weights(), state, fixture.cuda_config,
+        1, k3x::ProfilePhase::decode);
+    if (!second || second.value().output != first.value().output ||
+        second.value().conv_q != first.value().conv_q ||
+        second.value().conv_k != first.value().conv_k ||
+        second.value().conv_v != first.value().conv_v ||
+        second.value().recurrent_v_first != first.value().recurrent_v_first) {
+        return 33;
+    }
+    const auto second_stats = backend.value()->runtime_stats();
+    if (second_stats.immutable_validation_scans != kImmutableViews ||
+        second_stats.immutable_validation_hits != kImmutableViews ||
+        second_stats.immutable_validation_bytes != kImmutableBytes) return 34;
+
+    const Fixture different_allocation;
+    const auto rejected = backend.value()->official_kda(
+        different_allocation.hidden, different_allocation.cuda_weights(), state,
+        different_allocation.cuda_config, 1, k3x::ProfilePhase::decode);
+    const auto rejected_stats = backend.value()->runtime_stats();
+    if (rejected || rejected.error() != k3x::ErrorCode::invalid_extent ||
+        rejected_stats.immutable_validation_scans !=
+            second_stats.immutable_validation_scans ||
+        rejected_stats.immutable_validation_hits !=
+            second_stats.immutable_validation_hits ||
+        rejected_stats.immutable_validation_bytes !=
+            second_stats.immutable_validation_bytes ||
+        rejected_stats.resident_weight_bytes !=
+            second_stats.resident_weight_bytes ||
+        rejected_stats.official_kda_calls != second_stats.official_kda_calls ||
+        rejected_stats.official_kda_kernel_launches !=
+            second_stats.official_kda_kernel_launches) return 35;
+
+    Fixture nonfinite;
+    nonfinite.q_conv[0] = std::numeric_limits<float>::quiet_NaN();
+    auto atomic = k3x::make_cuda_backend(options(
+        k3x::CudaWeightMode::resident, 1 << 20,
+        k3x::CudaWeightValidationMode::admission));
+    if (!atomic) return 36;
+    const auto failed = atomic.value()->official_kda(
+        nonfinite.hidden, nonfinite.cuda_weights(), state,
+        nonfinite.cuda_config, 1, k3x::ProfilePhase::decode);
+    const auto failed_stats = atomic.value()->runtime_stats();
+    if (failed || failed.error() != k3x::ErrorCode::invalid_extent ||
+        failed_stats.immutable_validation_scans != kImmutableViews ||
+        failed_stats.immutable_validation_hits != 0 ||
+        failed_stats.immutable_validation_bytes != kImmutableBytes ||
+        failed_stats.resident_weight_bytes != 0 ||
+        failed_stats.official_kda_calls != 0 ||
+        failed_stats.official_kda_kernel_launches != 0) return 37;
+    nonfinite.q_conv[0] = 0.25F;
+    const auto recovered = atomic.value()->official_kda(
+        nonfinite.hidden, nonfinite.cuda_weights(), state,
+        nonfinite.cuda_config, 1, k3x::ProfilePhase::decode);
+    const auto recovered_stats = atomic.value()->runtime_stats();
+    if (!recovered ||
+        recovered_stats.immutable_validation_scans != 2 * kImmutableViews ||
+        recovered_stats.immutable_validation_hits != 0 ||
+        recovered_stats.immutable_validation_bytes != 2 * kImmutableBytes) {
+        return 38;
+    }
+
+    Fixture nonfinite_bf16;
+    nonfinite_bf16.identity[0] = 0x7f80U;
+    auto bf16_backend = k3x::make_cuda_backend(options(
+        k3x::CudaWeightMode::resident, 1 << 20,
+        k3x::CudaWeightValidationMode::admission));
+    if (!bf16_backend) return 39;
+    const auto bf16_failed = bf16_backend.value()->official_kda(
+        nonfinite_bf16.hidden, nonfinite_bf16.cuda_weights(), state,
+        nonfinite_bf16.cuda_config, 1, k3x::ProfilePhase::decode);
+    const auto bf16_stats = bf16_backend.value()->runtime_stats();
+    if (bf16_failed ||
+        bf16_failed.error() != k3x::ErrorCode::invalid_extent ||
+        bf16_stats.immutable_validation_scans != kImmutableViews ||
+        bf16_stats.immutable_validation_hits != 0 ||
+        bf16_stats.immutable_validation_bytes != kImmutableBytes ||
+        bf16_stats.resident_weight_bytes != 0 ||
+        bf16_stats.official_kda_kernel_launches != 0) return 40;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
     if (const auto result = run(k3x::CudaWeightMode::transient)) return result;
     if (const auto result = run(k3x::CudaWeightMode::resident)) return 10 + result;
-    return invalid();
+    if (const auto result = invalid()) return result;
+    return admission_validation();
 }

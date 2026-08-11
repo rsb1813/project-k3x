@@ -773,3 +773,10 @@
 - B-0031 is fixed to resident incremental/full crossed with per-call/admission. It reuses the ignored M29 artifact, changes no tensor bytes or graph semantics, and makes no token, physical-traffic, utilization, bandwidth, or quality claim.
 - The implementation plan has four connected tasks: backend admission semantics, harness CLI/telemetry, strict B-0031 tooling, and formal evidence plus publication. It deliberately leaves B-0030 files unchanged and requires one semantic commit per task.
 - For twenty measured sequences, the closed validation formulas are 560 scans or hits for incremental execution and 280 for full execution. Per-call scanned bytes are 35,512,033,280 and 17,756,016,640 respectively; admission measured scan bytes are zero after the cold call and warmups.
+
+## 2026-08-11 — Milestone 30 Task 1 official KDA admission semantics
+
+- RED built successfully and exited 32 because official KDA recorded no immutable admission scan counters. A separate resident-only RED exited 29 because admission plus transient execution was still accepted.
+- GREEN separates dynamic validation from fourteen immutable views, classifies exact pointer/byte/shape identities through the existing registry, scans all new views, and inserts only after every BF16/F32 payload is finite.
+- Tiny coverage proves 14 scans and 384 bytes on first admission, 14 hits on reuse, 42 scans across three per-call executions, identity-conflict rejection, BF16/F32 non-finite rejection, atomic recovery after a failed first scan, and resident-only admission.
+- Focused CUDA build passes `cuda_moe_layer_ops`, `cuda_moe_layer`, `cuda_official_kda`, and `cuda_official_layer` 4/4. No artifact, benchmark, routing, default, or production capability changed.
