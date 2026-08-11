@@ -195,3 +195,39 @@ def test_strict_verification_requires_fixed_iteration_identity(
             output / "summary.json", output / "summary.csv", artifact=artifact,
             manifest=manifest, runner=runner,
         )
+
+
+def test_committed_b0031_evidence_is_self_consistent() -> None:
+    root = Path(__file__).resolve().parents[2]
+    output = root / "results" / "b0031-official-kda-validation-wsl"
+    summary = verify_summary(
+        output / "summary.json", output / "summary.csv", strict_official=False
+    )
+    assert summary["warmups"] == 3
+    assert summary["iterations"] == 20
+    assert summary["artifact_sha256"] == (
+        "9f0c29fcb18b8cdab5aeeec67d8e5e0113b8dffb7352a2dcdac1ae41ae5198c6"
+    )
+    assert summary["manifest_sha256"] == (
+        "cf0dd554d5dfc7db640cb3313f7527e6c354a6fd74f9011cd747348b247168d4"
+    )
+    assert summary["runner_sha256"] == (
+        "a710b7189220256189fa682e9be371e412ce4b27bedf63ffa5e2dac81c864685"
+    )
+    assert summary["aggregate_sha256"] == (
+        "5d6ba38a0d959902c5ab8e7f7bce4f13254f018644430a18490864c173b30a1f"
+    )
+    assert summary["summary_csv_sha256"] == (
+        "ea4bcd6b6f613d4a07bdb4e8aa14cb989f2ef11a3fcdfd473112a846e0883501"
+    )
+    records = summary["records"]
+    assert isinstance(records, list)
+    assert [record["latency_nanoseconds_median"] for record in records] == [
+        175_667_985,
+        70_584_413,
+        121_067_320,
+        67_236_923,
+    ]
+    assert hashlib.sha256((output / "summary.json").read_bytes()).hexdigest() == (
+        "9ddad853b3a99ea84efd189f0294814d736d7418c5264bbcf06865e6f94d4fc4"
+    )
