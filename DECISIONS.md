@@ -608,12 +608,13 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-053 — Prove one official expert FFN before widening real-weight closure
 
 - Date: 2026-08-10.
-- Status: accepted, implemented, and measured locally; public integration is pending.
+- Status: accepted, implemented, measured, and publicly integrated through PR #46 at `ec08b827`.
 - Decision: add a dedicated benchmark-only path that hard-binds the B-0027 K3X root and ordered expert digest, uses the portable CPU backend as oracle, and measures transient and resident RTX 5080 execution without changing `k3x_run`.
 - Alternatives considered: reuse the released-dimension executable unchanged; add caller-selected official labels to that executable; add a pinned official-expert harness.
 - Evidence: B-0028 reports transient/resident medians of 2,508,377/331,868 ns with identical `3.0267983675e-9` maximum absolute error. Both cold calls transfer 17,547,264 weight bytes; twenty transient calls transfer 350,945,280 bytes while resident transfers zero measured weight bytes and records 60 hits. CUDA CTest passes 28/28 and the resident official-expert Compute Sanitizer reports zero errors.
 - Reason accepted: the dedicated harness is the smallest boundary that proves actual official MXFP4 CUDA computation while keeping synthetic released evidence, production generation, and official provenance distinct.
 - Rejected claims: one expert FFN is not a real full MoE layer, routing result, token throughput, full-checkpoint runtime, physical NVMe measurement, or quality result.
+- Publication: branch correctness `31455570571`, pull-request correctness `31455597581`, and pull-request CodeQL `31455597565` passed. PR #46 was rebase-merged at `ec08b827`; post-merge `main` correctness `31455776634` and CodeQL `31455776673` passed.
 - Revisit: native Linux and a real changing routed set are required before residency becomes a default or the one-expert latency ratio is used in a model-level projection.
 
 ## D-054 — Close a real MoE FFN sublayer before a full transformer layer

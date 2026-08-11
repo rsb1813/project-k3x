@@ -359,6 +359,8 @@ Record B-0028 date, commit, hardware, WSL2 environment, official revision, one-e
 
 Review the complete diff for Critical/Important correctness, evidence, identity, timing, and claim-boundary issues. Apply at most one focused correction/re-review cycle unless a verified Critical remains. Commit evidence and synchronized documents with a single benchmark-scoped message.
 
-- [ ] **Step 7: Publish and integrate**
+- [x] **Step 7: Publish and integrate**
 
 Push the branch, open a public PR, wait for correctness and CodeQL, rebase-merge only when clean, verify post-merge `main` correctness and CodeQL, and reconcile any remaining publication-pending documentation before starting M28.
+
+Completed through PR #46 at public integration head `ec08b827`. Branch correctness `31455570571`, pull-request correctness `31455597581`, pull-request CodeQL `31455597565`, post-merge correctness `31455776634`, and post-merge CodeQL `31455776673` all passed.

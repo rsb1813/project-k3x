@@ -218,7 +218,7 @@
 - [x] Implement pinned identity validation through a witnessed RED/GREEN cycle.
 - [x] Implement the dedicated CUDA harness through witnessed RED/GREEN cycles.
 - [x] Implement and verify the B-0028 two-mode runner and strict evidence verifier.
-- [ ] Run B-0028, the full verification matrix, final review, TITAN Ledger synchronization, and public integration.
+- [x] Run B-0028, the full verification matrix, final review, TITAN Ledger synchronization, and public integration.
 
 ## Milestone 12 — Fused routed accumulation CUDA kernel
 
