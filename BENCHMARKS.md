@@ -1121,7 +1121,7 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 ## Milestone 29 design metadata gate — not a benchmark
 
 - Date: 2026-08-11.
-- Commit: pending design commit.
+- Evidence commit: `5f04768`.
 - Hardware: metadata-only HTTPS inspection from the current development host; no GPU execution.
 - Model/checkpoint: `moonshotai/Kimi-K3` revision `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`.
 - Observation: pinned `modeling_kimi_linear.py` is 51,506 bytes and recomputes to Git blob `b8c41e8bfce768d74d8da3a37e693f5ee43876a0`; 17 layer-1 KDA/self-Attention-Residual header entries total 887,843,840 payload bytes in `model-00002-of-000096.safetensors`.

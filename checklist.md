@@ -418,7 +418,7 @@
 - [x] Verify the pinned official graph, source Git blob, configuration, index, and layer-1 shard header without tensor payload downloads.
 - [x] Compare the external state boundary, layer-0 closure, and KDA-only alternatives.
 - [x] Write and self-review the accepted complete-layer design.
-- [ ] Write the detailed TDD implementation plan.
+- [x] Write the detailed TDD implementation plan.
 - [ ] Implement fail-closed official KDA tensor planning and bounded materialization.
 - [ ] Implement an independent portable KDA recurrence and full/incremental state oracle.
 - [ ] Compose the complete portable layer with the official M28 MoE boundary.

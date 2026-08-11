@@ -112,7 +112,7 @@ State audited last on 2026-08-11 from public head `ab3cf433fc2eac2a6aaf8a55cdb30
 ## Work in progress
 
 - M29 design research is complete. The pinned source Git blob matches repository metadata; header-only inspection identifies 17 new tensors totaling 887,843,840 bytes; and D-061 selects the explicit layer-1 recurrent-state boundary.
-- M29 has no implementation or measurement yet. The next unit is a detailed TDD plan followed by fail-closed tensor planning and tiny independent KDA recurrence tests.
+- M29 has no implementation or measurement yet. The accepted design is commit `5f04768`; the detailed eight-task TDD plan is written. The next unit is fail-closed tensor planning and config/header regression tests.
 
 - M28 Task 2 is complete at `0b0c944`: the route manifest is durable before expert fetching, only the natural A/B first-use union is planned, object reuse is rehashed, response bytes are measured separately from logical source bytes, and production generation remains fail-closed.
 - M28 Task 3 is complete at `8a13cf5`: the dimension-driven CPU oracle preserves explicit BF16 boundaries, validates the natural route before execution, decodes native MXFP4 experts exactly, and matches independent PyTorch intermediate values without production dispatch.
@@ -172,8 +172,8 @@ State audited last on 2026-08-11 from public head `ab3cf433fc2eac2a6aaf8a55cdb30
 
 ## Next concrete tasks
 
-1. Write the detailed M29 TDD plan and commit the accepted design ledger.
-2. Implement fail-closed official KDA tensor planning plus tiny independent full/incremental recurrence parity before materializing payload.
+1. Implement fail-closed official KDA tensor planning and config/header regression tests.
+2. Implement tiny independent full/incremental KDA recurrence parity before materializing payload.
 3. Extend bounded content-addressed manufacturing, compose the portable complete layer, then add CUDA and B-0030 only after each prior correctness gate passes.
 4. Keep the artifact non-executable; do not download a complete shard/checkpoint or create paid cloud resources.
 
