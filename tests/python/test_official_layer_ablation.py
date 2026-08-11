@@ -242,3 +242,42 @@ def test_full_and_incremental_rows_require_same_output_and_state(
 ) -> None:
     with pytest.raises(RuntimeError, match="full/incremental parity"):
         _generate(tmp_path, monkeypatch, ("state_sha256", "f" * 64))
+
+
+def test_committed_b0030_evidence_is_self_consistent() -> None:
+    root = Path(__file__).resolve().parents[2]
+    output = root / "results" / "b0030-official-layer-wsl"
+    summary = verify_summary(
+        output / "summary.json", output / "summary.csv", strict_official=False
+    )
+    assert summary["warmups"] == 3
+    assert summary["iterations"] == 20
+    assert summary["artifact_sha256"] == (
+        "9f0c29fcb18b8cdab5aeeec67d8e5e0113b8dffb7352a2dcdac1ae41ae5198c6"
+    )
+    assert summary["manifest_sha256"] == (
+        "cf0dd554d5dfc7db640cb3313f7527e6c354a6fd74f9011cd747348b247168d4"
+    )
+    assert summary["runner_sha256"] == (
+        "253af0dfa411b771913997f9685c3bb4c5d5877ae68d7fe263eaff6e67f2b1b9"
+    )
+    assert summary["aggregate_sha256"] == (
+        "86f0007af7da007d6646dec6fa8fba4008c1bf7bedff53971d5d31926c9f6452"
+    )
+    assert summary["summary_csv_sha256"] == (
+        "1e5af9bb7d5b9abb16f62962bbce3584b62014873b12ce7642868e919770a635"
+    )
+    records = {record["name"]: record for record in summary["records"]}
+    assert records["a-transient"]["latency_nanoseconds_median"] == 262_801_334
+    assert records["ab-incremental-resident"]["latency_nanoseconds_median"] == 168_577_563
+    assert records["ab-full-resident"]["latency_nanoseconds_median"] == 114_804_882
+    assert records["ab-incremental-resident"]["weight_h2d_bytes"] == 0
+    assert records["ab-full-resident"]["weight_h2d_bytes"] == 0
+    assert records["ab-incremental-resident"]["output_sha256"] == (
+        records["ab-full-resident"]["output_sha256"]
+    )
+    assert records["ab-incremental-resident"]["state_sha256"] == (
+        records["ab-full-resident"]["state_sha256"]
+    )
+    assert all(record["maximum_absolute_error"] == 0.00048828125
+               for record in records.values())
