@@ -203,6 +203,188 @@ def test_official_kda_portable_boundaries_match_independent_torch() -> None:
     )
 
 
+def test_official_layer_portable_graph_matches_independent_torch() -> None:
+    completed = subprocess.run(
+        [str(cpp_binary("test_official_layer")), "--dump"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    actual = json.loads(completed.stdout)
+    config = OfficialKdaConfig(4, 2, 2, 3, 1.0e-5, -5.0)
+    identity = torch.eye(4, dtype=torch.bfloat16)
+    conv = torch.tensor(
+        [
+            [0.25, -0.5, 1.0], [-0.25, 0.5, 0.75],
+            [0.5, 0.25, -0.5], [-0.5, 0.25, 1.25],
+        ],
+        dtype=torch.float32,
+    )
+    kda_weights = OfficialKdaWeights(
+        q_proj=identity,
+        k_proj=torch.tensor(
+            [
+                [0.5, 0.0, 0.25, 0.0], [0.0, 0.75, 0.0, -0.25],
+                [0.25, 0.0, 1.0, 0.0], [0.0, -0.5, 0.0, 0.5],
+            ],
+            dtype=torch.bfloat16,
+        ),
+        v_proj=identity,
+        q_conv=conv,
+        k_conv=conv * 0.75,
+        v_conv=conv * -0.5,
+        f_a_proj=torch.tensor(
+            [[0.5, -0.25, 0.0, 0.25], [0.0, 0.5, -0.5, 0.25]],
+            dtype=torch.bfloat16,
+        ),
+        f_b_proj=torch.tensor(
+            [[1.0, 0.0], [0.5, -0.5], [0.0, 1.0], [-0.25, 0.75]],
+            dtype=torch.bfloat16,
+        ),
+        a_log=torch.tensor([0.0, 0.5]),
+        dt_bias=torch.tensor([0.25, -0.5, 0.75, -0.25]),
+        b_proj=torch.tensor(
+            [[0.5, -0.25, 0.25, 0.0], [0.0, 0.5, -0.5, 0.25]],
+            dtype=torch.bfloat16,
+        ),
+        g_proj=torch.tensor(
+            [
+                [0.5, 0.0, 0.0, -0.25], [0.0, 0.5, 0.25, 0.0],
+                [-0.25, 0.0, 0.5, 0.0], [0.0, 0.25, 0.0, 0.75],
+            ],
+            dtype=torch.bfloat16,
+        ),
+        o_norm=torch.tensor([1.0, 1.5]),
+        o_proj=identity,
+    )
+    hidden_inputs = torch.tensor(
+        [[0.5, -1.0, 0.25, 0.75], [-0.25, 0.5, 1.0, -0.5]],
+        dtype=torch.bfloat16,
+    )
+    block_sources = torch.tensor(
+        [[0.75, -0.25, 0.5, 0.25], [-0.5, 0.75, -0.25, 0.5]],
+        dtype=torch.bfloat16,
+    )
+    residual_norm = torch.ones(4, dtype=torch.bfloat16)
+    residual_proj = torch.tensor(
+        [0.5, -0.25, 0.25, 0.0], dtype=torch.bfloat16
+    )
+
+    def attention_residual(prefix: torch.Tensor, block: torch.Tensor) -> torch.Tensor:
+        values = torch.stack((block, prefix)).float()
+        normalized = values * torch.rsqrt(
+            values.square().mean(dim=-1, keepdim=True) + 1.0e-5
+        )
+        scores = (normalized * residual_norm.float() * residual_proj.float()).sum(-1)
+        return (scores.softmax(-1)[:, None] * values).sum(0).to(torch.bfloat16)
+
+    self_residuals = torch.stack(
+        [attention_residual(hidden_inputs[i], block_sources[i]) for i in range(2)]
+    )
+    kda_inputs = (
+        self_residuals.float()
+        * torch.rsqrt(self_residuals.float().square().mean(-1, keepdim=True) + 1.0e-5)
+    ).to(torch.bfloat16)
+    kda = official_kda(
+        kda_inputs.unsqueeze(0),
+        kda_weights,
+        zero_official_kda_state(config, 1, hidden_inputs.device),
+        config,
+    )
+    post_prefixes = (hidden_inputs.float() + kda.output[0].float()).to(torch.bfloat16)
+    router = torch.tensor(
+        [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0],
+         [-1.0, 0.5, 0.25, 0.0]],
+        dtype=torch.bfloat16,
+    )
+    correction = torch.tensor([0.0, 0.1, -0.05])
+    routed_down = torch.tensor(
+        [[1.0, 0.0, 0.5, 0.0], [0.0, 1.0, 0.0, 0.5]]
+    )
+    routed_up = torch.tensor(
+        [[1.0, 0.0], [0.0, 1.0], [0.5, 0.0], [0.0, 0.5]]
+    )
+    shared_gate_up = torch.tensor(
+        [[1.0, 0.0, 0.0, 0.5], [0.0, 1.0, 0.5, 0.0]]
+    )
+    shared_down = torch.tensor(
+        [[1.0, 0.0], [0.0, 1.0], [0.5, 0.0], [0.0, 0.5]]
+    )
+    expert_matrices = {
+        0: (
+            torch.tensor([[1.0, 0.5], [0.5, 1.0]]),
+            torch.tensor([[1.0, 1.0], [0.5, 1.5]]),
+            torch.tensor([[1.0, 0.5], [0.5, 1.0]]),
+        ),
+        1: (
+            torch.tensor([[0.5, 1.0], [1.0, 0.5]]),
+            torch.tensor([[1.0, 0.5], [1.5, 1.0]]),
+            torch.tensor([[1.0, 0.5], [1.0, 0.5]]),
+        ),
+    }
+
+    def situ(gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
+        return 4.0 * torch.tanh(gate / 4.0) * torch.sigmoid(gate) * (
+            25.0 * torch.tanh(up / 25.0)
+        )
+
+    for index, actual_step in enumerate(actual["steps"]):
+        mlp_residual = attention_residual(post_prefixes[index], block_sources[index])
+        normalized = (
+            mlp_residual.float()
+            * torch.rsqrt(mlp_residual.float().square().mean() + 1.0e-5)
+        ).to(torch.bfloat16)
+        scores = torch.sigmoid(router.float() @ normalized.float())
+        selected = torch.topk(scores + correction, 2, sorted=False).indices.tolist()
+        selected = sorted(selected, key=lambda item: (-float(scores[item] + correction[item]), item))
+        contributions = scores[selected] / scores[selected].sum()
+        latent = (routed_down @ normalized.float()).to(torch.bfloat16).float()
+        expert_outputs = []
+        for expert_id in selected:
+            gate_weight, up_weight, down_weight = expert_matrices[expert_id]
+            expert_outputs.append(
+                (down_weight @ situ(gate_weight @ latent, up_weight @ latent))
+                .to(torch.bfloat16).float()
+            )
+        mixed = sum(
+            weight * output
+            for weight, output in zip(contributions, expert_outputs)
+        ).to(torch.bfloat16).float()
+        routed = (
+            mixed * torch.rsqrt(mixed.square().mean() + 1.0e-5)
+        ).to(torch.bfloat16).float()
+        routed = (routed_up @ routed).to(torch.bfloat16).float()
+        shared_gate = (shared_gate_up @ normalized.float()).to(torch.bfloat16).float()
+        shared_up = (shared_gate_up @ normalized.float()).to(torch.bfloat16).float()
+        shared = (shared_down @ situ(shared_gate, shared_up)).to(torch.bfloat16).float()
+        combined = (routed + shared).to(torch.bfloat16).float()
+        output = (post_prefixes[index].float() + combined).to(torch.bfloat16).float()
+
+        assert actual_step["self_attention_residual"] == pytest.approx(
+            self_residuals[index].float().tolist(), abs=1.0e-6
+        )
+        assert actual_step["input_normalized"] == pytest.approx(
+            kda_inputs[index].float().tolist(), abs=1.0e-6
+        )
+        assert actual_step["post_kda_prefix"] == pytest.approx(
+            post_prefixes[index].float().tolist(), abs=1.0e-6
+        )
+        assert actual_step["mlp_attention_residual"] == pytest.approx(
+            mlp_residual.float().tolist(), abs=1.0e-6
+        )
+        assert actual_step["normalized_moe_input"] == pytest.approx(
+            normalized.float().tolist(), abs=1.0e-6
+        )
+        assert actual_step["expert_ids"] == selected
+        assert actual_step["contributions"] == pytest.approx(
+            contributions.tolist(), abs=1.0e-6
+        )
+        assert actual_step["output"] == pytest.approx(output.tolist(), abs=1.0e-6)
+    assert actual["recurrent_v_first"] == pytest.approx(
+        kda.state.recurrent_v_first.reshape(-1).tolist(), abs=1.0e-6
+    )
+
+
 def test_cpp_runner_rejects_storage_fixture_before_graph_execution(
     tmp_path: Path,
 ) -> None:

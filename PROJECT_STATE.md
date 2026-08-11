@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 29's official layer-1 KDA transformer boundary is designed; its fail-closed metadata planner, independent PyTorch and portable C++ tiny KDA oracles, and bounded complete-layer manufacturing path are implemented and verified. The accepted boundary supplies deterministic layer-1 hidden/source-bank vectors and explicit KDA state, then will execute two tokens through self Attention Residual, KDA, MLP Attention Residual, the measured natural Top-16 MoE FFN, and final prefix accumulation both together and incrementally. It keeps the bounded artifact non-executable until independent whole-layer parity passes. No M29 tensor payload, official route union, complete-layer composition, CUDA result, B-0030 result, token metric, or quality result exists yet.
+Milestone 29's official layer-1 KDA transformer boundary is designed; its fail-closed metadata planner, independent PyTorch and portable C++ tiny KDA oracles, bounded complete-layer manufacturing path, and tiny portable complete-layer composition are implemented and verified. The accepted boundary supplies deterministic layer-1 hidden/source-bank vectors and explicit KDA state, then executes the tiny two-token fixture through self Attention Residual, KDA, MLP Attention Residual, natural routing, the portable MoE FFN, and final prefix accumulation both together and incrementally. It keeps the bounded artifact non-executable while pinned manifest preflight, official payload execution, CUDA, and B-0030 remain pending. No M29 tensor payload, official route union, CUDA result, B-0030 result, token metric, or quality result exists yet.
 
 State audited last on 2026-08-11 from public head `ab3cf433fc2eac2a6aaf8a55cdb3072997a7ab9c` after PR #49 reconciled M28 publication records. Its post-merge `main` correctness `31466295752` and CodeQL `31466295731` passed. The last full local M28 matrix passes CPU CTest 17/17 plus Python 507/97, liburing CTest 18/18 plus Python 509/95, ASan/UBSan CTest 18/18, CUDA CTest 30/30 plus actual-artifact Python 592/12, and actual alternating resident Compute Sanitizer with zero errors. The ignored bounded fixture contains eleven always-active tensors and a 32-expert union; no complete shard, full checkpoint, or paid cloud resource is in use.
 
@@ -116,7 +116,8 @@ State audited last on 2026-08-11 from public head `ab3cf433fc2eac2a6aaf8a55cdb30
 - M29 Task 2 is implemented and verified. The independent scalar oracle passes exact BF16 full/incremental output and convolution-state parity, `1e-6` FP32 recurrent-state parity, an independently reconstructed nonzero-state recurrence, and strict negative contracts across 17 focused tests.
 - M29 Task 3 is implemented and verified. The M28 transaction primitives now manufacture all pre-route objects, publish explicit V-first full/incremental state linkage before selected experts, assemble exact execution order, revalidate the complete plan before payload, and expose a zero-payload `kda-layer` dry-run/materialization CLI. The combined recovery/source-integrity regression passes 123 tests.
 - M29 Task 4 is implemented and verified. The Reader-free portable C++ KDA consumes native BF16/F32 views, owns explicit V-first state, matches every independent PyTorch boundary, and passes full CPU CTest 18/18 plus Python C++ parity 114/32.
-- The accepted design is commit `5f04768` and the detailed eight-task TDD plan is commit `b7a6c0e`. The next unit is portable complete-layer composition and manifest preflight; actual bounded fixture materialization remains a later explicit M29 task.
+- M29 Task 5A is implemented and verified. The Reader-free portable complete layer preserves both Attention Residual boundaries, composes the KDA and MoE authorities, matches full/incremental state and changing natural routes, and passes full CPU CTest 19/19 plus Python C++ parity 115/32.
+- The accepted design is commit `5f04768` and the detailed eight-task TDD plan is commit `b7a6c0e`. The next unit is pinned artifact/manifest preflight before backend construction; actual bounded fixture materialization remains a later explicit M29 task.
 
 - M28 Task 2 is complete at `0b0c944`: the route manifest is durable before expert fetching, only the natural A/B first-use union is planned, object reuse is rehashed, response bytes are measured separately from logical source bytes, and production generation remains fail-closed.
 - M28 Task 3 is complete at `8a13cf5`: the dimension-driven CPU oracle preserves explicit BF16 boundaries, validates the natural route before execution, decodes native MXFP4 experts exactly, and matches independent PyTorch intermediate values without production dispatch.
@@ -176,9 +177,9 @@ State audited last on 2026-08-11 from public head `ab3cf433fc2eac2a6aaf8a55cdb30
 
 ## Next concrete tasks
 
-1. Compose the complete portable layer and strict manifest validation before any native backend construction.
+1. Implement strict pinned artifact/manifest validation before any native backend construction.
 2. Add the dedicated official-layer harness contract while preserving `k3x_run` rejection.
-3. Add CUDA and B-0030 only after portable whole-layer parity passes, then materialize the bounded real fixture without a complete shard.
+3. Add CUDA and B-0030 only after pinned preflight passes, then materialize the bounded real fixture without a complete shard.
 4. Keep the artifact non-executable; do not download a complete shard/checkpoint or create paid cloud resources.
 
 ## Hardware assumptions
@@ -212,6 +213,7 @@ The immediate measured boundary is approximately 7.40 ms of CUDA kernel work plu
 
 ## Last known-good state
 
+- Local M29 Task 5A full CPU build and CTest 19/19 pass. Focused official CTest passes 4/4, Python C++ parity passes 115 with 32 capability skips, strict warning compilation passes, and the tiny full/incremental complete layer matches the independent PyTorch graph within `1e-6`. No official payload or performance result exists.
 - Local M29 Task 4 full CPU build and CTest 18/18 pass. Focused official CTest passes 3/3, Python C++ parity passes 114 with 32 capability skips, strict warning compilation passes, and every tiny KDA boundary matches the independent PyTorch oracle within `1e-6`. No official payload or performance result exists.
 - Local M29 Task 3 passes 123 layer/MoE/CLI/source/resume/source-integrity tests, Python compile validation, and `git diff --check`. A live pinned `kda-layer` dry-run matched the official revision/source blob and accepted byte bounds with zero tensor payload. No M29 payload or performance result exists.
 - Local M29 Task 2 passes 17 focused official/synthetic KDA and model tests and 81 combined Task 1/2 regressions. Exact BF16 full/incremental output and convolution histories, `1e-6` FP32 recurrent-state parity, independent nonzero-state recurrence reconstruction, fail-closed negative coverage, compile validation, and `git diff --check` pass. No official payload or performance result exists.
