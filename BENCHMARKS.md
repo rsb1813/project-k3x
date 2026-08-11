@@ -974,6 +974,34 @@ The next bottleneck is not source compatibility or bounded conversion. It is the
 
 PR #44 was rebase-merged at public implementation head `5b6345db`. Both branch and pull-request correctness passed, all pull-request CodeQL checks passed, and post-merge `main` correctness `31386873905` and CodeQL `31386873928` succeeded. Node.js 20 and CodeQL Action v3 deprecation annotations did not change the successful conclusions and remain separate workflow maintenance.
 
+## B-0028 — Milestone 27 official expert CUDA execution
+
+- Date: 2026-08-11.
+- Commit: official identity `2e2acb9`, dedicated CUDA harness and runtime D2H correction `60f19e7`, strict runner/verifier `c39aac2`; evidence/documentation commit pending at measurement time.
+- Hardware: AMD Ryzen 7 9800X3D and NVIDIA GeForce RTX 5080 16,303 MiB under WSL2 Ubuntu 24.04.4, driver 591.86, CUDA 13.3.1 native `sm_120`.
+- Model/checkpoint: official public `moonshotai/Kimi-K3` snapshot `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`; layer 1, expert 0 only; ignored K3X artifact SHA-256 `e08293cd854ed11913bd8f1bc3a51d1eb577202fd5fd9b5b7e3c96ef1bccecc7` and root `d585d283325e13e1316a0194c2d6274dd89ef75a28b96b02f02733290b7658be`.
+- Mode: exact native MXFP4 `cuda-custom + reused + ffn-block + synchronous + fusion-none`; transient versus exact 17,547,264-byte resident capacity; one cold call, three warmups, and twenty measured calls.
+- Context length, decode tok/s, prefill tok/s, and TTFT: not applicable and not emitted because this invokes one expert FFN with `token_semantics=false` and `routing_semantics=false`.
+- System RAM, physical NVMe GB/token, RAM-to-GPU GB/token, GPU utilization, GPU memory bandwidth, I/O stall time, and coding/agentic quality: not measured. H2D/D2H below are backend byte counters per twenty direct invocations, not per-token or physical-bus counters.
+- Average Top-K, speculative acceptance, and cold rescue: not applicable. The invocation contains exactly one fixed expert and no router or speculative block.
+- Cache hit rate: transient has no resident lookup; resident records 60 hits, zero misses, and zero bypasses during the measured interval after cold admission, or 100% of its measured tensor lookups.
+- Quality: all 3,584 outputs are finite and both modes have `3.0267983675e-9` maximum absolute error against the independent portable CPU backend. Full-model and coding quality are unmeasured.
+
+| Mode | Cold latency | Warm p05 | Warm median | Warm p95 | Kernel total | Cold weight H2D | Measured weight H2D | Activation H2D | D2H | Resident bytes | Peak VRAM |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Transient | 7,122,628 ns | 1,865,439 ns | 2,508,377 ns | 2,649,090 ns | 6,309,888 ns | 17,547,264 B | 350,945,280 B | 286,720 B | 286,720 B | 0 B | 5,914,624 B |
+| Resident | 7,748,006 ns | 319,489 ns | 331,868 ns | 366,599 ns | 2,692,992 ns | 17,547,264 B | 0 B | 286,720 B | 286,720 B | 17,547,264 B | 23,461,888 B |
+
+The bounded resident median is 86.77% lower than transient, or 7.56 times as fast at this one-expert boundary, while the single cold resident call is 8.78% slower. The measured result establishes exact reuse benefit only. It does not measure a natural Top-16 routed set, a shared expert, a complete MoE layer, tokens, native Linux, physical PCIe/NVMe traffic, utilization, bandwidth, or quality.
+
+Raw JSON and summary artifacts are under `results/b0028-official-expert-cuda-wsl/`. Raw transient/resident SHA-256 values are `3b39610b5f5b6f4cfd5ec1da1bc3588e00c0af62f58438c81a7f9b3357093518` / `79c935869226108431f391bb61402e10b61a616493720bac75fc545512cc30bf`. Runner SHA-256 is `48f0f295ab7299af07f261522ffd2999814bd5967e12bfcc3e7b0b3d21b201fa`; canonical aggregate SHA-256 is `eb4580b74481855d04fdf9d3f7ed5921ea25b0e5b56408d561cd645a3ea99172`; summary JSON/CSV SHA-256 is `9c7aec65fe3f662c8a8e7ea08084e8d69901cff2707b32e10958b62439e69919` / `d339a8774283e49608393172ffd551d46692a076e00cb4d63e1e2a347ae42a91`.
+
+Strict verification rehashes the ignored artifact and runner, checks fixed B-0027 provenance, raw payload/digests, exact case order, canonical aggregate, LF-only CSV parity, mode-specific traffic formulas, finite parity, and forbidden metric absence. Staged Git blob SHA-256 values match all four working files. A separate read-only cross-check recomputed raw-summary equality, `20 × 17,547,264` transient H2D, resident hit/residency values, activation/D2H formulas, aggregate, CSV order, and forbidden fields.
+
+Fresh verification passes CPU CTest 16/16 with pytest 473 passed/76 skipped, liburing/direct CTest 17/17 with pytest 475 passed/74 skipped, ASan/UBSan CTest 17/17, and CUDA CTest 28/28 with pytest 531 passed/18 skipped. The actual-artifact focused suite passes 6/6, the committed B-0028 evidence suite passes 11/11, and the resident official-expert Compute Sanitizer run reports `ERROR SUMMARY: 0 errors`.
+
+The measured next bottleneck is no longer official single-expert compatibility. M28 must close a real MoE FFN sublayer with the official router, all 896 scores, natural Top-16 selection, exact selected routed experts, real shared expert, mixing, and residual parity before any cache-pressure, full-layer, or throughput conclusion.
+
 ## Pending benchmark gates
 
 - Native Linux repetition of B-0002; WSL2 is the development path, not final performance authority.
@@ -987,6 +1015,7 @@ PR #44 was rebase-merged at public implementation head `5b6345db`. Both branch a
 - Persistent multi-token/multi-expert CUDA execution after B-0020 removes most repeated weight H2D; keep dynamic eviction/prediction and reduced precision as separate policy and quality axes.
 - Native-Linux and representative-dimension repetition of B-0022 before selecting a MoE-layer boundary or CUDA Graph strategy as a default.
 - Real K3 ordered routed-set reuse, native-Linux end-to-end graph timing, and dynamic residency interaction before reconsidering CUDA Graphs or a larger device-resident token boundary; B-0025 keeps direct execution as the default.
-- Multi-expert or full-layer bounded slices before claiming cache-pressure or locality behavior.
-- Bounded official Kimi K3 shard discovery and conversion with content-addressed provenance before claiming real-checkpoint compatibility.
+- Real router-selected Top-16 plus shared-expert FFN sublayer execution before claiming cache pressure, locality, or complete-layer behavior; B-0028 proves only one fixed expert.
+- Complete-object or authenticated-chunk source verification before production conversion claims; B-0027/B-0028 retain explicit `transport-pinned-range` provenance.
+- Native-Linux repetition of B-0028 before using its one-expert residency latency ratio in any runtime policy.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.

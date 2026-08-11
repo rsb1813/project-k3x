@@ -608,10 +608,22 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-053 — Prove one official expert FFN before widening real-weight closure
 
 - Date: 2026-08-10.
-- Status: accepted with the identity, CUDA harness, and strict B-0028 evidence tool implemented locally; formal measurement and public integration are pending.
+- Status: accepted, implemented, and measured locally; public integration is pending.
 - Decision: add a dedicated benchmark-only path that hard-binds the B-0027 K3X root and ordered expert digest, uses the portable CPU backend as oracle, and measures transient and resident RTX 5080 execution without changing `k3x_run`.
 - Alternatives considered: reuse the released-dimension executable unchanged; add caller-selected official labels to that executable; add a pinned official-expert harness.
-- Evidence: the dedicated harness passes all six synthetic/actual-artifact cases, CUDA CTest 28/28, and a resident official-expert Compute Sanitizer run with zero errors. Direct transient/resident validation both report `3.0267983675e-9` maximum absolute error, while transient measured one 17,547,264-byte weight transfer and resident measured zero after cold admission. These timings are validation evidence, not B-0028.
+- Evidence: B-0028 reports transient/resident medians of 2,508,377/331,868 ns with identical `3.0267983675e-9` maximum absolute error. Both cold calls transfer 17,547,264 weight bytes; twenty transient calls transfer 350,945,280 bytes while resident transfers zero measured weight bytes and records 60 hits. CUDA CTest passes 28/28 and the resident official-expert Compute Sanitizer reports zero errors.
 - Reason accepted: the dedicated harness is the smallest boundary that proves actual official MXFP4 CUDA computation while keeping synthetic released evidence, production generation, and official provenance distinct.
 - Rejected claims: one expert FFN is not a real full MoE layer, routing result, token throughput, full-checkpoint runtime, physical NVMe measurement, or quality result.
-- Revisit: B-0028 transient/resident traffic, latency, and parity determine the smallest real multi-expert or complete-layer closure for M28.
+- Revisit: native Linux and a real changing routed set are required before residency becomes a default or the one-expert latency ratio is used in a model-level projection.
+
+## D-054 — Close a real MoE FFN sublayer before a full transformer layer
+
+- Date: 2026-08-11.
+- Status: accepted for Milestone 28; implementation and measurement are pending.
+- Decision: the next real-weight boundary binds the official router, computes all 896 scores, preserves natural Top-16 selection, materializes and executes the exact selected routed experts, executes the real shared expert, and verifies the complete mixing/residual FFN sublayer against an independent reference.
+- Alternatives considered: repeat the single expert with more IDs; benchmark a caller-selected four-expert set; close the real MoE FFN sublayer; download enough attention/KDA/MLA tensors for a complete transformer layer immediately.
+- Evidence: B-0028 proves exact single-expert CUDA execution and shows that warm exact residency removes 350,945,280 measured weight-H2D bytes over twenty calls, but it has no routing, shared-expert, changing-set, or output-mixing semantics. A repeated or caller-selected set would not close those correctness gaps, while a complete transformer layer would widen source and graph dependencies before the MoE boundary is independently proven.
+- Benchmark result: B-0028; no token, full-layer, quality, physical NVMe, or native-Linux result is implied.
+- Reason accepted: the real FFN sublayer is the smallest boundary that tests natural routing and exact selected-weight residency without conflating it with attention and recurrent-state integration.
+- Rejected claims: this decision does not authorize a complete shard/full checkpoint download, paid cloud execution, a residency default, or a full-model TPS projection.
+- Revisit: after the real FFN sublayer passes parity and traffic gates, choose between full transformer-layer closure and multi-layer routing/residency traces from measured evidence.

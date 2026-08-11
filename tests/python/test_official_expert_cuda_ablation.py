@@ -319,3 +319,32 @@ def test_verify_summary_rejects_case_order_even_with_rehashed_aggregate(
             runner=runner,
             strict_official=False,
         )
+
+
+def test_committed_b0028_evidence_is_self_consistent() -> None:
+    root = Path(__file__).resolve().parents[2]
+    output = root / "results" / "b0028-official-expert-cuda-wsl"
+    summary = verify_summary(
+        output / "summary.json",
+        output / "summary.csv",
+        strict_official=False,
+    )
+
+    assert summary["warmup"] == 3
+    assert summary["iterations"] == 20
+    assert summary["artifact_sha256"] == (
+        "e08293cd854ed11913bd8f1bc3a51d1eb577202fd5fd9b5b7e3c96ef1bccecc7"
+    )
+    assert summary["runner_sha256"] == (
+        "48f0f295ab7299af07f261522ffd2999814bd5967e12bfcc3e7b0b3d21b201fa"
+    )
+    assert summary["aggregate_sha256"] == (
+        "eb4580b74481855d04fdf9d3f7ed5921ea25b0e5b56408d561cd645a3ea99172"
+    )
+    assert summary["summary_csv_sha256"] == (
+        "d339a8774283e49608393172ffd551d46692a076e00cb4d63e1e2a347ae42a91"
+    )
+    assert [record["raw_json_sha256"] for record in summary["records"]] == [
+        "3b39610b5f5b6f4cfd5ec1da1bc3588e00c0af62f58438c81a7f9b3357093518",
+        "79c935869226108431f391bb61402e10b61a616493720bac75fc545512cc30bf",
+    ]
