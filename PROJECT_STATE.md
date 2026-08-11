@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 32 is publicly complete through implementation PR #56 and publication PR #57 at public head `f0a5d2ab46acb35f322a9bbcf8bf576695d32d95`. Exact device route preparation is experimental and host routing remains the default after a mixed one-layer result. Milestone 33 metadata planning, exact source-byte execution, dependency-ordered two-shard manufacturing, deterministic oracle generation, tiny K3X v1 round-trip, portable exact two-layer runtime, and the capacity-two CUDA KDA state registry are implemented through `8580df8`. The CUDA activation closure and B-0034 are pending. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, actual M33 official payload, or paid cloud resource exists.
+Milestone 32 is publicly complete through implementation PR #56 and publication PR #57 at public head `f0a5d2ab46acb35f322a9bbcf8bf576695d32d95`. Exact device route preparation is experimental and host routing remains the default after a mixed one-layer result. Milestone 33 metadata planning, exact source-byte execution, dependency-ordered two-shard manufacturing, deterministic oracle generation, tiny K3X v1 round-trip, portable exact two-layer runtime, capacity-two CUDA KDA state, inter-layer activation closure, and the exact two-mode CUDA wrapper are implemented locally through `9265799`. The dedicated artifact harness and B-0034 are pending. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, actual M33 official payload, or paid cloud resource exists.
 
 State audited last on 2026-08-12 at public M32 publication head `f0a5d2ab46acb35f322a9bbcf8bf576695d32d95`. PR #56 branch/PR correctness and CodeQL passed; post-merge correctness `31510749958` and CodeQL `31510749973` also succeeded. PR #57 and its post-merge correctness `31511564878` and CodeQL `31511564986` succeeded. Local verification passes CPU CTest 19/19 plus Python 597/128, liburing/direct CTest 20/20 plus Python 603/122, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus Python 710/15, evidence regressions 65/65, actual device-route Compute Sanitizer with zero errors, and the production non-executable guard. No complete shard, full checkpoint, or paid cloud resource is in use.
 
@@ -187,9 +187,10 @@ State audited last on 2026-08-12 at public M32 publication head `f0a5d2ab46acb35
 
 ## Next concrete tasks
 
-1. Write a focused RED for the exact source-byte single-step executor behind the interleaved scheduler.
-2. Reuse the existing official KDA, residual, routing, and native MXFP4 authorities before adding the materialization transaction or CLI.
-3. Keep full checkpoint download and paid Cloud Run work deferred until the explicitly authorized later milestone.
+1. Write the dedicated two-layer harness CLI/schema RED for invalid artifact, manifest, oracle, tensor order, mode, and residency inputs.
+2. Reuse the existing strict Reader and official layer loader while parameterizing exact layer IDs 1 and 2; do not change historical one-layer CLI schemas.
+3. Run tiny host/device parity, production guard, strict compilation, and sanitizer before any actual M33 payload or B-0034 transaction.
+4. Keep full checkpoint download and paid Cloud Run work deferred until the explicitly authorized later milestone.
 
 ## Hardware assumptions
 
