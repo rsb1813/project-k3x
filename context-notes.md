@@ -805,3 +805,9 @@
 - Actual admission incremental Compute Sanitizer reports `ERROR SUMMARY: 0 errors`. Production `k3x_run` remains fail-closed with exit 4 and `NON_EXECUTABLE_ARTIFACT`.
 - Fresh final verification passes CPU CTest 19/19 plus Python 558/122, liburing/direct CTest 20/20 plus Python 560/120, ASan/UBSan CTest 20/20, and CUDA CTest 34/34 plus actual-artifact Python 659/21.
 - D-068 accepts admission as an exact opt-in path but retains `per-call` as the default. This one-layer WSL2 result does not establish token throughput, quality, physical traffic, native-Linux behavior, or full-model lifetime safety.
+
+## 2026-08-11 — Milestone 30 public integration
+
+- PR #52 branch correctness `31493248372`, pull-request correctness `31493267425`, and pull-request CodeQL `31493267404` passed before merge.
+- PR #52 rebase-merged at public head `51182575b32b49afa4b1fb2586f31df058a74155`.
+- Post-merge `main` correctness `31493550970` and CodeQL `31493549669` passed. GitHub emitted action-version deprecation warnings only; no M30 correctness or analysis failure occurred.

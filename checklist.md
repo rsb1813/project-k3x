@@ -445,4 +445,4 @@
 - [x] Run actual-artifact correctness and Compute Sanitizer gates.
 - [x] Run B-0031 exactly once and seal the evidence.
 - [x] Run the complete verification matrix and synchronize README/TITAN Ledger.
-- [ ] Publish M30 and verify pull-request and post-merge CI.
+- [x] Publish M30 and verify pull-request and post-merge CI.

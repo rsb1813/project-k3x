@@ -1301,4 +1301,4 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - B-0031 evidence-tool plus B-0030 regression tests: 26/26 passed; strict B-0031 artifact/manifest/runner/raw/CSV/aggregate rehash passed.
 - Actual admission-mode AB incremental resident Compute Sanitizer: `ERROR SUMMARY: 0 errors` with `--launch-timeout 0`; measured interval records 28 hits, zero scans/bytes/time, zero warm weight H2D, and maximum error `0.00048828125`.
 - Production guard: `k3x_run` exits 4 with `NON_EXECUTABLE_ARTIFACT` on the unchanged bounded layer fixture.
-- Public integration: pending.
+- Public integration: branch correctness `31493248372`, pull-request correctness `31493267425`, and pull-request CodeQL `31493267404` passed. PR #52 rebase-merged at `51182575b32b49afa4b1fb2586f31df058a74155`; post-merge `main` correctness `31493550970` and CodeQL `31493549669` passed.

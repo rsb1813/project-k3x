@@ -57,9 +57,9 @@ flowchart LR
 | Milestone 27 | [PR #46 merged](https://github.com/rsb1813/project-k3x/pull/46) at `ec08b827` | B-0028 executes the pinned official expert on RTX 5080 and verifies exact transient/resident traffic and CPU-oracle parity |
 | Milestone 28 | [PR #48 merged](https://github.com/rsb1813/project-k3x/pull/48) at `eb2c208` | B-0029 executes a bounded official MoE FFN with two natural Top-16 routes and exact residency |
 | Milestone 29 | [PR #50 merged](https://github.com/rsb1813/project-k3x/pull/50) at `2a4bfaf` | B-0030 executes the bounded official layer-1 KDA transformer boundary and isolates a host-orchestration gap |
-| Milestone 30 | Local evidence complete; publication pending | B-0031 measures exact immutable KDA admission validation without changing the default |
+| Milestone 30 | [PR #52 merged](https://github.com/rsb1813/project-k3x/pull/52) at `51182575` | B-0031 measures exact immutable KDA admission validation without changing the default |
 
-The latest audited public implementation baseline is Milestone 29 integration head `2a4bfaf`. PR #50 branch correctness `31487723904`, pull-request correctness `31487748354`, and pull-request CodeQL `31487748339` passed before merge; post-merge `main` correctness `31488078940` and CodeQL `31488078974` also succeeded. Milestone 30 is locally complete and awaits the same public integration gate.
+The latest audited public implementation baseline is Milestone 30 integration head `51182575`. PR #52 branch correctness `31493248372`, pull-request correctness `31493267425`, and pull-request CodeQL `31493267404` passed before merge; post-merge `main` correctness `31493550970` and CodeQL `31493549669` also succeeded.
 
 ## Why a dedicated engine
 
