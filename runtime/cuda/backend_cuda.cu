@@ -2526,6 +2526,11 @@ public:
         std::size_t head_square{};
         std::size_t recurrent_count{};
         const auto state_mode = state_control.mode;
+        const bool valid_state_mode =
+            state_mode == OfficialKdaStateMode::host_roundtrip ||
+            state_mode == OfficialKdaStateMode::device_seed ||
+            state_mode == OfficialKdaStateMode::device_continue ||
+            state_mode == OfficialKdaStateMode::device_publish;
         const bool host_state_input =
             state_mode == OfficialKdaStateMode::host_roundtrip ||
             state_mode == OfficialKdaStateMode::device_seed;
@@ -2540,7 +2545,8 @@ public:
             state_mode == OfficialKdaStateMode::device_continue;
         const bool device_state_mode =
             state_mode != OfficialKdaStateMode::host_roundtrip;
-        if (options_.kind != BackendKind::cuda_custom ||
+        if (!valid_state_mode ||
+            options_.kind != BackendKind::cuda_custom ||
             options_.cuda_boundary != CudaBoundaryMode::moe_layer ||
             options_.cuda_allocation != CudaAllocationMode::reused ||
             options_.cuda_transfer != CudaTransferMode::synchronous ||
