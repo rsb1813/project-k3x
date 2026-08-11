@@ -961,3 +961,11 @@
 - Commit `324822f` adds the real two-shard orchestration boundary and `--scope two-layer`. Dry-run reads only metadata and both headers. Materialization fetches both trunk sets before any expert, then prepares each A1→A2→B1→B2 route and fetches only that layer's first-use experts before exact completion.
 - The external oracle stores both final outputs and both final official KDA states in a deterministic checked binary payload. The K3X source manifest binds its digest, while the final route-state manifest binds traffic, object ranges/hashes, trace digests, and artifact hashes.
 - Focused plus historical official converter, format, source-integrity, resume, and discovery CLI verification passes 139 tests. Python compilation and `git diff --check` pass. The transport/materializer test is mocked and no official payload, complete shard, full checkpoint, benchmark, or paid resource was used.
+
+## 2026-08-12 — Milestone 33 Task 3 portable two-layer runtime
+
+- The controlled C++ RED failed because `k3x/official_two_layer.hpp` did not exist. Commit `3dd0a80` adds the minimum exact A1→A2→B1→B2 orchestrator and delegates all numerical work to the existing portable official-layer implementation.
+- The runtime accepts exactly two inputs, layer IDs `(1, 2)`, and two caller-owned initial states. It keeps independent local state chains, preserves each input's block source, feeds layer-1 hidden output into layer 2, and publishes four attributed steps, two final states, and two final outputs.
+- A fixture-lifetime failure initially corrupted the first expert ID because an `OfficialMoeWeights` span referenced a returned local vector. The test now owns both expert arrays for the fixture lifetime; focused CTest and direct execution pass without changing production code.
+- Four official portable CTests and two focused cross-language tests pass. The new source and test pass `-Wall -Wextra -Wpedantic -Werror`; the repository-wide warning build stops on pre-existing `reader.cpp` warnings and was not broadened into an unrelated cleanup. Four ASan/UBSan official tests pass.
+- This task downloaded no official payload, complete shard, or checkpoint, ran no performance benchmark, and provisioned no paid resource. The next implementation boundary is the capacity-two layer-keyed CUDA KDA state registry.

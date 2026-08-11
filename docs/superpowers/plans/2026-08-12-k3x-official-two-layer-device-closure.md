@@ -121,23 +121,23 @@ Commit message: `feat: manufacture bounded official two-layer traces`.
 - Own two independent `OfficialKdaState` values and publish both final states.
 - Return each layer's natural route, contribution, hidden-output, and state digests for parity attribution.
 
-- [ ] **Step 1: Write the portable RED.**
+- [x] **Step 1: Write the portable RED.**
 
 Build a tiny two-layer fixture with distinct weights and assert that A/layer-2 consumes A/layer-1 output, B/layer-1 consumes only layer-1 state, and B/layer-2 consumes only layer-2 state. Add swapped-layer, shared-state, missing-expert, wrong block, and route-drift failures.
 
-- [ ] **Step 2: Witness compile RED.**
+- [x] **Step 2: Witness compile RED.**
 
 Build `test_official_two_layer`. Expected result: the new header and target are missing.
 
-- [ ] **Step 3: Implement the minimum portable orchestrator.**
+- [x] **Step 3: Implement the minimum portable orchestrator.**
 
 Call one official layer step at a time, retain two host states, and avoid duplicating KDA, MoE, or routing math. Keep the old one-layer interfaces unchanged.
 
-- [ ] **Step 4: Run portable GREEN and parity.**
+- [x] **Step 4: Run portable GREEN and parity.**
 
 Run `ctest -R "official_(moe|kda|layer|two_layer)"`, focused C++ parity, strict warning compilation, and ASan/UBSan for the new target.
 
-- [ ] **Step 5: Self-review and commit.**
+- [x] **Step 5: Self-review and commit.**
 
 Commit message: `feat: add exact official two-layer oracle`.
 
