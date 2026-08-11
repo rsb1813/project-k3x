@@ -917,6 +917,13 @@ def materialize_official_moe_slice(
     expected_optional = OPTIONAL_STORAGE_FIXTURE | OPTIONAL_OFFICIAL_MOE_FIXTURE
     if reader.superblock.optional_features != expected_optional:
         raise K3XError("INVALID_OFFICIAL_MOE_ARTIFACT")
+    route_manifest["artifact"] = {
+        "filename": k3x_path.name,
+        "k3x_root_sha256": reader.superblock.root_sha256.hex(),
+        "source_sha256": assembled.microshard_sha256,
+        "tensor_sha256": assembled.tensor_sha256,
+    }
+    _write_json_atomic(route_manifest_path, route_manifest)
     return OfficialMoeMaterializationReport(
         assembled.source_directory,
         route_manifest_path,
