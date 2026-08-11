@@ -811,3 +811,10 @@
 - PR #52 branch correctness `31493248372`, pull-request correctness `31493267425`, and pull-request CodeQL `31493267404` passed before merge.
 - PR #52 rebase-merged at public head `51182575b32b49afa4b1fb2586f31df058a74155`.
 - Post-merge `main` correctness `31493550970` and CodeQL `31493549669` passed. GitHub emitted action-version deprecation warnings only; no M30 correctness or analysis failure occurred.
+
+## 2026-08-11 — Milestone 31 device-state design
+
+- M30 publication PR #53 rebase-merged at `cd1cbd0d10d0231b4392d1aaec21dedd016ea3b1`; final documentation-only `main` correctness `31494813241` and CodeQL `31494813220` passed.
+- D-069 is now scoped to one exact backend-owned KDA state slot. An opaque owner/generation token expresses seed, continuation, and final publication; host round trip remains the default.
+- Implicit scratch reuse was rejected because sequence-sized offsets and allocation growth can move state, and stale callers cannot be detected. A general multi-session registry was deferred until the bounded transfer hypothesis is measured.
+- B-0032 will compare host incremental, device-handoff incremental, and full host execution in one fixed resident-admission transaction. It will not claim token throughput, quality, physical traffic, or a default change.
