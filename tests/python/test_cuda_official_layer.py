@@ -14,6 +14,9 @@ from k3x_converter.writer import convert
 from k3x_ref.storage_fixture import write_bounded_expert_source
 
 
+_ROUTE_A = [348, 65, 544, 421, 379, 753, 839, 423,
+            169, 60, 818, 629, 375, 225, 200, 178]
+
 _KDA_SUFFIXES = (
     "self_attention_res_norm.weight",
     "self_attention_res_proj.weight",
@@ -303,3 +306,34 @@ def test_official_layer_bench_rejects_generic_artifact_before_cuda(
     )
     assert result.returncode == 4
     assert result.stderr.strip() == "INVALID_EXTENT: artifact is not official layer fixture"
+
+
+def test_official_layer_bench_executes_bounded_fixture_on_cuda() -> None:
+    root = Path(__file__).resolve().parents[2]
+    fixture = root / "artifacts" / "m29-official-layer"
+    artifact = fixture / "official-kda-layer-l1.k3x"
+    manifest = fixture / "route-state-manifest.json"
+    if not artifact.is_file() or not manifest.is_file():
+        pytest.skip("bounded official layer fixture is not materialized")
+
+    result = subprocess.run(
+        [
+            str(_runner()), "--artifact", str(artifact), "--manifest",
+            str(manifest), "--case", "a", "--weight-mode", "transient",
+            "--warmups", "0", "--iterations", "1",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["artifact_kind"] == "official_kimi_k3_kda_layer"
+    assert payload["case"] == "a"
+    assert payload["weight_mode"] == "transient"
+    assert payload["full_transformer_layer"] is True
+    assert payload["token_semantics"] is False
+    assert payload["quality_measured"] is False
+    assert payload["route_a"] == _ROUTE_A
+    assert payload["maximum_absolute_error"] <= 2.0e-2
+    assert payload["official_kda_calls"] == 1

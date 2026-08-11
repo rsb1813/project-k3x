@@ -425,7 +425,7 @@
 - [x] Implement portable C++ KDA recurrence and full/incremental boundary parity.
 - [x] Compose the tiny complete portable layer with the official M28 MoE boundary.
 - [x] Implement pinned artifact/manifest preflight before backend construction.
-- [ ] Implement the native CUDA complete-layer boundary and telemetry.
+- [x] Implement the native CUDA complete-layer boundary and telemetry.
 - [x] Materialize the bounded fixture without a complete shard/checkpoint.
 - [ ] Run correctness, sanitizer, B-0030, full verification, and evidence cross-checks.
 - [ ] Synchronize README and the TITAN Ledger, publish, and verify post-merge CI.

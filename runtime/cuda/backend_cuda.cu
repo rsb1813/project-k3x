@@ -7,6 +7,7 @@
 #include "graph_resources.cuh"
 #include "mxfp4.cuh"
 #include "moe_layer.cuh"
+#include "official_kda.cuh"
 #include "resident_weights.cuh"
 #include "situ.cuh"
 
@@ -177,7 +178,8 @@ public:
           layer_shared_up_scratch_(&memory_stats_, &runtime_stats_),
           layer_shared_activation_scratch_(&memory_stats_, &runtime_stats_),
           layer_shared_hidden_scratch_(&memory_stats_, &runtime_stats_),
-          layer_final_hidden_scratch_(&memory_stats_, &runtime_stats_) {
+          layer_final_hidden_scratch_(&memory_stats_, &runtime_stats_),
+          official_kda_scratch_(&memory_stats_, &runtime_stats_) {
         runtime_stats_.async_engine_count = async_engine_count;
         runtime_stats_.device_overlap = device_overlap;
         if (options_.cuda_weights == CudaWeightMode::resident) {
@@ -2495,6 +2497,366 @@ public:
             {true, std::move(output)});
     }
 
+    Result<OfficialKdaCudaResult> official_kda(
+        std::span<const float> hidden, OfficialKdaCudaView weights,
+        OfficialKdaCudaStateView state, OfficialKdaCudaConfig config,
+        std::uint32_t layer, ProfilePhase phase) override {
+        const auto operation_start = std::chrono::steady_clock::now();
+        const auto product = [](std::size_t left, std::size_t right,
+                                std::size_t& output) {
+            if (right && left > std::numeric_limits<std::size_t>::max() / right) {
+                return false;
+            }
+            output = left * right;
+            return true;
+        };
+        std::size_t projection{};
+        std::size_t history_count{};
+        std::size_t head_square{};
+        std::size_t recurrent_count{};
+        if (options_.kind != BackendKind::cuda_custom ||
+            options_.cuda_boundary != CudaBoundaryMode::moe_layer ||
+            options_.cuda_allocation != CudaAllocationMode::reused ||
+            options_.cuda_transfer != CudaTransferMode::synchronous ||
+            options_.cuda_batching != CudaBatchingMode::resident_grid ||
+            !config.hidden_size || !config.heads || !config.head_dim ||
+            config.conv_width < 2 || config.head_dim > 1024 ||
+            !std::isfinite(config.rms_norm_epsilon) ||
+            config.rms_norm_epsilon <= 0.0F ||
+            !std::isfinite(config.gate_lower_bound) ||
+            config.gate_lower_bound >= 0.0F || hidden.empty() ||
+            hidden.size() % config.hidden_size != 0 ||
+            !product(config.heads, config.head_dim, projection) ||
+            !product(config.conv_width - 1, projection, history_count) ||
+            !product(config.head_dim, config.head_dim, head_square) ||
+            !product(config.heads, head_square, recurrent_count) ||
+            state.conv_q.size() != history_count ||
+            state.conv_k.size() != history_count ||
+            state.conv_v.size() != history_count ||
+            state.recurrent_v_first.size() != recurrent_count) {
+            return Result<OfficialKdaCudaResult>::failure(ErrorCode::invalid_extent);
+        }
+        const auto finite_f32 = [](std::span<const float> values) {
+            return std::all_of(values.begin(), values.end(),
+                               [](float value) { return std::isfinite(value); });
+        };
+        const auto valid_bf16 = [](Bf16WeightView view,
+                                   std::size_t rows, std::size_t cols) {
+            return view.tensor_id && view.rows == rows && view.cols == cols &&
+                   view.values.size() == rows * cols &&
+                   std::all_of(view.values.begin(), view.values.end(),
+                       [](std::uint16_t value) {
+                           return (value & 0x7f80U) != 0x7f80U;
+                       });
+        };
+        const auto valid_bf16_state = [](std::span<const std::uint16_t> values) {
+            return std::all_of(values.begin(), values.end(),
+                               [](std::uint16_t value) {
+                                   return (value & 0x7f80U) != 0x7f80U;
+                               });
+        };
+        const auto valid_f32 = [&finite_f32](DenseWeightView view,
+                                             std::size_t rows,
+                                             std::size_t cols) {
+            return view.tensor_id && view.rows == rows && view.cols == cols &&
+                   view.values.size() == rows * cols && finite_f32(view.values);
+        };
+        const auto valid_vector = [&finite_f32](DenseVectorView view,
+                                                std::size_t size) {
+            return view.tensor_id && view.values.size() == size &&
+                   finite_f32(view.values);
+        };
+        if (!finite_f32(hidden) || !finite_f32(state.recurrent_v_first) ||
+            !valid_bf16_state(state.conv_q) ||
+            !valid_bf16_state(state.conv_k) ||
+            !valid_bf16_state(state.conv_v) ||
+            !valid_bf16(weights.q_proj, projection, config.hidden_size) ||
+            !valid_bf16(weights.k_proj, projection, config.hidden_size) ||
+            !valid_bf16(weights.v_proj, projection, config.hidden_size) ||
+            !valid_f32(weights.q_conv, projection, config.conv_width) ||
+            !valid_f32(weights.k_conv, projection, config.conv_width) ||
+            !valid_f32(weights.v_conv, projection, config.conv_width) ||
+            !valid_bf16(weights.f_a_proj, config.head_dim, config.hidden_size) ||
+            !valid_bf16(weights.f_b_proj, projection, config.head_dim) ||
+            !valid_vector(weights.a_log, config.head_dim) ||
+            !valid_vector(weights.dt_bias, projection) ||
+            !valid_bf16(weights.b_proj, config.heads, config.hidden_size) ||
+            !valid_bf16(weights.g_proj, projection, config.hidden_size) ||
+            !valid_vector(weights.o_norm, config.head_dim) ||
+            !valid_bf16(weights.o_proj, config.hidden_size, projection)) {
+            return Result<OfficialKdaCudaResult>::failure(ErrorCode::invalid_extent);
+        }
+        const std::array bf16_views{
+            weights.q_proj, weights.k_proj, weights.v_proj,
+            weights.f_a_proj, weights.f_b_proj, weights.b_proj,
+            weights.g_proj, weights.o_proj};
+        const std::array f32_views{
+            weights.q_conv, weights.k_conv, weights.v_conv,
+            DenseWeightView{weights.a_log.tensor_id, weights.a_log.values,
+                            1, config.head_dim},
+            DenseWeightView{weights.dt_bias.tensor_id, weights.dt_bias.values,
+                            1, projection},
+            DenseWeightView{weights.o_norm.tensor_id, weights.o_norm.values,
+                            1, config.head_dim}};
+        std::unordered_set<std::uint64_t> tensor_ids;
+        std::uint64_t total_weight_bytes{};
+        for (const auto& view : bf16_views) {
+            if (!tensor_ids.insert(view.tensor_id).second) {
+                return Result<OfficialKdaCudaResult>::failure(ErrorCode::invalid_extent);
+            }
+            total_weight_bytes += view.values.size_bytes();
+        }
+        for (const auto& view : f32_views) {
+            if (!tensor_ids.insert(view.tensor_id).second) {
+                return Result<OfficialKdaCudaResult>::failure(ErrorCode::invalid_extent);
+            }
+            total_weight_bytes += view.values.size_bytes();
+        }
+        if (options_.cuda_weights == CudaWeightMode::resident &&
+            (!resident_weights_ || total_weight_bytes > options_.cuda_resident_bytes)) {
+            return Result<OfficialKdaCudaResult>::failure(ErrorCode::invalid_extent);
+        }
+        std::vector<std::unique_ptr<cuda::DeviceAllocation>> transient;
+        transient.reserve(bf16_views.size() + f32_views.size());
+        std::uint64_t uploaded_weight_bytes{};
+        const auto acquire = [&](cuda::ResidentWeightKey key,
+                                 std::span<const std::byte> bytes)
+            -> Result<const void*> {
+            if (resident_weights_) {
+                auto value = resident_weights_->acquire(key, bytes, {});
+                if (!value || value.value().disposition ==
+                                  cuda::ResidentDisposition::bypass) {
+                    return Result<const void*>::failure(ErrorCode::invalid_extent);
+                }
+                uploaded_weight_bytes += value.value().uploaded_bytes;
+                return Result<const void*>::success(value.value().primary);
+            }
+            auto allocation = std::make_unique<cuda::DeviceAllocation>(
+                &memory_stats_, &runtime_stats_);
+            if (allocation->allocate(bytes.size()) != cudaSuccess ||
+                cudaMemcpyAsync(allocation->get(), bytes.data(), bytes.size(),
+                                cudaMemcpyHostToDevice, stream_) != cudaSuccess) {
+                return Result<const void*>::failure(ErrorCode::backend_unavailable);
+            }
+            const auto* pointer = allocation->get();
+            uploaded_weight_bytes += bytes.size();
+            transient.push_back(std::move(allocation));
+            return Result<const void*>::success(pointer);
+        };
+        std::array<const std::uint16_t*, 8> device_bf16{};
+        for (std::size_t index = 0; index < bf16_views.size(); ++index) {
+            const auto& view = bf16_views[index];
+            auto value = acquire(
+                {view.tensor_id, cuda::WeightRepresentation::dense_bf16,
+                 view.rows, view.cols, 0}, std::as_bytes(view.values));
+            if (!value) return Result<OfficialKdaCudaResult>::failure(
+                value.error(), value.message());
+            device_bf16[index] = static_cast<const std::uint16_t*>(value.value());
+        }
+        std::array<const float*, 6> device_f32{};
+        for (std::size_t index = 0; index < f32_views.size(); ++index) {
+            const auto& view = f32_views[index];
+            auto value = acquire(
+                {view.tensor_id, cuda::WeightRepresentation::dense_fp32,
+                 view.rows, view.cols, 0}, std::as_bytes(view.values));
+            if (!value) return Result<OfficialKdaCudaResult>::failure(
+                value.error(), value.message());
+            device_f32[index] = static_cast<const float*>(value.value());
+        }
+        const auto sequence = hidden.size() / config.hidden_size;
+        std::size_t sequence_projection{};
+        std::size_t sequence_heads{};
+        std::size_t sequence_hidden{};
+        if (!product(sequence, projection, sequence_projection) ||
+            !product(sequence, config.heads, sequence_heads) ||
+            !product(sequence, config.hidden_size, sequence_hidden)) {
+            return Result<OfficialKdaCudaResult>::failure(ErrorCode::invalid_extent);
+        }
+        const auto float_count = 2 * sequence_hidden + 13 * sequence_projection +
+                                 sequence * config.head_dim + 2 * sequence_heads +
+                                 recurrent_count;
+        const auto float_bytes = float_count * sizeof(float);
+        const auto conv_state_bytes = history_count * sizeof(std::uint16_t);
+        const auto total_scratch = float_bytes + 3 * conv_state_bytes;
+        if (official_kda_scratch_.reserve(total_scratch) != cudaSuccess) {
+            return Result<OfficialKdaCudaResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        auto* cursor = static_cast<float*>(official_kda_scratch_.get());
+        const auto take = [&cursor](std::size_t count) {
+            auto* result = cursor;
+            cursor += count;
+            return result;
+        };
+        auto* device_hidden = take(sequence_hidden);
+        auto* projected_q = take(sequence_projection);
+        auto* projected_k = take(sequence_projection);
+        auto* projected_v = take(sequence_projection);
+        auto* forget_low = take(sequence * config.head_dim);
+        auto* forget = take(sequence_projection);
+        auto* beta_projection = take(sequence_heads);
+        auto* output_gate = take(sequence_projection);
+        auto* convolved_q = take(sequence_projection);
+        auto* convolved_k = take(sequence_projection);
+        auto* convolved_v = take(sequence_projection);
+        auto* q = take(sequence_projection);
+        auto* k = take(sequence_projection);
+        auto* log_decay = take(sequence_projection);
+        auto* beta = take(sequence_heads);
+        auto* recurrent_output = take(sequence_projection);
+        auto* gated = take(sequence_projection);
+        auto* output = take(sequence_hidden);
+        auto* recurrent = take(recurrent_count);
+        auto* conv_cursor = reinterpret_cast<std::uint16_t*>(cursor);
+        auto* conv_q = conv_cursor;
+        auto* conv_k = conv_q + history_count;
+        auto* conv_v = conv_k + history_count;
+        const auto state_h2d_bytes = 3 * conv_state_bytes +
+                                     state.recurrent_v_first.size_bytes();
+        if (cudaMemcpyAsync(device_hidden, hidden.data(), hidden.size_bytes(),
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+            cudaMemcpyAsync(conv_q, state.conv_q.data(), conv_state_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+            cudaMemcpyAsync(conv_k, state.conv_k.data(), conv_state_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+            cudaMemcpyAsync(conv_v, state.conv_v.data(), conv_state_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+            cudaMemcpyAsync(recurrent, state.recurrent_v_first.data(),
+                            state.recurrent_v_first.size_bytes(),
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+            cuda::launch_round_bf16_inplace(device_hidden, sequence_hidden,
+                                            stream_) != cudaSuccess ||
+            official_kda_event_start_.ensure() != cudaSuccess ||
+            official_kda_event_end_.ensure() != cudaSuccess ||
+            cudaEventRecord(official_kda_event_start_.get(), stream_) != cudaSuccess) {
+            return Result<OfficialKdaCudaResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        std::uint64_t launches = 1;
+        for (std::size_t token = 0; token < sequence; ++token) {
+            const auto* input = device_hidden + token * config.hidden_size;
+            if (cuda::launch_bf16_matvec(input, device_bf16[0],
+                    projected_q + token * projection, projection,
+                    config.hidden_size, stream_) != cudaSuccess ||
+                cuda::launch_bf16_matvec(input, device_bf16[1],
+                    projected_k + token * projection, projection,
+                    config.hidden_size, stream_) != cudaSuccess ||
+                cuda::launch_bf16_matvec(input, device_bf16[2],
+                    projected_v + token * projection, projection,
+                    config.hidden_size, stream_) != cudaSuccess ||
+                cuda::launch_bf16_matvec(input, device_bf16[3],
+                    forget_low + token * config.head_dim, config.head_dim,
+                    config.hidden_size, stream_) != cudaSuccess ||
+                cuda::launch_bf16_matvec(input, device_bf16[5],
+                    beta_projection + token * config.heads, config.heads,
+                    config.hidden_size, stream_) != cudaSuccess ||
+                cuda::launch_bf16_matvec(input, device_bf16[6],
+                    output_gate + token * projection, projection,
+                    config.hidden_size, stream_) != cudaSuccess) {
+                return Result<OfficialKdaCudaResult>::failure(
+                    ErrorCode::backend_unavailable);
+            }
+            launches += 6;
+        }
+        for (std::size_t token = 0; token < sequence; ++token) {
+            if (cuda::launch_bf16_matvec(
+                    forget_low + token * config.head_dim, device_bf16[4],
+                    forget + token * projection, projection,
+                    config.head_dim, stream_) != cudaSuccess) {
+                return Result<OfficialKdaCudaResult>::failure(
+                    ErrorCode::backend_unavailable);
+            }
+            ++launches;
+        }
+        if (cuda::launch_official_kda_short_conv(
+                projected_q, conv_q, device_f32[0], convolved_q, sequence,
+                projection, config.conv_width, stream_) != cudaSuccess ||
+            cuda::launch_official_kda_short_conv(
+                projected_k, conv_k, device_f32[1], convolved_k, sequence,
+                projection, config.conv_width, stream_) != cudaSuccess ||
+            cuda::launch_official_kda_short_conv(
+                projected_v, conv_v, device_f32[2], convolved_v, sequence,
+                projection, config.conv_width, stream_) != cudaSuccess ||
+            cuda::launch_official_kda_normalize_qk(
+                convolved_q, convolved_k, q, k, sequence, config.heads,
+                config.head_dim, stream_) != cudaSuccess ||
+            cuda::launch_official_kda_decay_beta(
+                forget, beta_projection, device_f32[3], device_f32[4],
+                log_decay, beta, sequence, config.heads, config.head_dim,
+                config.gate_lower_bound, stream_) != cudaSuccess ||
+            cuda::launch_official_kda_recurrence(
+                q, k, convolved_v, log_decay, beta, recurrent,
+                recurrent_output, sequence, config.heads, config.head_dim,
+                stream_) != cudaSuccess ||
+            cuda::launch_official_kda_gate_norm(
+                recurrent_output, output_gate, device_f32[5], gated,
+                sequence, config.heads, config.head_dim,
+                config.rms_norm_epsilon, stream_) != cudaSuccess) {
+            return Result<OfficialKdaCudaResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        launches += 7;
+        for (std::size_t token = 0; token < sequence; ++token) {
+            if (cuda::launch_bf16_matvec(
+                    gated + token * projection, device_bf16[7],
+                    output + token * config.hidden_size, config.hidden_size,
+                    projection, stream_) != cudaSuccess) {
+                return Result<OfficialKdaCudaResult>::failure(
+                    ErrorCode::backend_unavailable);
+            }
+            ++launches;
+        }
+        if (cudaEventRecord(official_kda_event_end_.get(), stream_) != cudaSuccess) {
+            return Result<OfficialKdaCudaResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        OfficialKdaCudaResult result;
+        result.executed = true;
+        result.output.resize(sequence_hidden);
+        result.conv_q.resize(history_count);
+        result.conv_k.resize(history_count);
+        result.conv_v.resize(history_count);
+        result.recurrent_v_first.resize(recurrent_count);
+        if (cudaMemcpyAsync(result.output.data(), output, hidden.size_bytes(),
+                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+            cudaMemcpyAsync(result.conv_q.data(), conv_q, conv_state_bytes,
+                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+            cudaMemcpyAsync(result.conv_k.data(), conv_k, conv_state_bytes,
+                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+            cudaMemcpyAsync(result.conv_v.data(), conv_v, conv_state_bytes,
+                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+            cudaMemcpyAsync(result.recurrent_v_first.data(), recurrent,
+                            result.recurrent_v_first.size() * sizeof(float),
+                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+            cudaStreamSynchronize(stream_) != cudaSuccess) {
+            return Result<OfficialKdaCudaResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        float milliseconds{};
+        if (cudaEventElapsedTime(&milliseconds, official_kda_event_start_.get(),
+                                 official_kda_event_end_.get()) != cudaSuccess) {
+            return Result<OfficialKdaCudaResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        const auto state_d2h_bytes = 3 * conv_state_bytes +
+                                     recurrent_count * sizeof(float);
+        ++runtime_stats_.stream_synchronization_count;
+        runtime_stats_.weight_h2d_bytes += uploaded_weight_bytes;
+        runtime_stats_.activation_h2d_bytes += hidden.size_bytes() + state_h2d_bytes;
+        runtime_stats_.device_to_host_bytes += hidden.size_bytes() + state_d2h_bytes;
+        ++runtime_stats_.official_kda_calls;
+        runtime_stats_.official_kda_kernel_launches += launches;
+        runtime_stats_.official_kda_state_h2d_bytes += state_h2d_bytes;
+        runtime_stats_.official_kda_state_d2h_bytes += state_d2h_bytes;
+        runtime_stats_.official_kda_output_d2h_bytes += hidden.size_bytes();
+        record(phase, ProfileOperation::dense_matvec,
+               NumericPrecision::bf16_rounded, layer, operation_start,
+               total_weight_bytes, uploaded_weight_bytes,
+               static_cast<std::uint64_t>(std::llround(milliseconds * 1.0e6)),
+               true);
+        return Result<OfficialKdaCudaResult>::success(std::move(result));
+    }
+
     Result<OfficialMoeFfnResult> official_mxfp4_moe_ffn(
         std::span<const float> hidden, std::span<const float> prefix,
         OfficialMoeFfnView weights, std::span<const Mxfp4MlpView> experts,
@@ -3893,12 +4255,15 @@ private:
     cuda::ScratchBuffer layer_shared_activation_scratch_;
     cuda::ScratchBuffer layer_shared_hidden_scratch_;
     cuda::ScratchBuffer layer_final_hidden_scratch_;
+    cuda::ScratchBuffer official_kda_scratch_;
     EventOwner dense_event_start_;
     EventOwner dense_event_end_;
     EventOwner mxfp4_event_start_;
     EventOwner mxfp4_event_end_;
     EventOwner official_moe_event_start_;
     EventOwner official_moe_event_end_;
+    EventOwner official_kda_event_start_;
+    EventOwner official_kda_event_end_;
     std::vector<std::unique_ptr<EventOwner>> dense_group_event_starts_;
     std::vector<std::unique_ptr<EventOwner>> dense_group_event_ends_;
     std::vector<std::unique_ptr<EventOwner>> mxfp4_group_event_starts_;

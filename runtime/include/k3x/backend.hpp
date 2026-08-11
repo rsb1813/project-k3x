@@ -97,6 +97,11 @@ struct BackendRuntimeStats {
     std::uint64_t resident_moe_layer_contribution_h2d_bytes{};
     std::uint64_t fused_moe_calls{};
     std::uint64_t fused_moe_experts{};
+    std::uint64_t official_kda_calls{};
+    std::uint64_t official_kda_kernel_launches{};
+    std::uint64_t official_kda_state_h2d_bytes{};
+    std::uint64_t official_kda_state_d2h_bytes{};
+    std::uint64_t official_kda_output_d2h_bytes{};
     std::uint64_t pinned_host_bytes{};
     std::uint64_t peak_pinned_host_bytes{};
     std::uint64_t async_prefetch_calls{};
@@ -167,6 +172,48 @@ struct OfficialMoeFfnResult {
 struct DenseVectorView {
     std::uint64_t tensor_id;
     std::span<const float> values;
+};
+
+struct OfficialKdaCudaConfig {
+    std::size_t hidden_size{};
+    std::size_t heads{};
+    std::size_t head_dim{};
+    std::size_t conv_width{};
+    float rms_norm_epsilon{};
+    float gate_lower_bound{};
+};
+
+struct OfficialKdaCudaView {
+    Bf16WeightView q_proj;
+    Bf16WeightView k_proj;
+    Bf16WeightView v_proj;
+    DenseWeightView q_conv;
+    DenseWeightView k_conv;
+    DenseWeightView v_conv;
+    Bf16WeightView f_a_proj;
+    Bf16WeightView f_b_proj;
+    DenseVectorView a_log;
+    DenseVectorView dt_bias;
+    Bf16WeightView b_proj;
+    Bf16WeightView g_proj;
+    DenseVectorView o_norm;
+    Bf16WeightView o_proj;
+};
+
+struct OfficialKdaCudaStateView {
+    std::span<const std::uint16_t> conv_q;
+    std::span<const std::uint16_t> conv_k;
+    std::span<const std::uint16_t> conv_v;
+    std::span<const float> recurrent_v_first;
+};
+
+struct OfficialKdaCudaResult {
+    bool executed{};
+    std::vector<float> output;
+    std::vector<std::uint16_t> conv_q;
+    std::vector<std::uint16_t> conv_k;
+    std::vector<std::uint16_t> conv_v;
+    std::vector<float> recurrent_v_first;
 };
 
 struct ResidentMoeLayerView {
@@ -248,6 +295,13 @@ public:
         std::span<const float>, float, float, std::optional<float>,
         std::uint32_t, ProfilePhase) {
         return Result<OfficialMoeFfnResult>::failure(
+            ErrorCode::backend_unavailable);
+    }
+    virtual Result<OfficialKdaCudaResult> official_kda(
+        std::span<const float>, OfficialKdaCudaView,
+        OfficialKdaCudaStateView, OfficialKdaCudaConfig,
+        std::uint32_t, ProfilePhase) {
+        return Result<OfficialKdaCudaResult>::failure(
             ErrorCode::backend_unavailable);
     }
     virtual Result<Mxfp4PrefetchToken> prefetch_mxfp4_situ_mlp_group(

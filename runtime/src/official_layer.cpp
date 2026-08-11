@@ -242,4 +242,150 @@ Result<OfficialLayerResult> official_layer_cpu(
         {std::move(kda.value()), std::move(steps)});
 }
 
+Result<OfficialLayerCudaResult> official_layer_cuda(
+    ComputeBackend& backend,
+    std::span<const OfficialLayerInput> inputs,
+    const OfficialLayerCudaWeights& weights,
+    const OfficialKdaState& initial_state,
+    const OfficialKdaConfig& config,
+    std::size_t top_k,
+    float situ_beta,
+    std::optional<float> situ_linear_beta,
+    std::uint32_t layer,
+    ProfilePhase phase) {
+    if (inputs.empty() || !config.hidden_size || !top_k ||
+        !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
+        (situ_linear_beta &&
+         (!std::isfinite(*situ_linear_beta) || *situ_linear_beta <= 0.0F)) ||
+        inputs.size() >
+            std::numeric_limits<std::size_t>::max() / config.hidden_size) {
+        return Result<OfficialLayerCudaResult>::failure(
+            ErrorCode::invalid_extent);
+    }
+
+    std::vector<std::vector<float>> self_residuals;
+    std::vector<std::vector<float>> normalized_inputs;
+    std::vector<float> flattened;
+    self_residuals.reserve(inputs.size());
+    normalized_inputs.reserve(inputs.size());
+    flattened.reserve(inputs.size() * config.hidden_size);
+    for (const auto& input : inputs) {
+        if (input.hidden_input.size() != config.hidden_size ||
+            input.block_source.size() != config.hidden_size) {
+            return Result<OfficialLayerCudaResult>::failure(
+                ErrorCode::invalid_extent);
+        }
+        auto residual = attention_residual(
+            input.hidden_input, input.block_source,
+            weights.self_residual_norm, weights.self_residual_proj,
+            config.rms_norm_epsilon);
+        if (!residual) {
+            return Result<OfficialLayerCudaResult>::failure(
+                residual.error(), residual.message());
+        }
+        auto normalized = rms_norm(
+            residual.value(), weights.input_norm, config.rms_norm_epsilon);
+        if (!normalized) {
+            return Result<OfficialLayerCudaResult>::failure(
+                normalized.error(), normalized.message());
+        }
+        flattened.insert(flattened.end(), normalized.value().begin(),
+                         normalized.value().end());
+        self_residuals.push_back(std::move(residual.value()));
+        normalized_inputs.push_back(std::move(normalized.value()));
+    }
+
+    const OfficialKdaCudaStateView state_view{
+        initial_state.conv_q, initial_state.conv_k, initial_state.conv_v,
+        initial_state.recurrent_v_first};
+    const OfficialKdaCudaConfig cuda_config{
+        config.hidden_size, config.heads, config.head_dim, config.conv_width,
+        config.rms_norm_epsilon, config.gate_lower_bound};
+    auto kda = backend.official_kda(
+        flattened, weights.kda, state_view, cuda_config, layer, phase);
+    if (!kda) {
+        return Result<OfficialLayerCudaResult>::failure(
+            kda.error(), kda.message());
+    }
+    if (!kda.value().executed || kda.value().output.size() != flattened.size()) {
+        return Result<OfficialLayerCudaResult>::failure(
+            ErrorCode::invalid_state);
+    }
+
+    OfficialKdaState final_state{
+        std::move(kda.value().conv_q), std::move(kda.value().conv_k),
+        std::move(kda.value().conv_v),
+        std::move(kda.value().recurrent_v_first)};
+    std::vector<OfficialLayerCudaStepResult> steps;
+    steps.reserve(inputs.size());
+    for (std::size_t index = 0; index < inputs.size(); ++index) {
+        std::vector<float> prefix(config.hidden_size);
+        for (std::size_t channel = 0; channel < config.hidden_size; ++channel) {
+            prefix[channel] = rounded_bf16(
+                rounded_bf16(inputs[index].hidden_input[channel]) +
+                kda.value().output[index * config.hidden_size + channel]);
+        }
+        auto mlp_residual = attention_residual(
+            prefix, inputs[index].block_source, weights.moe.residual_norm,
+            weights.moe.residual_proj, config.rms_norm_epsilon);
+        if (!mlp_residual) {
+            return Result<OfficialLayerCudaResult>::failure(
+                mlp_residual.error(), mlp_residual.message());
+        }
+        const OfficialMoeInput moe_input{prefix, inputs[index].block_source};
+        auto prepared = prepare_official_moe_input(
+            moe_input, weights.moe, config.rms_norm_epsilon);
+        if (!prepared) {
+            return Result<OfficialLayerCudaResult>::failure(
+                prepared.error(), prepared.message());
+        }
+        auto route = route_official_moe(
+            prepared.value(), weights.moe.router, weights.moe.correction, top_k);
+        if (!route) {
+            return Result<OfficialLayerCudaResult>::failure(
+                route.error(), route.message());
+        }
+        std::vector<Mxfp4MlpView> selected;
+        selected.reserve(route.value().expert_ids.size());
+        for (const auto expert_id : route.value().expert_ids) {
+            const auto match = std::find_if(
+                weights.moe.experts.begin(), weights.moe.experts.end(),
+                [expert_id](const OfficialExpertView& expert) {
+                    return expert.expert_id == expert_id;
+                });
+            if (match == weights.moe.experts.end()) {
+                return Result<OfficialLayerCudaResult>::failure(
+                    ErrorCode::invalid_extent);
+            }
+            selected.push_back(match->weights);
+        }
+        auto moe = backend.official_mxfp4_moe_ffn(
+            prepared.value(), prefix, weights.moe_ffn, selected,
+            route.value().expert_ids, route.value().contributions,
+            config.rms_norm_epsilon, situ_beta, situ_linear_beta,
+            layer, phase);
+        if (!moe) {
+            return Result<OfficialLayerCudaResult>::failure(
+                moe.error(), moe.message());
+        }
+        if (!moe.value().executed ||
+            moe.value().selected_expert_ids != route.value().expert_ids ||
+            moe.value().output.size() != config.hidden_size) {
+            return Result<OfficialLayerCudaResult>::failure(
+                ErrorCode::invalid_state);
+        }
+        steps.push_back({
+            std::move(self_residuals[index]),
+            std::move(normalized_inputs[index]),
+            std::move(prefix),
+            std::move(mlp_residual.value()),
+            std::move(prepared.value()),
+            std::move(route.value()),
+            std::move(moe.value().output),
+        });
+    }
+    return Result<OfficialLayerCudaResult>::success(
+        {true, std::move(final_state), std::move(steps)});
+}
+
 }  // namespace k3x

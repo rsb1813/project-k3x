@@ -11,16 +11,19 @@
 #include <array>
 #include <bit>
 #include <charconv>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <map>
 #include <optional>
+#include <numeric>
 #include <set>
 #include <span>
 #include <string>
@@ -757,6 +760,33 @@ struct LoadedLayer {
         return {self_norm.vector(), self_proj.matrix(), input_norm.vector(),
                 kda, moe};
     }
+
+    k3x::OfficialLayerCudaWeights cuda_views() const {
+        const std::string base = "model.layers.1.";
+        const auto id = [&](std::string_view suffix) {
+            return k3x::fnv1a64((base + std::string(suffix)).c_str());
+        };
+        const k3x::OfficialKdaCudaView kda{
+            q_proj.matrix(), k_proj.matrix(), v_proj.matrix(),
+            {id("self_attn.q_conv1d.weight"), q_conv, 12'288, 4},
+            {id("self_attn.k_conv1d.weight"), k_conv, 12'288, 4},
+            {id("self_attn.v_conv1d.weight"), v_conv, 12'288, 4},
+            f_a.matrix(), f_b.matrix(),
+            {id("self_attn.A_log"), a_log},
+            {id("self_attn.dt_bias"), dt_bias}, beta.matrix(), gate.matrix(),
+            {id("self_attn.o_norm.weight"), o_norm}, o_proj.matrix()};
+        const k3x::OfficialMoeWeights moe{
+            mlp_norm.vector(), mlp_proj.matrix(), post_norm.vector(),
+            router.matrix(), correction, routed_down.matrix(),
+            routed_norm.vector(), routed_up.matrix(),
+            {shared_gate.matrix(), shared_up.matrix(), shared_down.matrix()},
+            expert_views};
+        const k3x::OfficialMoeFfnView moe_ffn{
+            routed_down.matrix(), routed_norm.vector(), routed_up.matrix(),
+            {shared_gate.matrix(), shared_up.matrix(), shared_down.matrix()}};
+        return {self_norm.vector(), self_proj.matrix(), input_norm.vector(),
+                kda, moe, moe_ffn};
+    }
 };
 
 std::optional<LoadedLayer> load_layer(k3x::Reader& reader,
@@ -969,9 +999,15 @@ ErrorStats f32_error(std::span<const float> actual,
     return result;
 }
 
+struct PortableReference {
+    k3x::OfficialLayerResult full;
+    k3x::OfficialLayerResult first;
+};
+
 bool validate_portable_oracle(const LoadedLayer& loaded,
                               const Manifest& manifest,
-                              const OfficialOracle& oracle) {
+                              const OfficialOracle& oracle,
+                              PortableReference& reference) {
     bool valid = true;
     const k3x::OfficialKdaConfig config{7'168, 96, 128, 4, 1.0e-5F, -5.0F};
     const auto zero = k3x::zero_official_kda_state(config);
@@ -1065,7 +1101,69 @@ bool validate_portable_oracle(const LoadedLayer& loaded,
             valid = false;
         }
     }
+    if (valid) {
+        reference = {std::move(full.value()), std::move(first.value())};
+    }
     return valid;
+}
+
+k3x::BackendOptions backend_options(WeightMode mode, std::uint64_t capacity) {
+    k3x::BackendOptions result;
+    result.kind = k3x::BackendKind::cuda_custom;
+    result.cuda_allocation = k3x::CudaAllocationMode::reused;
+    result.cuda_weights = mode == WeightMode::resident
+        ? k3x::CudaWeightMode::resident : k3x::CudaWeightMode::transient;
+    result.cuda_batching = k3x::CudaBatchingMode::resident_grid;
+    result.cuda_boundary = k3x::CudaBoundaryMode::moe_layer;
+    result.cuda_resident_bytes = capacity;
+    return result;
+}
+
+std::uint64_t elapsed(std::chrono::steady_clock::time_point start) {
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<
+        std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count());
+}
+
+void write_u32_array(std::ostream& stream,
+                     std::span<const std::uint32_t> values) {
+    stream << '[';
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (index) stream << ',';
+        stream << values[index];
+    }
+    stream << ']';
+}
+
+bool observe_cuda_result(const k3x::OfficialLayerCudaResult& actual,
+                         const k3x::OfficialLayerResult& expected,
+                         float& maximum_error) {
+    if (!actual.executed || actual.steps.size() != expected.steps.size()) return false;
+    for (std::size_t step = 0; step < actual.steps.size(); ++step) {
+        if (actual.steps[step].route.expert_ids !=
+                expected.steps[step].route.expert_ids ||
+            actual.steps[step].route.contributions.size() !=
+                expected.steps[step].route.contributions.size() ||
+            actual.steps[step].output.size() !=
+                expected.steps[step].moe.output.size()) return false;
+        for (std::size_t index = 0;
+             index < actual.steps[step].route.contributions.size(); ++index) {
+            if (std::abs(actual.steps[step].route.contributions[index] -
+                         expected.steps[step].route.contributions[index]) >
+                kContributionAbsoluteTolerance) return false;
+        }
+        for (std::size_t index = 0; index < actual.steps[step].output.size(); ++index) {
+            const auto error = std::abs(actual.steps[step].output[index] -
+                                        expected.steps[step].moe.output[index]);
+            if (!std::isfinite(error)) return false;
+            maximum_error = std::max(maximum_error, error);
+        }
+    }
+    return actual.kda_state.conv_q == expected.kda.state.conv_q &&
+           actual.kda_state.conv_k == expected.kda.state.conv_k &&
+           actual.kda_state.conv_v == expected.kda.state.conv_v &&
+           f32_error(actual.kda_state.recurrent_v_first,
+                     expected.kda.state.recurrent_v_first).maximum_absolute <=
+               kRecurrentAbsoluteTolerance;
 }
 
 void write_error(k3x::ErrorCode code, std::string_view message) {
@@ -1115,12 +1213,152 @@ int main(int argc, char** argv) {
                     "official layer oracle identity mismatch");
         return 4;
     }
-    if (!validate_portable_oracle(*loaded, *manifest, *oracle)) {
+    PortableReference reference;
+    if (!validate_portable_oracle(*loaded, *manifest, *oracle, reference)) {
         write_error(k3x::ErrorCode::invalid_state,
                     "official layer portable oracle mismatch");
         return 4;
     }
-    write_error(k3x::ErrorCode::backend_unavailable,
-                "official layer CUDA execution is not implemented");
-    return 4;
+    const k3x::OfficialKdaConfig config{7'168, 96, 128, 4, 1.0e-5F, -5.0F};
+    const auto zero = k3x::zero_official_kda_state(config);
+    const auto inputs = layer_inputs();
+    k3x::Profiler profiler;
+    auto backend = k3x::make_cuda_backend(
+        backend_options(arguments->weight_mode,
+                        reader.value().superblock().file_length), &profiler);
+    if (!backend) {
+        write_error(backend.error(), backend.message());
+        return 4;
+    }
+    const auto weights = loaded->cuda_views();
+    float maximum_error{};
+    const auto execute = [&]() {
+        if (arguments->case_mode == CaseMode::a) {
+            auto result = k3x::official_layer_cuda(
+                *backend.value(), std::span(inputs).first(1), weights, zero,
+                config, 16, 4, 25, 1, k3x::ProfilePhase::decode);
+            return result && observe_cuda_result(
+                result.value(), reference.first, maximum_error);
+        }
+        if (arguments->case_mode == CaseMode::ab_full) {
+            auto result = k3x::official_layer_cuda(
+                *backend.value(), inputs, weights, zero, config, 16, 4, 25,
+                1, k3x::ProfilePhase::decode);
+            return result && observe_cuda_result(
+                result.value(), reference.full, maximum_error);
+        }
+        auto first = k3x::official_layer_cuda(
+            *backend.value(), std::span(inputs).first(1), weights, zero,
+            config, 16, 4, 25, 1, k3x::ProfilePhase::decode);
+        auto second = first ? k3x::official_layer_cuda(
+            *backend.value(), std::span(inputs).last(1), weights,
+            first.value().kda_state, config, 16, 4, 25, 1,
+            k3x::ProfilePhase::decode)
+                            : k3x::Result<k3x::OfficialLayerCudaResult>::failure(
+                                  first.error(), first.message());
+        if (!first || !second ||
+            !observe_cuda_result(first.value(), reference.first, maximum_error) ||
+            second.value().steps.size() != 1) return false;
+        const auto& actual_step = second.value().steps[0];
+        const auto& expected_step = reference.full.steps[1];
+        if (actual_step.route.expert_ids != expected_step.route.expert_ids ||
+            actual_step.route.contributions.size() !=
+                expected_step.route.contributions.size() ||
+            actual_step.output.size() != expected_step.moe.output.size()) {
+            return false;
+        }
+        for (std::size_t index = 0;
+             index < actual_step.route.contributions.size(); ++index) {
+            if (std::abs(actual_step.route.contributions[index] -
+                         expected_step.route.contributions[index]) >
+                kContributionAbsoluteTolerance) return false;
+        }
+        for (std::size_t index = 0; index < actual_step.output.size(); ++index) {
+            const auto error = std::abs(actual_step.output[index] -
+                                        expected_step.moe.output[index]);
+            if (!std::isfinite(error)) return false;
+            maximum_error = std::max(maximum_error, error);
+        }
+        return second.value().kda_state.conv_q == reference.full.kda.state.conv_q &&
+               second.value().kda_state.conv_k == reference.full.kda.state.conv_k &&
+               second.value().kda_state.conv_v == reference.full.kda.state.conv_v &&
+               f32_error(second.value().kda_state.recurrent_v_first,
+                         reference.full.kda.state.recurrent_v_first)
+                       .maximum_absolute <= kRecurrentAbsoluteTolerance;
+    };
+    for (std::uint64_t index = 0; index < arguments->warmups; ++index) {
+        if (!execute()) {
+            write_error(k3x::ErrorCode::invalid_state,
+                        "official layer CUDA warmup mismatch");
+            return 4;
+        }
+    }
+    const auto stats_before = backend.value()->runtime_stats();
+    const auto profile_before = profiler.summary();
+    std::vector<std::uint64_t> samples;
+    samples.reserve(arguments->iterations);
+    for (std::uint64_t index = 0; index < arguments->iterations; ++index) {
+        const auto start = std::chrono::steady_clock::now();
+        if (!execute()) {
+            write_error(k3x::ErrorCode::invalid_state,
+                        "official layer CUDA result mismatch");
+            return 4;
+        }
+        samples.push_back(elapsed(start));
+    }
+    const auto stats_after = backend.value()->runtime_stats();
+    const auto profile_after = profiler.summary();
+    const auto memory = backend.value()->memory_stats();
+    const auto latency_sum = std::accumulate(
+        samples.begin(), samples.end(), std::uint64_t{});
+    const auto kernel_time = profile_after.device_nanoseconds -
+        profile_before.device_nanoseconds;
+    std::cout << std::setprecision(12)
+        << "{\"artifact_kind\":\"official_kimi_k3_kda_layer\""
+        << ",\"repository\":\"moonshotai/Kimi-K3\""
+        << ",\"resolved_revision\":\"9f62e4e9fffbd0a83ddd60e1c209d828994b3569\""
+        << ",\"case\":\""
+        << (arguments->case_mode == CaseMode::a ? "a" :
+            arguments->case_mode == CaseMode::ab_full ? "ab-full" :
+                                                        "ab-incremental")
+        << "\",\"weight_mode\":\""
+        << (arguments->weight_mode == WeightMode::resident ? "resident" :
+                                                             "transient")
+        << "\",\"token_semantics\":false,\"routing_semantics\":true"
+        << ",\"full_transformer_layer\":true,\"quality_measured\":false"
+        << ",\"route_a\":";
+    write_u32_array(std::cout, reference.full.steps[0].route.expert_ids);
+    std::cout << ",\"route_b\":";
+    write_u32_array(std::cout, reference.full.steps[1].route.expert_ids);
+    std::cout << ",\"warmups\":" << arguments->warmups
+        << ",\"iterations\":" << arguments->iterations
+        << ",\"latency_nanoseconds_total\":" << latency_sum
+        << ",\"kernel_nanoseconds\":" << kernel_time
+        << ",\"orchestration_nanoseconds\":"
+        << latency_sum - std::min(latency_sum, kernel_time)
+        << ",\"weight_h2d_bytes\":"
+        << stats_after.weight_h2d_bytes - stats_before.weight_h2d_bytes
+        << ",\"activation_h2d_bytes\":"
+        << stats_after.activation_h2d_bytes - stats_before.activation_h2d_bytes
+        << ",\"device_to_host_bytes\":"
+        << stats_after.device_to_host_bytes - stats_before.device_to_host_bytes
+        << ",\"official_kda_calls\":"
+        << stats_after.official_kda_calls - stats_before.official_kda_calls
+        << ",\"official_kda_kernel_launches\":"
+        << stats_after.official_kda_kernel_launches -
+               stats_before.official_kda_kernel_launches
+        << ",\"official_kda_state_h2d_bytes\":"
+        << stats_after.official_kda_state_h2d_bytes -
+               stats_before.official_kda_state_h2d_bytes
+        << ",\"official_kda_state_d2h_bytes\":"
+        << stats_after.official_kda_state_d2h_bytes -
+               stats_before.official_kda_state_d2h_bytes
+        << ",\"official_kda_output_d2h_bytes\":"
+        << stats_after.official_kda_output_d2h_bytes -
+               stats_before.official_kda_output_d2h_bytes
+        << ",\"resident_weight_bytes\":" << stats_after.resident_weight_bytes
+        << ",\"peak_vram_bytes\":" << memory.peak_device_bytes
+        << ",\"maximum_absolute_error\":" << maximum_error
+        << ",\"all_finite\":true}\n";
+    return maximum_error <= 2.0e-2F ? 0 : 4;
 }

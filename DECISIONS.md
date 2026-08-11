@@ -705,13 +705,13 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-061 — Close layer 1 at an explicit recurrent-state boundary
 
 - Date: 2026-08-11.
-- Status: accepted and partially implemented through bounded manufacturing, independent Python/C++ KDA oracles, tiny portable complete-layer composition, and pinned fail-before-backend preflight; official execution and measurement remain pending.
+- Status: accepted and implemented through bounded manufacturing, independent Python/C++ KDA oracles, pinned preflight, official portable execution, and native CUDA complete-layer execution; formal B-0030 measurement remains pending.
 - Decision: supply deterministic layer-1 hidden/source-bank vectors and explicit zero KDA state, then execute two tokens through the complete layer both together and incrementally. Require checkpoint-authoritative F32 `A_log[128]` and explicit V-first recurrent-state storage. Keep the final artifact non-executable through `k3x_run`.
 - Alternatives considered: include embeddings and layer 0; stop at a KDA-only official boundary; close layer 1 around explicit state inputs.
 - Evidence: the pinned source blob matches repository metadata, layer 1 is KDA, the exact 17-tensor header payload is 887,843,840 bytes, and the KDA paper defines channel-wise decay. The checkpoint header exposes `A_log[128]` while the source constructor initializes `[96]`, so silent source imitation would be incorrect.
 - Benchmark result: none. Header and source identity checks are metadata observations, not a performance benchmark.
 - Reason accepted: this is the smallest boundary that exposes recurrent attention, both Attention Residual halves, natural routing, MoE, state movement, and final output without importing a separate layer-0 MLA/dense dependency closure.
-- Rejected claims: no complete-layer execution, B-0030, token rate, quality result, physical traffic, full-shard integrity, or production default exists yet.
+- Rejected claims: no B-0030, token rate, quality result, physical traffic, full-shard integrity, or production default exists yet. The native complete-layer result is a bounded benchmark-only capability path.
 - Revisit: after B-0030, use measured KDA/MoE/kernel/orchestration and residency data to choose whole-layer fusion or bounded multi-layer tracing.
 
 ## D-062 — Extend the M28 manufacturing transaction for the KDA layer fixture
@@ -749,3 +749,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: independent implementations cannot honestly promise byte identity across different GEMM reduction orders. A content-bound numerical oracle preserves source-byte authority, makes divergence measurable, and avoids adding PyTorch or oneDNN as a runtime dependency.
 - Rejected claims: these tolerances do not establish CUDA parity, complete-layer output parity after MoE, B-0030, token rate, quality, physical storage traffic, or a production default.
 - Revisit: native CUDA must report its own source-byte and portable-oracle error. Tighten or separate tolerances only from measured cross-backend evidence, never by hiding a failing value.
+
+## D-065 — Close the first CUDA layer with host routing and exact GPU KDA/MoE
+
+- Date: 2026-08-11.
+- Status: accepted and implemented for the M29 benchmark-only boundary.
+- Decision: retain both Attention Residual reductions, RMS normalization, and exact all-896 natural routing on the host while executing all large BF16/F32 KDA projections, convolution, decay, V-first recurrence, output projection, and the exact native-MXFP4 MoE FFN on the CUDA backend. Keep transient and exact-resident modes and publish complete KDA state explicitly.
+- Alternatives considered: move routing and residual reductions onto the GPU before any official whole-layer result; stop at KDA-only CUDA; compose the already verified host control flow with the verified GPU KDA and MoE boundaries.
+- Evidence: tiny transient/resident and full/incremental parity pass; CPU CTest passes 19/19, CUDA CTest passes 34/34, focused Python passes 175 with 8 capability skips, and both new CUDA binaries report zero Compute Sanitizer errors. The bounded resident A-to-B official smoke preserves both exact routes, full/incremental state, and complete-layer output within `0.00048828125`.
+- Benchmark result: no formal benchmark. The cold one-sequence smoke records 381,907,507 ns wall time, 32,897,536 ns profiled kernel time, 1,816,322,048 weight-H2D/resident bytes, 13,025,280 state bytes in each direction, and 1,824,612,416 tracked peak device bytes. It used zero warmups and one iteration and is not B-0030.
+- Reason accepted: it is the smallest dependency-closed native boundary that tests official KDA state movement and exact MoE composition without conflating the next optimization step with routing/residual fusion.
+- Rejected claims: the cold smoke is not token throughput, quality, physical PCIe/NVMe traffic, utilization, bandwidth, native-Linux evidence, or a production default.
+- Revisit: after fixed B-0030 evidence attributes warm kernel and orchestration cost, decide whether host routing/residual fusion or a bounded multi-layer trace is the next measured step.

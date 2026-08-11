@@ -1205,3 +1205,14 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Regression verification: CPU CTest 19/19, CUDA CTest 32/32, and focused Python 67 passed with 4 skipped. The skip count is build-capability related. No native official-layer CUDA test or sanitizer result exists yet.
 - Decode tok/s, prefill tok/s, TTFT, VRAM, system RAM, NVMe GB/token, H2D GB/token, cache hit rate, average Top-K, speculative acceptance, complete-layer CUDA latency, utilization, bandwidth, and quality: not measured.
 - Interpretation: this is official bounded-payload CPU correctness and provenance evidence. It is not B-0030, native CUDA execution, token throughput, physical traffic, or a quality result.
+
+## Milestone 29 Task 6 verification — native CUDA complete-layer capability
+
+- Date: 2026-08-11.
+- Hardware/model: Ryzen 7 9800X3D and RTX 5080 under WSL2; bounded 1,829,310,720-byte official Kimi K3 layer-1 K3X artifact with the exact disjoint 32-expert union. No complete shard/checkpoint or paid cloud resource was used.
+- Mode: host self/MLP Attention Residual, RMS normalization, and exact all-896 natural routing; native `sm_120` BF16/F32 KDA projections, short convolution, channel decay, V-first recurrence, output projection, and exact native-MXFP4 MoE FFN. The recorded official smoke is `ab-incremental`, exact resident, zero warmups, one iteration.
+- Correctness: transient/resident tiny CUDA paths match the portable complete layer; full two-token and incremental A-to-B outputs and final state agree. The official resident smoke preserves both exact Top-16 routes and reports complete-layer maximum absolute output error `0.00048828125`.
+- Verification: CPU CTest 19/19; CUDA CTest 34/34; focused harness/Reader/C++ parity Python 175 passed and 8 capability skips; `test_cuda_official_kda` and `test_cuda_official_layer` Compute Sanitizer each report `ERROR SUMMARY: 0 errors`.
+- Cold capability counters: 381,907,507 ns wall time; 32,897,536 ns aggregate profiled device time; 32 KDA kernel launches over two KDA calls; 1,816,322,048 weight-H2D/resident bytes; 13,198,976 activation-H2D bytes; 13,139,968 total D2H bytes; 13,025,280 KDA-state bytes in each direction; 57,344 KDA-output D2H bytes; 1,824,612,416 tracked peak device bytes.
+- Decode tok/s, prefill tok/s, TTFT, VRAM from an independent process observer, system RAM, physical NVMe GB/token, physical H2D GB/token, cache hit rate, average full-model Top-K, speculative acceptance, utilization, memory bandwidth, coding quality, and end-to-end model quality: not measured.
+- Interpretation: this is one cold capability/correctness smoke with zero warmups, not B-0030. It proves the dependency-closed official layer fits and executes on RTX 5080 but supports no warm performance, token-rate, physical-traffic, quality, native-Linux, or default-policy conclusion.
