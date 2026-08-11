@@ -438,6 +438,8 @@ Commit `bb634e1` adds the opt-in byte-native CUDA counterpart. Routed/shared BF1
 
 Commits `a109409` and `bdab0da` bind the final K3X root back into the durable route manifest and add the strict official fixture harness. It verifies pinned source identity, exact tensor metadata/order, both recomputed routes, CPU-oracle parity, and transient/resident traffic formulas before emitting the B-0029 input schema. Synthetic coverage passes 18 tests; three official-fixture smoke cases remain skipped until bounded materialization.
 
+Commit `ba3a0d2` adds the non-ranking B-0029 evidence pipeline for exactly A transient, A resident, and alternating resident. It verifies every schema, traffic, parity, digest, aggregate, and LF-only CSV boundary before publication. The tooling passes controlled tests, but B-0029 itself has not run.
+
 This remains correctness-only evidence. The bounded official M28 fixture has not been downloaded, B-0029 tooling and bounded materialization are next, and no token-rate, quality, physical-NVMe, or full-layer result is claimed.
 
 ## Quick start
@@ -715,6 +717,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Dimension-driven portable BF16/MXFP4 official MoE oracle with independent PyTorch boundary parity.
 - [x] Opt-in native BF16/MXFP4 official MoE CUDA boundary with transient/resident parity and sanitizer coverage.
 - [x] Strict pinned official MoE fixture harness with root binding, route recomputation, and fail-closed synthetic coverage.
+- [x] Strict three-row B-0029 runner/verifier with digest-backed JSON/CSV evidence contracts.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.

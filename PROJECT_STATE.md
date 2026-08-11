@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 28 dependency-closed real MoE FFN sublayer is the active engineering boundary. Native BF16 K3X support, exact official tensor planning, deterministic natural route derivation, content-addressed two-phase selected-union materialization, source assembly, explicit CLI orchestration, the pure portable BF16/MXFP4 oracle, its byte-native CUDA boundary, final artifact/root manifest binding, and the strict pinned fixture harness are implemented. The B-0029 runner/verifier, ignored real fixture, and formal measurement remain pending.
+Milestone 28 dependency-closed real MoE FFN sublayer is the active engineering boundary. Native BF16 K3X support, exact official tensor planning, deterministic natural route derivation, content-addressed two-phase selected-union materialization, source assembly, portable BF16/MXFP4 CPU/CUDA execution, final artifact/root binding, the strict pinned harness, and the B-0029 runner/verifier are implemented. The ignored real fixture and formal B-0029 measurement remain pending.
 
-State audited last on 2026-08-11 after M28 Task 5 commit `bdab0da` passed 18 harness tests with 3 ignored-real-fixture skips, CUDA CTest 30/30, focused Compute Sanitizer with zero errors, and strict warning compilation. One bounded official expert from M27 is present only under ignored `artifacts/`; the M28 multi-expert fixture has not been downloaded. No complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-11 after M28 Task 6 commit `ba3a0d2` passed the combined runner/harness suite 28 tests with 3 ignored-real-fixture skips. CUDA CTest remains 30/30 and focused Compute Sanitizer reports zero errors. The M28 multi-expert fixture has not been downloaded. No complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -114,6 +114,7 @@ State audited last on 2026-08-11 after M28 Task 5 commit `bdab0da` passed 18 har
 - M28 Task 3 is complete at `8a13cf5`: the dimension-driven CPU oracle preserves explicit BF16 boundaries, validates the natural route before execution, decodes native MXFP4 experts exactly, and matches independent PyTorch intermediate values without production dispatch.
 - M28 Task 4 is complete at `bb634e1`: the opt-in CUDA method executes the routed/shared BF16 and selected native-MXFP4 FFN boundary on one stream, returns one final D2H vector, and reuses byte-native resident weights with zero second-call weight H2D.
 - M28 Task 5 is implemented at `a109409`/`bdab0da`: final materialization binds the Reader root into the route manifest, and the harness validates pinned identities, exact tensor metadata/order, recomputed routes, portable oracles, CUDA parity, and traffic formulas. Actual official smoke remains pending by design.
+- M28 Task 6 is complete at `ba3a0d2`: the fixed three-row evidence tool validates raw schema, formulas, parity, digests, aggregate, LF-only CSV, and strict 3/20 identity without rerunning or ranking timings.
 - Milestone 27 implementation, B-0028, full local verification, README/TITAN Ledger synchronization, D-054 M28 selection, final Critical/Important review, PR #46 merge, and post-merge correctness/CodeQL are complete.
 - Milestone 26 implementation, live dry-run, one exact official expert conversion, B-0027 verifier, full local verification, final Critical/Important review, README/TITAN Ledger synchronization, PR #44 merge, and post-merge CI are complete.
 - The actual official K3X storage fixture still exits 4 with `NON_EXECUTABLE_ARTIFACT` through `k3x_run`; the separate M27 benchmark-only path executes only the pinned expert FFN and does not weaken that production guard.
@@ -167,9 +168,9 @@ State audited last on 2026-08-11 after M28 Task 5 commit `bdab0da` passed 18 har
 
 ## Next concrete tasks
 
-1. Add the strict B-0029 runner/verifier and synthetic failure matrix before any live materialization.
-2. Materialize only the bounded ignored M28 fixture now that the harness identity is ready, then run the three pending smoke cases.
-3. Run B-0029 once, followed by parity, traffic, sanitizer, evidence, and full verification gates before any performance claim.
+1. Materialize only the bounded ignored M28 fixture now that harness and evidence identities are ready, without downloading a full shard or checkpoint.
+2. Run the three pending smoke cases and the resident alternating Compute Sanitizer gate.
+3. Run B-0029 once, followed by strict evidence and the complete verification matrix before any performance claim.
 
 ## Hardware assumptions
 
@@ -200,6 +201,7 @@ B-0028 remains the latest performance measurement. Twenty transient single-exper
 
 ## Last known-good state
 
+- Local M28 Task 6 head `ba3a0d2` implements the strict fixed-matrix B-0029 tool. Combined runner/harness pytest passes 28 with 3 real-fixture skips; compile validation and `git diff --check` pass. No B-0029 measurement was produced.
 - Local M28 Task 5 head `bdab0da` plus manifest binding `a109409` implements the pinned harness. Harness pytest passes 18 with 3 ignored-real-fixture skips; CUDA CTest passes 30/30; focused Compute Sanitizer reports zero errors; strict warning compilation passes. No official M28 payload or performance result was produced.
 - Local M28 Task 4 head `bb634e1` implements the opt-in byte-native official MoE CUDA boundary. CPU CTest passes 17/17, CUDA CTest passes 30/30, and the focused Compute Sanitizer reports `ERROR SUMMARY: 0 errors`. Tiny transient/resident calls match the portable oracle within `2e-2`; the second resident call adds zero weight H2D. No official M28 payload or performance result was produced.
 - Local M28 Task 3 head `8a13cf5` implements the pure official MoE CPU oracle. CPU CTest passes 17/17 and `test_cpp_parity.py` passes 113/113 runnable cases with 32 capability skips; the tiny C++ dump and independent PyTorch graph agree at every recorded boundary within `1e-6`. No official M28 payload or performance result was produced.

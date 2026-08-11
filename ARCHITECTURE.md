@@ -418,6 +418,8 @@ The pinned harness is implemented at `bdab0da`. Final materialization atomically
 
 Synthetic CLI and fail-closed coverage passes 18 tests; three real-fixture smoke cases are skipped until the bounded ignored fixture is materialized. Therefore the harness is implemented, but official full-size parity, B-0029, and performance remain unmeasured.
 
+The B-0029 evidence tool is implemented at `ba3a0d2`. Its matrix is fixed to A transient, A resident, and alternating resident. Each subprocess must emit exactly one schema-complete JSON object; the tool validates pinned manifest identity, route/contribution arrays, BF16/MXFP4 traffic formulas, one-D2H-per-call, resident warm-zero H2D, cache/allocation/synchronization formulas, finite output, and `2e-2` parity before writing anything. Raw JSON is compact sorted LF, summary JSON is canonical indented LF, and summary CSV is LF-only. Strict verification fixes 3 warmups and 20 iterations and rehashes artifact, route manifest, runner, every raw row, aggregate, and CSV.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.
