@@ -1262,4 +1262,4 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Committed B-0030 verifier: 9/9 passed; strict artifact/manifest/runner/raw/CSV/aggregate rehash passed.
 - Actual AB incremental resident Compute Sanitizer: `ERROR SUMMARY: 0 errors`; launch attach used `--launch-timeout 0` because the checksum/preflight oracle exceeds the tool's 10-second default attach timeout. The valid run reports zero warm weight H2D and maximum absolute error `0.00048828125`.
 - Production guard: `k3x_run` exits 4 with `NON_EXECUTABLE_ARTIFACT` on the bounded layer fixture.
-- Public integration: pending.
+- Public integration: branch correctness `31487723904`, pull-request correctness `31487748354`, and pull-request CodeQL `31487748339` passed. PR #50 rebase-merged at `2a4bfaf40284204ab314938f8112b280915f77df`; post-merge `main` correctness `31488078940` and CodeQL `31488078974` passed.

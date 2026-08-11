@@ -757,3 +757,9 @@
 - Fresh final gates pass CPU CTest 19/19 plus Python 541/119, liburing/direct CTest 20/20 plus Python 543/117, ASan/UBSan CTest 20/20, and CUDA CTest 34/34 plus Python 639/21 against the actual bounded artifact. The committed evidence verifier passes 9/9.
 - The first actual-artifact Compute Sanitizer attempts exceeded the external command limit because the tool's default 10-second attach timeout expired during checksum/preflight work and then waited for target completion. The retained log reported `No attachable process found`. Re-running with `--launch-timeout 0` completed in 80.6 seconds with `ERROR SUMMARY: 0 errors`, zero warm weight H2D, and maximum error `0.00048828125`.
 - Production `k3x_run` still exits 4 with `NON_EXECUTABLE_ARTIFACT`. No complete shard/checkpoint, paid resource, token throughput, quality, or physical traffic result was created.
+
+## 2026-08-11 — Milestone 29 public integration
+
+- Public PR #50 carried the complete official KDA layer implementation, bounded B-0030 evidence, English README, and synchronized TITAN Ledger. The ignored 1.829 GB artifact and 6.5 MB oracle sidecar were not tracked.
+- Branch correctness `31487723904`, pull-request correctness `31487748354`, and pull-request CodeQL `31487748339` passed. PR #50 was ready, clean, and rebase-merged at public head `2a4bfaf40284204ab314938f8112b280915f77df`.
+- Post-merge `main` correctness `31488078940` and CodeQL `31488078974` passed. Milestone 29 is publicly complete; D-067 is the next bounded non-cloud experiment.

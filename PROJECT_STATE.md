@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 29's official layer-1 KDA transformer boundary is locally complete through formal B-0030 and the full verification matrix. Its fail-closed planner, independent PyTorch and portable C++ KDA oracles, bounded manufacturing, portable/native-CUDA complete-layer execution, strict artifact preflight, 32-expert official fixture, source-byte oracle sidecar, committed evidence verifier, and actual-artifact sanitizer gate are implemented and verified. Public GitHub integration remains pending. The bounded artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
+Milestone 29's official layer-1 KDA transformer boundary is publicly complete through formal B-0030 and the full verification matrix. Its fail-closed planner, independent PyTorch and portable C++ KDA oracles, bounded manufacturing, portable/native-CUDA complete-layer execution, strict artifact preflight, 32-expert official fixture, source-byte oracle sidecar, committed evidence verifier, actual-artifact sanitizer gate, and public CI are implemented and verified. The bounded artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
 
-State audited last on 2026-08-11 from local M29 evidence commit `bbdccb9` over public head `ab3cf433fc2eac2a6aaf8a55cdb3072997a7ab9c`. Fresh M29 verification passes CPU CTest 19/19 plus Python 541/119, liburing/direct CTest 20/20 plus Python 543/117, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus actual-artifact Python 639/21, committed B-0030 verification 9/9, and actual AB incremental resident Compute Sanitizer with zero errors. The ignored bounded fixture contains 17 KDA tensors, eleven always-active MoE tensors, and a 32-expert union; no complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-11 from public M29 head `2a4bfaf40284204ab314938f8112b280915f77df`. Fresh local verification passes CPU CTest 19/19 plus Python 541/119, liburing/direct CTest 20/20 plus Python 543/117, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus actual-artifact Python 639/21, committed B-0030 verification 9/9, and actual AB incremental resident Compute Sanitizer with zero errors. PR #50 branch/PR correctness and CodeQL plus post-merge `main` correctness `31488078940` and CodeQL `31488078974` passed. The ignored bounded fixture contains 17 KDA tensors, eleven always-active MoE tensors, and a 32-expert union; no complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -122,7 +122,7 @@ State audited last on 2026-08-11 from local M29 evidence commit `bbdccb9` over p
 - M29 Task 6 is implemented and verified locally. The native `sm_120` boundary keeps Attention Residual/RMSNorm/router host-side while KDA and exact native-MXFP4 MoE execute on CUDA. Tiny transient/resident and full/incremental parity, CPU CTest 19/19, CUDA CTest 34/34, focused Python 175/8, and both new Compute Sanitizer runs pass. The actual resident A-to-B cold smoke preserves exact routes/state and matches the complete-layer oracle within `0.00048828125`.
 - M29 Task 7 is implemented and verified locally. The fixed fsynced atomic B-0030 pipeline enforces three rows, exact 3/20 official identity, BF16/F32/MXFP4 plus KDA-state and Reader traffic formulas, process peak RSS, full/incremental output/state digests, raw/CSV/aggregate hashes, and no token/quality/physical-traffic fields. Runner tests pass 8/8 and actual one-sample probes confirm all formulas, including 24 launches for two-token full KDA versus 32 for two incremental calls.
 - Formal B-0030 is committed at `bbdccb9`. A transient, resident incremental, and resident full medians are 262,801,334, 168,577,563, and 114,804,882 ns. Both resident rows retain 1,816,322,048 exact weight bytes, transfer zero warm weight bytes, and preserve exact full/incremental output plus final-state digests with maximum error `0.00048828125`.
-- The accepted design is commit `5f04768` and the detailed eight-task TDD plan is commit `b7a6c0e`. Local implementation, evidence, full verification, README, and TITAN Ledger synchronization are complete; public PR/CI integration is the remaining M29 step.
+- The accepted design is commit `5f04768` and the detailed eight-task TDD plan is commit `b7a6c0e`. Implementation, evidence, full verification, README, TITAN Ledger, PR #50, and post-merge CI are complete at public head `2a4bfaf`.
 
 - M28 Task 2 is complete at `0b0c944`: the route manifest is durable before expert fetching, only the natural A/B first-use union is planned, object reuse is rehashed, response bytes are measured separately from logical source bytes, and production generation remains fail-closed.
 - M28 Task 3 is complete at `8a13cf5`: the dimension-driven CPU oracle preserves explicit BF16 boundaries, validates the natural route before execution, decodes native MXFP4 experts exactly, and matches independent PyTorch intermediate values without production dispatch.
@@ -182,10 +182,9 @@ State audited last on 2026-08-11 from local M29 evidence commit `bbdccb9` over p
 
 ## Next concrete tasks
 
-1. Publish the M29 branch, verify pull-request correctness and CodeQL, rebase-merge, and verify post-merge `main` checks.
-2. Implement D-067 as a bounded immutable KDA validation/orchestration attribution experiment with the exact default retained.
-3. Re-run applicable tests and a fixed non-ranking ablation before deciding whether admission validation or a wider device-resident boundary becomes the next implementation step.
-4. Keep the artifact non-executable; do not download a complete shard/checkpoint or create paid cloud resources.
+1. Implement D-067 as a bounded immutable KDA validation/orchestration attribution experiment with the exact default retained.
+2. Re-run applicable tests and a fixed non-ranking ablation before deciding whether admission validation or a wider device-resident boundary becomes the next implementation step.
+3. Keep the artifact non-executable; do not download a complete shard/checkpoint or create paid cloud resources.
 
 ## Hardware assumptions
 
@@ -212,7 +211,7 @@ D-067 selects a separate admission-validation/orchestration attribution experime
 
 - Local M29 evidence commit `bbdccb9` records formal B-0030 with aggregate SHA-256 `86f0007af7da007d6646dec6fa8fba4008c1bf7bedff53971d5d31926c9f6452` and summary CSV SHA-256 `1e5af9bb7d5b9abb16f62962bbce3584b62014873b12ce7642868e919770a635`. Strict committed-evidence verification passes 9/9.
 - Fresh M29 final verification passes CPU CTest 19/19 plus Python 541/119, liburing/direct CTest 20/20 plus Python 543/117, ASan/UBSan CTest 20/20, and CUDA CTest 34/34 plus Python 639/21 against the actual bounded artifact. Actual AB incremental resident Compute Sanitizer reports `ERROR SUMMARY: 0 errors`; `--launch-timeout 0` is required because preflight exceeds the tool's default attach timeout.
-- Production `k3x_run` exits 4 with `NON_EXECUTABLE_ARTIFACT`. Public integration remains pending; public head is still `ab3cf433fc2eac2a6aaf8a55cdb3072997a7ab9c` until M29 merges.
+- Production `k3x_run` exits 4 with `NON_EXECUTABLE_ARTIFACT`. PR #50 rebase-merged M29 at public head `2a4bfaf40284204ab314938f8112b280915f77df`; branch/PR and post-merge correctness/CodeQL all passed.
 - Local M29 Task 6 executes the checksum-bound 1,829,310,720-byte official layer fixture on RTX 5080 through the native CUDA KDA and exact MoE boundaries. CPU CTest passes 19/19, CUDA CTest passes 34/34, focused Python passes 175 with 8 capability skips, and both focused Compute Sanitizer runs report zero errors. The actual resident A-to-B cold smoke preserves exact routes/state, reports `0.00048828125` maximum complete-layer output error, and retains 1,816,322,048 weight bytes. No formal B-0030, token metric, quality result, physical traffic result, or production execution path exists.
 - Local M29 Task 5C remains the portable source-byte authority. It loads the same ignored artifact and 6,541,344-byte oracle sidecar, passes full/incremental execution and exact route-ID gates, and records the independent accumulation tolerances. The verified artifact regeneration reused 60 objects and downloaded zero tensor payload.
 - Local M29 Task 5A full CPU build and CTest 19/19 pass. Focused official CTest passes 4/4, Python C++ parity passes 115 with 32 capability skips, strict warning compilation passes, and the tiny full/incremental complete layer matches the independent PyTorch graph within `1e-6`. No official payload or performance result exists.
