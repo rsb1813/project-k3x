@@ -608,7 +608,7 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-053 — Prove one official expert FFN before widening real-weight closure
 
 - Date: 2026-08-10.
-- Status: accepted and implemented locally; formal B-0028 and public integration are pending.
+- Status: accepted with the identity, CUDA harness, and strict B-0028 evidence tool implemented locally; formal measurement and public integration are pending.
 - Decision: add a dedicated benchmark-only path that hard-binds the B-0027 K3X root and ordered expert digest, uses the portable CPU backend as oracle, and measures transient and resident RTX 5080 execution without changing `k3x_run`.
 - Alternatives considered: reuse the released-dimension executable unchanged; add caller-selected official labels to that executable; add a pinned official-expert harness.
 - Evidence: the dedicated harness passes all six synthetic/actual-artifact cases, CUDA CTest 28/28, and a resident official-expert Compute Sanitizer run with zero errors. Direct transient/resident validation both report `3.0267983675e-9` maximum absolute error, while transient measured one 17,547,264-byte weight transfer and resident measured zero after cold admission. These timings are validation evidence, not B-0028.

@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 27 official expert CUDA execution is the active engineering boundary. The pure pinned identity contract and dedicated transient/resident CUDA harness are implemented and pass real-artifact CPU-oracle parity, traffic, CUDA regression, and Compute Sanitizer gates. The B-0028 runner/verifier, formal measurement, and public integration remain pending.
+Milestone 27 official expert CUDA execution is the active engineering boundary. The pure pinned identity contract, dedicated transient/resident CUDA harness, and strict B-0028 runner/verifier are implemented and locally verified. Formal B-0028 measurement, the complete verification matrix, final review, documentation publication, and public integration remain pending.
 
-State audited last on 2026-08-11 after M27 Task 2 architecture, decision, test, and real-artifact CUDA evidence synchronization. Milestone 26 remains publicly integrated through PR #44 at `5b6345db`, with its publication update through PR #45 at `9c461a1`. One bounded official expert is present only under ignored `artifacts/`; no complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-11 after M27 Task 3 evidence-tool implementation and synchronization. Milestone 26 remains publicly integrated through PR #44 at `5b6345db`, with its publication update through PR #45 at `9c461a1`. One bounded official expert is present only under ignored `artifacts/`; no complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -109,7 +109,7 @@ State audited last on 2026-08-11 after M27 Task 2 architecture, decision, test, 
 
 ## Work in progress
 
-- Milestone 27 design, detailed TDD plan, pure pinned identity helper, and dedicated official-expert CUDA harness are complete. The B-0028 runner/verifier, formal measurement, full verification, and public integration remain.
+- Milestone 27 design, detailed TDD plan, pure pinned identity helper, dedicated official-expert CUDA harness, and strict two-case B-0028 evidence tool are complete. Formal measurement, full verification, final review, documentation, and public integration remain.
 - Milestone 26 implementation, live dry-run, one exact official expert conversion, B-0027 verifier, full local verification, final Critical/Important review, README/TITAN Ledger synchronization, PR #44 merge, and post-merge CI are complete.
 - The actual official K3X storage fixture still exits 4 with `NON_EXECUTABLE_ARTIFACT` through `k3x_run`; the separate M27 benchmark-only path executes only the pinned expert FFN and does not weaken that production guard.
 - Milestone 24 implementation, B-0025 measurement, committed-evidence validation, full local verification, final Critical/Important review, PR #40 merge, and post-merge correctness/CodeQL are complete.
@@ -161,9 +161,9 @@ State audited last on 2026-08-11 after M27 Task 2 architecture, decision, test, 
 
 ## Next concrete tasks
 
-1. Implement the strict B-0028 two-mode runner and committed-evidence verifier.
-2. Run formal transient/resident B-0028, the complete verification matrix, and final review.
-3. Publish M27 and use B-0028 to choose the smallest dependency-closed multi-expert or complete-layer slice for Milestone 28.
+1. Build the exact CUDA target, rehash the ignored artifact, and run formal B-0028 exactly once at 3 warmups and 20 iterations.
+2. Independently verify the staged evidence, run the complete verification matrix, and complete final Critical/Important review.
+3. Synchronize README and the TITAN Ledger, publish M27, and use B-0028 to choose the smallest dependency-closed multi-expert or complete-layer slice for Milestone 28.
 
 ## Hardware assumptions
 
@@ -199,6 +199,7 @@ B-0027 closes the immediate official-source compatibility and bounded real-byte 
 - The M27 exploratory official-artifact scalar FFN completed on RTX 5080 with 7,212,040 ns wall time, 1,962,624 ns kernel time, 17,547,264 weight-H2D bytes, and `3.0267983675e-9` maximum CPU-oracle error. It is feasibility evidence only and is not B-0028.
 - M27 Task 1 witnessed RED at missing identity implementation, then passed the exact/mutated pure identity contract and CPU CTest 16/16.
 - M27 Task 2 witnessed RED at the missing dedicated source and a separate runtime-D2H regression at exit 58. The corrected harness passes all six synthetic/real-artifact cases, CUDA CTest 28/28, and resident official-expert Compute Sanitizer with zero errors. Direct one-iteration transient/resident validation reports `3.0267983675e-9` maximum absolute error; these timings are not B-0028.
+- M27 Task 3 witnessed the planned missing-module RED and now passes ten runner/digest/parity/mutation tests. The combined Task 2/3 focused suite passes 16 tests against the ignored actual artifact; strict verification requires both artifact and runner files for independent rehashing.
 - Public Milestone 25 evidence commit `cce5223` contains the B-0026 canonical summary JSON/CSV, and integration head `ca8c544e` contains strict source/safetensors/resume validation, exact orphan-suffix recovery, synchronized documentation, and the final committed-boundary correction. Runner/aggregate/summary JSON/CSV SHA-256 are `d292991ada21dd305078d2fe90116450d7a5184606962891bc1c383c47487ca0`, `4181e012dc0ccc1570f5ca18336ee3037327b32da63b8128bcc5423c0191100c`, `f78de6ef9bb3b47d1cb3d56af1969d1d3d465025a21ee0b25f2d97df27e38116`, and `c98f12b39fdc7f76bd4cd824cb5fc9da9b44208dd27a954c958f6e3bf3b6ea6d`.
 - Fresh Milestone 25 verification passes CPU CTest 15/15 with pytest 405 passed/70 skipped, liburing/direct CTest 16/16 with capability-aware pytest 407 passed/68 skipped, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 459 passed/16 skipped. The unchanged released MoE-layer Compute Sanitizer regression reports `ERROR SUMMARY: 0 errors`.
 - PR #42 push and pull-request correctness runs `31379029215`/`31379074639`, pull-request CodeQL `31379074656`, and post-merge `main` correctness/CodeQL `31379311743`/`31379311695` passed.
@@ -268,4 +269,4 @@ B-0027 closes the immediate official-source compatibility and bounded real-byte 
 
 ## Proposed component status
 
-AURORA's replay reference, persistent reduced-Top-K CPU state, adaptive scheduler, exact transient CUDA draft, bounded exact resident CUDA draft, exact resident expert grid, resident MoE-layer execution, admission validation, independent target/draft CUDA Graph ownership, target feedback, CLI, separated telemetry, and B-0017 through B-0025 are implemented and measured as experimental non-default paths. The strict K3X v1 converter trust boundary, official bounded discovery/materialization path, and B-0026/B-0027 are implemented, measured, and publicly integrated. M27's pinned identity and dedicated official-expert CUDA harness are implemented and locally verified, but formal B-0028 measurement and public integration remain pending. Transient CUDA is rejected as a default; bounded residency, the resident grid, the resident MoE layer, admission validation, and CUDA Graph modes remain opt-in. B-0025 rejects a graph default on current evidence. Reduced precision, eviction-capable residency, a complete device-resident token graph, learned drafting, and full real-weight CUDA graph execution remain proposed. APOLLO, TITAN COUNCIL, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None of the proposed-only components is claimed as implemented or benchmarked.
+AURORA's replay reference, persistent reduced-Top-K CPU state, adaptive scheduler, exact transient CUDA draft, bounded exact resident CUDA draft, exact resident expert grid, resident MoE-layer execution, admission validation, independent target/draft CUDA Graph ownership, target feedback, CLI, separated telemetry, and B-0017 through B-0025 are implemented and measured as experimental non-default paths. The strict K3X v1 converter trust boundary, official bounded discovery/materialization path, and B-0026/B-0027 are implemented, measured, and publicly integrated. M27's pinned identity, dedicated official-expert CUDA harness, and strict B-0028 evidence tool are implemented and locally verified, but formal measurement and public integration remain pending. Transient CUDA is rejected as a default; bounded residency, the resident grid, the resident MoE layer, admission validation, and CUDA Graph modes remain opt-in. B-0025 rejects a graph default on current evidence. Reduced precision, eviction-capable residency, a complete device-resident token graph, learned drafting, and full real-weight CUDA graph execution remain proposed. APOLLO, TITAN COUNCIL, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None of the proposed-only components is claimed as implemented or benchmarked.
