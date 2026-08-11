@@ -12,7 +12,9 @@ import torch
 
 from k3x_converter.official_moe import (
     OfficialMoeSourceTensor,
+    MaterializedRangeObject,
     assemble_official_moe_source,
+    derive_official_moe_routes,
     prepare_official_moe_hidden,
     materialize_official_range_object,
     official_moe_inputs,
@@ -426,3 +428,113 @@ def test_source_assembler_preserves_declared_physical_order_and_hashes(
     assert by_id[fnv1a64(second_name)].data_offset < by_id[
         fnv1a64(first_name)
     ].data_offset
+
+
+def test_route_derivation_decodes_exact_objects_and_builds_first_use_union(
+    tmp_path: Path,
+) -> None:
+    metadata = _metadata()
+    index = OfficialIndex(
+        sum(item.length for item in metadata.values()),
+        MappingProxyType({name: _SHARD for name in metadata}),
+        (_SHARD,),
+        len(metadata),
+        "7" * 64,
+    )
+    header = OfficialShardHeader(
+        _SHARD,
+        16_990_911_504,
+        818_696,
+        818_704,
+        MappingProxyType(metadata),
+    )
+    plan = plan_official_moe_slice(index, header, _config(), layer_id=1)
+    prefix = f"{_PREFIX}."
+    tensors = {
+        prefix + "mlp_res_norm.weight": torch.linspace(
+            0.5, 1.5, 7_168, dtype=torch.bfloat16
+        ),
+        prefix + "mlp_res_proj.weight": torch.linspace(
+            -0.25, 0.25, 7_168, dtype=torch.bfloat16
+        ).reshape(1, 7_168),
+        prefix + "post_attention_layernorm.weight": torch.linspace(
+            0.75, 1.25, 7_168, dtype=torch.bfloat16
+        ),
+        prefix + "block_sparse_moe.gate.e_score_correction_bias": (
+            torch.arange(896, dtype=torch.float32).remainder(97) / 100.0
+        ),
+    }
+    gate = torch.zeros((896, 7_168), dtype=torch.bfloat16)
+    expert_ids = torch.arange(896)
+    gate[expert_ids, (expert_ids * 37).remainder(7_168)] = (
+        expert_ids.remainder(17).to(torch.float32) - 8.0
+    ).to(torch.bfloat16) / 4.0
+    tensors[prefix + "block_sparse_moe.gate.weight"] = gate
+    objects = {}
+    for name, tensor in tensors.items():
+        path = tmp_path / f"{hashlib.sha256(name.encode()).hexdigest()}.blob"
+        path.write_bytes(tensor.contiguous().view(torch.uint8).numpy().tobytes())
+        objects[name] = MaterializedRangeObject(
+            path,
+            hashlib.sha256(path.read_bytes()).hexdigest(),
+            path.stat().st_size,
+            False,
+            1,
+            path.stat().st_size,
+        )
+
+    derived = derive_official_moe_routes(plan, objects)
+
+    expected_routes = []
+    for case_index, values in enumerate(
+        (
+            (17, 3, 257, 128, 29, 11, 251, 125),
+            (31, 7, 263, 131, 43, 19, 269, 134),
+        )
+    ):
+        pa, pb, pm, po, ba, bb, bm, bo = values
+        prefix_sum = torch.tensor(
+            [(((pa * i + pb) % pm) - po) / 1024.0 for i in range(7_168)],
+            dtype=torch.bfloat16,
+        )
+        block = torch.tensor(
+            [(((ba * i + bb) % bm) - bo) / 1024.0 for i in range(7_168)],
+            dtype=torch.bfloat16,
+        )
+        stacked = torch.stack((block, prefix_sum)).float()
+        normalized = stacked * torch.rsqrt(
+            stacked.pow(2).mean(dim=-1, keepdim=True) + 1.0e-5
+        )
+        score_weight = tensors[prefix + "mlp_res_norm.weight"].float() * tensors[
+            prefix + "mlp_res_proj.weight"
+        ].flatten().float()
+        probabilities = (normalized * score_weight).sum(dim=-1).softmax(dim=-1)
+        hidden = (probabilities.unsqueeze(-1) * stacked).sum(dim=0).to(torch.bfloat16)
+        hidden_float = hidden.float()
+        hidden = (
+            hidden_float
+            * torch.rsqrt(hidden_float.pow(2).mean() + 1.0e-5)
+            * tensors[prefix + "post_attention_layernorm.weight"].float()
+        ).to(torch.bfloat16)
+        scores = torch.sigmoid(gate.float() @ hidden.float())
+        adjusted = scores + tensors[
+            prefix + "block_sparse_moe.gate.e_score_correction_bias"
+        ]
+        selected = torch.topk(adjusted, 16, sorted=False).indices.tolist()
+        canonical = tuple(sorted(selected, key=lambda e: (-float(adjusted[e]), e)))
+        contributions = scores[list(canonical)]
+        contributions = contributions / (contributions.sum() + 1.0e-20)
+        expected_routes.append(
+            ("a" if case_index == 0 else "b", canonical, tuple(float(v) for v in contributions))
+        )
+
+    assert tuple((case.name, case.route.expert_ids) for case in derived.cases) == tuple(
+        (name, ids) for name, ids, _ in expected_routes
+    )
+    for case, (_, _, contributions) in zip(derived.cases, expected_routes):
+        assert case.route.contributions == pytest.approx(contributions, abs=1.0e-7)
+    expected_union = tuple(
+        dict.fromkeys((*expected_routes[0][1], *expected_routes[1][1]))
+    )
+    assert derived.selected_experts == expected_union
+    assert set(expected_routes[0][1]) != set(expected_routes[1][1])

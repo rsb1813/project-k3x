@@ -615,3 +615,9 @@
 - The bounded object store splits every request at no more than 8 MiB, persists a prefix digest after each fsynced chunk, rejects a damaged partial, resumes a valid partial, and reuses a content-addressed completed blob without another request.
 - The source assembler writes a hashed safetensors-compatible shard and official fixture manifest. A RED/GREEN test caught an unreachable physical-order branch; the final K3X extents now follow declared first-use order rather than sorted tensor names.
 - The official-source focused suite currently passes 53 tests. Full expert-union orchestration, CLI integration, and the actual ignored fixture remain in progress and are not claimed implemented.
+
+## 2026-08-11 — Milestone 28 natural route derivation
+
+- `--scope moe-ffn` now exposes a zero-payload dry-run record with the exact eleven always-active tensors, 379,900,416 always-active bytes, and 941,412,864-byte two-route upper bound while preserving the existing expert CLI as the default.
+- Exact BF16 object files for Attention Residual norms/projection, postnorm, and the 896×7,168 router plus the FP32 correction bias are rehashed before mapping. The derived A/B natural Top-16 sets, canonical contribution ordering, and first-use union match an independent PyTorch implementation of the pinned official formulas.
+- The route derivation fixture is about 13 MB and does not download official payloads. Full always-active plus selected-expert materialization remains the next Task 2 unit.

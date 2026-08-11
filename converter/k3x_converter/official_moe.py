@@ -110,6 +110,18 @@ class OfficialMoeRoute:
 
 
 @dataclass(frozen=True)
+class OfficialMoeRouteCase:
+    name: str
+    route: OfficialMoeRoute
+
+
+@dataclass(frozen=True)
+class OfficialMoeRoutes:
+    cases: tuple[OfficialMoeRouteCase, OfficialMoeRouteCase]
+    selected_experts: tuple[int, ...]
+
+
+@dataclass(frozen=True)
 class MaterializedRangeObject:
     path: Path
     sha256: str
@@ -470,6 +482,75 @@ def route_official_hidden(
         canonical,
         tuple(float(value) for value in weights),
     )
+
+
+def derive_official_moe_routes(
+    plan: OfficialMoePlan,
+    objects: dict[str, MaterializedRangeObject],
+) -> OfficialMoeRoutes:
+    by_role = {item.role: item for item in plan.always_active}
+    required_roles = {
+        "mlp_res_norm",
+        "mlp_res_proj",
+        "post_attention_norm",
+        "router",
+        "router_correction",
+    }
+    if set(by_role) < required_roles:
+        raise K3XError("INCOMPLETE_OFFICIAL_MOE_ROUTE_SOURCE")
+
+    def load(role: str) -> torch.Tensor:
+        item = by_role[role]
+        materialized = objects.get(item.official_name)
+        if (
+            materialized is None
+            or materialized.length != item.length
+            or not materialized.path.is_file()
+            or materialized.path.stat().st_size != item.length
+            or _sha256_path(materialized.path, 8 * 1024 * 1024)
+            != materialized.sha256
+        ):
+            raise K3XError("INVALID_OFFICIAL_MOE_ROUTE_OBJECT", item.official_name)
+        dtype = torch.float32 if item.dtype == "F32" else torch.bfloat16
+        values = math.prod(item.shape)
+        return torch.from_file(
+            str(materialized.path), shared=False, size=values, dtype=dtype
+        ).reshape(item.shape)
+
+    residual_norm = load("mlp_res_norm")
+    residual_proj = load("mlp_res_proj").reshape(-1)
+    post_norm = load("post_attention_norm")
+    router_weight = load("router")
+    correction = load("router_correction")
+    cases: list[OfficialMoeRouteCase] = []
+    for case in official_moe_inputs():
+        hidden = prepare_official_moe_hidden(
+            torch.tensor(case.prefix_sum, dtype=torch.bfloat16),
+            torch.tensor(case.block_residual, dtype=torch.bfloat16),
+            residual_norm,
+            residual_proj,
+            post_norm,
+            rms_norm_eps=1.0e-5,
+        )
+        cases.append(
+            OfficialMoeRouteCase(
+                case.name,
+                route_official_hidden(
+                    hidden,
+                    router_weight,
+                    correction,
+                    top_k=16,
+                ),
+            )
+        )
+    if set(cases[0].route.expert_ids) == set(cases[1].route.expert_ids):
+        raise K3XError("OFFICIAL_MOE_ROUTES_NOT_DISTINCT")
+    selected = tuple(
+        dict.fromkeys(
+            (*cases[0].route.expert_ids, *cases[1].route.expert_ids)
+        )
+    )
+    return OfficialMoeRoutes((cases[0], cases[1]), selected)
 
 
 def _input_values(
