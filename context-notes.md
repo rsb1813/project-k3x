@@ -918,3 +918,12 @@
 - Public ready PR #56 passed branch correctness `31510344481`, pull-request correctness `31510368444`, and pull-request CodeQL `31510368390`, then rebase-merged at `ab0ecb19ade01e7989bcba9f6dbcd1c853c43432`.
 - Post-merge `main` correctness `31510749958` and CodeQL `31510749973` succeeded. Annotations remain the known Node 20 and CodeQL Action v3 deprecation notices; no new failure or security finding appeared.
 - M32 is publicly integrated. Host routing remains default, and M33 bounded multi-layer closure is next before any full checkpoint or paid Cloud Run milestone.
+
+## 2026-08-12 — Milestone 33 design
+
+- The public M32 head is the clean starting point. B-0033 leaves a split boundary in which four added kernels and two router-logit synchronizations per sequence offset most of the host-orchestration reduction.
+- The released schedule and synthetic reference both place KDA layers at decoder layers 1 and 2. Current official manufacturing, oracle, artifact naming, harness identity, and materialization checks are intentionally fixed to layer 1.
+- A genuine two-layer A/B trace must interleave model order and retain independent KDA recurrence for each layer. The current backend's one global state slot cannot express that contract.
+- D-071 selects a capacity-two layer-keyed state registry and an opaque ping-pong hidden/block token. Canonical natural Top-16 and dynamic expert resolution stay on the host; device Top-K is not bundled into M33.
+- Replaying layer 1 twice was rejected because it cannot prove layer-2 tensor, state, or transition identity. A monolithic two-layer device-Top-K call was rejected because it hides the cache/rescue scheduling point and expands the correctness surface before the bounded boundary is measured.
+- K3X v1 already stores canonical tensor names and per-layer directories. The proposed two-layer fixture can remain v1 and be assembled in execution order after dependency-ordered route discovery. No full checkpoint or paid resource is authorized or needed.
