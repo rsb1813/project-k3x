@@ -830,3 +830,16 @@
 - A dedicated grow-only state allocation stores convolution histories and recurrent state independently of sequence-sized operation scratch. Continuation binds exact backend, generation, layer, and KDA config and consumes tokens before mutation.
 - Tiny tests prove CPU-oracle output/final-state parity, empty unpublished host vectors, one state H2D and D2H for two-call handoff, generation advancement, stale/cross-backend/wrong-layer/wrong-config rejection, continuation host-state rejection, and host-call invalidation.
 - Focused CUDA KDA, official-layer, and MoE-layer tests pass 3/3. The non-CUDA build completes all targets and the backend test passes 1/1.
+
+## 2026-08-11 — Milestone 31 Task 2 RED
+
+- The official-layer CUDA test now requires exact A-to-B device seed/final-publication parity, empty intermediate host state, opaque token propagation, and one official 6,512,640-byte state transfer in each direction.
+- The wrapper build fails with nine expected errors because it has no state-control argument or publication/token result fields. Focused Python CLI coverage has two expected failures because `--state-transfer` is not parsed.
+- Review found that a post-KDA routing or MoE failure could otherwise strand an active token inside the backend. Task 2 therefore includes an explicit opaque-token discard operation and wrapper cleanup on downstream failure.
+
+## 2026-08-11 — Milestone 31 Task 2 GREEN
+
+- The official-layer wrapper propagates host/seed/continue/publish state control and returns publication state plus opaque token identity. Any downstream residual, routing, expert lookup, or MoE failure discards an active token before returning failure.
+- The harness accepts explicit `--state-transfer host|device`, restricts device execution to `ab-incremental + resident + admission`, and emits cold/measured state-operation counters only when the option is explicit. Implicit B-0030/B-0031 schemas remain unchanged.
+- Tiny failure-cleanup and exact device handoff tests pass. The actual bounded device smoke passes with measured 6,512,640-byte state H2D and D2H, one seed/continuation/publication, zero invalidations, zero warm weight H2D, and the existing maximum-error gate.
+- Focused official-layer Python passes 28/28 in 218.63 seconds. CUDA KDA/layer/MoE tests pass 3/3; the non-CUDA build and backend test pass.

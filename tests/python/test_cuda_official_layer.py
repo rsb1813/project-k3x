@@ -201,6 +201,11 @@ def _write_manifest(path: Path, value: dict) -> None:
         (("--case", "other"), "unknown case: other"),
         (("--weight-mode", "other"), "unknown weight mode: other"),
         (("--validation", "other"), "unknown validation mode: other"),
+        (("--state-transfer", "other"), "unknown state transfer: other"),
+        (
+            ("--state-transfer", "device"),
+            "device state requires ab-incremental resident admission",
+        ),
         (
             ("--validation", "admission"),
             "admission validation requires resident weights",
@@ -337,6 +342,7 @@ def test_official_layer_bench_executes_bounded_fixture_on_cuda() -> None:
     assert payload["case"] == "a"
     assert payload["weight_mode"] == "transient"
     assert "validation" not in payload
+    assert "state_transfer" not in payload
     assert payload["full_transformer_layer"] is True
     assert payload["token_semantics"] is False
     assert payload["quality_measured"] is False
@@ -376,5 +382,38 @@ def test_official_layer_bench_executes_admission_validation_on_cuda() -> None:
     assert payload["immutable_validation_hits"] == 28
     assert payload["immutable_validation_bytes"] == 0
     assert payload["immutable_validation_nanoseconds"] == 0
+    assert payload["weight_h2d_bytes"] == 0
+    assert payload["maximum_absolute_error"] <= 2.0e-2
+
+
+def test_official_layer_bench_executes_device_state_handoff_on_cuda() -> None:
+    root = Path(__file__).resolve().parents[2]
+    fixture = root / "artifacts" / "m29-official-layer"
+    artifact = fixture / "official-kda-layer-l1.k3x"
+    manifest = fixture / "route-state-manifest.json"
+    if not artifact.is_file() or not manifest.is_file():
+        pytest.skip("bounded official layer fixture is not materialized")
+
+    result = subprocess.run(
+        [
+            str(_runner()), "--artifact", str(artifact), "--manifest",
+            str(manifest), "--case", "ab-incremental", "--weight-mode",
+            "resident", "--validation", "admission", "--state-transfer",
+            "device", "--warmups", "0", "--iterations", "1",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["state_transfer"] == "device"
+    assert payload["official_kda_calls"] == 2
+    assert payload["official_kda_device_state_seeds"] == 1
+    assert payload["official_kda_device_state_continuations"] == 1
+    assert payload["official_kda_device_state_publications"] == 1
+    assert payload["official_kda_device_state_invalidations"] == 0
+    assert payload["official_kda_state_h2d_bytes"] == 6_512_640
+    assert payload["official_kda_state_d2h_bytes"] == 6_512_640
     assert payload["weight_h2d_bytes"] == 0
     assert payload["maximum_absolute_error"] <= 2.0e-2

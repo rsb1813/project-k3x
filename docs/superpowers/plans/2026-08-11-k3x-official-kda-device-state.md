@@ -47,11 +47,11 @@
 - Modify: `tests/cuda/test_cuda_official_layer.cu`
 - Modify: `tests/python/test_cuda_official_layer.py`
 
-- [ ] Write RED tests for exact A-to-B wrapper parity and `--state-transfer host|device` parsing, default schema preservation, invalid combinations, and closed telemetry.
-- [ ] Add explicit begin/continue publication at the layer boundary while leaving the existing host call unchanged.
-- [ ] Restrict harness device state to `ab-incremental + resident + admission`; emit new fields only when the option is explicit.
-- [ ] Run focused GREEN and one actual-artifact host/device parity smoke.
-- [ ] Self-review and commit as `feat: expose official KDA device-state handoff`.
+- [x] Write RED tests for exact A-to-B wrapper parity and `--state-transfer host|device` parsing, default schema preservation, invalid combinations, and closed telemetry.
+- [x] Add explicit begin/continue publication at the layer boundary while leaving the existing host call unchanged.
+- [x] Restrict harness device state to `ab-incremental + resident + admission`; emit new fields only when the option is explicit.
+- [x] Run focused GREEN and one actual-artifact host/device parity smoke.
+- [x] Self-review and commit as `feat: expose official KDA device-state handoff`.
 
 ### Task 3: Strict B-0032 evidence transaction
 

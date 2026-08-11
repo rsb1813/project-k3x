@@ -61,6 +61,8 @@ struct OfficialLayerCudaStepResult {
 
 struct OfficialLayerCudaResult {
     bool executed{};
+    bool kda_state_published{};
+    OfficialKdaDeviceStateToken kda_device_state;
     OfficialKdaState kda_state;
     std::vector<OfficialLayerCudaStepResult> steps;
 };
@@ -84,6 +86,7 @@ Result<OfficialLayerCudaResult> official_layer_cuda(
     float situ_beta,
     std::optional<float> situ_linear_beta,
     std::uint32_t layer,
-    ProfilePhase phase);
+    ProfilePhase phase,
+    OfficialKdaStateControl state_control = {});
 
 }  // namespace k3x

@@ -3062,6 +3062,17 @@ public:
         return Result<OfficialKdaCudaResult>::success(std::move(result));
     }
 
+    Result<bool> discard_official_kda_device_state(
+        OfficialKdaDeviceStateToken token) override {
+        if (!device_state_active_ || token.owner != device_state_owner_ ||
+            token.generation != device_state_generation_) {
+            return Result<bool>::failure(ErrorCode::invalid_state);
+        }
+        device_state_active_ = false;
+        ++runtime_stats_.official_kda_device_state_invalidations;
+        return Result<bool>::success(true);
+    }
+
     Result<OfficialMoeFfnResult> official_mxfp4_moe_ffn(
         std::span<const float> hidden, std::span<const float> prefix,
         OfficialMoeFfnView weights, std::span<const Mxfp4MlpView> experts,

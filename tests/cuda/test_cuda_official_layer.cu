@@ -160,7 +160,10 @@ struct Fixture {
     }
 };
 
-k3x::BackendOptions options(k3x::CudaWeightMode mode) {
+k3x::BackendOptions options(
+    k3x::CudaWeightMode mode,
+    k3x::CudaWeightValidationMode validation =
+        k3x::CudaWeightValidationMode::per_call) {
     k3x::BackendOptions value;
     value.kind = k3x::BackendKind::cuda_custom;
     value.cuda_allocation = k3x::CudaAllocationMode::reused;
@@ -168,6 +171,7 @@ k3x::BackendOptions options(k3x::CudaWeightMode mode) {
     value.cuda_batching = k3x::CudaBatchingMode::resident_grid;
     value.cuda_boundary = k3x::CudaBoundaryMode::moe_layer;
     value.cuda_resident_bytes = 8 * 1024 * 1024;
+    value.cuda_weight_validation = validation;
     return value;
 }
 
@@ -219,10 +223,106 @@ int run(k3x::CudaWeightMode mode) {
     return 0;
 }
 
+int device_state() {
+    const Fixture fixture;
+    const auto zero = k3x::zero_official_kda_state(fixture.config);
+    const auto oracle = k3x::official_layer_cpu(
+        fixture.inputs, fixture.cpu_weights(), zero, fixture.config, 2, 4, 25);
+    if (!oracle) return 20;
+    auto backend = k3x::make_cuda_backend(options(
+        k3x::CudaWeightMode::resident,
+        k3x::CudaWeightValidationMode::admission));
+    if (!backend) return 21;
+    const auto first = k3x::official_layer_cuda(
+        *backend.value(), std::span(fixture.inputs).first(1),
+        fixture.cuda_weights(), zero, fixture.config, 2, 4, 25, 1,
+        k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    if (!first || !first.value().executed ||
+        first.value().kda_state_published ||
+        !first.value().kda_device_state.owner ||
+        !first.value().kda_device_state.generation ||
+        !first.value().kda_state.conv_q.empty() ||
+        !first.value().kda_state.conv_k.empty() ||
+        !first.value().kda_state.conv_v.empty() ||
+        !first.value().kda_state.recurrent_v_first.empty() ||
+        first.value().steps.size() != 1 ||
+        !close(first.value().steps[0].output,
+               oracle.value().steps[0].moe.output)) return 22;
+    const k3x::OfficialKdaState no_host_state;
+    const auto second = k3x::official_layer_cuda(
+        *backend.value(), std::span(fixture.inputs).last(1),
+        fixture.cuda_weights(), no_host_state, fixture.config, 2, 4, 25, 1,
+        k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_publish,
+         first.value().kda_device_state});
+    if (!second || !second.value().executed ||
+        !second.value().kda_state_published ||
+        second.value().kda_device_state.owner ||
+        second.value().kda_device_state.generation ||
+        second.value().steps.size() != 1 ||
+        second.value().steps[0].route.expert_ids !=
+            oracle.value().steps[1].route.expert_ids ||
+        !close(second.value().steps[0].route.contributions,
+               oracle.value().steps[1].route.contributions) ||
+        !close(second.value().steps[0].output,
+               oracle.value().steps[1].moe.output) ||
+        second.value().kda_state.conv_q != oracle.value().kda.state.conv_q ||
+        second.value().kda_state.conv_k != oracle.value().kda.state.conv_k ||
+        second.value().kda_state.conv_v != oracle.value().kda.state.conv_v ||
+        !close(second.value().kda_state.recurrent_v_first,
+               oracle.value().kda.state.recurrent_v_first)) return 23;
+    const auto stats = backend.value()->runtime_stats();
+    const std::uint64_t state_bytes = 3 * 2 * 4 * sizeof(std::uint16_t) +
+                                      2 * 2 * 2 * sizeof(float);
+    if (stats.official_kda_state_h2d_bytes != state_bytes ||
+        stats.official_kda_state_d2h_bytes != state_bytes ||
+        stats.official_kda_device_state_seeds != 1 ||
+        stats.official_kda_device_state_continuations != 1 ||
+        stats.official_kda_device_state_publications != 1) return 24;
+    return 0;
+}
+
+int device_state_failure_cleanup() {
+    const Fixture fixture;
+    const auto zero = k3x::zero_official_kda_state(fixture.config);
+    auto backend = k3x::make_cuda_backend(options(
+        k3x::CudaWeightMode::resident,
+        k3x::CudaWeightValidationMode::admission));
+    if (!backend) return 30;
+    auto broken = fixture.cuda_weights();
+    broken.moe.experts = {};
+    const auto failed = k3x::official_layer_cuda(
+        *backend.value(), std::span(fixture.inputs).first(1), broken, zero,
+        fixture.config, 2, 4, 25, 1, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    const auto failed_stats = backend.value()->runtime_stats();
+    if (failed || failed.error() != k3x::ErrorCode::invalid_extent ||
+        failed_stats.official_kda_calls != 1 ||
+        failed_stats.official_kda_device_state_seeds != 1 ||
+        failed_stats.official_kda_device_state_invalidations != 1) return 31;
+
+    const auto recovered = k3x::official_layer_cuda(
+        *backend.value(), std::span(fixture.inputs).first(1),
+        fixture.cuda_weights(), zero, fixture.config, 2, 4, 25, 1,
+        k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    if (!recovered || !recovered.value().kda_device_state.owner ||
+        backend.value()->runtime_stats()
+                .official_kda_device_state_invalidations != 1) return 32;
+    const auto discarded = backend.value()->discard_official_kda_device_state(
+        recovered.value().kda_device_state);
+    const auto final_stats = backend.value()->runtime_stats();
+    if (!discarded ||
+        final_stats.official_kda_device_state_invalidations != 2) return 33;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
     if (const auto result = run(k3x::CudaWeightMode::transient)) return result;
     if (const auto result = run(k3x::CudaWeightMode::resident)) return 10 + result;
-    return 0;
+    if (const auto result = device_state()) return result;
+    return device_state_failure_cleanup();
 }
