@@ -4,7 +4,9 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -86,6 +88,18 @@ def test_case_order_is_fixed() -> None:
         ("ab-full-resident-per-call", "ab-full", "per-call"),
         ("ab-full-resident-admission", "ab-full", "admission"),
     )
+
+
+def test_runner_is_directly_executable_from_repository_root() -> None:
+    root = Path(__file__).resolve().parents[2]
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = "converter:reference"
+    result = subprocess.run(
+        [sys.executable, "tools/ablate_official_kda_validation.py", "--help"],
+        cwd=root, env=environment, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--verify-existing" in result.stdout
 
 
 def test_run_writes_digest_backed_lf_evidence(

@@ -11,7 +11,10 @@ import subprocess
 from pathlib import Path
 from typing import Mapping
 
-from tools import ablate_official_layer as base
+if __package__:
+    from tools import ablate_official_layer as base
+else:
+    import ablate_official_layer as base
 
 
 CASES = (
