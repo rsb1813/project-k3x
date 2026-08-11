@@ -118,6 +118,18 @@ struct DenseWeightView {
     std::size_t cols;
 };
 
+struct Bf16WeightView {
+    std::span<const std::uint16_t> values;
+    std::size_t rows{};
+    std::size_t cols{};
+    std::uint64_t tensor_id{};
+};
+
+struct Bf16VectorView {
+    std::span<const std::uint16_t> values;
+    std::uint64_t tensor_id{};
+};
+
 struct Mxfp4WeightView {
     std::uint64_t tensor_id;
     std::span<const std::byte> packed;
@@ -131,6 +143,25 @@ struct DenseMlpView {
     DenseWeightView gate;
     DenseWeightView up;
     DenseWeightView down;
+};
+
+struct Bf16MlpView {
+    Bf16WeightView gate;
+    Bf16WeightView up;
+    Bf16WeightView down;
+};
+
+struct OfficialMoeFfnView {
+    Bf16WeightView routed_down;
+    Bf16VectorView routed_norm;
+    Bf16WeightView routed_up;
+    Bf16MlpView shared;
+};
+
+struct OfficialMoeFfnResult {
+    bool executed{};
+    std::vector<float> output;
+    std::vector<std::uint32_t> selected_expert_ids;
 };
 
 struct DenseVectorView {
@@ -209,6 +240,14 @@ public:
         std::span<const Mxfp4MlpView>, std::span<const float>, float, float,
         std::optional<float>, std::uint32_t, ProfilePhase) {
         return Result<ResidentMoeLayerResult>::failure(
+            ErrorCode::backend_unavailable);
+    }
+    virtual Result<OfficialMoeFfnResult> official_mxfp4_moe_ffn(
+        std::span<const float>, std::span<const float>, OfficialMoeFfnView,
+        std::span<const Mxfp4MlpView>, std::span<const std::uint32_t>,
+        std::span<const float>, float, float, std::optional<float>,
+        std::uint32_t, ProfilePhase) {
+        return Result<OfficialMoeFfnResult>::failure(
             ErrorCode::backend_unavailable);
     }
     virtual Result<Mxfp4PrefetchToken> prefetch_mxfp4_situ_mlp_group(

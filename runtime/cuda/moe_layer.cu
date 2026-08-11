@@ -1,6 +1,8 @@
 // resident MoE layer의 ordered mix, strict RMSNorm, 최종 합산 CUDA kernel을 구현합니다.
 #include "moe_layer.cuh"
 
+#include <cuda_bf16.h>
+
 #include <cmath>
 #include <cstddef>
 
@@ -44,6 +46,57 @@ __global__ void vector_add_kernel(
     const auto row = static_cast<std::size_t>(blockIdx.x) * blockDim.x +
                      threadIdx.x;
     if (row < width) output[row] = left[row] + right[row];
+}
+
+__device__ float bf16_round(float value) {
+    return __bfloat162float(__float2bfloat16_rn(value));
+}
+
+__global__ void bf16_matvec_kernel(
+    const float* input, const __nv_bfloat16* weight, float* output,
+    std::size_t rows, std::size_t cols) {
+    const auto row = static_cast<std::size_t>(blockIdx.x) * blockDim.x +
+                     threadIdx.x;
+    if (row >= rows) return;
+    double sum = 0.0;
+    for (std::size_t column = 0; column < cols; ++column) {
+        sum += static_cast<double>(__bfloat162float(weight[row * cols + column])) *
+               input[column];
+    }
+    output[row] = bf16_round(static_cast<float>(sum));
+}
+
+__global__ void bf16_rms_norm_kernel(
+    const float* input, const __nv_bfloat16* weight, float* output,
+    std::size_t width, float epsilon) {
+    __shared__ float inverse;
+    if (threadIdx.x == 0) {
+        double squares = 0.0;
+        for (std::size_t row = 0; row < width; ++row) {
+            squares += static_cast<double>(input[row]) * input[row];
+        }
+        inverse = 1.0F /
+                  sqrtf(static_cast<float>(squares / width) + epsilon);
+    }
+    __syncthreads();
+    for (std::size_t row = threadIdx.x; row < width; row += blockDim.x) {
+        output[row] = bf16_round(
+            input[row] * inverse * __bfloat162float(weight[row]));
+    }
+}
+
+__global__ void bf16_vector_add_kernel(
+    const float* left, const float* right, float* output,
+    std::size_t width) {
+    const auto row = static_cast<std::size_t>(blockIdx.x) * blockDim.x +
+                     threadIdx.x;
+    if (row < width) output[row] = bf16_round(left[row] + right[row]);
+}
+
+__global__ void round_bf16_kernel(float* values, std::size_t count) {
+    const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x +
+                       threadIdx.x;
+    if (index < count) values[index] = bf16_round(values[index]);
 }
 
 }  // namespace
@@ -90,6 +143,65 @@ cudaError_t launch_vector_add(
     vector_add_kernel<<<blocks, threads, 0, stream>>>(
         left, right, output, width);
     return cudaGetLastError();
+}
+
+cudaError_t launch_bf16_matvec(
+    const float* input, const std::uint16_t* weight, float* output,
+    std::size_t rows, std::size_t cols, cudaStream_t stream) {
+    if (!input || !weight || !output || !rows || !cols) {
+        return cudaErrorInvalidValue;
+    }
+    constexpr unsigned threads = 256;
+    const auto blocks = static_cast<unsigned>((rows + threads - 1) / threads);
+    bf16_matvec_kernel<<<blocks, threads, 0, stream>>>(
+        input, reinterpret_cast<const __nv_bfloat16*>(weight), output,
+        rows, cols);
+    return cudaGetLastError();
+}
+
+cudaError_t launch_bf16_rms_norm(
+    const float* input, const std::uint16_t* weight, float* output,
+    std::size_t width, float epsilon, cudaStream_t stream) {
+    if (!input || !weight || !output || !width || !std::isfinite(epsilon) ||
+        epsilon <= 0.0F) {
+        return cudaErrorInvalidValue;
+    }
+    bf16_rms_norm_kernel<<<1, 256, 0, stream>>>(
+        input, reinterpret_cast<const __nv_bfloat16*>(weight), output,
+        width, epsilon);
+    return cudaGetLastError();
+}
+
+cudaError_t launch_bf16_vector_add(
+    const float* left, const float* right, float* output,
+    std::size_t width, cudaStream_t stream) {
+    if (!left || !right || !output || !width) return cudaErrorInvalidValue;
+    constexpr unsigned threads = 256;
+    const auto blocks = static_cast<unsigned>((width + threads - 1) / threads);
+    bf16_vector_add_kernel<<<blocks, threads, 0, stream>>>(
+        left, right, output, width);
+    return cudaGetLastError();
+}
+
+cudaError_t launch_round_bf16_inplace(
+    float* values, std::size_t count, cudaStream_t stream) {
+    if (!values || !count) return cudaErrorInvalidValue;
+    constexpr unsigned threads = 256;
+    const auto blocks = static_cast<unsigned>((count + threads - 1) / threads);
+    round_bf16_kernel<<<blocks, threads, 0, stream>>>(values, count);
+    return cudaGetLastError();
+}
+
+cudaError_t launch_ordered_expert_mix_bf16(
+    const float* expert_outputs, const float* device_contributions,
+    std::span<const float> host_contributions, float* mixed,
+    std::size_t width, cudaStream_t stream) {
+    const auto status = launch_ordered_expert_mix(
+        expert_outputs, device_contributions, host_contributions, mixed,
+        width, stream);
+    return status == cudaSuccess
+        ? launch_round_bf16_inplace(mixed, width, stream)
+        : status;
 }
 
 }  // namespace k3x::cuda
