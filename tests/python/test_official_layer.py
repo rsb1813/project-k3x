@@ -224,6 +224,20 @@ def test_official_kda_layer_plan_accepts_bounded_layer_two_identity() -> None:
     assert plan.base_payload_bytes == 1_267_744_256
 
 
+def test_official_kda_layer_plan_rejects_layer_two_not_declared_as_kda() -> None:
+    shard = "model-00003-of-000096.safetensors"
+    index, header = _plan_inputs_for_layer(2, shard)
+
+    with pytest.raises(K3XError, match="INVALID_OFFICIAL_LAYER"):
+        plan_official_kda_layer(
+            index,
+            header,
+            replace(_config(), kda_layers=(1,)),
+            source_blob_id=_SOURCE_BLOB,
+            layer_id=2,
+        )
+
+
 @pytest.mark.parametrize("layer_id", [0, 3])
 def test_official_kda_layer_plan_rejects_layers_outside_bounded_pair(
     layer_id: int,

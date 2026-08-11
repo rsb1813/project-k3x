@@ -236,6 +236,24 @@ def test_official_moe_plan_accepts_bounded_layer_two_identity() -> None:
     assert plan.always_active_bytes == 379_900_416
 
 
+def test_official_moe_plan_rejects_layer_two_cross_shard_binding() -> None:
+    shard = "model-00003-of-000096.safetensors"
+    index, header = _plan_inputs_for_layer(2, shard)
+    weight_map = dict(index.weight_map)
+    first_name = next(iter(weight_map))
+    weight_map[first_name] = _SHARD
+    mixed_index = OfficialIndex(
+        index.total_size,
+        MappingProxyType(weight_map),
+        tuple(sorted({_SHARD, shard})),
+        index.tensor_count,
+        index.sha256,
+    )
+
+    with pytest.raises(K3XError, match="INVALID_OFFICIAL_MOE_TENSOR"):
+        plan_official_moe_slice(mixed_index, header, _config(), layer_id=2)
+
+
 @pytest.mark.parametrize("layer_id", [0, 3])
 def test_official_moe_plan_rejects_layers_outside_bounded_pair(
     layer_id: int,
