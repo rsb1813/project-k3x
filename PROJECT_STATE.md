@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 31 is publicly complete through implementation PR #54 and publication PR #55. Milestone 32 design D-070 selects an exact two-stage official MoE device-routing experiment: CUDA prepares residual/normalized activation and raw router logits, canonical host code retains natural Top-16 policy, and an opaque token hands prepared activation to the resident exact FFN. M32 is proposed and not implemented or measured yet. Host routing remains the default. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
+Milestone 31 is publicly complete through implementation PR #54 and publication PR #55. Milestone 32 design D-070 and its five-task TDD plan are accepted: CUDA prepares residual/normalized activation and raw router logits, canonical host code retains natural Top-16 policy, and an opaque token hands prepared activation to the resident exact FFN. M32 is planned but not implemented or measured yet. Host routing remains the default. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
 
 State audited last on 2026-08-11 at public M31 publication head `c46d6139673d442a83858e637d268e0d92a7784a`. Fresh M31 verification passes CPU CTest 19/19 plus Python 578/125, liburing/direct CTest 20/20 plus Python 584/119, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus actual/live Python 688/15, B-0032/B-0031/B-0030 evidence regressions 46/46, strict B-0032 rehash, and device-state actual-artifact Compute Sanitizer with zero errors. PR #55 and post-merge correctness `31503260596` plus CodeQL `31503260599` succeeded. The ignored bounded fixture is unchanged; no complete shard, full checkpoint, or paid cloud resource is in use.
 
@@ -178,9 +178,9 @@ State audited last on 2026-08-11 at public M31 publication head `c46d6139673d442
 
 ## Next concrete tasks
 
-1. Write and self-review the detailed M32 TDD implementation plan with exact interfaces, failure rules, tests, and commits.
-2. Witness the CUDA RED for route-preparation parity and opaque-token lifetime, then implement the minimal exact backend boundary.
-3. Add explicit harness/evidence modes only after tiny parity passes. Keep the artifact non-executable and do not download a complete shard/checkpoint or create paid cloud resources.
+1. Implement Task 1 with a witnessed CPU RED and shared canonical raw-logit routing helper.
+2. Implement Task 2 with a witnessed CUDA RED, deterministic preparation kernels, and fail-closed opaque-token lifetime.
+3. Add wrapper, harness, and evidence modes only after tiny parity passes. Keep the artifact non-executable and do not download a complete shard/checkpoint or create paid cloud resources.
 
 ## Hardware assumptions
 
