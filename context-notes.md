@@ -780,3 +780,10 @@
 - GREEN separates dynamic validation from fourteen immutable views, classifies exact pointer/byte/shape identities through the existing registry, scans all new views, and inserts only after every BF16/F32 payload is finite.
 - Tiny coverage proves 14 scans and 384 bytes on first admission, 14 hits on reuse, 42 scans across three per-call executions, identity-conflict rejection, BF16/F32 non-finite rejection, atomic recovery after a failed first scan, and resident-only admission.
 - Focused CUDA build passes `cuda_moe_layer_ops`, `cuda_moe_layer`, `cuda_official_kda`, and `cuda_official_layer` 4/4. No artifact, benchmark, routing, default, or production capability changed.
+
+## 2026-08-11 — Milestone 30 Task 2 official-layer validation telemetry
+
+- CLI/schema RED produced three expected failures because `--validation` was unknown. GREEN adds explicit `per-call|admission`, keeps the implicit default at per-call, and rejects admission plus transient weights before artifact access.
+- New validation fields are emitted only when `--validation` is explicitly supplied. The implicit default output remains byte-schema compatible with B-0030 rather than retroactively changing its closed raw records.
+- The actual bounded artifact passes the complete harness suite 25/25. Incremental admission cold execution records 14 scans, 14 hits, and 887,800,832 scanned bytes; its measured execution records 28 hits, zero scans/bytes/time, zero warm weight H2D, and unchanged numerical tolerance.
+- B-0030 controlled evidence tests pass 9/9. Its strict verifier correctly rejects the newly rebuilt M30 executable as `runner_sha256 diverged`; final historical verification must use the preserved M29 runner identity rather than weakening or rewriting B-0030 evidence.

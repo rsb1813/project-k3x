@@ -53,6 +53,9 @@ struct Arguments {
     std::filesystem::path manifest;
     CaseMode case_mode{CaseMode::a};
     WeightMode weight_mode{WeightMode::transient};
+    k3x::CudaWeightValidationMode validation{
+        k3x::CudaWeightValidationMode::per_call};
+    bool validation_explicit{};
     std::uint64_t warmups{};
     std::uint64_t iterations{1};
 };
@@ -70,6 +73,7 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
     Arguments result;
     std::string case_name{"a"};
     std::string weight_name{"transient"};
+    std::string validation_name{"per-call"};
     for (int index = 1; index < argc; index += 2) {
         if (index + 1 >= argc) {
             std::cerr << "missing option value\n";
@@ -82,6 +86,10 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
         else if (key == "--manifest") result.manifest = value;
         else if (key == "--case") case_name = value;
         else if (key == "--weight-mode") weight_name = value;
+        else if (key == "--validation") {
+            validation_name = value;
+            result.validation_explicit = true;
+        }
         else if (key == "--warmups" && number) result.warmups = *number;
         else if (key == "--iterations" && number) result.iterations = *number;
         else {
@@ -100,6 +108,19 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
     else if (weight_name == "resident") result.weight_mode = WeightMode::resident;
     else {
         std::cerr << "unknown weight mode: " << weight_name << '\n';
+        return std::nullopt;
+    }
+    if (validation_name == "per-call") {
+        result.validation = k3x::CudaWeightValidationMode::per_call;
+    } else if (validation_name == "admission") {
+        result.validation = k3x::CudaWeightValidationMode::admission;
+    } else {
+        std::cerr << "unknown validation mode: " << validation_name << '\n';
+        return std::nullopt;
+    }
+    if (result.validation == k3x::CudaWeightValidationMode::admission &&
+        result.weight_mode != WeightMode::resident) {
+        std::cerr << "admission validation requires resident weights\n";
         return std::nullopt;
     }
     if (!result.iterations) {
@@ -1109,7 +1130,9 @@ bool validate_portable_oracle(const LoadedLayer& loaded,
     return valid;
 }
 
-k3x::BackendOptions backend_options(WeightMode mode, std::uint64_t capacity) {
+k3x::BackendOptions backend_options(
+    WeightMode mode, std::uint64_t capacity,
+    k3x::CudaWeightValidationMode validation) {
     k3x::BackendOptions result;
     result.kind = k3x::BackendKind::cuda_custom;
     result.cuda_allocation = k3x::CudaAllocationMode::reused;
@@ -1118,6 +1141,7 @@ k3x::BackendOptions backend_options(WeightMode mode, std::uint64_t capacity) {
     result.cuda_batching = k3x::CudaBatchingMode::resident_grid;
     result.cuda_boundary = k3x::CudaBoundaryMode::moe_layer;
     result.cuda_resident_bytes = capacity;
+    result.cuda_weight_validation = validation;
     return result;
 }
 
@@ -1265,7 +1289,8 @@ int main(int argc, char** argv) {
     k3x::Profiler profiler;
     auto backend = k3x::make_cuda_backend(
         backend_options(arguments->weight_mode,
-                        reader.value().superblock().file_length), &profiler);
+                        reader.value().superblock().file_length,
+                        arguments->validation), &profiler);
     if (!backend) {
         write_error(backend.error(), backend.message());
         return 4;
@@ -1428,7 +1453,16 @@ int main(int argc, char** argv) {
         << "\",\"weight_mode\":\""
         << (arguments->weight_mode == WeightMode::resident ? "resident" :
                                                              "transient")
-        << "\",\"token_semantics\":false,\"routing_semantics\":true"
+        << '"';
+    if (arguments->validation_explicit) {
+        std::cout << ",\"validation\":\""
+                  << (arguments->validation ==
+                              k3x::CudaWeightValidationMode::admission
+                          ? "admission"
+                          : "per-call")
+                  << '"';
+    }
+    std::cout << ",\"token_semantics\":false,\"routing_semantics\":true"
         << ",\"full_transformer_layer\":true,\"quality_measured\":false"
         << ",\"k3x_root_sha256\":\"" << manifest->root_sha256 << "\""
         << ",\"warmups\":" << arguments->warmups
@@ -1455,8 +1489,23 @@ int main(int argc, char** argv) {
         << cold_weight
         << ",\"cold_bf16_weight_h2d_bytes\":" << cold_bf16
         << ",\"cold_f32_weight_h2d_bytes\":" << cold_f32
-        << ",\"cold_mxfp4_weight_h2d_bytes\":" << cold_mxfp4
-        << ",\"latency_nanoseconds_p05\":" << percentile(samples, 5)
+        << ",\"cold_mxfp4_weight_h2d_bytes\":" << cold_mxfp4;
+    if (arguments->validation_explicit) {
+        std::cout
+            << ",\"cold_immutable_validation_scans\":"
+            << cold_stats_after.immutable_validation_scans -
+                   cold_stats_before.immutable_validation_scans
+            << ",\"cold_immutable_validation_hits\":"
+            << cold_stats_after.immutable_validation_hits -
+                   cold_stats_before.immutable_validation_hits
+            << ",\"cold_immutable_validation_bytes\":"
+            << cold_stats_after.immutable_validation_bytes -
+                   cold_stats_before.immutable_validation_bytes
+            << ",\"cold_immutable_validation_nanoseconds\":"
+            << cold_stats_after.immutable_validation_nanoseconds -
+                   cold_stats_before.immutable_validation_nanoseconds;
+    }
+    std::cout << ",\"latency_nanoseconds_p05\":" << percentile(samples, 5)
         << ",\"latency_nanoseconds_median\":" << median(samples)
         << ",\"latency_nanoseconds_p95\":" << percentile(samples, 95)
         << ",\"kernel_nanoseconds\":" << kernel_time
@@ -1498,8 +1547,23 @@ int main(int argc, char** argv) {
         << stats_after.device_allocation_count - stats_before.device_allocation_count
         << ",\"stream_synchronization_count\":"
         << stats_after.stream_synchronization_count -
-               stats_before.stream_synchronization_count
-        << ",\"peak_vram_bytes\":" << memory.peak_device_bytes
+               stats_before.stream_synchronization_count;
+    if (arguments->validation_explicit) {
+        std::cout
+            << ",\"immutable_validation_scans\":"
+            << stats_after.immutable_validation_scans -
+                   stats_before.immutable_validation_scans
+            << ",\"immutable_validation_hits\":"
+            << stats_after.immutable_validation_hits -
+                   stats_before.immutable_validation_hits
+            << ",\"immutable_validation_bytes\":"
+            << stats_after.immutable_validation_bytes -
+                   stats_before.immutable_validation_bytes
+            << ",\"immutable_validation_nanoseconds\":"
+            << stats_after.immutable_validation_nanoseconds -
+                   stats_before.immutable_validation_nanoseconds;
+    }
+    std::cout << ",\"peak_vram_bytes\":" << memory.peak_device_bytes
         << ",\"process_peak_rss_bytes\":" << process_peak_rss
         << ",\"reader_read_calls\":" << reader_counters.calls
         << ",\"reader_requested_bytes\":" << reader_counters.requested_bytes

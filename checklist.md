@@ -440,7 +440,7 @@
 - [x] Write and self-review the accepted M30 design.
 - [x] Write the detailed TDD implementation plan.
 - [x] Implement and test atomic admission for fourteen official KDA immutable views.
-- [ ] Expose official-layer validation CLI and cold/measured telemetry.
+- [x] Expose official-layer validation CLI and cold/measured telemetry.
 - [ ] Implement and verify the strict B-0031 evidence transaction.
 - [ ] Run actual-artifact correctness and Compute Sanitizer gates.
 - [ ] Run B-0031 exactly once and seal the evidence.

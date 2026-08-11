@@ -200,6 +200,11 @@ def _write_manifest(path: Path, value: dict) -> None:
         (("--artifact", "x"), "manifest path is required"),
         (("--case", "other"), "unknown case: other"),
         (("--weight-mode", "other"), "unknown weight mode: other"),
+        (("--validation", "other"), "unknown validation mode: other"),
+        (
+            ("--validation", "admission"),
+            "admission validation requires resident weights",
+        ),
         (("--iterations", "0"), "iterations must be positive"),
         (("--unknown", "x"), "invalid option: --unknown"),
         (("--artifact", "x", "trailing"), "missing option value"),
@@ -331,9 +336,45 @@ def test_official_layer_bench_executes_bounded_fixture_on_cuda() -> None:
     assert payload["artifact_kind"] == "official_kimi_k3_kda_layer"
     assert payload["case"] == "a"
     assert payload["weight_mode"] == "transient"
+    assert "validation" not in payload
     assert payload["full_transformer_layer"] is True
     assert payload["token_semantics"] is False
     assert payload["quality_measured"] is False
     assert payload["route_a"] == _ROUTE_A
     assert payload["maximum_absolute_error"] <= 2.0e-2
     assert payload["official_kda_calls"] == 1
+
+
+def test_official_layer_bench_executes_admission_validation_on_cuda() -> None:
+    root = Path(__file__).resolve().parents[2]
+    fixture = root / "artifacts" / "m29-official-layer"
+    artifact = fixture / "official-kda-layer-l1.k3x"
+    manifest = fixture / "route-state-manifest.json"
+    if not artifact.is_file() or not manifest.is_file():
+        pytest.skip("bounded official layer fixture is not materialized")
+
+    result = subprocess.run(
+        [
+            str(_runner()), "--artifact", str(artifact), "--manifest",
+            str(manifest), "--case", "ab-incremental", "--weight-mode",
+            "resident", "--validation", "admission", "--warmups", "0",
+            "--iterations", "1",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["validation"] == "admission"
+    assert payload["official_kda_calls"] == 2
+    assert payload["cold_immutable_validation_scans"] == 14
+    assert payload["cold_immutable_validation_hits"] == 14
+    assert payload["cold_immutable_validation_bytes"] == 887_800_832
+    assert payload["cold_immutable_validation_nanoseconds"] > 0
+    assert payload["immutable_validation_scans"] == 0
+    assert payload["immutable_validation_hits"] == 28
+    assert payload["immutable_validation_bytes"] == 0
+    assert payload["immutable_validation_nanoseconds"] == 0
+    assert payload["weight_h2d_bytes"] == 0
+    assert payload["maximum_absolute_error"] <= 2.0e-2
