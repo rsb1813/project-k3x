@@ -2756,7 +2756,10 @@ public:
             return Result<OfficialMoeFfnResult>::failure(
                 ErrorCode::backend_unavailable);
         }
-        if (cuda::launch_bf16_matvec(device_hidden, device_bf16[0],
+        if (official_moe_event_start_.ensure() != cudaSuccess ||
+            official_moe_event_end_.ensure() != cudaSuccess ||
+            cudaEventRecord(official_moe_event_start_.get(), stream_) != cudaSuccess ||
+            cuda::launch_bf16_matvec(device_hidden, device_bf16[0],
                                      device_latent, latent_width, hidden_width,
                                      stream_) != cudaSuccess ||
             cuda::launch_round_bf16_inplace(device_prefix, hidden_width,
@@ -2811,7 +2814,8 @@ public:
                                          stream_) != cudaSuccess ||
             cuda::launch_bf16_vector_add(device_prefix, device_combined,
                                          device_routed, hidden_width,
-                                         stream_) != cudaSuccess) {
+                                         stream_) != cudaSuccess ||
+            cudaEventRecord(official_moe_event_end_.get(), stream_) != cudaSuccess) {
             return Result<OfficialMoeFfnResult>::failure(
                 ErrorCode::backend_unavailable);
         }
@@ -2833,6 +2837,18 @@ public:
         runtime_stats_.resident_moe_layer_kernel_launches += 17;
         runtime_stats_.resident_moe_layer_contribution_h2d_bytes +=
             contribution_bytes;
+        float elapsed_milliseconds = 0.0F;
+        if (cudaEventElapsedTime(&elapsed_milliseconds,
+                                 official_moe_event_start_.get(),
+                                 official_moe_event_end_.get()) != cudaSuccess) {
+            return Result<OfficialMoeFfnResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        const auto device_nanoseconds = static_cast<std::uint64_t>(
+            std::llround(static_cast<double>(elapsed_milliseconds) * 1.0e6));
+        record(phase, ProfileOperation::moe_mix,
+               NumericPrecision::bf16_rounded, layer, operation_start, 0, 0,
+               device_nanoseconds, true);
         record(phase, ProfileOperation::weight_host_to_device,
                NumericPrecision::bf16_rounded, layer, operation_start, 0,
                uploaded_weight_bytes, 0, true);
@@ -3881,6 +3897,8 @@ private:
     EventOwner dense_event_end_;
     EventOwner mxfp4_event_start_;
     EventOwner mxfp4_event_end_;
+    EventOwner official_moe_event_start_;
+    EventOwner official_moe_event_end_;
     std::vector<std::unique_ptr<EventOwner>> dense_group_event_starts_;
     std::vector<std::unique_ptr<EventOwner>> dense_group_event_ends_;
     std::vector<std::unique_ptr<EventOwner>> mxfp4_group_event_starts_;
