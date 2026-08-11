@@ -82,4 +82,4 @@
 - [x] Strictly verify and independently rehash evidence, then commit it separately.
 - [x] Run CPU, liburing/direct, ASan/UBSan, CUDA, actual-artifact, evidence, sanitizer, and production-guard verification.
 - [x] Record measured results and limitations, update `PROJECT_STATE.md` last, and commit the Ledger.
-- [ ] Publish a public PR, require correctness and CodeQL, rebase-merge, and verify post-merge `main` gates.
+- [x] Publish a public PR, require correctness and CodeQL, rebase-merge, and verify post-merge `main` gates.

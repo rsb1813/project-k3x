@@ -34,7 +34,7 @@ flowchart LR
 ```
 
 > [!IMPORTANT]
-> The executable token graph still uses a tiny synthetic model, but Milestone 29 now executes one bounded official layer-1 KDA + natural Top-16 MoE sequence on RTX 5080, and Milestone 30 attributes its repeated 887,800,832-byte KDA validation scan. This is a two-position layer-boundary fixture, not token generation or full-model throughput. No complete shard, full checkpoint, or paid cloud resource was used.
+> The executable token graph still uses a tiny synthetic model, but Milestone 29 executes one bounded official layer-1 KDA + natural Top-16 MoE sequence on RTX 5080, Milestone 30 attributes its repeated 887,800,832-byte KDA validation scan, and Milestone 31 measures an exact device-resident KDA state handoff. This is a two-position layer-boundary fixture, not token generation or full-model throughput. No complete shard, full checkpoint, or paid cloud resource was used.
 
 | Milestone | GitHub status | Evidence |
 |---|---|---|
@@ -58,8 +58,9 @@ flowchart LR
 | Milestone 28 | [PR #48 merged](https://github.com/rsb1813/project-k3x/pull/48) at `eb2c208` | B-0029 executes a bounded official MoE FFN with two natural Top-16 routes and exact residency |
 | Milestone 29 | [PR #50 merged](https://github.com/rsb1813/project-k3x/pull/50) at `2a4bfaf` | B-0030 executes the bounded official layer-1 KDA transformer boundary and isolates a host-orchestration gap |
 | Milestone 30 | [PR #52 merged](https://github.com/rsb1813/project-k3x/pull/52) at `51182575` | B-0031 measures exact immutable KDA admission validation without changing the default |
+| Milestone 31 | [PR #54 merged](https://github.com/rsb1813/project-k3x/pull/54) at `e1233891` | B-0032 measures exact single-slot KDA device-state handoff without changing the host default |
 
-The latest audited public implementation baseline is Milestone 30 integration head `51182575`. PR #52 branch correctness `31493248372`, pull-request correctness `31493267425`, and pull-request CodeQL `31493267404` passed before merge; post-merge `main` correctness `31493550970` and CodeQL `31493549669` also succeeded.
+The latest audited public implementation baseline is Milestone 31 integration head `e1233891`. PR #54 branch correctness `31501537039`, pull-request correctness `31501569778`, and pull-request CodeQL `31501569789` passed before merge; post-merge `main` correctness `31501949124` and CodeQL `31501949081` also succeeded.
 
 ## Why a dedicated engine
 

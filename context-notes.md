@@ -860,3 +860,10 @@
 - Fresh final gates pass CPU CTest 19/19 plus Python 578/125, capability-aware liburing/direct CTest 20/20 plus Python 584/119, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus actual/live Python 688/15, and evidence regressions 46/46. An initial liburing pytest omitted `K3X_TEST_IO_URING=1`, correctly failed the opposite capability test, and was replaced by the explicit `K3X_TEST_IO_URING=1 K3X_TEST_DIRECT=1` run.
 - B-0032 has no token semantics, throughput, TTFT, quality, physical traffic, utilization, bandwidth, native-Linux, multi-layer, or default-policy claim. Host round trip and per-call validation remain defaults; device state and admission remain explicit experiments.
 - Final self-review compared the complete M31 diff against opaque-token lifetime, mutation-time invalidation, downstream failure cleanup, host-default compatibility, explicit schema ownership, fixed evidence formulas, and production non-executability. No remaining Critical or Important finding was identified; single-backend concurrency, multi-session state, and exception-level allocation recovery remain explicitly outside M31 rather than silently claimed.
+
+## 2026-08-11 — Milestone 31 public integration
+
+- PR #54 branch correctness `31501537039`, pull-request correctness `31501569778`, and pull-request CodeQL `31501569789` all succeeded before merge.
+- PR #54 rebase-merged at public implementation head `e1233891537f14785373f47e9f736fed43598c46`. Post-merge `main` correctness `31501949124` and CodeQL `31501949081` also succeeded.
+- Workflow annotations were limited to the Node 20 and CodeQL Action v3 deprecation notices plus the existing C++ overlay-base fallback warning. Every recorded job conclusion was `success`.
+- M31 is publicly complete. M32 will compare a wider device-resident residual/routing boundary with bounded multi-layer closure before code changes; host state and per-call validation remain defaults.
