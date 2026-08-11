@@ -475,3 +475,19 @@
 - [x] Run B-0033 exactly once and seal the evidence.
 - [x] Run the complete verification matrix and synchronize README/TITAN Ledger.
 - [x] Publish M32 and verify pull-request and post-merge CI.
+
+## Milestone 33 — Official two-layer device closure
+
+- [x] Re-read the public M32 implementation and measured B-0033 bottleneck.
+- [x] Compare real layers 1 and 2, layer-1 replay, and a monolithic device-Top-K call.
+- [x] Accept D-071 and write the M33 design.
+- [ ] Write and self-review the detailed TDD implementation plan.
+- [ ] Generalize the bounded planner and oracle to an exact layer-1-to-layer-2 trace.
+- [ ] Build and round-trip one execution-ordered two-layer K3X v1 fixture.
+- [ ] Add the capacity-two layer-keyed KDA state registry with ownership tests.
+- [ ] Add the opaque inter-layer hidden token and full CUDA front/tail bridge.
+- [ ] Add explicit two-layer harness mode and closed telemetry.
+- [ ] Add strict B-0034 evidence tooling.
+- [ ] Run actual-artifact correctness, sanitizer, production-guard, and full regression gates.
+- [ ] Run B-0034 exactly once and seal the evidence.
+- [ ] Synchronize README and TITAN Ledger, publish M33, and verify CI.

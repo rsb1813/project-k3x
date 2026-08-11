@@ -821,3 +821,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: this is the smallest reversible boundary that directly removes the current CPU router loop without new official payload, preserves the dynamic expert scheduling point needed by cache/rescue work, and keeps the natural routing policy in one canonical host implementation.
 - Rejected claims: no predicted speedup, token rate, quality result, physical PCIe traffic, native-Linux authority, multi-layer behavior, or default-policy change is accepted before measurement.
 - Revisit: at bounded multi-layer closure, where retained activations may amortize the four added kernels and two logit synchronization points per sequence. Do not make device route preparation the default from the mixed one-layer WSL2 result.
+
+## D-071 — Close real layers 1 and 2 while preserving host natural routing
+
+- Date: 2026-08-12.
+- Status: accepted design; implementation and measurement pending.
+- Decision: make official decoder layers 1 and 2 the M33 bounded target, manufacture one checksum-bound K3X v1 fixture for their dependent A/B trace, retain the inter-layer hidden vector and Attention Residual block source behind an opaque device token, and replace the explicit path's single KDA state slot with a capacity-two layer-keyed registry. Return raw logits at each layer and keep canonical natural Top-16 selection plus dynamic expert resolution on the host.
+- Alternatives considered: replay layer 1 twice; issue one monolithic two-layer CUDA call with device Top-K; keep composing the existing one-layer wrapper with an inter-layer host round trip.
+- Evidence: the released graph identifies layers 1 and 2 as KDA plus MoE, while current converter guards and artifact metadata accept only layer 1. The current backend owns one KDA state slot and returns both KDA and final MoE activations to the host. B-0033 shows four added kernels and two logit synchronizations offset most of the removed host route work, so another isolated one-layer micro-optimization cannot test activation-residency amortization.
+- Benchmark result: none. B-0034 does not exist and no speedup is predicted.
+- Reason accepted: this is the smallest real cross-layer graph that requires independent recurrent state and can remove the inter-layer activation round trip while preserving the exact routing-to-residency scheduling point required by cache and cold-rescue work. K3X v1 already supports the necessary tensor and layer identities.
+- Rejected claims: this design does not implement or measure M33, prove arbitrary-layer or concurrent-session state management, remove all router-logit synchronizations, authorize a default change, establish token throughput or quality, download a complete checkpoint, or provision paid cloud resources.
+- Revisit: after sealed B-0034 evidence, decide whether kernel fusion, wider layer closure, or asynchronous expert scheduling is the next measured bottleneck. Generalize beyond the capacity-two registry only with a separately tested ownership and memory policy.

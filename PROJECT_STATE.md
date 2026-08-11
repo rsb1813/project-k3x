@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 32 is publicly complete through PR #56 at `ab0ecb19ade01e7989bcba9f6dbcd1c853c43432`. Exact device route preparation is experimental and host routing remains the default after a mixed one-layer result. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists. M33 bounded multi-layer closure is next.
+Milestone 32 is publicly complete through implementation PR #56 and publication PR #57 at public head `f0a5d2ab46acb35f322a9bbcf8bf576695d32d95`. Exact device route preparation is experimental and host routing remains the default after a mixed one-layer result. Milestone 33 bounded official two-layer device closure is accepted in design under D-071; implementation and B-0034 are pending. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
 
-State audited last on 2026-08-12 at public M32 implementation head `ab0ecb19ade01e7989bcba9f6dbcd1c853c43432`. PR #56 branch/PR correctness and CodeQL passed; post-merge correctness `31510749958` and CodeQL `31510749973` also succeeded. Local verification passes CPU CTest 19/19 plus Python 597/128, liburing/direct CTest 20/20 plus Python 603/122, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus Python 710/15, evidence regressions 65/65, actual device-route Compute Sanitizer with zero errors, and the production non-executable guard. No complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-12 at public M32 publication head `f0a5d2ab46acb35f322a9bbcf8bf576695d32d95`. PR #56 branch/PR correctness and CodeQL passed; post-merge correctness `31510749958` and CodeQL `31510749973` also succeeded. PR #57 and its post-merge correctness `31511564878` and CodeQL `31511564986` succeeded. Local verification passes CPU CTest 19/19 plus Python 597/128, liburing/direct CTest 20/20 plus Python 603/122, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus Python 710/15, evidence regressions 65/65, actual device-route Compute Sanitizer with zero errors, and the production non-executable guard. No complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -13,6 +13,7 @@ State audited last on 2026-08-12 at public M32 implementation head `ab0ecb19ade0
 - Milestone 29 bounded official layer-1 Attention-Residual/KDA/MoE execution, exact full/incremental state parity, B-0030 evidence, public PR #50, and post-merge CI without a complete shard or checkpoint.
 - Milestone 30 exact official KDA immutable-weight admission, atomic identity failure recovery, explicit harness telemetry, fixed B-0031 evidence, actual-artifact sanitizer, and complete local verification.
 - Milestone 31 exact single-slot official KDA device-state handoff, opaque lifetime validation, explicit final publication, fixed B-0032 evidence, actual-artifact sanitizer, and complete local verification.
+- Milestone 32 exact official MoE device route preparation, canonical host natural Top-16, opaque prepared-activation lifetime, fixed B-0033 evidence, public PR #56/#57 integration, and post-merge CI.
 - Milestone 25 strict generic source containment and ownership, bounded canonical safetensors metadata, exact resume-ledger schema, committed-prefix validation, and fail-atomic orphan-suffix recovery without changing K3X v1.
 - Milestone 26 fixed-authority HTTPS discovery, content-addressed snapshot/index/config/header identity, exact official expert planning, atomic real-byte materialization, K3X round-trip, and strict B-0027 JSON/CSV verification.
 - B-0027 official layer-1 expert-0 conversion with 59,799,719 metadata bytes, 818,704 header bytes, 17,547,264 tensor-payload bytes, Reader validity, and explicit `transport-pinned-range` provenance.
@@ -114,11 +115,12 @@ State audited last on 2026-08-12 at public M32 implementation head `ab0ecb19ade0
 
 ## Work in progress
 
+- D-071 defines the M33 real layer-1-to-layer-2 boundary, capacity-two layer-keyed KDA state registry, opaque inter-layer hidden/block token, host canonical routing point, bounded two-layer K3X v1 fixture, and B-0034 evidence contract. No M33 code or measurement exists yet.
 - M31 code, formal B-0032, evidence commit `992e0de`, actual-artifact sanitizer, production guard, full verification, README, TITAN Ledger synchronization, PR #54, and post-merge CI are publicly complete.
 - Formal B-0032 host/device incremental medians are 73,192,169/69,835,612 ns; full host is 68,224,527 ns. Device handoff removes exactly 6,512,640 state bytes in each direction per sequence and lowers the incremental median 4.585951% while aggregate kernel time changes +0.339801%.
 - All B-0032 rows preserve exact route/output/state identity, zero warm weight H2D, 1,816,322,048 resident bytes, and `0.00048828125` maximum error. The device row records 20 seeds, continuations, and publications with zero invalidations.
 - Publicly integrated D-068 retains per-call as the default and admission as opt-in. D-069 retains host round trip as the default and device state as an exact single-slot experiment; multi-session policy, VAULT persistence, and a production state registry remain unimplemented.
-- D-070 and M32 are locally complete. The backend route-preparation interface, deterministic CUDA kernels, opaque lifetime, exact prepared FFN consumption, wrapper, explicit harness schema, cleanup telemetry, strict B-0033 evidence, and full gates pass.
+- D-070 and M32 are publicly complete. The backend route-preparation interface, deterministic CUDA kernels, opaque lifetime, exact prepared FFN consumption, wrapper, explicit harness schema, cleanup telemetry, strict B-0033 evidence, and full gates pass.
 - Formal B-0033 host/device medians are 64,210,407/63,767,134 ns. Device route is 0.690344% lower in wall median but 27.294141% higher in aggregate kernel time; orchestration falls 9.279958 ms per sequence. Host routing remains default pending bounded multi-layer evidence.
 
 - M28 Task 2 is complete at `0b0c944`: the route manifest is durable before expert fetching, only the natural A/B first-use union is planned, object reuse is rehashed, response bytes are measured separately from logical source bytes, and production generation remains fail-closed.
@@ -154,7 +156,7 @@ State audited last on 2026-08-12 at public M32 implementation head `ab0ecb19ade0
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Current implementation branch: `codex/milestone-thirty-two-device-routing` from public M31 publication head `c46d6139`.
+- Current implementation branch: `codex/milestone-thirty-three-multilayer` from public M32 publication head `f0a5d2a`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build`, `build-liburing`, `build-asan`, and `build-cuda`.
 
 ## Known failures and blockers
@@ -179,8 +181,8 @@ State audited last on 2026-08-12 at public M32 implementation head `ab0ecb19ade0
 
 ## Next concrete tasks
 
-1. Design M33 bounded multi-layer closure from the measured four-kernel/two-sync route boundary.
-2. Define the smallest exact two-layer fixture and opaque activation/state lifetime before code changes.
+1. Write and self-review the detailed M33 TDD implementation plan from D-071.
+2. Begin with RED tests that generalize bounded planning and the exact interleaved layer-1-to-layer-2 oracle without downloading tensor payload.
 3. Keep full checkpoint download and paid Cloud Run work deferred until the explicitly authorized later milestone.
 
 ## Hardware assumptions
@@ -314,4 +316,4 @@ D-070 retains device route preparation as an explicit experiment but does not se
 
 ## Proposed component status
 
-AURORA's replay reference, persistent reduced-Top-K CPU state, adaptive scheduler, exact transient/resident CUDA draft, resident expert grid and MoE-layer execution, admission validation, independent target/draft CUDA Graph ownership, target feedback, CLI, and B-0017 through B-0025 are implemented and measured as experimental non-default paths. The strict converter trust boundary, bounded official discovery/materialization, exact official expert/MoE/KDA CUDA boundaries, immutable admission, single-slot KDA device-state handoff, and B-0026 through B-0032 are implemented, measured, and publicly integrated through M31. D-070 canonical routing and the CUDA backend preparation/token primitive are implemented and tested, but official-layer integration and B-0033 remain incomplete and unmeasured. Transient CUDA is rejected as a default, and residency, admission, graph, device-state, and device-routing primitives remain opt-in. Reduced precision, eviction-capable device residency, a complete device-resident token graph, learned drafting, full-checkpoint execution, and multi-session KDA state remain proposed. APOLLO, TITAN COUNCIL, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None of the proposed-only components is claimed as implemented or benchmarked.
+AURORA's replay reference, persistent reduced-Top-K CPU state, adaptive scheduler, exact transient/resident CUDA draft, resident expert grid and MoE-layer execution, admission validation, independent target/draft CUDA Graph ownership, target feedback, CLI, and B-0017 through B-0025 are implemented and measured as experimental non-default paths. The strict converter trust boundary, bounded official discovery/materialization, exact official expert/MoE/KDA CUDA boundaries, immutable admission, single-slot KDA device-state handoff, device route preparation, and B-0026 through B-0033 are implemented, measured, and publicly integrated through M32. M33's real two-layer fixture, capacity-two state registry, inter-layer hidden token, complete device front/tail bridge, and B-0034 remain proposed under D-071. Transient CUDA is rejected as a default, and residency, admission, graph, device-state, and device-routing primitives remain opt-in. Reduced precision, eviction-capable device residency, a complete 93-layer device-resident token graph, learned drafting, full-checkpoint execution, and multi-session KDA state remain proposed. APOLLO, TITAN COUNCIL, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None of the proposed-only components is claimed as implemented or benchmarked.
