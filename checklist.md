@@ -465,7 +465,7 @@
 - [x] Re-read the public M31 implementation and measured B-0032 bottleneck.
 - [x] Compare device route preparation, a second official layer, and a monolithic whole-layer call.
 - [x] Accept D-070 and write the M32 design.
-- [ ] Write and self-review the detailed TDD implementation plan.
+- [x] Write and self-review the detailed TDD implementation plan.
 - [ ] Write and witness CUDA RED tests for preparation parity and token lifetime.
 - [ ] Implement exact device residual preparation and raw router logits.
 - [ ] Implement opaque prepared-activation consumption and wrapper cleanup.
