@@ -34,6 +34,7 @@ add_library(k3x_runtime
     runtime/src/official_expert.cpp
     runtime/src/official_moe.cpp
     runtime/src/official_kda.cpp
+    runtime/src/official_layer.cpp
 )
 if(K3X_ENABLE_CUDA)
     enable_language(CUDA)
@@ -105,6 +106,10 @@ add_test(NAME official_moe COMMAND test_official_moe)
 add_executable(test_official_kda tests/cpp/test_official_kda.cpp)
 target_link_libraries(test_official_kda PRIVATE k3x_runtime)
 add_test(NAME official_kda COMMAND test_official_kda)
+
+add_executable(test_official_layer tests/cpp/test_official_layer.cpp)
+target_link_libraries(test_official_layer PRIVATE k3x_runtime)
+add_test(NAME official_layer COMMAND test_official_layer)
 
 add_executable(test_host_expert_store tests/cpp/test_host_expert_store.cpp)
 target_link_libraries(test_host_expert_store PRIVATE k3x_runtime)

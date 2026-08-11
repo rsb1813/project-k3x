@@ -1172,3 +1172,13 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Negative coverage: malformed A-log length, non-finite F32 weight, recurrent-state length drift, checked dimension products, native BF16 finiteness, and derived non-finite values fail before result publication. Input state remains unchanged.
 - Decode tok/s, prefill tok/s, TTFT, VRAM, system RAM, NVMe GB/token, H2D GB/token, cache hit rate, average Top-K, speculative acceptance, quality, official layer latency, utilization, and bandwidth: not measured.
 - Interpretation: this is a tiny portable correctness oracle. It is not Reader integration, official payload execution, complete-layer parity, CUDA evidence, B-0030, or a performance benchmark.
+
+## Milestone 29 Task 5A verification — portable complete-layer composition
+
+- Date: 2026-08-11.
+- Hardware/model: CPU tiny literal `hidden=4`, `heads=2`, `head_dim=2`, convolution width 3, three router experts, and two materialized native-MXFP4 experts; no official tensor payload.
+- Mode: explicit self Attention Residual, input RMSNorm, portable KDA, BF16 prefix accumulation, MLP Attention Residual, post RMSNorm, natural Top-2 routing, portable MoE, and final prefix accumulation. The reduced Top-K belongs only to the tiny fixture.
+- Verification: full CPU build succeeds; CPU CTest passes 19/19; focused official expert/MoE/KDA/layer CTest passes 4/4; Python C++ parity passes 115 tests with 32 capability skips in 21.90 seconds; source and test compile with `-Wall -Wextra -Wpedantic -Werror`; `git diff --check` passes.
+- Parity: full two-token and incremental A-then-B execution match at both Attention Residual outputs, both normalized inputs, all KDA boundaries and final V-first state, natural routes `[0,1]` then `[1,0]`, route contributions, every MoE intermediate, and final outputs. An independent PyTorch graph matches all exposed values within `1e-6`; BF16 boundaries are exact.
+- Decode tok/s, prefill tok/s, TTFT, VRAM, system RAM, NVMe GB/token, H2D GB/token, cache hit rate, average official Top-K, speculative acceptance, quality, official layer latency, utilization, and bandwidth: not measured.
+- Interpretation: this is a tiny pure-composition correctness gate. It does not read a K3X artifact, validate a pinned manifest, construct a CUDA backend, execute official payload bytes, or constitute B-0030.

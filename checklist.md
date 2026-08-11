@@ -423,7 +423,8 @@
 - [x] Implement an independent portable KDA recurrence and full/incremental state oracle.
 - [x] Implement bounded official KDA tensor materialization.
 - [x] Implement portable C++ KDA recurrence and full/incremental boundary parity.
-- [ ] Compose the complete portable layer with the official M28 MoE boundary.
+- [x] Compose the tiny complete portable layer with the official M28 MoE boundary.
+- [ ] Implement pinned artifact/manifest preflight before backend construction.
 - [ ] Implement the native CUDA complete-layer boundary and telemetry.
 - [ ] Materialize the bounded fixture without a complete shard/checkpoint.
 - [ ] Run correctness, sanitizer, B-0030, full verification, and evidence cross-checks.

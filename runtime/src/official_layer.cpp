@@ -1,0 +1,245 @@
+// 공식 self Attention Residual, KDA, MoE를 하나의 portable layer로 합성합니다.
+#include "k3x/official_layer.hpp"
+
+#include <algorithm>
+#include <bit>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <utility>
+#include <vector>
+
+namespace k3x {
+namespace {
+
+std::uint16_t encode_bf16(float value) noexcept {
+    auto bits = std::bit_cast<std::uint32_t>(value);
+    if ((bits & 0x7f800000U) == 0x7f800000U) {
+        if (bits & 0x007fffffU) bits |= 0x00400000U;
+        return static_cast<std::uint16_t>(bits >> 16U);
+    }
+    bits += 0x7fffU + ((bits >> 16U) & 1U);
+    return static_cast<std::uint16_t>(bits >> 16U);
+}
+
+float rounded_bf16(float value) noexcept {
+    return decode_bf16_word(encode_bf16(value));
+}
+
+bool finite(std::span<const float> values) {
+    return std::all_of(values.begin(), values.end(),
+                       [](float value) { return std::isfinite(value); });
+}
+
+bool valid_words(std::span<const std::uint16_t> values) {
+    return std::all_of(values.begin(), values.end(), [](std::uint16_t value) {
+        return std::isfinite(decode_bf16_word(value));
+    });
+}
+
+Result<std::vector<float>> attention_residual(
+    std::span<const float> prefix,
+    std::span<const float> block,
+    Bf16VectorView norm,
+    Bf16WeightView projection,
+    float epsilon) {
+    const auto width = prefix.size();
+    if (!width || block.size() != width || norm.values.size() != width ||
+        projection.rows != 1 || projection.cols != width ||
+        projection.values.size() != width || !finite(prefix) || !finite(block) ||
+        !valid_words(norm.values) || !valid_words(projection.values) ||
+        !std::isfinite(epsilon) || epsilon <= 0.0F) {
+        return Result<std::vector<float>>::failure(ErrorCode::invalid_extent);
+    }
+    std::vector<float> rounded_prefix(width);
+    std::vector<float> rounded_block(width);
+    for (std::size_t index = 0; index < width; ++index) {
+        rounded_prefix[index] = rounded_bf16(prefix[index]);
+        rounded_block[index] = rounded_bf16(block[index]);
+        if (!std::isfinite(rounded_prefix[index]) ||
+            !std::isfinite(rounded_block[index])) {
+            return Result<std::vector<float>>::failure(ErrorCode::invalid_extent);
+        }
+    }
+    const auto score = [&](std::span<const float> values) {
+        double squares = 0.0;
+        for (const auto value : values) {
+            squares += static_cast<double>(value) * value;
+        }
+        const auto inverse = 1.0F / std::sqrt(
+            static_cast<float>(squares / width) + epsilon);
+        double result = 0.0;
+        for (std::size_t index = 0; index < width; ++index) {
+            result += static_cast<double>(values[index] * inverse) *
+                      decode_bf16_word(norm.values[index]) *
+                      decode_bf16_word(projection.values[index]);
+        }
+        return static_cast<float>(result);
+    };
+    const auto block_score = score(rounded_block);
+    const auto prefix_score = score(rounded_prefix);
+    const auto maximum = std::max(block_score, prefix_score);
+    const auto block_exp = std::exp(block_score - maximum);
+    const auto prefix_exp = std::exp(prefix_score - maximum);
+    const auto denominator = block_exp + prefix_exp;
+    if (!std::isfinite(denominator) || denominator <= 0.0F) {
+        return Result<std::vector<float>>::failure(ErrorCode::invalid_extent);
+    }
+    const auto block_probability = block_exp / denominator;
+    const auto prefix_probability = prefix_exp / denominator;
+    std::vector<float> output(width);
+    for (std::size_t index = 0; index < width; ++index) {
+        output[index] = rounded_bf16(
+            block_probability * rounded_block[index] +
+            prefix_probability * rounded_prefix[index]);
+        if (!std::isfinite(output[index])) {
+            return Result<std::vector<float>>::failure(ErrorCode::invalid_extent);
+        }
+    }
+    return Result<std::vector<float>>::success(std::move(output));
+}
+
+Result<std::vector<float>> rms_norm(
+    std::span<const float> input,
+    Bf16VectorView weight,
+    float epsilon) {
+    if (input.empty() || weight.values.size() != input.size() || !finite(input) ||
+        !valid_words(weight.values) || !std::isfinite(epsilon) || epsilon <= 0.0F) {
+        return Result<std::vector<float>>::failure(ErrorCode::invalid_extent);
+    }
+    double squares = 0.0;
+    for (const auto value : input) squares += static_cast<double>(value) * value;
+    const auto inverse = 1.0F / std::sqrt(
+        static_cast<float>(squares / input.size()) + epsilon);
+    std::vector<float> output(input.size());
+    for (std::size_t index = 0; index < input.size(); ++index) {
+        output[index] = rounded_bf16(
+            input[index] * inverse * decode_bf16_word(weight.values[index]));
+        if (!std::isfinite(output[index])) {
+            return Result<std::vector<float>>::failure(ErrorCode::invalid_extent);
+        }
+    }
+    return Result<std::vector<float>>::success(std::move(output));
+}
+
+bool equal(std::span<const float> left, std::span<const float> right) {
+    return left.size() == right.size() &&
+           std::equal(left.begin(), left.end(), right.begin());
+}
+
+}  // namespace
+
+Result<OfficialLayerResult> official_layer_cpu(
+    std::span<const OfficialLayerInput> inputs,
+    const OfficialLayerWeights& weights,
+    const OfficialKdaState& initial_state,
+    const OfficialKdaConfig& config,
+    std::size_t top_k,
+    float situ_beta,
+    std::optional<float> situ_linear_beta) {
+    if (inputs.empty() || !config.hidden_size || !top_k ||
+        !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
+        (situ_linear_beta &&
+         (!std::isfinite(*situ_linear_beta) || *situ_linear_beta <= 0.0F))) {
+        return Result<OfficialLayerResult>::failure(ErrorCode::invalid_extent);
+    }
+    if (inputs.size() >
+        std::numeric_limits<std::size_t>::max() / config.hidden_size) {
+        return Result<OfficialLayerResult>::failure(ErrorCode::invalid_extent);
+    }
+    std::vector<std::vector<float>> self_residuals;
+    std::vector<std::vector<float>> normalized_inputs;
+    std::vector<float> flattened;
+    self_residuals.reserve(inputs.size());
+    normalized_inputs.reserve(inputs.size());
+    flattened.reserve(inputs.size() * config.hidden_size);
+    for (const auto& input : inputs) {
+        if (input.hidden_input.size() != config.hidden_size ||
+            input.block_source.size() != config.hidden_size) {
+            return Result<OfficialLayerResult>::failure(ErrorCode::invalid_extent);
+        }
+        auto residual = attention_residual(
+            input.hidden_input,
+            input.block_source,
+            weights.self_residual_norm,
+            weights.self_residual_proj,
+            config.rms_norm_epsilon);
+        if (!residual) {
+            return Result<OfficialLayerResult>::failure(
+                residual.error(), residual.message());
+        }
+        auto normalized = rms_norm(
+            residual.value(), weights.input_norm, config.rms_norm_epsilon);
+        if (!normalized) {
+            return Result<OfficialLayerResult>::failure(
+                normalized.error(), normalized.message());
+        }
+        flattened.insert(flattened.end(), normalized.value().begin(),
+                         normalized.value().end());
+        self_residuals.push_back(std::move(residual.value()));
+        normalized_inputs.push_back(std::move(normalized.value()));
+    }
+    auto kda = official_kda_cpu(flattened, weights.kda, initial_state, config);
+    if (!kda || kda.value().output.size() != flattened.size()) {
+        return Result<OfficialLayerResult>::failure(
+            kda ? ErrorCode::invalid_state : kda.error(),
+            kda ? std::string{} : kda.message());
+    }
+
+    std::vector<OfficialLayerStepResult> steps;
+    steps.reserve(inputs.size());
+    for (std::size_t index = 0; index < inputs.size(); ++index) {
+        std::vector<float> prefix(config.hidden_size);
+        for (std::size_t channel = 0; channel < config.hidden_size; ++channel) {
+            prefix[channel] = rounded_bf16(
+                rounded_bf16(inputs[index].hidden_input[channel]) +
+                kda.value().output[index * config.hidden_size + channel]);
+        }
+        auto mlp_residual = attention_residual(
+            prefix,
+            inputs[index].block_source,
+            weights.moe.residual_norm,
+            weights.moe.residual_proj,
+            config.rms_norm_epsilon);
+        auto normalized = rms_norm(
+            mlp_residual ? std::span<const float>(mlp_residual.value())
+                         : std::span<const float>{},
+            weights.moe.post_norm,
+            config.rms_norm_epsilon);
+        const OfficialMoeInput moe_input{prefix, inputs[index].block_source};
+        auto prepared = prepare_official_moe_input(
+            moe_input, weights.moe, config.rms_norm_epsilon);
+        if (!mlp_residual || !normalized || !prepared ||
+            !equal(normalized.value(), prepared.value())) {
+            return Result<OfficialLayerResult>::failure(ErrorCode::invalid_state);
+        }
+        auto route = route_official_moe(
+            prepared.value(), weights.moe.router, weights.moe.correction, top_k);
+        if (!route) {
+            return Result<OfficialLayerResult>::failure(
+                route.error(), route.message());
+        }
+        auto moe = official_moe_cpu(
+            moe_input, weights.moe, route.value(), config.rms_norm_epsilon,
+            situ_beta, situ_linear_beta);
+        if (!moe || !equal(moe.value().hidden, prepared.value())) {
+            return Result<OfficialLayerResult>::failure(
+                moe ? ErrorCode::invalid_state : moe.error(),
+                moe ? std::string{} : moe.message());
+        }
+        steps.push_back({
+            std::move(self_residuals[index]),
+            std::move(normalized_inputs[index]),
+            std::move(prefix),
+            std::move(mlp_residual.value()),
+            std::move(prepared.value()),
+            std::move(route.value()),
+            std::move(moe.value()),
+        });
+    }
+    return Result<OfficialLayerResult>::success(
+        {std::move(kda.value()), std::move(steps)});
+}
+
+}  // namespace k3x
