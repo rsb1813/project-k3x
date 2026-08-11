@@ -79,7 +79,7 @@ Commit message: `feat: plan bounded official layer two`.
 - Use exact source-byte BF16 boundaries and native MXFP4 decode to compute layer-1 final hidden before deriving layer-2 routes.
 - Assemble one execution-ordered `k3-official-moe-slice-v1` source and K3X v1 artifact with both layer directories and one two-layer metadata envelope.
 
-- [ ] **Step 1: Write pure trace and transaction RED tests.**
+- [x] **Step 1: Write pure trace and transaction RED tests.**
 
 Use tiny monkeypatched KDA/MoE tensors to require exact interleaving, unchanged block-source propagation, independent state hashes, layer-1-output-to-layer-2-input digests, per-layer routes/expert unions, and a two-layer oracle payload. Require plan/header drift, duplicate canonical names, missing expert bytes, route mismatch, non-atomic publication, and resume-object corruption to fail before finalization.
 
@@ -91,19 +91,19 @@ Run `pytest -q tests/python/test_official_two_layer.py`. Expected result: import
 
 Reuse the official KDA reference, Attention Residual/RMSNorm rules, canonical routing helper, and `k3x_ref.mxfp4` primitives. Decode and execute one selected expert at a time so peak temporary memory stays bounded. Persist per-step input, output, route, state-consumption, state-publication, and contribution digests.
 
-- [ ] **Step 4: Implement dependency-ordered materialization and CLI.**
+- [x] **Step 4: Implement dependency-ordered materialization and CLI.**
 
 Add explicit `official-two-layer --dry-run|--materialize` handling. Fetch and verify both layers' trunks first, publish a partial trace manifest, fetch layer-1 selected experts, derive layer-2 inputs/routes, fetch only layer-2 selected experts, then assemble and convert. Accept distinct source shards per layer. Reuse content-addressed objects only after digest verification. Emit the exact requested/downloaded/reused byte accounting and maximum response size.
 
-- [ ] **Step 5: Round-trip the tiny composite artifact.**
+- [x] **Step 5: Round-trip the tiny composite artifact.**
 
 Require tensor physical order to match the manifest, layer directory IDs to equal `(1, 2)`, all tensor/expert records to resolve, source/tensor/root hashes to verify, interrupted conversion to resume, and production `k3x_run` to retain the non-executable guard.
 
-- [ ] **Step 6: Run GREEN and historical converter regressions.**
+- [x] **Step 6: Run GREEN and historical converter regressions.**
 
 Run the new suite, official layer/MoE/source suites, K3X format, source integrity, resume, CLI, Python compile validation, and `git diff --check`.
 
-- [ ] **Step 7: Self-review and commit.**
+- [x] **Step 7: Self-review and commit.**
 
 Commit message: `feat: manufacture bounded official two-layer traces`.
 

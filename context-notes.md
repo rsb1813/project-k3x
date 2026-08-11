@@ -954,3 +954,10 @@
 - A controlled import RED failed on the missing source-byte tensor, MXFP4 expert, state, and executor APIs. The minimum implementation accepts BF16/F32 payload bytes plus native MXFP4 packed/scale bytes and reuses the official KDA, Attention Residual, and natural-routing references.
 - The tiny exact A1→A2→B1→B2 trace keeps independent recurrent states, propagates layer-1 output into layer 2, preserves each position's block source, executes selected experts serially, and records contribution digests. A truncated dense payload fails closed before execution.
 - Commit `0b7dc19` passes 10 focused tests and 45 focused plus historical official KDA/MoE/layer tests. Python compilation and Windows `git diff --check` pass. No official payload, artifact, benchmark, full checkpoint, or paid resource was used.
+
+## 2026-08-12 — Milestone 33 Task 2 dependency-ordered manufacturer
+
+- Commit `1be65f6` adds a tiny execution-ordered K3X v1 fixture with layer directories 1/2, complete expert records, strict source/tensor/root verification, optional non-executable feature bits, and interrupted extent resume.
+- Commit `324822f` adds the real two-shard orchestration boundary and `--scope two-layer`. Dry-run reads only metadata and both headers. Materialization fetches both trunk sets before any expert, then prepares each A1→A2→B1→B2 route and fetches only that layer's first-use experts before exact completion.
+- The external oracle stores both final outputs and both final official KDA states in a deterministic checked binary payload. The K3X source manifest binds its digest, while the final route-state manifest binds traffic, object ranges/hashes, trace digests, and artifact hashes.
+- Focused plus historical official converter, format, source-integrity, resume, and discovery CLI verification passes 139 tests. Python compilation and `git diff --check` pass. The transport/materializer test is mocked and no official payload, complete shard, full checkpoint, benchmark, or paid resource was used.

@@ -774,9 +774,9 @@ Device route preparation lowers the median by 0.690344%, or 0.443273 ms, while a
 
 ## Milestone 33 — official two-layer closure in progress
 
-M33 targets real official decoder layers 1 and 2 as the smallest bounded multi-layer boundary. Implemented work now validates their pinned metadata, schedules A1→A2→B1→B2 with independent KDA states, and executes a tiny exact source-byte oracle. The oracle decodes BF16/F32 payload bytes and native MXFP4 packed/scale bytes, retains natural routing, runs selected experts serially, and binds inter-layer outputs and route contributions by digest.
+M33 targets real official decoder layers 1 and 2 as the smallest bounded multi-layer boundary. Implemented manufacturing now validates both pinned shard headers, fetches both layers' trunks before routing, schedules A1→A2→B1→B2 with independent KDA states, and fetches only first-use routed experts after each exact route is known. The oracle decodes BF16/F32 payload bytes and native MXFP4 packed/scale bytes, retains natural routing, runs selected experts serially, and binds inter-layer outputs, states, and route contributions by digest.
 
-Local commit `0b7dc19` passes 10 focused tests and 45 focused plus historical official KDA/MoE/layer tests. This is correctness evidence only. The dependency-ordered two-layer materializer, K3X v1 round-trip artifact, portable/CUDA runtime, B-0034 measurement, full checkpoint, token throughput, and paid Cloud Run work do not exist yet.
+Local commit `324822f` adds `--scope two-layer` dry-run/materialization, a deterministic two-layer oracle, execution-ordered K3X v1 assembly, strict two-layer metadata, crash-safe resume, and Reader verification. The focused converter matrix passes 139 tests. This is synthetic and mocked-transport correctness evidence only: no official payload was downloaded. The portable/CUDA runtime, B-0034 measurement, full checkpoint, token throughput, and paid Cloud Run work do not exist yet.
 
 ## Quality contract
 
