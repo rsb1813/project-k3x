@@ -197,6 +197,34 @@ def test_run_ablation_rejects_resident_warm_weight_h2d(
                      warmup=2, iterations=5)
 
 
+@pytest.mark.parametrize(("drift", "accepted"), [(5.0e-7, True), (1.1e-6, False)])
+def test_route_contribution_uses_the_harness_tolerance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drift: float, accepted: bool
+) -> None:
+    artifact, manifest, runner = (tmp_path / name for name in ("m", "j", "r"))
+    artifact.write_bytes(b"artifact")
+    manifest.write_text(json.dumps(_manifest()), encoding="utf-8")
+    runner.write_bytes(b"runner")
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        case = command[command.index("--case") + 1]
+        mode = command[command.index("--weight-mode") + 1]
+        record = _record(case, mode, 2, 5, artifact.stat().st_size)
+        values = list(record["route_a_contributions"])
+        values[0] += drift
+        record["route_a_contributions"] = values
+        return subprocess.CompletedProcess(command, 0, json.dumps(record), "")
+
+    monkeypatch.setattr("tools.ablate_official_moe.subprocess.run", fake_run)
+    if accepted:
+        run_ablation(artifact, manifest, runner, output_dir=tmp_path / "out",
+                     warmup=2, iterations=5)
+    else:
+        with pytest.raises(RuntimeError, match="route contribution"):
+            run_ablation(artifact, manifest, runner, output_dir=tmp_path / "out",
+                         warmup=2, iterations=5)
+
+
 def test_verify_rejects_raw_csv_aggregate_and_case_order_mutations(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

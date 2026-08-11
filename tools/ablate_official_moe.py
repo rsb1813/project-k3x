@@ -223,14 +223,28 @@ def _validate_record(
         "iterations": iterations, "input_elements": _HIDDEN,
         "output_elements": _HIDDEN, "selected_union": identity["selected"],
         "route_a": identity["route_a"], "route_b": identity["route_b"],
-        "route_a_contributions": identity["contributions_a"],
-        "route_b_contributions": identity["contributions_b"],
         "source_bytes": 379_900_416 + len(identity["selected"]) * _EXPERT_BYTES,
         "k3x_bytes": artifact_bytes, "all_finite": True,
     }
     for field, value in expected.items():
         if record.get(field) != value or type(record.get(field)) is not type(value):
             raise RuntimeError(f"{name} identity field {field} diverged")
+    for field, expected_field in (
+        ("route_a_contributions", "contributions_a"),
+        ("route_b_contributions", "contributions_b"),
+    ):
+        observed = record.get(field)
+        expected_values = identity[expected_field]
+        if (
+            not isinstance(observed, list)
+            or not isinstance(expected_values, list)
+            or len(observed) != _TOP_K
+            or any(
+                not _finite(value) or abs(value - expected_value) > 1.0e-6
+                for value, expected_value in zip(observed, expected_values, strict=True)
+            )
+        ):
+            raise RuntimeError(f"{name} route contribution diverged")
     for field in (
         "cpu_oracle_nanoseconds", "attention_residual_nanoseconds", "router_nanoseconds",
         "cold_latency_nanoseconds", "cold_kernel_nanoseconds",
