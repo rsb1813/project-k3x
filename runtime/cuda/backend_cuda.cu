@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <bit>
 #include <chrono>
 #include <cmath>
@@ -35,6 +36,8 @@
 
 namespace k3x {
 namespace {
+
+std::atomic<std::uint64_t> next_kda_state_owner{1};
 
 class StreamOwner {
 public:
@@ -179,7 +182,14 @@ public:
           layer_shared_activation_scratch_(&memory_stats_, &runtime_stats_),
           layer_shared_hidden_scratch_(&memory_stats_, &runtime_stats_),
           layer_final_hidden_scratch_(&memory_stats_, &runtime_stats_),
-          official_kda_scratch_(&memory_stats_, &runtime_stats_) {
+          official_kda_scratch_(&memory_stats_, &runtime_stats_),
+          official_kda_state_(&memory_stats_, &runtime_stats_) {
+        device_state_owner_ = next_kda_state_owner.fetch_add(
+            1, std::memory_order_relaxed);
+        if (!device_state_owner_) {
+            device_state_owner_ = next_kda_state_owner.fetch_add(
+                1, std::memory_order_relaxed);
+        }
         runtime_stats_.async_engine_count = async_engine_count;
         runtime_stats_.device_overlap = device_overlap;
         if (options_.cuda_weights == CudaWeightMode::resident) {
@@ -2500,7 +2510,8 @@ public:
     Result<OfficialKdaCudaResult> official_kda(
         std::span<const float> hidden, OfficialKdaCudaView weights,
         OfficialKdaCudaStateView state, OfficialKdaCudaConfig config,
-        std::uint32_t layer, ProfilePhase phase) override {
+        std::uint32_t layer, ProfilePhase phase,
+        OfficialKdaStateControl state_control) override {
         const auto operation_start = std::chrono::steady_clock::now();
         const auto product = [](std::size_t left, std::size_t right,
                                 std::size_t& output) {
@@ -2514,6 +2525,21 @@ public:
         std::size_t history_count{};
         std::size_t head_square{};
         std::size_t recurrent_count{};
+        const auto state_mode = state_control.mode;
+        const bool host_state_input =
+            state_mode == OfficialKdaStateMode::host_roundtrip ||
+            state_mode == OfficialKdaStateMode::device_seed;
+        const bool device_continuation =
+            state_mode == OfficialKdaStateMode::device_continue ||
+            state_mode == OfficialKdaStateMode::device_publish;
+        const bool publish_state =
+            state_mode == OfficialKdaStateMode::host_roundtrip ||
+            state_mode == OfficialKdaStateMode::device_publish;
+        const bool retain_state =
+            state_mode == OfficialKdaStateMode::device_seed ||
+            state_mode == OfficialKdaStateMode::device_continue;
+        const bool device_state_mode =
+            state_mode != OfficialKdaStateMode::host_roundtrip;
         if (options_.kind != BackendKind::cuda_custom ||
             options_.cuda_boundary != CudaBoundaryMode::moe_layer ||
             options_.cuda_allocation != CudaAllocationMode::reused ||
@@ -2522,6 +2548,10 @@ public:
             (options_.cuda_weight_validation ==
                  CudaWeightValidationMode::admission &&
              options_.cuda_weights != CudaWeightMode::resident) ||
+            (device_state_mode &&
+             (options_.cuda_weights != CudaWeightMode::resident ||
+              options_.cuda_weight_validation !=
+                  CudaWeightValidationMode::admission)) ||
             !config.hidden_size || !config.heads || !config.head_dim ||
             config.conv_width < 2 || config.head_dim > 1024 ||
             !std::isfinite(config.rms_norm_epsilon) ||
@@ -2533,10 +2563,19 @@ public:
             !product(config.conv_width - 1, projection, history_count) ||
             !product(config.head_dim, config.head_dim, head_square) ||
             !product(config.heads, head_square, recurrent_count) ||
-            state.conv_q.size() != history_count ||
-            state.conv_k.size() != history_count ||
-            state.conv_v.size() != history_count ||
-            state.recurrent_v_first.size() != recurrent_count) {
+            (host_state_input &&
+             (state.conv_q.size() != history_count ||
+              state.conv_k.size() != history_count ||
+              state.conv_v.size() != history_count ||
+              state.recurrent_v_first.size() != recurrent_count)) ||
+            (!host_state_input &&
+             (!state.conv_q.empty() || !state.conv_k.empty() ||
+              !state.conv_v.empty() ||
+              !state.recurrent_v_first.empty())) ||
+            ((state_mode == OfficialKdaStateMode::host_roundtrip ||
+              state_mode == OfficialKdaStateMode::device_seed) &&
+             (state_control.token.owner ||
+              state_control.token.generation))) {
             return Result<OfficialKdaCudaResult>::failure(ErrorCode::invalid_extent);
         }
         const auto finite_f32 = [](std::span<const float> values) {
@@ -2564,10 +2603,12 @@ public:
                                            std::size_t size) {
             return view.tensor_id && view.values.size() == size;
         };
-        if (!finite_f32(hidden) || !finite_f32(state.recurrent_v_first) ||
-            !valid_bf16_state(state.conv_q) ||
-            !valid_bf16_state(state.conv_k) ||
-            !valid_bf16_state(state.conv_v) ||
+        if (!finite_f32(hidden) ||
+            (host_state_input &&
+             (!finite_f32(state.recurrent_v_first) ||
+              !valid_bf16_state(state.conv_q) ||
+              !valid_bf16_state(state.conv_k) ||
+              !valid_bf16_state(state.conv_v))) ||
             !valid_bf16_shape(weights.q_proj, projection, config.hidden_size) ||
             !valid_bf16_shape(weights.k_proj, projection, config.hidden_size) ||
             !valid_bf16_shape(weights.v_proj, projection, config.hidden_size) ||
@@ -2586,6 +2627,24 @@ public:
             !valid_vector_shape(weights.o_norm, config.head_dim) ||
             !valid_bf16_shape(weights.o_proj, config.hidden_size, projection)) {
             return Result<OfficialKdaCudaResult>::failure(ErrorCode::invalid_extent);
+        }
+        const auto same_config = [](OfficialKdaCudaConfig left,
+                                    OfficialKdaCudaConfig right) {
+            return left.hidden_size == right.hidden_size &&
+                   left.heads == right.heads &&
+                   left.head_dim == right.head_dim &&
+                   left.conv_width == right.conv_width &&
+                   left.rms_norm_epsilon == right.rms_norm_epsilon &&
+                   left.gate_lower_bound == right.gate_lower_bound;
+        };
+        if (device_continuation &&
+            (!device_state_active_ ||
+             state_control.token.owner != device_state_owner_ ||
+             state_control.token.generation != device_state_generation_ ||
+             device_state_layer_ != layer ||
+             !same_config(device_state_config_, config))) {
+            return Result<OfficialKdaCudaResult>::failure(
+                ErrorCode::invalid_state);
         }
         const std::array bf16_views{
             weights.q_proj, weights.k_proj, weights.v_proj,
@@ -2782,12 +2841,16 @@ public:
             return Result<OfficialKdaCudaResult>::failure(ErrorCode::invalid_extent);
         }
         const auto float_count = 2 * sequence_hidden + 13 * sequence_projection +
-                                 sequence * config.head_dim + 2 * sequence_heads +
-                                 recurrent_count;
+                                 sequence * config.head_dim + 2 * sequence_heads;
         const auto float_bytes = float_count * sizeof(float);
         const auto conv_state_bytes = history_count * sizeof(std::uint16_t);
-        const auto total_scratch = float_bytes + 3 * conv_state_bytes;
-        if (official_kda_scratch_.reserve(total_scratch) != cudaSuccess) {
+        const auto conv_total_bytes = 3 * conv_state_bytes;
+        const auto recurrent_offset =
+            (conv_total_bytes + alignof(float) - 1) & ~(alignof(float) - 1);
+        const auto state_allocation_bytes =
+            recurrent_offset + recurrent_count * sizeof(float);
+        if (official_kda_scratch_.reserve(float_bytes) != cudaSuccess ||
+            official_kda_state_.reserve(state_allocation_bytes) != cudaSuccess) {
             return Result<OfficialKdaCudaResult>::failure(
                 ErrorCode::backend_unavailable);
         }
@@ -2815,31 +2878,51 @@ public:
         auto* recurrent_output = take(sequence_projection);
         auto* gated = take(sequence_projection);
         auto* output = take(sequence_hidden);
-        auto* recurrent = take(recurrent_count);
-        auto* conv_cursor = reinterpret_cast<std::uint16_t*>(cursor);
+        auto* state_cursor =
+            static_cast<std::byte*>(official_kda_state_.get());
+        auto* conv_cursor = reinterpret_cast<std::uint16_t*>(state_cursor);
         auto* conv_q = conv_cursor;
         auto* conv_k = conv_q + history_count;
         auto* conv_v = conv_k + history_count;
-        const auto state_h2d_bytes = 3 * conv_state_bytes +
-                                     state.recurrent_v_first.size_bytes();
-        if (cudaMemcpyAsync(device_hidden, hidden.data(), hidden.size_bytes(),
-                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(conv_q, state.conv_q.data(), conv_state_bytes,
-                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(conv_k, state.conv_k.data(), conv_state_bytes,
-                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(conv_v, state.conv_v.data(), conv_state_bytes,
-                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(recurrent, state.recurrent_v_first.data(),
-                            state.recurrent_v_first.size_bytes(),
-                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
-            cuda::launch_round_bf16_inplace(device_hidden, sequence_hidden,
-                                            stream_) != cudaSuccess ||
-            official_kda_event_start_.ensure() != cudaSuccess ||
-            official_kda_event_end_.ensure() != cudaSuccess ||
-            cudaEventRecord(official_kda_event_start_.get(), stream_) != cudaSuccess) {
+        auto* recurrent =
+            reinterpret_cast<float*>(state_cursor + recurrent_offset);
+        const auto state_bytes =
+            conv_total_bytes + recurrent_count * sizeof(float);
+        const auto state_h2d_bytes = host_state_input ? state_bytes : 0;
+        if (official_kda_event_start_.ensure() != cudaSuccess ||
+            official_kda_event_end_.ensure() != cudaSuccess) {
             return Result<OfficialKdaCudaResult>::failure(
                 ErrorCode::backend_unavailable);
+        }
+        if (device_state_active_ && !device_continuation) {
+            device_state_active_ = false;
+            ++runtime_stats_.official_kda_device_state_invalidations;
+        } else if (device_continuation) {
+            device_state_active_ = false;
+        }
+        const auto state_failure = [this, device_state_mode]() {
+            if (device_state_mode) {
+                ++runtime_stats_.official_kda_device_state_invalidations;
+            }
+            return Result<OfficialKdaCudaResult>::failure(
+                ErrorCode::backend_unavailable);
+        };
+        if (cudaMemcpyAsync(device_hidden, hidden.data(), hidden.size_bytes(),
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+            (host_state_input &&
+             (cudaMemcpyAsync(conv_q, state.conv_q.data(), conv_state_bytes,
+                              cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+              cudaMemcpyAsync(conv_k, state.conv_k.data(), conv_state_bytes,
+                              cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+              cudaMemcpyAsync(conv_v, state.conv_v.data(), conv_state_bytes,
+                              cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+              cudaMemcpyAsync(recurrent, state.recurrent_v_first.data(),
+                              state.recurrent_v_first.size_bytes(),
+                              cudaMemcpyHostToDevice, stream_) != cudaSuccess)) ||
+            cuda::launch_round_bf16_inplace(device_hidden, sequence_hidden,
+                                            stream_) != cudaSuccess ||
+            cudaEventRecord(official_kda_event_start_.get(), stream_) != cudaSuccess) {
+            return state_failure();
         }
         std::uint64_t launches = 1;
         for (std::size_t token = 0; token < sequence; ++token) {
@@ -2862,8 +2945,7 @@ public:
                 cuda::launch_bf16_matvec(input, device_bf16[6],
                     output_gate + token * projection, projection,
                     config.hidden_size, stream_) != cudaSuccess) {
-                return Result<OfficialKdaCudaResult>::failure(
-                    ErrorCode::backend_unavailable);
+                return state_failure();
             }
             launches += 6;
         }
@@ -2872,8 +2954,7 @@ public:
                     forget_low + token * config.head_dim, device_bf16[4],
                     forget + token * projection, projection,
                     config.head_dim, stream_) != cudaSuccess) {
-                return Result<OfficialKdaCudaResult>::failure(
-                    ErrorCode::backend_unavailable);
+                return state_failure();
             }
             ++launches;
         }
@@ -2901,8 +2982,7 @@ public:
                 recurrent_output, output_gate, device_f32[5], gated,
                 sequence, config.heads, config.head_dim,
                 config.rms_norm_epsilon, stream_) != cudaSuccess) {
-            return Result<OfficialKdaCudaResult>::failure(
-                ErrorCode::backend_unavailable);
+            return state_failure();
         }
         launches += 7;
         for (std::size_t token = 0; token < sequence; ++token) {
@@ -2910,45 +2990,44 @@ public:
                     gated + token * projection, device_bf16[7],
                     output + token * config.hidden_size, config.hidden_size,
                     projection, stream_) != cudaSuccess) {
-                return Result<OfficialKdaCudaResult>::failure(
-                    ErrorCode::backend_unavailable);
+                return state_failure();
             }
             ++launches;
         }
         if (cudaEventRecord(official_kda_event_end_.get(), stream_) != cudaSuccess) {
-            return Result<OfficialKdaCudaResult>::failure(
-                ErrorCode::backend_unavailable);
+            return state_failure();
         }
         OfficialKdaCudaResult result;
         result.executed = true;
+        result.state_published = publish_state;
         result.output.resize(sequence_hidden);
-        result.conv_q.resize(history_count);
-        result.conv_k.resize(history_count);
-        result.conv_v.resize(history_count);
-        result.recurrent_v_first.resize(recurrent_count);
+        if (publish_state) {
+            result.conv_q.resize(history_count);
+            result.conv_k.resize(history_count);
+            result.conv_v.resize(history_count);
+            result.recurrent_v_first.resize(recurrent_count);
+        }
         if (cudaMemcpyAsync(result.output.data(), output, hidden.size_bytes(),
                             cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(result.conv_q.data(), conv_q, conv_state_bytes,
-                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(result.conv_k.data(), conv_k, conv_state_bytes,
-                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(result.conv_v.data(), conv_v, conv_state_bytes,
-                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(result.recurrent_v_first.data(), recurrent,
-                            result.recurrent_v_first.size() * sizeof(float),
-                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+            (publish_state &&
+             (cudaMemcpyAsync(result.conv_q.data(), conv_q, conv_state_bytes,
+                              cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+              cudaMemcpyAsync(result.conv_k.data(), conv_k, conv_state_bytes,
+                              cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+              cudaMemcpyAsync(result.conv_v.data(), conv_v, conv_state_bytes,
+                              cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+              cudaMemcpyAsync(result.recurrent_v_first.data(), recurrent,
+                              recurrent_count * sizeof(float),
+                              cudaMemcpyDeviceToHost, stream_) != cudaSuccess)) ||
             cudaStreamSynchronize(stream_) != cudaSuccess) {
-            return Result<OfficialKdaCudaResult>::failure(
-                ErrorCode::backend_unavailable);
+            return state_failure();
         }
         float milliseconds{};
         if (cudaEventElapsedTime(&milliseconds, official_kda_event_start_.get(),
                                  official_kda_event_end_.get()) != cudaSuccess) {
-            return Result<OfficialKdaCudaResult>::failure(
-                ErrorCode::backend_unavailable);
+            return state_failure();
         }
-        const auto state_d2h_bytes = 3 * conv_state_bytes +
-                                     recurrent_count * sizeof(float);
+        const auto state_d2h_bytes = publish_state ? state_bytes : 0;
         ++runtime_stats_.stream_synchronization_count;
         runtime_stats_.weight_h2d_bytes += uploaded_weight_bytes;
         runtime_stats_.activation_h2d_bytes += hidden.size_bytes() + state_h2d_bytes;
@@ -2958,6 +3037,23 @@ public:
         runtime_stats_.official_kda_state_h2d_bytes += state_h2d_bytes;
         runtime_stats_.official_kda_state_d2h_bytes += state_d2h_bytes;
         runtime_stats_.official_kda_output_d2h_bytes += hidden.size_bytes();
+        if (state_mode == OfficialKdaStateMode::device_seed) {
+            ++runtime_stats_.official_kda_device_state_seeds;
+        } else if (device_continuation) {
+            ++runtime_stats_.official_kda_device_state_continuations;
+        }
+        if (state_mode == OfficialKdaStateMode::device_publish) {
+            ++runtime_stats_.official_kda_device_state_publications;
+        }
+        if (retain_state) {
+            ++device_state_generation_;
+            if (!device_state_generation_) ++device_state_generation_;
+            device_state_layer_ = layer;
+            device_state_config_ = config;
+            device_state_active_ = true;
+            result.device_state =
+                {device_state_owner_, device_state_generation_};
+        }
         record(phase, ProfileOperation::dense_matvec,
                NumericPrecision::bf16_rounded, layer, operation_start,
                total_weight_bytes, uploaded_weight_bytes,
@@ -4365,6 +4461,12 @@ private:
     cuda::ScratchBuffer layer_shared_hidden_scratch_;
     cuda::ScratchBuffer layer_final_hidden_scratch_;
     cuda::ScratchBuffer official_kda_scratch_;
+    cuda::ScratchBuffer official_kda_state_;
+    std::uint64_t device_state_owner_{};
+    std::uint64_t device_state_generation_{};
+    std::uint32_t device_state_layer_{};
+    OfficialKdaCudaConfig device_state_config_{};
+    bool device_state_active_{};
     EventOwner dense_event_start_;
     EventOwner dense_event_end_;
     EventOwner mxfp4_event_start_;

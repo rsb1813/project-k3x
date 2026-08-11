@@ -31,12 +31,12 @@
 - Modify: `runtime/cuda/backend_cuda.cu`
 - Modify: `tests/cuda/test_cuda_official_kda.cu`
 
-- [ ] Write RED tests for host default parity, seed/continue/publish, exact transfer counters, empty unpublished host vectors, single-use generation, wrong owner/layer/config, and invalidation after mutation begins.
-- [ ] Build and witness focused RED because no device-state API exists.
-- [ ] Add the minimum control/token/result surface and dedicated reusable state allocation.
-- [ ] Validate all structure, weights, dynamic hidden, and token identity before mutation; invalidate a consumed token before upload/launch and issue a new generation only after success.
-- [ ] Run focused GREEN plus official KDA/MoE CUDA regressions.
-- [ ] Self-review and commit as `feat: retain official KDA state on device`.
+- [x] Write RED tests for host default parity, seed/continue/publish, exact transfer counters, empty unpublished host vectors, single-use generation, wrong owner/layer/config, and invalidation after mutation begins.
+- [x] Build and witness focused RED because no device-state API exists.
+- [x] Add the minimum control/token/result surface and dedicated reusable state allocation.
+- [x] Validate all structure, weights, dynamic hidden, and token identity before mutation; invalidate a consumed token before upload/launch and issue a new generation only after success.
+- [x] Run focused GREEN plus official KDA/MoE CUDA regressions.
+- [x] Self-review and commit as `feat: retain official KDA state on device`.
 
 ### Task 2: Official-layer wrapper and explicit harness telemetry
 

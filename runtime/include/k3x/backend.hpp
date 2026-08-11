@@ -102,6 +102,10 @@ struct BackendRuntimeStats {
     std::uint64_t official_kda_state_h2d_bytes{};
     std::uint64_t official_kda_state_d2h_bytes{};
     std::uint64_t official_kda_output_d2h_bytes{};
+    std::uint64_t official_kda_device_state_seeds{};
+    std::uint64_t official_kda_device_state_continuations{};
+    std::uint64_t official_kda_device_state_publications{};
+    std::uint64_t official_kda_device_state_invalidations{};
     std::uint64_t pinned_host_bytes{};
     std::uint64_t peak_pinned_host_bytes{};
     std::uint64_t async_prefetch_calls{};
@@ -207,8 +211,29 @@ struct OfficialKdaCudaStateView {
     std::span<const float> recurrent_v_first;
 };
 
+enum class OfficialKdaStateMode {
+    host_roundtrip,
+    device_seed,
+    device_continue,
+    device_publish,
+};
+
+struct OfficialKdaDeviceStateToken {
+    std::uint64_t owner{};
+    std::uint64_t generation{};
+
+    bool operator==(const OfficialKdaDeviceStateToken&) const = default;
+};
+
+struct OfficialKdaStateControl {
+    OfficialKdaStateMode mode{OfficialKdaStateMode::host_roundtrip};
+    OfficialKdaDeviceStateToken token{};
+};
+
 struct OfficialKdaCudaResult {
     bool executed{};
+    bool state_published{};
+    OfficialKdaDeviceStateToken device_state;
     std::vector<float> output;
     std::vector<std::uint16_t> conv_q;
     std::vector<std::uint16_t> conv_k;
@@ -300,7 +325,7 @@ public:
     virtual Result<OfficialKdaCudaResult> official_kda(
         std::span<const float>, OfficialKdaCudaView,
         OfficialKdaCudaStateView, OfficialKdaCudaConfig,
-        std::uint32_t, ProfilePhase) {
+        std::uint32_t, ProfilePhase, OfficialKdaStateControl = {}) {
         return Result<OfficialKdaCudaResult>::failure(
             ErrorCode::backend_unavailable);
     }

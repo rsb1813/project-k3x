@@ -818,3 +818,15 @@
 - D-069 is now scoped to one exact backend-owned KDA state slot. An opaque owner/generation token expresses seed, continuation, and final publication; host round trip remains the default.
 - Implicit scratch reuse was rejected because sequence-sized offsets and allocation growth can move state, and stale callers cannot be detected. A general multi-session registry was deferred until the bounded transfer hypothesis is measured.
 - B-0032 will compare host incremental, device-handoff incremental, and full host execution in one fixed resident-admission transaction. It will not claim token throughput, quality, physical traffic, or a default change.
+
+## 2026-08-11 — Milestone 31 Task 1 RED
+
+- The tiny official KDA CUDA test now requires device seed followed by final publication, exact CPU-oracle output/state parity, empty unpublished host-state vectors, one state transfer in each direction, successful seed/continuation/publication counters, and stale-token rejection before upload or launch.
+- The focused CUDA build fails with seventeen expected compile errors because `OfficialKdaStateMode`, the opaque token/control surface, result publication fields, telemetry counters, and the controlled `official_kda` overload do not exist. No implementation code was present during RED.
+
+## 2026-08-11 — Milestone 31 Task 1 GREEN
+
+- `OfficialKdaStateMode` now keeps host round trip as the default and adds explicit device seed, continuation, and final publication. Results expose only an opaque backend-owner/generation token; no CUDA pointer crosses the interface.
+- A dedicated grow-only state allocation stores convolution histories and recurrent state independently of sequence-sized operation scratch. Continuation binds exact backend, generation, layer, and KDA config and consumes tokens before mutation.
+- Tiny tests prove CPU-oracle output/final-state parity, empty unpublished host vectors, one state H2D and D2H for two-call handoff, generation advancement, stale/cross-backend/wrong-layer/wrong-config rejection, continuation host-state rejection, and host-call invalidation.
+- Focused CUDA KDA, official-layer, and MoE-layer tests pass 3/3. The non-CUDA build completes all targets and the backend test passes 1/1.

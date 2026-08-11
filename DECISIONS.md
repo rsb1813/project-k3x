@@ -801,7 +801,7 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-069 — Attribute device-resident KDA state handoff before widening the official graph
 
 - Date: 2026-08-11.
-- Status: accepted as the next bounded non-cloud experiment after M30 publication.
+- Status: accepted; raw official KDA backend Task 1 implemented and tested, with official-layer integration and B-0032 pending.
 - Decision: keep exact admission opt-in and isolate KDA state residency across incremental calls so token A's state can feed token B without an intermediate 6,512,640-byte D2H plus H2D round trip. Preserve an explicit final-state publication path and the current host-state reference mode.
 - Alternatives considered: materialize a second official layer immediately; fuse host Attention Residual and routing first; make admission the default; start Cloud Run/full-checkpoint work.
 - Evidence: B-0031 admission incremental/full medians are 70.584413/67.236923 ms with nearly identical 33.889030/33.958984 ms kernel time. Incremental performs two state transfers in each direction while full performs one, leaving a 3.347490 ms wall gap after validation is removed.
