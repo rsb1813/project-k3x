@@ -398,6 +398,14 @@ The executable remains outside `k3x_run`; `OPTIONAL_STORAGE_FIXTURE` generation 
 
 The accepted M28 boundary is a dependency-closed real MoE FFN sublayer, not another repeated-view microbenchmark. It must bind the real router, compute all 896 scores, preserve natural Top-16 selection, acquire the exact selected routed experts, execute the real shared expert, apply mixing and residual behavior, and compare the complete sublayer output with an independent reference. Attention/KDA/MLA closure and token generation remain later boundaries unless the real sublayer dependencies require them.
 
+## Milestone 28 bounded official MoE manufacturing path
+
+The storage half of the M28 boundary is implemented and tested. Phase 1 materializes the eleven always-active layer-1 BF16/FP32 ranges as individually content-addressed objects, rehashes them, derives deterministic natural routes for cases A and B, and atomically publishes `route-manifest.json`. Phase 2 plans only the first-use union of those exact route IDs, materializes one contiguous native-MXFP4 object per selected expert, and assembles one safetensors-compatible source in execution order. Routed expert matrices are physically repacked as gate, up, then down; remaining routed/shared BF16 tensors follow after the selected expert bank.
+
+Every HTTP response and local copy is capped at 8 MiB. A valid completed object is reused only after size and SHA-256 verification; a valid partial resumes from its verified prefix; a damaged partial restarts from byte zero. The route manifest is durable before expert fetching begins, while the final source manifest is not published until every selected object has completed. The final source manifest records pinned repository, revision, snapshot, index, config, shard, deterministic-input, natural-route, object-range, and object-digest identities. Conversion emits both `OPTIONAL_STORAGE_FIXTURE` and `OPTIONAL_OFFICIAL_MOE_FIXTURE`, so general generation remains fail-closed.
+
+The CLI default for `--scope moe-ffn` remains zero-payload dry-run. Actual bounded manufacturing requires the explicit `--materialize` flag and an output directory. Its report separates logical source-object bytes from actual downloaded payload bytes, so a resumed or fully reused run cannot be misreported as new network traffic. Commit `0b0c944` passes 27 focused orchestration/CLI tests and 149 official-source/converter recovery regressions. No official M28 tensor payload, B-0029 result, CPU/CUDA oracle result, token rate, or quality result exists yet.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

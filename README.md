@@ -426,6 +426,14 @@ B-0028 records three warmups and twenty measured calls for transient and exact-c
 
 Resident execution lowers this bounded warm median by 86.77% and removes all measured repeated weight H2D after the identical 17,547,264-byte cold admission. The comparison is one deterministic expert under WSL2; it does not establish token throughput, natural routing, multi-expert pressure, native-Linux behavior, GPU utilization, memory bandwidth, physical PCIe/NVMe traffic, or coding quality. M28 therefore closes the smallest meaningful real MoE FFN sublayer next: real router scores, natural Top-16 selection, exact selected routed experts, the real shared expert, mixing, and residual behavior.
 
+## Milestone 28 — bounded official MoE manufacturing
+
+The M28 storage path now implements the complete two-phase manufacturing contract without downloading a full shard. Phase 1 materializes and verifies the eleven always-active layer-1 tensors, derives two deterministic natural Top-16 routes from all 896 scores, and atomically persists their first-use union. Phase 2 requests only that selected union, preserves each native MXFP4 expert exactly, repacks expert matrices in gate/up/down execution order, and assembles one BF16/MXFP4 K3X storage fixture.
+
+Every response and local copy is bounded to 8 MiB. Completed objects are rehashed before reuse, verified partials resume, damaged partials restart, and route identity is durable before expert fetching begins. `--scope moe-ffn` remains a zero-payload dry-run by default; payload access additionally requires `--materialize --output-dir`. Reports separate actual downloaded bytes from logical source-object bytes.
+
+Commit `0b0c944` passes 27 focused materializer/CLI tests and 149 official-source/converter recovery regressions. This is storage and recovery correctness only. The bounded official M28 fixture has not been downloaded, the portable full-sublayer oracle and CUDA boundary are still next, and no B-0029, token-rate, quality, physical-NVMe, or full-layer result is claimed.
+
 ## Quick start
 
 ### 1. Create an environment
@@ -697,6 +705,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Strict converter source, safetensors, resume-ledger, and orphan-suffix trust boundaries with B-0026 evidence.
 - [x] Pinned official index/config/header discovery and one exact real native-MXFP4 expert conversion with B-0027 evidence.
 - [x] Pinned official expert CPU-oracle/RTX 5080 execution with strict transient/resident B-0028 evidence.
+- [x] Two-phase bounded official MoE planning, natural-route persistence, exact selected-union materialization, and non-executable K3X assembly.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.
@@ -753,7 +762,7 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
 - Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0025 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; transient, bounded-resident, resident-grid, resident MoE-layer, admission-validation, and CUDA Graph paths are exact opt-in experiments. B-0025 finds mixed stable/alternating deltas and rotating churn 6.09%–11.57% slower, so no graph default changes. There is no learned DSpark drafter, reduced-precision draft path, eviction-capable draft residency, device-resident whole-token graph, or full-model speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
-- The converter and dedicated CUDA harness have processed and executed one bounded official Kimi K3 expert range, but not natural routing, a complete real layer, a complete shard, or the full checkpoint. Its evidence is transport-pinned range identity, not recomputed full-object LFS verification or signed publisher provenance.
+- The converter and dedicated CUDA harness have processed and executed one bounded official Kimi K3 expert range. M28 now implements natural-route derivation and restartable selected-union manufacturing, but the new multi-expert fixture has not yet been downloaded or executed. No complete real layer, complete shard, or full checkpoint has been processed. Provenance remains transport-pinned range identity, not recomputed full-object LFS verification or signed publisher provenance.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.
 - No open-source license has been selected yet; public visibility does not itself grant reuse rights.
 
