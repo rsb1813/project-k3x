@@ -256,6 +256,12 @@ The host-to-device-incremental median change is -4.585951%, or -3.356557 ms. Agg
 
 All three processes keep 1,816,322,048 weight bytes resident and transfer zero warm weight bytes. Tracked peak VRAM is 1,824,612,416 bytes for both incremental rows and 1,825,310,016 bytes for full execution. These are one-layer WSL2 counters and timings, not bytes/token or an end-to-end capacity model. Host round trip remains the default.
 
+## Milestone 32 device route-preparation accounting
+
+The explicit device route path adds 12,888,064 resident BF16 bytes for MLP residual norm/projection, post norm, and the 896-by-7,168 router. It returns only 896 FP32 raw logits per position, or 7,168 logical D2H bytes for the fixed two-position sequence. Prefix and prepared hidden vectors remain in one backend-owned slot and are consumed by the resident exact MXFP4 FFN, so the measured warm interval must retain zero weight H2D.
+
+These are exact byte formulas and passing smoke-test counters, not a timing result. B-0033 must measure the host and device route paths under the same bounded sequence before any latency conclusion. The device row necessarily holds 12,888,064 more resident route weights because the host row executes those weights on CPU; evidence must report that footprint difference rather than conceal it.
+
 ## Required production measurements
 
 Before selecting a default storage or kernel path, the Linux target must record decode and prefill rates, TTFT, GPU utilization and memory bandwidth, VRAM and host RAM, NVMe and RAM-to-GPU GB/token, expert-cache hit rate, speculative acceptance, unique experts per block, adaptive Top-K, cold rescues, per-kernel time, and I/O stall time. Every result must carry an ablation configuration and quality mode.

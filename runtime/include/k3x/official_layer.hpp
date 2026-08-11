@@ -67,6 +67,8 @@ struct OfficialLayerCudaResult {
     std::vector<OfficialLayerCudaStepResult> steps;
 };
 
+enum class OfficialMoeRoutePreparationMode { host, device };
+
 Result<OfficialLayerResult> official_layer_cpu(
     std::span<const OfficialLayerInput> inputs,
     const OfficialLayerWeights& weights,
@@ -87,6 +89,8 @@ Result<OfficialLayerCudaResult> official_layer_cuda(
     std::optional<float> situ_linear_beta,
     std::uint32_t layer,
     ProfilePhase phase,
-    OfficialKdaStateControl state_control = {});
+    OfficialKdaStateControl state_control = {},
+    OfficialMoeRoutePreparationMode route_preparation =
+        OfficialMoeRoutePreparationMode::host);
 
 }  // namespace k3x

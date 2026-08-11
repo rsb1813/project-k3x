@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 31 is publicly complete through implementation PR #54 and publication PR #55. Milestone 32 Tasks 1 and 2 implement canonical raw-logit routing plus an exact CUDA residual/router preparation primitive with opaque single-use prepared-activation consumption. Official-layer/CLI integration, actual-artifact execution, and B-0033 are not implemented or measured yet. Host routing remains the default. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
+Milestone 31 is publicly complete through implementation PR #54 and publication PR #55. Milestone 32 Tasks 1 through 3 implement canonical raw-logit routing, exact CUDA residual/router preparation, opaque single-use prepared-activation consumption, official-layer integration, and an explicit harness mode. Tiny and bounded actual-artifact host/device correctness smoke gates pass; B-0033 evidence tooling and formal measurement are not implemented yet. Host routing remains the default. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
 
-State audited last on 2026-08-11 at public M31 publication head `c46d6139673d442a83858e637d268e0d92a7784a`. Fresh M31 verification passes CPU CTest 19/19 plus Python 578/125, liburing/direct CTest 20/20 plus Python 584/119, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus actual/live Python 688/15, B-0032/B-0031/B-0030 evidence regressions 46/46, strict B-0032 rehash, and device-state actual-artifact Compute Sanitizer with zero errors. PR #55 and post-merge correctness `31503260596` plus CodeQL `31503260599` succeeded. The ignored bounded fixture is unchanged; no complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-12 on `codex/milestone-thirty-two-device-routing`; the public baseline remains M31 publication head `c46d6139673d442a83858e637d268e0d92a7784a`. M32 Task 3 passes the tiny CUDA wrapper, three downstream cleanup paths, Compute Sanitizer with zero errors, 13 focused CLI parser cases, and one host plus one device-route actual-artifact smoke. The ignored bounded fixture is unchanged; no complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -118,8 +118,8 @@ State audited last on 2026-08-11 at public M31 publication head `c46d6139673d442
 - Formal B-0032 host/device incremental medians are 73,192,169/69,835,612 ns; full host is 68,224,527 ns. Device handoff removes exactly 6,512,640 state bytes in each direction per sequence and lowers the incremental median 4.585951% while aggregate kernel time changes +0.339801%.
 - All B-0032 rows preserve exact route/output/state identity, zero warm weight H2D, 1,816,322,048 resident bytes, and `0.00048828125` maximum error. The device row records 20 seeds, continuations, and publications with zero invalidations.
 - Publicly integrated D-068 retains per-call as the default and admission as opt-in. D-069 retains host round trip as the default and device state as an exact single-slot experiment; multi-session policy, VAULT persistence, and a production state registry remain unimplemented.
-- D-070 and the M32 design are accepted. The backend route-preparation interface, deterministic CUDA kernels, opaque lifetime, exact prepared FFN consumption, telemetry, and tiny tests exist; wrapper, harness, actual-artifact, and benchmark work remain.
-- M32 Task 1 provides one canonical raw-logit routing authority while preserving exact existing route fields. Task 2 passes focused CUDA/non-CUDA regressions and Compute Sanitizer with zero errors.
+- D-070 and the M32 design are accepted. The backend route-preparation interface, deterministic CUDA kernels, opaque lifetime, exact prepared FFN consumption, wrapper, explicit harness schema, and cleanup telemetry exist; strict evidence tooling and formal B-0033 remain.
+- M32 Task 1 provides one canonical raw-logit routing authority. Task 2 implements the CUDA primitive. Task 3 preserves the omitted host path, requires device-state resident admission for explicit device routing, and passes tiny plus bounded actual-artifact parity with zero warm weight H2D.
 
 - M28 Task 2 is complete at `0b0c944`: the route manifest is durable before expert fetching, only the natural A/B first-use union is planned, object reuse is rehashed, response bytes are measured separately from logical source bytes, and production generation remains fail-closed.
 - M28 Task 3 is complete at `8a13cf5`: the dimension-driven CPU oracle preserves explicit BF16 boundaries, validates the natural route before execution, decodes native MXFP4 experts exactly, and matches independent PyTorch intermediate values without production dispatch.
@@ -162,7 +162,7 @@ State audited last on 2026-08-11 at public M31 publication head `c46d6139673d442
 - Windows Smart App Control still blocks unsigned `k3x_run.exe`; WSL2 is the verified local CUDA path and native Linux remains the final performance authority.
 - The production-executable checkpoint is synthetic and tiny. The bounded official M29–M31 artifact executes only through the dedicated benchmark harness and remains rejected by `k3x_run`; no complete shard or full checkpoint has been downloaded. B-0032 is one complete layer-boundary sequence attribution, not token throughput or full-model evidence.
 - M26 binds transport, snapshot, index, config, shard header, range, tensor, microshard, and K3X identities, but does not recompute the complete shard LFS digest or provide signed publisher provenance. Production conversion needs stronger complete-object or authenticated-chunk verification.
-- The graph remains CPU-driven outside FFN blocks. KDA, MLA, routing, score mixing, residual work, state management, and non-FFN boundaries remain on the host.
+- The production graph remains CPU-driven outside FFN blocks. M32 can explicitly move one bounded layer's MLP residual preparation and raw router matvec to CUDA, but canonical score mixing/Top-K, dynamic expert resolution, MLA, wider layer scheduling, and production state management remain on the host.
 - L1 misses use ordered Reader batches into pageable host vectors. Deadline mode may run one such blocking batch on a worker, but there is no cross-layer asynchronous L2 pipeline, transition predictor, or N/N+1/N+2 triple buffering.
 - Exact prefetch is single-flight and limited to `cuda-custom + ffn-block + reused + transient`; it is not combined with static residency.
 - `cuda-dense` intentionally keeps native MXFP4 on the CPU as its documented comparison identity. `cuda-custom` is the exact GPU MXFP4 path.
@@ -179,9 +179,9 @@ State audited last on 2026-08-11 at public M31 publication head `c46d6139673d442
 
 ## Next concrete tasks
 
-1. Write Task 3 wrapper and CLI RED tests for explicit device route preparation, schema ownership, cleanup, and invalid combinations.
-2. Connect canonical routing and prepared FFN consumption without changing the omitted-option host path.
-3. Run tiny and actual-artifact smoke parity before starting B-0033 tooling. Keep the artifact non-executable and do not download a complete shard/checkpoint or create paid cloud resources.
+1. Write strict B-0033 RED tests for the fixed host/device route-preparation evidence transaction and every one-field mutation.
+2. Implement the minimum atomic B-0033 publisher/verifier without changing historical B-0030 through B-0032 schemas.
+3. Run production-guard, sanitizer, full regression, and one formal B-0033 transaction before synchronizing final M32 documentation. Do not download a complete shard/checkpoint or create paid cloud resources.
 
 ## Hardware assumptions
 

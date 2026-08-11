@@ -254,7 +254,8 @@ Result<OfficialLayerCudaResult> official_layer_cuda(
     std::optional<float> situ_linear_beta,
     std::uint32_t layer,
     ProfilePhase phase,
-    OfficialKdaStateControl state_control) {
+    OfficialKdaStateControl state_control,
+    OfficialMoeRoutePreparationMode route_preparation) {
     if (inputs.empty() || !config.hidden_size || !top_k ||
         !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
         (situ_linear_beta &&
@@ -263,6 +264,11 @@ Result<OfficialLayerCudaResult> official_layer_cuda(
             std::numeric_limits<std::size_t>::max() / config.hidden_size) {
         return Result<OfficialLayerCudaResult>::failure(
             ErrorCode::invalid_extent);
+    }
+    if (route_preparation != OfficialMoeRoutePreparationMode::host &&
+        route_preparation != OfficialMoeRoutePreparationMode::device) {
+        return Result<OfficialLayerCudaResult>::failure(
+            ErrorCode::invalid_state);
     }
 
     std::vector<std::vector<float>> self_residuals;
@@ -352,6 +358,74 @@ Result<OfficialLayerCudaResult> official_layer_cuda(
             prefix[channel] = rounded_bf16(
                 rounded_bf16(inputs[index].hidden_input[channel]) +
                 kda.value().output[index * config.hidden_size + channel]);
+        }
+        if (route_preparation == OfficialMoeRoutePreparationMode::device) {
+            auto prepared = backend.prepare_official_moe_route(
+                prefix, inputs[index].block_source,
+                {weights.moe.residual_norm, weights.moe.residual_proj,
+                 weights.moe.post_norm, weights.moe.router},
+                config.rms_norm_epsilon, layer, phase);
+            if (!prepared) {
+                return fail_after_kda(prepared.error(), prepared.message());
+            }
+            const auto prepared_token = prepared.value().prepared;
+            const auto fail_after_prepare = [&](ErrorCode code,
+                                                const std::string& message = {},
+                                                bool consumed = false) {
+                const auto discarded =
+                    backend.discard_official_moe_prepared(prepared_token);
+                if (!discarded &&
+                    !(consumed && discarded.error() == ErrorCode::invalid_state)) {
+                    return fail_after_kda(ErrorCode::invalid_state);
+                }
+                return fail_after_kda(code, message);
+            };
+            if (!prepared.value().executed || !prepared_token.owner ||
+                !prepared_token.generation) {
+                return fail_after_prepare(ErrorCode::invalid_state);
+            }
+            auto route = route_official_moe_logits(
+                prepared.value().router_logits, weights.moe.correction, top_k);
+            if (!route) {
+                return fail_after_prepare(route.error(), route.message());
+            }
+            std::vector<Mxfp4MlpView> selected;
+            selected.reserve(route.value().expert_ids.size());
+            for (const auto expert_id : route.value().expert_ids) {
+                const auto match = std::find_if(
+                    weights.moe.experts.begin(), weights.moe.experts.end(),
+                    [expert_id](const OfficialExpertView& expert) {
+                        return expert.expert_id == expert_id;
+                    });
+                if (match == weights.moe.experts.end()) {
+                    return fail_after_prepare(ErrorCode::invalid_extent);
+                }
+                selected.push_back(match->weights);
+            }
+            auto moe = backend.official_mxfp4_moe_ffn_prepared(
+                prepared_token, weights.moe_ffn, selected,
+                route.value().expert_ids, route.value().contributions,
+                config.rms_norm_epsilon, situ_beta, situ_linear_beta,
+                layer, phase);
+            if (!moe) {
+                return fail_after_prepare(
+                    moe.error(), moe.message(), true);
+            }
+            if (!moe.value().executed ||
+                moe.value().selected_expert_ids != route.value().expert_ids ||
+                moe.value().output.size() != config.hidden_size) {
+                return fail_after_prepare(ErrorCode::invalid_state, {}, true);
+            }
+            steps.push_back({
+                std::move(self_residuals[index]),
+                std::move(normalized_inputs[index]),
+                std::move(prefix),
+                {},
+                {},
+                std::move(route.value()),
+                std::move(moe.value().output),
+            });
+            continue;
         }
         auto mlp_residual = attention_residual(
             prefix, inputs[index].block_source, weights.moe.residual_norm,
