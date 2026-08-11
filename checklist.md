@@ -489,6 +489,7 @@
 - [x] Add the portable exact A1→A2→B1→B2 runtime oracle with independent KDA state ownership.
 - [x] Add the capacity-two layer-keyed KDA state registry with ownership tests.
 - [x] Add the opaque inter-layer hidden token and full CUDA front/tail bridge.
+- [x] Add the exact host-round-trip/device-closure A1→A2→B1→B2 CUDA wrapper.
 - [ ] Add explicit two-layer harness mode and closed telemetry.
 - [ ] Add strict B-0034 evidence tooling.
 - [ ] Run actual-artifact correctness, sanitizer, production-guard, and full regression gates.
