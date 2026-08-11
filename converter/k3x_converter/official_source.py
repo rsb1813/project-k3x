@@ -94,6 +94,14 @@ class OfficialConfig:
     num_expert_group: int
     topk_group: int
     routed_scaling_factor: float
+    num_hidden_layers: int
+    kda_layers: tuple[int, ...]
+    kda_heads: int
+    kda_head_dim: int
+    short_conv_kernel_size: int
+    kda_gate_lower_bound: float
+    kda_use_full_rank_gate: bool
+    attn_res_block_size: int
 
 
 @dataclass(frozen=True)
@@ -458,6 +466,27 @@ def load_official_config(
             valid = _matches_number(actual, expected_value)
         if not valid:
             raise K3XError("OFFICIAL_CONFIG_MISMATCH", key)
+    linear = text.get("linear_attn_config")
+    expected_kda_layers = tuple(index for index in range(1, 92) if index % 4 != 0)
+    expected_full_layers = (*range(4, 94, 4), 93)
+    full_layers = linear.get("full_attn_layers") if isinstance(linear, dict) else None
+    kda_layers = linear.get("kda_layers") if isinstance(linear, dict) else None
+    if (
+        text.get("attn_res_block_size") != 12
+        or not isinstance(linear, dict)
+        or not isinstance(full_layers, list)
+        or not all(_is_int(item) for item in full_layers)
+        or tuple(full_layers) != expected_full_layers
+        or not isinstance(kda_layers, list)
+        or not all(_is_int(item) for item in kda_layers)
+        or tuple(kda_layers) != expected_kda_layers
+        or linear.get("gate_lower_bound") != -5.0
+        or linear.get("head_dim") != 128
+        or linear.get("num_heads") != 96
+        or linear.get("short_conv_kernel_size") != 4
+        or linear.get("use_full_rank_gate") is not True
+    ):
+        raise K3XError("OFFICIAL_CONFIG_MISMATCH", "linear_attn_config")
     return OfficialConfig(
         hashlib.sha256(body).hexdigest(),
         blob_id,
@@ -476,6 +505,14 @@ def load_official_config(
         text["num_expert_group"],
         text["topk_group"],
         text["routed_scaling_factor"],
+        text["num_hidden_layers"],
+        expected_kda_layers,
+        linear["num_heads"],
+        linear["head_dim"],
+        linear["short_conv_kernel_size"],
+        linear["gate_lower_bound"],
+        linear["use_full_rank_gate"],
+        text["attn_res_block_size"],
     )
 
 

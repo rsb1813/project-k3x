@@ -80,6 +80,14 @@ def _config() -> OfficialConfig:
         1,
         1,
         1.0,
+        93,
+        tuple(index for index in range(1, 92) if index % 4 != 0),
+        96,
+        128,
+        4,
+        -5.0,
+        True,
+        12,
     )
 
 
