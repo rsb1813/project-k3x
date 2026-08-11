@@ -472,6 +472,12 @@ Only one device state is implemented per backend for this experiment. A token be
 
 Formal B-0032 fixes host-incremental, device-incremental, and full-host rows. Device handoff removes one 6,512,640-byte H2D plus D2H state round trip per sequence, preserves exact routes/output/final state, and lowers the bounded WSL2 incremental median from 73.192169 to 69.835612 ms. The full-host median is 68.224527 ms. The path remains experimental because this is not token throughput, quality, physical traffic, native-Linux, multi-layer, or concurrency evidence. Multi-session residency, eviction, VAULT persistence, and a production default remain unimplemented.
 
+## Milestone 32 proposed official MoE device-routing boundary
+
+D-070 accepts, but does not yet implement, a two-stage route-preparation boundary inside the existing bounded official layer. Stage one will execute MLP Attention Residual, post RMSNorm, and the 896-row router matvec on CUDA, return raw router logits, and retain exact prefix/prepared activations behind a backend-owner/generation token. The canonical host rule will continue to own sigmoid, correction, natural Top-16 ordering, expert-ID tie breaking, and contribution normalization. Stage two will consume the opaque token in the existing exact resident MXFP4 FFN after the runtime resolves the selected expert views.
+
+The design deliberately preserves the dynamic routing-to-residency scheduling point rather than hiding expert selection inside a monolithic whole-layer call. Host routing remains the default; the proposed CUDA path is explicit and single-slot. B-0033 will compare host and device route preparation on the unchanged official fixture before another layer or payload range is added. Until implementation and tests exist, this section is `Proposed`, not `Experimental` or measured architecture.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

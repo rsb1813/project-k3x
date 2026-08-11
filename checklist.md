@@ -459,3 +459,18 @@
 - [x] Run B-0032 exactly once and seal the evidence.
 - [x] Run the complete verification matrix and synchronize README/TITAN Ledger.
 - [x] Publish M31 and verify pull-request and post-merge CI.
+
+## Milestone 32 — Official MoE device routing
+
+- [x] Re-read the public M31 implementation and measured B-0032 bottleneck.
+- [x] Compare device route preparation, a second official layer, and a monolithic whole-layer call.
+- [x] Accept D-070 and write the M32 design.
+- [ ] Write and self-review the detailed TDD implementation plan.
+- [ ] Write and witness CUDA RED tests for preparation parity and token lifetime.
+- [ ] Implement exact device residual preparation and raw router logits.
+- [ ] Implement opaque prepared-activation consumption and wrapper cleanup.
+- [ ] Add explicit harness mode and strict B-0033 evidence tooling.
+- [ ] Run actual-artifact correctness, sanitizer, and production-guard gates.
+- [ ] Run B-0033 exactly once and seal the evidence.
+- [ ] Run the complete verification matrix and synchronize README/TITAN Ledger.
+- [ ] Publish M32 and verify pull-request and post-merge CI.

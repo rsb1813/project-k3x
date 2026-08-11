@@ -789,7 +789,7 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-068 — Retain per-call default after accepting exact KDA admission as an opt-in path
 
 - Date: 2026-08-11.
-- Status: accepted and implemented through B-0031; public integration pending.
+- Status: accepted, implemented, measured through B-0031, and publicly integrated.
 - Decision: reuse the backend-wide immutable identity registry for fourteen official KDA views, require exact resident execution and atomic first admission, expose the mode explicitly in the official-layer harness, and retain `per-call` as the global default.
 - Alternatives considered: make admission the default immediately; add a KDA-specific cache; bypass backend validation from the benchmark; proceed directly to a wider official graph.
 - Evidence: B-0031 preserves identical routes, contributions, output/final-state digests, resident bytes, zero warm weight H2D, and `0.00048828125` maximum error. Incremental/full medians fall by 59.819421%/44.463194%, measured validation time is 103.874127/55.731721 ms per sequence, and paired kernel totals change by less than 0.4%.
@@ -809,3 +809,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: the opaque single-slot handoff is the smallest exact, reversible boundary that removes the measured transfer without new model payload or routing changes. The result supports retaining the experiment, but not changing the host-round-trip default.
 - Rejected claims: B-0032 logical transfer accounting is not physical PCIe measurement, and its 4.585951% bounded reduction does not authorize a default change, token-rate projection, full checkpoint download, or paid cloud resources.
 - Revisit: after a multi-layer or token-loop boundary exists, compare state lifetime and concurrency policy with wider device-resident residual/routing orchestration. Do not generalize the single-slot design to VAULT or make it default from B-0032 alone.
+
+## D-070 — Measure exact device route preparation before adding another official layer
+
+- Date: 2026-08-11.
+- Status: accepted as the Milestone 32 bounded experiment; not implemented or measured yet.
+- Decision: keep host routing as the default and add an explicit two-stage CUDA path that computes exact MLP Attention Residual, post RMSNorm, and 896 raw router logits on device, retains prefix/prepared activation behind a single-use opaque token, runs canonical natural Top-16 selection on the host, and consumes the token in the existing exact resident MXFP4 FFN.
+- Alternatives considered: materialize a second official layer immediately; issue one monolithic whole-layer CUDA call including device Top-K; optimize existing KDA or expert kernels without first closing the remaining host routing boundary.
+- Evidence: B-0032 device incremental/full-host medians differ by only 1.611085 ms, but both retain roughly 35 ms per sequence outside their roughly 34 ms aggregate CUDA kernel totals. The current wrapper performs residual preparation and the 896 by 7,168 router loop on the CPU and re-enters the backend for the FFN.
+- Benchmark result: none yet. B-0033 will compare fixed host-routing and device-routing rows only after parity, actual-artifact, sanitizer, and evidence gates pass.
+- Reason accepted: this is the smallest reversible boundary that directly removes the current CPU router loop without new official payload, preserves the dynamic expert scheduling point needed by cache/rescue work, and keeps the natural routing policy in one canonical host implementation.
+- Rejected claims: no predicted speedup, token rate, quality result, physical PCIe traffic, native-Linux authority, multi-layer behavior, or default-policy change is accepted before measurement.
+- Revisit: after B-0033, proceed to bounded multi-layer closure if route preparation is correct and the remaining orchestration is small; otherwise attribute the surviving synchronization or kernel boundary before widening payload scope.
