@@ -424,7 +424,7 @@ B-0029 is now measured on RTX 5080 under WSL2. Route A transient has a 97,095,78
 
 ## Milestone 29 accepted official KDA layer boundary
 
-Milestone 29 is accepted and its metadata-planning gate is implemented; recurrence, manufacturing, execution, and measurement remain unimplemented. It closes official layer 1 from the self-attention Attention Residual through KDA, the MLP Attention Residual, the already validated natural Top-16 MoE FFN, and final prefix accumulation. The boundary receives deterministic layer-1 hidden/source-bank vectors and explicit KDA state; it does not import embeddings or layer-0 weights. A KDA-only path is an implementation gate rather than milestone completion.
+Milestone 29 is accepted. Its metadata-planning gate and independent portable scalar KDA oracle are implemented; manufacturing, complete-layer composition, native execution, and measurement remain unimplemented. It closes official layer 1 from the self-attention Attention Residual through KDA, the MLP Attention Residual, the already validated natural Top-16 MoE FFN, and final prefix accumulation. The boundary receives deterministic layer-1 hidden/source-bank vectors and explicit KDA state; it does not import embeddings or layer-0 weights. A KDA-only path is an implementation gate rather than milestone completion.
 
 Pinned metadata identifies 17 new layer-1 tensors totaling 887,843,840 unaligned bytes, all in `model-00002-of-000096.safetensors`. Combined with the existing always-active MoE tensors and a natural expert union of size `U`, the unaligned payload is `1,267,744,256 + 17,547,264 * U` bytes. The upper bound at `U=32` is 1,829,256,704 bytes. The actual route union and aligned artifact size remain unknown until the independent KDA oracle derives routes; no route or input may be searched to reduce payload.
 
@@ -433,6 +433,8 @@ The checkpoint stores F32 `A_log[128]`, while the pinned Python constructor init
 The fixture executes tokens A and B both as one two-token call and as two incremental calls from zero state. The initial state is 221,184 BF16 convolution-history bytes plus 6,291,456 FP32 recurrent bytes. Whole-sequence and incremental outputs, final state, natural routes, and contributions must agree before CUDA or B-0030 evidence is accepted. The final artifact retains the storage-fixture guard and remains rejected by `k3x_run`.
 
 The implemented pure planner extends the pinned config authority with exact KDA layer membership and dimensions, binds the source Git blob, validates every one of the 17 header records in execution order, composes the existing M28 MoE plan, and exposes exact storage bounds without network payload access. Malformed list schemas return stable K3X errors rather than host-language exceptions. The actual pinned metadata passes this planner; no tensor object is created.
+
+The implemented scalar oracle is deliberately independent of converter and runtime dispatch. It preserves BF16 projection and short-convolution boundaries, applies Q/K L2 normalization and channel-wise decay, updates an FP32 mathematical key-by-value recurrence one token at a time, and publishes the state in explicit V-first layout. It rejects dtype, shape, device, finite-value, history-width, sequence, and state-layout drift before computation. This oracle currently runs only on tiny literal tensors; official tensor materialization and whole-layer execution remain absent.
 
 ## TITAN component registry
 

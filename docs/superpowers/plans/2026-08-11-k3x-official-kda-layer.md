@@ -113,11 +113,11 @@ git commit -m "feat: plan official KDA layer tensors"
 
 **Interfaces:**
 - Produces: `OfficialKdaConfig`, `OfficialKdaWeights`, `OfficialKdaState`, and `OfficialKdaResult` frozen dataclasses.
-- Produces: `zero_official_kda_state(config, *, device) -> OfficialKdaState`.
+- Produces: `zero_official_kda_state(config, batch_size, device) -> OfficialKdaState`.
 - Produces: `official_kda(hidden, weights, state, config) -> OfficialKdaResult` for `[batch, sequence, hidden]`.
 - State identity: BF16 convolution histories `[B,3,12288]` and FP32 V-first recurrence `[B,96,128V,128K]` at official dimensions.
 
-- [ ] **Step 1: Write tiny recurrence RED tests**
+- [x] **Step 1: Write tiny recurrence RED tests**
 
 Use a tiny `hidden=4, heads=2, head_dim=2, conv_width=3` fixture with literal tensors. Independently compute one step from a nonzero state using the paper recurrence `(I - beta*k*k^T) @ (Diag(alpha) @ S) + beta*k*v^T`. Require exact boundary shapes, finite output, V-first serialization, and unchanged input state.
 
@@ -131,7 +131,7 @@ torch.testing.assert_close(full.state.recurrent_v_first, second.state.recurrent_
 
 Add independent negatives for F32/BF16 dtype drift, `[heads]` A-log, wrong convolution history width, K-first state labeling, non-finite weights, and state alias mutation.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
@@ -140,7 +140,7 @@ PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
 
 Expected: import failure because `official_kda.py` does not exist.
 
-- [ ] **Step 3: Implement the scalar semantic oracle**
+- [x] **Step 3: Implement the scalar semantic oracle**
 
 Implement explicit BF16 operation boundaries, F32 convolution weights, SiLU short convolution, Q/K L2 normalization, channel-wise decay, scalar-per-head beta, FP32 recurrence, sigmoid-gated head RMSNorm, and BF16 output projection. Convert V-first storage to mathematical K-by-V only around the recurrence and convert back before publishing state.
 
@@ -152,7 +152,7 @@ updated = decayed + k.float().unsqueeze(-1) * delta.unsqueeze(-2)
 output = torch.einsum("...k,...kv->...v", q.float(), updated)
 ```
 
-- [ ] **Step 4: Run GREEN and existing synthetic KDA regressions**
+- [x] **Step 4: Run GREEN and existing synthetic KDA regressions**
 
 ```bash
 PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
@@ -161,7 +161,7 @@ PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
 
 Expected: all runnable tests pass and no existing synthetic semantics change.
 
-- [ ] **Step 5: Self-review and commit**
+- [x] **Step 5: Self-review and commit**
 
 ```bash
 git diff --check

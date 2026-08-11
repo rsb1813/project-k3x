@@ -689,3 +689,10 @@
 - The first GREEN exposed the official `full_attn_layers` terminal `93` and existing test fixtures that did not mirror the full current config. The real pinned config and complete test fixtures now agree. A separate malformed-list RED proved an integer schema leaked `TypeError`; the parser now returns stable `OFFICIAL_CONFIG_MISMATCH`.
 - Live metadata-only planning returns 17 tensors, 887,843,840 KDA bytes, 1,267,744,256 base bytes, and 1,829,256,704 maximum bytes with the pinned source blob. No tensor payload, complete shard, checkpoint, or paid resource was used.
 - Official source/MoE/layer/CLI pytest passes 64 tests, compile validation passes, and `git diff --check` passes. No KDA recurrence, state parity, route, CUDA, B-0030, token, quality, or performance result exists yet.
+
+## 2026-08-11 — Milestone 29 Task 2 scalar KDA oracle
+
+- RED failed at the planned missing `k3x_ref.official_kda` module. The first GREEN run then exposed a test-fixture-only cardinality error: `[1,2,2,2]` needs eight values, not sixteen. Correcting that literal made the intended recurrence test runnable without changing production semantics.
+- The independent oracle fixes BF16 projection/convolution boundaries, F32 channel-wise `A_log[head_dim]` decay, scalar-per-head beta, FP32 key-by-value recurrence, and explicit V-first state publication. It does not call converter or runtime dispatch.
+- Full two-token execution matches incremental A-then-B exactly for BF16 output and convolution histories and within `1e-6` for FP32 recurrent state. The nonzero-state test independently reconstructs decay, delta, update, and output and confirms the input state is not mutated.
+- Focused official/synthetic KDA and model coverage passes 17 tests; the combined Task 1/2 regression passes 81 tests. Dtype, shape, non-finite, convolution-history width, empty sequence, and state-layout drift fail closed. No official payload, CUDA execution, B-0030, token, quality, or performance result was produced.
