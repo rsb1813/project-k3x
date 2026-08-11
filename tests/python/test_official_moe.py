@@ -755,3 +755,10 @@ def test_materializer_publishes_routes_before_experts_and_returns_verified_repor
     assert report.requested_payload_bytes == plan.always_active_bytes + 12
     assert report.k3x_root_sha256 == "6" * 64
     assert report.route_manifest_path.is_file()
+    final_manifest = json.loads(report.route_manifest_path.read_text(encoding="utf-8"))
+    assert final_manifest["artifact"] == {
+        "filename": "official-moe-l1.k3x",
+        "k3x_root_sha256": "6" * 64,
+        "source_sha256": "4" * 64,
+        "tensor_sha256": {"t": "5" * 64},
+    }
