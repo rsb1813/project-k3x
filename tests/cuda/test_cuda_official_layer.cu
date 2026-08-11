@@ -1,6 +1,7 @@
 // 공식 complete-layer CUDA 경계의 portable parity와 증분 상태를 검증합니다.
 #include "k3x/official_layer.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cmath>
@@ -156,7 +157,7 @@ struct Fixture {
     }
 
     k3x::OfficialLayerCudaWeights cuda_weights() const {
-        return {{ones4}, {residual_proj, 1, 4}, {ones4}, cuda_kda(),
+        return {{ones4, 501}, {residual_proj, 1, 4, 502}, {ones4, 503}, cuda_kda(),
                 cpu_moe(), cuda_moe()};
     }
 };
@@ -429,6 +430,246 @@ int device_route_failure_cleanup() {
     return 0;
 }
 
+int device_hidden_bridge() {
+    const Fixture fixture;
+    const auto zero = k3x::zero_official_kda_state(fixture.config);
+    const auto first_oracle = k3x::official_layer_cpu(
+        std::span(fixture.inputs).first(1), fixture.cpu_weights(), zero,
+        fixture.config, 2, 4, 25);
+    if (!first_oracle) return 60;
+    const std::array<k3x::OfficialLayerInput, 1> second_input{{
+        {first_oracle.value().steps[0].moe.output,
+         fixture.inputs[0].block_source},
+    }};
+    const auto second_oracle = k3x::official_layer_cpu(
+        second_input, fixture.cpu_weights(), zero, fixture.config, 2, 4, 25);
+    if (!second_oracle) return 61;
+
+    auto backend = k3x::make_cuda_backend(options(
+        k3x::CudaWeightMode::resident,
+        k3x::CudaWeightValidationMode::admission));
+    if (!backend) return 62;
+    const auto cuda_weights = fixture.cuda_weights();
+    const k3x::OfficialKdaCudaStateView initial_state{
+        zero.conv_q, zero.conv_k, zero.conv_v, zero.recurrent_v_first};
+    const k3x::OfficialKdaCudaConfig config{
+        fixture.config.hidden_size, fixture.config.heads,
+        fixture.config.head_dim, fixture.config.conv_width,
+        fixture.config.rms_norm_epsilon, fixture.config.gate_lower_bound};
+    const k3x::OfficialLayerFrontWeights front_weights{
+        cuda_weights.self_residual_norm, cuda_weights.self_residual_proj,
+        cuda_weights.input_norm, cuda_weights.kda,
+        {cuda_weights.moe.residual_norm, cuda_weights.moe.residual_proj,
+         cuda_weights.moe.post_norm, cuda_weights.moe.router},
+    };
+    const auto front_one = backend.value()->official_layer_front(
+        fixture.inputs[0].hidden_input, fixture.inputs[0].block_source, {},
+        front_weights, initial_state, config, 1, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    if (!front_one || !front_one.value().executed ||
+        !front_one.value().route.prepared.owner ||
+        !front_one.value().kda.device_state.owner ||
+        !front_one.value().kda.output.empty())
+        return 63;
+    const auto route_one = k3x::route_official_moe_logits(
+        front_one.value().route.router_logits, cuda_weights.moe.correction, 2);
+    if (!route_one ||
+        route_one.value().expert_ids !=
+            first_oracle.value().steps[0].route.expert_ids ||
+        !close(route_one.value().contributions,
+               first_oracle.value().steps[0].route.contributions))
+        return 64;
+    std::vector<k3x::Mxfp4MlpView> selected_one;
+    for (const auto expert_id : route_one.value().expert_ids) {
+        const auto expert = std::find_if(
+            cuda_weights.moe.experts.begin(), cuda_weights.moe.experts.end(),
+            [expert_id](const k3x::OfficialExpertView& item) {
+                return item.expert_id == expert_id;
+            });
+        if (expert == cuda_weights.moe.experts.end()) return 65;
+        selected_one.push_back(expert->weights);
+    }
+    const auto tail_one = backend.value()->official_layer_tail(
+        front_one.value().route.prepared, cuda_weights.moe_ffn, selected_one,
+        route_one.value().expert_ids, route_one.value().contributions,
+        fixture.config.rms_norm_epsilon, 4, 25, 1,
+        k3x::ProfilePhase::decode, true);
+    if (!tail_one || !tail_one.value().executed ||
+        !tail_one.value().hidden.owner || !tail_one.value().output.empty() ||
+        tail_one.value().hidden.producing_layer != 1 ||
+        tail_one.value().hidden.width != fixture.config.hidden_size)
+        return 66;
+
+    auto other = k3x::make_cuda_backend(options(
+        k3x::CudaWeightMode::resident,
+        k3x::CudaWeightValidationMode::admission));
+    if (!other) return 67;
+    const auto zero_token = backend.value()->official_layer_front(
+        {}, {}, {}, front_weights, initial_state, config, 2,
+        k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    const auto cross_backend = other.value()->official_layer_front(
+        {}, {}, tail_one.value().hidden, front_weights, initial_state, config,
+        2, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    auto wrong_producer = tail_one.value().hidden;
+    wrong_producer.producing_layer = 2;
+    const auto producer_failure = backend.value()->official_layer_front(
+        {}, {}, wrong_producer, front_weights, initial_state, config, 2,
+        k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    auto wrong_width = tail_one.value().hidden;
+    ++wrong_width.width;
+    const auto width_failure = backend.value()->official_layer_front(
+        {}, {}, wrong_width, front_weights, initial_state, config, 2,
+        k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    auto wrong_slot = tail_one.value().hidden;
+    wrong_slot.slot = 2;
+    const auto slot_failure = backend.value()->official_layer_front(
+        {}, {}, wrong_slot, front_weights, initial_state, config, 2,
+        k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    const auto wrong_consumer = backend.value()->official_layer_front(
+        {}, {}, tail_one.value().hidden, front_weights, initial_state, config,
+        1, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    const auto unexpected_host = backend.value()->official_layer_front(
+        fixture.inputs[0].hidden_input, fixture.inputs[0].block_source, {},
+        front_weights, initial_state, config, 1, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    if (zero_token || zero_token.error() != k3x::ErrorCode::invalid_extent ||
+        cross_backend ||
+        cross_backend.error() != k3x::ErrorCode::invalid_state ||
+        producer_failure ||
+        producer_failure.error() != k3x::ErrorCode::invalid_state ||
+        width_failure ||
+        width_failure.error() != k3x::ErrorCode::invalid_state ||
+        slot_failure ||
+        slot_failure.error() != k3x::ErrorCode::invalid_state ||
+        wrong_consumer ||
+        wrong_consumer.error() != k3x::ErrorCode::invalid_state ||
+        unexpected_host ||
+        unexpected_host.error() != k3x::ErrorCode::invalid_state)
+        return 67;
+
+    const k3x::OfficialKdaCudaStateView no_host_state{};
+    const auto before_front_two = backend.value()->runtime_stats();
+    const auto front_two = backend.value()->official_layer_front(
+        {}, {}, tail_one.value().hidden, front_weights, initial_state, config,
+        2, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    if (!front_two || !front_two.value().executed ||
+        !front_two.value().kda.output.empty())
+        return 67;
+    const auto after_front_two = backend.value()->runtime_stats();
+    const std::uint64_t state_bytes =
+        3 * (fixture.config.conv_width - 1) *
+            fixture.config.heads * fixture.config.head_dim *
+            sizeof(std::uint16_t) +
+        fixture.config.heads * fixture.config.head_dim *
+            fixture.config.head_dim * sizeof(float);
+    const auto router_bytes = cuda_weights.moe.router.rows * sizeof(float);
+    if (after_front_two.activation_h2d_bytes -
+            before_front_two.activation_h2d_bytes != state_bytes ||
+        after_front_two.device_to_host_bytes -
+            before_front_two.device_to_host_bytes != router_bytes ||
+        after_front_two.official_kda_output_d2h_bytes != 0)
+        return 67;
+    const auto stale_hidden = backend.value()->official_layer_front(
+        {}, {}, tail_one.value().hidden, front_weights, no_host_state, config,
+        2, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_continue,
+         front_two.value().kda.device_state});
+    if (stale_hidden || stale_hidden.error() != k3x::ErrorCode::invalid_state)
+        return 68;
+    if (backend.value()->discard_official_layer_hidden(
+            tail_one.value().hidden))
+        return 68;
+    const auto route_two = k3x::route_official_moe_logits(
+        front_two.value().route.router_logits, cuda_weights.moe.correction, 2);
+    if (!route_two ||
+        route_two.value().expert_ids !=
+            second_oracle.value().steps[0].route.expert_ids ||
+        !close(route_two.value().contributions,
+               second_oracle.value().steps[0].route.contributions))
+        return 69;
+    std::vector<k3x::Mxfp4MlpView> selected_two;
+    for (const auto expert_id : route_two.value().expert_ids) {
+        const auto expert = std::find_if(
+            cuda_weights.moe.experts.begin(), cuda_weights.moe.experts.end(),
+            [expert_id](const k3x::OfficialExpertView& item) {
+                return item.expert_id == expert_id;
+            });
+        if (expert == cuda_weights.moe.experts.end()) return 70;
+        selected_two.push_back(expert->weights);
+    }
+    const auto tail_two = backend.value()->official_layer_tail(
+        front_two.value().route.prepared, cuda_weights.moe_ffn, selected_two,
+        route_two.value().expert_ids, route_two.value().contributions,
+        fixture.config.rms_norm_epsilon, 4, 25, 2,
+        k3x::ProfilePhase::decode, false);
+    if (!tail_two || !tail_two.value().executed ||
+        tail_two.value().hidden.owner ||
+        !close(tail_two.value().output,
+               second_oracle.value().steps[0].moe.output))
+        return 71;
+    const auto stale_prepared = backend.value()->official_layer_tail(
+        front_two.value().route.prepared, cuda_weights.moe_ffn, selected_two,
+        route_two.value().expert_ids, route_two.value().contributions,
+        fixture.config.rms_norm_epsilon, 4, 25, 2,
+        k3x::ProfilePhase::decode, false);
+    if (stale_prepared ||
+        stale_prepared.error() != k3x::ErrorCode::invalid_state)
+        return 72;
+
+    const auto stats = backend.value()->runtime_stats();
+    const auto hidden_bytes = fixture.config.hidden_size * sizeof(float);
+    if (stats.activation_h2d_bytes < 2 * hidden_bytes ||
+        stats.official_kda_output_d2h_bytes != 0 ||
+        !backend.value()->discard_official_kda_device_state(
+            front_one.value().kda.device_state) ||
+        !backend.value()->discard_official_kda_device_state(
+            front_two.value().kda.device_state))
+        return 73;
+
+    auto cleanup_backend = k3x::make_cuda_backend(options(
+        k3x::CudaWeightMode::resident,
+        k3x::CudaWeightValidationMode::admission));
+    if (!cleanup_backend) return 74;
+    const auto cleanup_front = cleanup_backend.value()->official_layer_front(
+        fixture.inputs[0].hidden_input, fixture.inputs[0].block_source, {},
+        front_weights, initial_state, config, 1, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    if (!cleanup_front) return 74;
+    const std::vector<k3x::Mxfp4MlpView> no_experts;
+    const std::vector<std::uint32_t> no_expert_ids;
+    const std::vector<float> no_contributions;
+    const auto failed_tail = cleanup_backend.value()->official_layer_tail(
+        cleanup_front.value().route.prepared, cuda_weights.moe_ffn,
+        no_experts, no_expert_ids, no_contributions,
+        fixture.config.rms_norm_epsilon, 4, 25, 1,
+        k3x::ProfilePhase::decode, true);
+    if (failed_tail ||
+        failed_tail.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        cleanup_backend.value()->discard_official_moe_prepared(
+            cleanup_front.value().route.prepared) ||
+        !cleanup_backend.value()->discard_official_kda_device_state(
+            cleanup_front.value().kda.device_state))
+        return 74;
+    const auto recovered = cleanup_backend.value()->official_layer_front(
+        fixture.inputs[0].hidden_input, fixture.inputs[0].block_source, {},
+        front_weights, initial_state, config, 1, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    if (!recovered ||
+        !cleanup_backend.value()->discard_official_moe_prepared(
+            recovered.value().route.prepared) ||
+        !cleanup_backend.value()->discard_official_kda_device_state(
+            recovered.value().kda.device_state))
+        return 74;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -437,5 +678,6 @@ int main() {
     if (const auto result = device_state()) return result;
     if (const auto result = device_state_failure_cleanup()) return result;
     if (const auto result = device_route_preparation()) return result;
-    return device_route_failure_cleanup();
+    if (const auto result = device_route_failure_cleanup()) return result;
+    return device_hidden_bridge();
 }
