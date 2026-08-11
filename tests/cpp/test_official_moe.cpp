@@ -89,6 +89,42 @@ int main(int argc, char** argv) {
         !close(route.value().contributions[0], 0.6497964859F, 1.0e-6F) ||
         !close(route.value().contributions[1], 0.3502035439F, 1.0e-6F))
         return 3;
+    const std::array<float, 3> logits{
+        1.2578125F, -0.32421875F, -1.58203125F};
+    const auto logits_route = k3x::route_official_moe_logits(
+        logits, weights.correction, 2);
+    if (!logits_route ||
+        logits_route.value().expert_ids != route.value().expert_ids ||
+        logits_route.value().scores != route.value().scores ||
+        logits_route.value().contributions != route.value().contributions)
+        return 13;
+    const std::array<float, 3> tied_logits{0.0F, 0.0F, 0.0F};
+    const std::array<float, 3> tied_correction{0.0F, 0.0F, 0.0F};
+    const auto tied_route = k3x::route_official_moe_logits(
+        tied_logits, tied_correction, 2);
+    if (!tied_route ||
+        tied_route.value().expert_ids != std::vector<std::uint32_t>({0, 1}) ||
+        tied_route.value().scores != std::vector<float>({0.5F, 0.5F, 0.5F}) ||
+        tied_route.value().contributions != std::vector<float>({0.5F, 0.5F}))
+        return 14;
+    auto non_finite_logits = tied_logits;
+    non_finite_logits[1] = std::numeric_limits<float>::infinity();
+    if (k3x::route_official_moe_logits(
+            non_finite_logits, tied_correction, 2) ||
+        k3x::route_official_moe_logits(
+            tied_logits, std::span<const float>(tied_correction).first(2), 2) ||
+        k3x::route_official_moe_logits(
+            tied_logits, tied_correction, 0) ||
+        k3x::route_official_moe_logits(
+            tied_logits, tied_correction, 4))
+        return 15;
+    const std::array<float, 3> zero_mass_logits{
+        -std::numeric_limits<float>::max(),
+        -std::numeric_limits<float>::max(),
+        -std::numeric_limits<float>::max()};
+    if (k3x::route_official_moe_logits(
+            zero_mass_logits, tied_correction, 2))
+        return 16;
 
     const auto result = k3x::official_moe_cpu(
         input, weights, route.value(), 1.0e-5F, 4.0F, 25.0F);

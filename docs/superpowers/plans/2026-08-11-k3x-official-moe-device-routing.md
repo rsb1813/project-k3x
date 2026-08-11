@@ -35,29 +35,29 @@
 - Produces: `Result<OfficialRoute> route_official_moe_logits(std::span<const float> logits, std::span<const float> correction, std::size_t top_k)`.
 - Preserves: `route_official_moe(hidden, router, correction, top_k)` computes BF16 router logits and delegates policy to the new helper.
 
-- [ ] **Step 1: Write the failing canonical-helper tests**
+- [x] **Step 1: Write the failing canonical-helper tests**
 
 Add a fixed logit/correction case that asserts sigmoid scores, expert-ID tie breaking, selected IDs, normalized contributions, and invalid length/non-finite/top-k rejection. Add a parity assertion that `route_official_moe` and `route_official_moe_logits` return identical route fields for the existing tiny fixture.
 
-- [ ] **Step 2: Run the CPU RED**
+- [x] **Step 2: Run the CPU RED**
 
 Run:
 
 ```powershell
-rtk wsl -d Ubuntu -- bash -lc 'cd /mnt/c/Users/jolib/Documents/project-k3x/.worktrees/milestone-twenty-four-cuda-graph-cache && cmake --build build -j2 --target test_official_moe && ctest --test-dir build -R "^official_moe$" --output-on-failure'
+rtk wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/c/Users/jolib/Documents/project-k3x/.worktrees/milestone-twenty-four-cuda-graph-cache && cmake --build build -j2 --target test_official_moe && ctest --test-dir build -R "^official_moe$" --output-on-failure'
 ```
 
 Expected result: compilation fails because `route_official_moe_logits` is undeclared.
 
-- [ ] **Step 3: Implement the minimum shared policy helper**
+- [x] **Step 3: Implement the minimum shared policy helper**
 
 Move only sigmoid, correction, partial sort with ID tie break, selected-score sum, and contribution normalization into the new function. Leave BF16 matvec validation and accumulation in `route_official_moe`.
 
-- [ ] **Step 4: Run GREEN and nearby portable regressions**
+- [x] **Step 4: Run GREEN and nearby portable regressions**
 
 Run the focused target above, then `ctest --test-dir build -R "official_(moe|layer)" --output-on-failure`.
 
-- [ ] **Step 5: Self-review and commit**
+- [x] **Step 5: Self-review and commit**
 
 Commit message: `refactor: share canonical official MoE routing`.
 
@@ -86,7 +86,7 @@ Require exact tiny CPU-oracle prepared activation, bounded parity for every raw 
 Run:
 
 ```powershell
-rtk wsl -d Ubuntu -- bash -lc 'cd /mnt/c/Users/jolib/Documents/project-k3x/.worktrees/milestone-twenty-four-cuda-graph-cache && cmake --build build-cuda -j2 --target test_cuda_official_moe'
+rtk wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/c/Users/jolib/Documents/project-k3x/.worktrees/milestone-twenty-four-cuda-graph-cache && cmake --build build-cuda -j2 --target test_cuda_official_moe'
 ```
 
 Expected result: compilation fails because the prepare/token/consume API does not exist.

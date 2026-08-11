@@ -67,6 +67,11 @@ Result<OfficialRoute> route_official_moe(
     std::span<const float> correction,
     std::size_t top_k);
 
+Result<OfficialRoute> route_official_moe_logits(
+    std::span<const float> logits,
+    std::span<const float> correction,
+    std::size_t top_k);
+
 Result<OfficialMoeResult> official_moe_cpu(
     const OfficialMoeInput& input,
     const OfficialMoeWeights& weights,
