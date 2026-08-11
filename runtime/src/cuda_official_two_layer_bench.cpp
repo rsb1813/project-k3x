@@ -631,6 +631,24 @@ float maximum_cuda_error(const k3x::OfficialTwoLayerCudaResult& actual,
                          expected.outputs[position][index]));
         }
     }
+    for (std::size_t layer = 0; layer < 2; ++layer) {
+        const auto& observed = actual.final_states[layer];
+        const auto& reference = expected.final_states[layer];
+        if (observed.conv_q != reference.conv_q ||
+            observed.conv_k != reference.conv_k ||
+            observed.conv_v != reference.conv_v ||
+            observed.recurrent_v_first.size() !=
+                reference.recurrent_v_first.size()) {
+            return std::numeric_limits<float>::infinity();
+        }
+        for (std::size_t index = 0;
+             index < observed.recurrent_v_first.size(); ++index) {
+            maximum = std::max(
+                maximum,
+                std::abs(observed.recurrent_v_first[index] -
+                         reference.recurrent_v_first[index]));
+        }
+    }
     return maximum;
 }
 
@@ -896,6 +914,22 @@ int main(int argc, char** argv) {
               << last.telemetry.layer_front_calls
               << ",\"layer_tail_calls\":"
               << last.telemetry.layer_tail_calls
+              << ",\"state_seeds\":"
+              << stats.official_kda_device_state_seeds
+              << ",\"state_continuations\":"
+              << stats.official_kda_device_state_continuations
+              << ",\"state_publications\":"
+              << stats.official_kda_device_state_publications
+              << ",\"state_invalidations\":"
+              << stats.official_kda_device_state_invalidations
+              << ",\"prepared_seeds\":"
+              << stats.official_moe_prepared_seeds
+              << ",\"prepared_consumes\":"
+              << stats.official_moe_prepared_consumes
+              << ",\"prepared_discards\":"
+              << stats.official_moe_prepared_discards
+              << ",\"prepared_invalidations\":"
+              << stats.official_moe_prepared_invalidations
               << ",\"resident_weight_bytes\":"
               << stats.resident_weight_bytes
               << ",\"peak_device_bytes\":"
