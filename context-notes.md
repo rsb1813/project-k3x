@@ -585,3 +585,8 @@
 - Fresh gates after the committed-evidence regression pass CPU CTest 16/16 plus pytest 473/76, liburing/direct CTest 17/17 plus pytest 475/74, ASan/UBSan CTest 17/17, CUDA CTest 28/28 plus pytest 531/18, actual-artifact focused pytest 6/6, committed B-0028 pytest 11/11, and resident Compute Sanitizer with zero errors.
 - D-054 selects a dependency-closed real MoE FFN sublayer for M28: real router and all 896 scores, natural Top-16, exact selected routed experts, real shared expert, mixing, residual behavior, and independent parity. No complete shard, full checkpoint, paid cloud, token, or full-layer claim is authorized by B-0028.
 - Final Critical/Important review found one evidence-regression gap: temporary-output tests did not read the committed B-0028 files. The fixed-digest committed-evidence test was added, all three Python matrices were rerun, and the final scoped review found no remaining Critical or Important issue. Production defaults, `k3x_run`, model graph, converter, K3X format, reference graph, and tracked real artifacts remain unchanged.
+
+## 2026-08-11 — Milestone 27 public integration
+
+- Branch correctness `31455570571`, pull-request correctness `31455597581`, and pull-request CodeQL `31455597565` passed. PR #46 was rebase-merged at public integration head `ec08b827`.
+- Post-merge `main` correctness `31455776634` and CodeQL `31455776673` both passed. M27 is publicly integrated; M28 now owns the dependency-closed real router-selected Top-16 plus shared-expert FFN boundary.

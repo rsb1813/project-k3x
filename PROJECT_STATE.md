@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 27 official expert CUDA execution is the active engineering boundary. The pure pinned identity contract, dedicated transient/resident CUDA harness, strict B-0028 runner/verifier, first formal measurement, independent evidence cross-check, complete verification matrix, documentation synchronization, and final Critical/Important review are complete. Public integration remains pending.
+Milestone 28 dependency-closed real MoE FFN sublayer is the active engineering boundary. Milestone 27's pure pinned identity contract, dedicated transient/resident CUDA harness, strict B-0028 runner/verifier, formal measurement, independent evidence cross-check, complete verification matrix, final Critical/Important review, and public integration are complete. M28 is accepted by D-054 but not yet implemented.
 
-State audited last on 2026-08-11 after formal B-0028, full verification, M28 boundary decision, and all other TITAN Ledger updates. Milestone 26 remains publicly integrated through PR #44 at `5b6345db`, with its publication update through PR #45 at `9c461a1`. One bounded official expert is present only under ignored `artifacts/`; no complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-11 after PR #46 rebase-merged Milestone 27 at `ec08b827` and post-merge `main` correctness `31455776634` plus CodeQL `31455776673` passed. One bounded official expert is present only under ignored `artifacts/`; no complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -110,7 +110,7 @@ State audited last on 2026-08-11 after formal B-0028, full verification, M28 bou
 
 ## Work in progress
 
-- Milestone 27 implementation, B-0028, full local verification, README/TITAN Ledger synchronization, D-054 M28 selection, and final Critical/Important review are complete. Public integration remains.
+- Milestone 27 implementation, B-0028, full local verification, README/TITAN Ledger synchronization, D-054 M28 selection, final Critical/Important review, PR #46 merge, and post-merge correctness/CodeQL are complete.
 - Milestone 26 implementation, live dry-run, one exact official expert conversion, B-0027 verifier, full local verification, final Critical/Important review, README/TITAN Ledger synchronization, PR #44 merge, and post-merge CI are complete.
 - The actual official K3X storage fixture still exits 4 with `NON_EXECUTABLE_ARTIFACT` through `k3x_run`; the separate M27 benchmark-only path executes only the pinned expert FFN and does not weaken that production guard.
 - Milestone 24 implementation, B-0025 measurement, committed-evidence validation, full local verification, final Critical/Important review, PR #40 merge, and post-merge correctness/CodeQL are complete.
@@ -138,7 +138,7 @@ State audited last on 2026-08-11 after formal B-0028, full verification, M28 bou
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Current implementation branch: `codex/milestone-twenty-seven-real-cuda-expert` from public Milestone 26 publication head `9c461a1`.
+- Current documentation reconciliation branch: `codex/milestone-twenty-seven-publication` from public Milestone 27 integration head `ec08b827`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build`, `build-uring`, `build-uring-asan`, and `build-cuda`.
 
 ## Known failures and blockers
@@ -163,9 +163,9 @@ State audited last on 2026-08-11 after formal B-0028, full verification, M28 bou
 
 ## Next concrete tasks
 
-1. Commit and publish M27, wait for branch/PR correctness and CodeQL, merge only when clean, and verify post-merge `main` checks.
-2. Reconcile the README/ledger with the final public PR, integration head, and post-merge runs.
-3. Start M28 with D-054's dependency-closed real MoE FFN sublayer without downloading a complete shard/full checkpoint or invoking paid cloud resources.
+1. Publish this M27 README/TITAN Ledger reconciliation and verify its public checks.
+2. Write and review the M28 dependency-closed real MoE FFN sublayer design and TDD plan, including the minimum bounded official tensor ranges required by the real router, natural Top-16, selected experts, shared expert, mixing, and residual oracle.
+3. Implement M28 without downloading a complete shard/full checkpoint or invoking paid cloud resources, then run parity, traffic, sanitizer, and evidence gates before any performance claim.
 
 ## Hardware assumptions
 
@@ -274,4 +274,4 @@ B-0028 closes the fixed single-expert CUDA correctness gate. Twenty transient ca
 
 ## Proposed component status
 
-AURORA's replay reference, persistent reduced-Top-K CPU state, adaptive scheduler, exact transient CUDA draft, bounded exact resident CUDA draft, exact resident expert grid, resident MoE-layer execution, admission validation, independent target/draft CUDA Graph ownership, target feedback, CLI, separated telemetry, and B-0017 through B-0025 are implemented and measured as experimental non-default paths. The strict K3X v1 converter trust boundary, official bounded discovery/materialization path, and B-0026/B-0027 are implemented, measured, and publicly integrated. M27's pinned identity, dedicated official-expert CUDA harness, strict B-0028 evidence tool, and formal B-0028 are implemented and measured locally; public integration remains pending. D-054's real routed/shared MoE FFN sublayer is accepted for M28 but unimplemented. Transient CUDA is rejected as a default; bounded residency, the resident grid, the resident MoE layer, admission validation, and CUDA Graph modes remain opt-in. B-0025 rejects a graph default on current evidence. Reduced precision, eviction-capable residency, a complete device-resident token graph, learned drafting, and full real-weight CUDA graph execution remain proposed. APOLLO, TITAN COUNCIL, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None of the proposed-only components is claimed as implemented or benchmarked.
+AURORA's replay reference, persistent reduced-Top-K CPU state, adaptive scheduler, exact transient CUDA draft, bounded exact resident CUDA draft, exact resident expert grid, resident MoE-layer execution, admission validation, independent target/draft CUDA Graph ownership, target feedback, CLI, separated telemetry, and B-0017 through B-0025 are implemented and measured as experimental non-default paths. The strict K3X v1 converter trust boundary, official bounded discovery/materialization path, B-0026/B-0027, and M27's pinned identity, dedicated official-expert CUDA harness, strict B-0028 evidence tool, and formal B-0028 are implemented, measured, and publicly integrated. D-054's real routed/shared MoE FFN sublayer is accepted for M28 but unimplemented. Transient CUDA is rejected as a default; bounded residency, the resident grid, the resident MoE layer, admission validation, and CUDA Graph modes remain opt-in. B-0025 rejects a graph default on current evidence. Reduced precision, eviction-capable residency, a complete device-resident token graph, learned drafting, and full real-weight CUDA graph execution remain proposed. APOLLO, TITAN COUNCIL, PROMETHEUS-X, MERCURY, ORBIT, HELIOS, SHADOW, PHOENIX, VAULT, VEILBREAK, AUTO, and SKYFORGE remain proposed only. ATLAS, CHRONOS, and BLACKSTAR remain reserved without accepted definitions. None of the proposed-only components is claimed as implemented or benchmarked.

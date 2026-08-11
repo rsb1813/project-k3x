@@ -977,7 +977,7 @@ PR #44 was rebase-merged at public implementation head `5b6345db`. Both branch a
 ## B-0028 — Milestone 27 official expert CUDA execution
 
 - Date: 2026-08-11.
-- Commit: official identity `2e2acb9`, dedicated CUDA harness and runtime D2H correction `60f19e7`, strict runner/verifier `c39aac2`; evidence/documentation commit pending at measurement time.
+- Commit: official identity `2e2acb9`, dedicated CUDA harness and runtime D2H correction `60f19e7`, strict runner/verifier `c39aac2`, committed evidence/documentation `e78fda0`; publicly integrated through PR #46 at `ec08b827`.
 - Hardware: AMD Ryzen 7 9800X3D and NVIDIA GeForce RTX 5080 16,303 MiB under WSL2 Ubuntu 24.04.4, driver 591.86, CUDA 13.3.1 native `sm_120`.
 - Model/checkpoint: official public `moonshotai/Kimi-K3` snapshot `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`; layer 1, expert 0 only; ignored K3X artifact SHA-256 `e08293cd854ed11913bd8f1bc3a51d1eb577202fd5fd9b5b7e3c96ef1bccecc7` and root `d585d283325e13e1316a0194c2d6274dd89ef75a28b96b02f02733290b7658be`.
 - Mode: exact native MXFP4 `cuda-custom + reused + ffn-block + synchronous + fusion-none`; transient versus exact 17,547,264-byte resident capacity; one cold call, three warmups, and twenty measured calls.
@@ -999,6 +999,8 @@ Raw JSON and summary artifacts are under `results/b0028-official-expert-cuda-wsl
 Strict verification rehashes the ignored artifact and runner, checks fixed B-0027 provenance, raw payload/digests, exact case order, canonical aggregate, LF-only CSV parity, mode-specific traffic formulas, finite parity, and forbidden metric absence. Staged Git blob SHA-256 values match all four working files. A separate read-only cross-check recomputed raw-summary equality, `20 × 17,547,264` transient H2D, resident hit/residency values, activation/D2H formulas, aggregate, CSV order, and forbidden fields.
 
 Fresh verification passes CPU CTest 16/16 with pytest 473 passed/76 skipped, liburing/direct CTest 17/17 with pytest 475 passed/74 skipped, ASan/UBSan CTest 17/17, and CUDA CTest 28/28 with pytest 531 passed/18 skipped. The actual-artifact focused suite passes 6/6, the committed B-0028 evidence suite passes 11/11, and the resident official-expert Compute Sanitizer run reports `ERROR SUMMARY: 0 errors`.
+
+Public branch correctness `31455570571`, pull-request correctness `31455597581`, and pull-request CodeQL `31455597565` passed. PR #46 was rebase-merged at public integration head `ec08b827`; post-merge `main` correctness `31455776634` and CodeQL `31455776673` also passed.
 
 The measured next bottleneck is no longer official single-expert compatibility. M28 must close a real MoE FFN sublayer with the official router, all 896 scores, natural Top-16 selection, exact selected routed experts, real shared expert, mixing, and residual parity before any cache-pressure, full-layer, or throughput conclusion.
 
