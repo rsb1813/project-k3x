@@ -1116,3 +1116,4 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - CUDA with actual bounded artifact: CTest 30/30; Python 592 passed, 12 skipped.
 - Actual alternating resident Compute Sanitizer: `ERROR SUMMARY: 0 errors`; maximum absolute error `0.00048828125`; warm weight H2D zero.
 - A full-matrix precursor exposed two incomplete BF16 source-integrity fields in a Python test helper. Commit `bdfc0b6` added the source/tensor digests and canonical tensor order; focused CPU and liburing BF16 tests then passed 2/2 before this fresh matrix.
+- Public integration: branch correctness `31465297042`, pull-request correctness `31465320780`, and pull-request CodeQL `31465320778` passed. PR #48 rebase-merged at `eb2c20860ee9c7c612b9b74984170bd8b4443ba1`; post-merge `main` correctness `31465590414` and CodeQL `31465590416` passed.

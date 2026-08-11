@@ -627,6 +627,7 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: B-0029 measures 97,095,781 ns transient and 10,153,939 ns resident medians for route A, plus a 20,201,466 ns resident median for an alternating A+B sequence. It implies no token, full-layer, quality, physical NVMe, or native-Linux result.
 - Reason accepted: the real FFN sublayer is the smallest boundary that tests natural routing and exact selected-weight residency without conflating it with attention and recurrent-state integration.
 - Rejected claims: this decision does not authorize a complete shard/full checkpoint download, paid cloud execution, a residency default, or a full-model TPS projection.
+- Publication: PR #48 rebase-merged the complete M28 lineage at `eb2c20860ee9c7c612b9b74984170bd8b4443ba1`. Branch and pull-request correctness, pull-request C++/Python CodeQL, and post-merge `main` correctness/CodeQL all passed.
 - Revisit: after the real FFN sublayer passes parity and traffic gates, choose between full transformer-layer closure and multi-layer routing/residency traces from measured evidence.
 
 ## D-055 — Persist routes before fetching the selected expert union

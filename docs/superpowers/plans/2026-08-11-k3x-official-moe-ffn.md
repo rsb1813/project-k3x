@@ -511,6 +511,6 @@ Run CPU CTest/pytest, liburing/direct CTest/pytest, ASan/UBSan CTest, CUDA CTest
 
 Record only measured sublayer latency, traffic, residency, routes, parity, and scope. Update architecture status and D-055 or later decision evidence. Mark token metrics, quality, physical NVMe, and full-layer behavior unmeasured. Update `PROJECT_STATE.md` after every other document and identify the next measured bottleneck.
 
-- [ ] **Step 8: Final review, semantic commit, and public integration**
+- [x] **Step 8: Final review, semantic commit, and public integration**
 
 Run `git diff --check`, inspect every changed line against the accepted design, verify no real bytes are tracked, and fix only Critical/Important findings in one correction cycle. Commit evidence/docs, push, open a public PR, wait for correctness and CodeQL, rebase-merge only when clean, and verify post-merge correctness and CodeQL before beginning M29.

@@ -444,6 +444,8 @@ B-0029 now measures a 97.096 ms transient median and a 10.154 ms exact-resident 
 
 The full M28 verification matrix passes CPU CTest 17/17 with Python 507 passed and 97 skipped, liburing CTest 18/18 with Python 509 passed and 95 skipped, ASan/UBSan CTest 18/18, and CUDA CTest 30/30 with Python 592 passed and 12 skipped. Compute Sanitizer reports zero errors on the actual alternating resident path. The next boundary is one complete official transformer layer, adding KDA/MLA/Attention Residual around the now-validated FFN before any end-to-end token claim.
 
+Public PR [#48](https://github.com/rsb1813/project-k3x/pull/48) rebase-merged Milestone 28 at `eb2c208`. Branch correctness, pull-request correctness, C++/Python CodeQL, and post-merge `main` correctness/CodeQL all passed.
+
 ## Quick start
 
 ### 1. Create an environment
