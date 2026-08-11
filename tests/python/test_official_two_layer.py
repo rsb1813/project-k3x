@@ -33,10 +33,12 @@ from k3x_converter.official_two_layer import (
     OfficialTwoLayerState,
     OfficialTwoLayerStepExecution,
     derive_official_two_layer_trace,
+    finish_official_source_step,
     make_official_source_byte_executor,
     manufacture_official_two_layer_fixture,
     official_two_layer_state,
     plan_official_two_layer,
+    prepare_official_source_step,
 )
 from k3x_converter.reader import K3XReader
 
@@ -346,6 +348,26 @@ def test_official_source_byte_executor_rejects_truncated_dense_payload() -> None
 
     with pytest.raises(K3XError, match="INVALID_OFFICIAL_TWO_LAYER_SOURCE"):
         execute(_layer_plan(1), item, state)
+
+
+def test_official_source_prepare_routes_before_expert_bytes_arrive() -> None:
+    source = replace(_tiny_source(1), experts=())
+    state = official_two_layer_state(
+        zero_official_kda_state(source.kda_config, 1, torch.device("cpu"))
+    )
+    item = OfficialLayerInput(
+        "a",
+        (0.5, -0.25),
+        (0.125, 0.375),
+        _float_digest((0.5, -0.25)),
+        _float_digest((0.125, 0.375)),
+    )
+
+    prepared = prepare_official_source_step(_layer_plan(1), item, state, source)
+
+    assert prepared.route.expert_ids == (0,)
+    with pytest.raises(K3XError, match="INVALID_OFFICIAL_TWO_LAYER_SOURCE"):
+        finish_official_source_step(prepared, source)
 
 
 def _tiny_artifact_tensors(

@@ -9,8 +9,18 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import torch
 
 from k3x_converter.format import K3XError, OPTIONAL_STORAGE_FIXTURE
+from k3x_converter.official_moe import MaterializedRangeObject, OfficialMoeRoute
+from k3x_converter.official_two_layer import (
+    OfficialLayerSourceBytes,
+    OfficialPreparedSourceStep,
+    OfficialTwoLayerMaterializationReport,
+    OfficialTwoLayerState,
+    OfficialTwoLayerStepExecution,
+    parse_official_two_layer_oracle,
+)
 from k3x_converter.official_transport import HttpResponse, TransportStats
 from tools.discover_official_kimi_k3 import main
 from tools.verify_official_discovery import (
@@ -23,6 +33,7 @@ from tools.verify_official_discovery import (
 
 _COMMIT = "9f62e4e9fffbd0a83ddd60e1c209d828994b3569"
 _SHARD = "model-00002-of-000096.safetensors"
+_SHARD_2 = "model-00003-of-000096.safetensors"
 _SHARD_SIZE = 16_990_911_504
 _HEADER_LENGTH = 818_696
 _DATA_START = 818_704
@@ -126,6 +137,26 @@ def _index_body(shards: tuple[str, ...]) -> bytes:
         "block_sparse_moe.shared_experts.down_proj.weight",
     )
     weight_map.update({f"language_model.model.layers.1.{name}": _SHARD for name in always_active})
+    layer_2_base = "language_model.model.layers.2.block_sparse_moe.experts.0"
+    weight_map.update(
+        {
+            f"{layer_2_base}.{matrix}.{kind}": _SHARD_2
+            for matrix in ("w1", "w2", "w3")
+            for kind in ("weight_packed", "weight_scale")
+        }
+    )
+    weight_map.update(
+        {
+            f"language_model.model.layers.2.{name}": _SHARD_2
+            for name, _, _ in _KDA_SPECIFICATIONS
+        }
+    )
+    weight_map.update(
+        {
+            f"language_model.model.layers.2.{name}": _SHARD_2
+            for name in always_active
+        }
+    )
     value = {
         "metadata": {"total_size": 1_560_860_324_864},
         "weight_map": weight_map,
@@ -133,7 +164,7 @@ def _index_body(shards: tuple[str, ...]) -> bytes:
     return json.dumps(value, separators=(",", ":")).encode()
 
 
-def _header_body() -> bytes:
+def _header_body(layer_id: int = 1) -> bytes:
     selected = [
         ("w1.weight_packed", [3072, 1792], [1_267_744_256, 1_273_249_280]),
         ("w1.weight_scale", [3072, 112], [1_273_249_280, 1_273_593_344]),
@@ -162,7 +193,7 @@ def _header_body() -> bytes:
         for dimension in shape:
             values *= dimension
         length = values * (4 if dtype == "F32" else 2)
-        kda[f"language_model.model.layers.1.{suffix}"] = {
+        kda[f"language_model.model.layers.{layer_id}.{suffix}"] = {
             "dtype": dtype,
             "shape": shape,
             "data_offsets": [cursor, cursor + length],
@@ -174,7 +205,7 @@ def _header_body() -> bytes:
         for dimension in shape:
             values *= dimension
         length = values * (4 if dtype == "F32" else 2)
-        always[f"language_model.model.layers.1.{suffix}"] = {
+        always[f"language_model.model.layers.{layer_id}.{suffix}"] = {
             "dtype": dtype,
             "shape": shape,
             "data_offsets": [cursor, cursor + length],
@@ -185,7 +216,8 @@ def _header_body() -> bytes:
         **kda,
         **always,
         **{
-            f"{_BASE}.{suffix}": {
+            f"language_model.model.layers.{layer_id}.block_sparse_moe."
+            f"experts.0.{suffix}": {
                 "dtype": "U8",
                 "shape": shape,
                 "data_offsets": offsets,
@@ -209,7 +241,7 @@ class _DiscoveryTransport:
             f"model-{index:05d}-of-000096.safetensors" for index in range(1, 97)
         )
         self.index = _index_body(self.shards)
-        self.header = _header_body()
+        self.headers = {_SHARD: _header_body(1), _SHARD_2: _header_body(2)}
         cycle = bytes(range(256))
         length = _PAYLOAD_END - _PAYLOAD_START
         self.payload = (cycle * ((length + 255) // 256))[:length]
@@ -235,7 +267,7 @@ class _DiscoveryTransport:
             },
         ]
         for index, path in enumerate(self.shards):
-            size = _SHARD_SIZE if path == _SHARD else 10_000 + index
+            size = _SHARD_SIZE if path in {_SHARD, _SHARD_2} else 10_000 + index
             siblings.append(
                 {
                     "rfilename": path,
@@ -288,7 +320,8 @@ class _DiscoveryTransport:
                 body = struct.pack("<Q", _HEADER_LENGTH)
                 start, end = 0, 7
             elif requested == f"bytes=8-{_HEADER_LENGTH + 7}":
-                body = self.header
+                shard_path = _SHARD_2 if _SHARD_2 in url else _SHARD
+                body = self.headers[shard_path]
                 start, end = 8, _HEADER_LENGTH + 7
             elif requested == f"bytes={_PAYLOAD_START}-{_PAYLOAD_END - 1}":
                 self.payload_requested = True
@@ -369,6 +402,265 @@ def test_cli_kda_layer_scope_dry_run_plans_complete_layer_without_payload(
     assert summary["maximum_two_token_bytes"] == 1_829_256_704
     assert summary["traffic"]["tensor_payload_bytes"] == 0
     assert transport.payload_requested is False
+
+
+def test_cli_two_layer_scope_dry_run_plans_both_shards_without_payload(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    summary_path = tmp_path / "two-layer-dry-run.json"
+    transport = _DiscoveryTransport()
+
+    assert main(
+        ["--scope", "two-layer", "--summary-json", str(summary_path)],
+        transport=transport,
+    ) == 0
+
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert json.loads(capsys.readouterr().out) == summary
+    assert summary["format"] == "k3x-official-two-layer-discovery-v1"
+    assert summary["scope"] == "two-layer"
+    assert summary["mode"] == "dry-run"
+    assert summary["layer_ids"] == [1, 2]
+    assert summary["shard_paths"] == [_SHARD, _SHARD_2]
+    assert summary["base_payload_bytes"] == 2_535_488_512
+    assert summary["maximum_two_position_bytes"] == 3_658_513_408
+    assert summary["traffic"]["tensor_payload_bytes"] == 0
+    assert transport.payload_requested is False
+
+
+def test_cli_two_layer_materialization_prints_canonical_report(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = tmp_path / "artifacts"
+    summary_path = tmp_path / "two-layer-summary.json"
+    captured: dict[str, object] = {}
+
+    def fake_materialize(
+        snapshot,
+        index,
+        config,
+        headers,
+        plan,
+        transport,
+        output_dir,
+        *,
+        chunk_bytes,
+    ):
+        captured.update(
+            headers=tuple(header.shard_path for header in headers),
+            output_dir=output_dir,
+            chunk_bytes=chunk_bytes,
+        )
+        return SimpleNamespace(
+            selected_experts=((7, 8), (9, 10)),
+            requested_payload_bytes=2_600_000_000,
+            downloaded_payload_bytes=123_456,
+            reused_objects=4,
+            requests=12,
+            maximum_response_bytes=8 * 1024 * 1024,
+            microshard_sha256="4" * 64,
+            tensor_sha256={"tensor": "5" * 64},
+            k3x_root_sha256="6" * 64,
+            route_manifest_path=output / "two-layer-route-state-manifest.json",
+            oracle_path=output / "official-two-layer-oracle-v1.bin",
+            oracle_sha256="7" * 64,
+            oracle_bytes=12_000_000,
+        )
+
+    monkeypatch.setattr(
+        "tools.discover_official_kimi_k3.materialize_official_two_layer",
+        fake_materialize,
+    )
+
+    assert main(
+        [
+            "--scope", "two-layer", "--materialize",
+            "--output-dir", str(output),
+            "--summary-json", str(summary_path),
+        ],
+        transport=_DiscoveryTransport(),
+    ) == 0
+
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert json.loads(capsys.readouterr().out) == summary
+    assert summary["format"] == "k3x-official-two-layer-materialization-v1"
+    assert summary["mode"] == "materialize"
+    assert summary["selected_experts"] == [[7, 8], [9, 10]]
+    assert summary["traffic"]["tensor_payload_bytes"] == 123_456
+    assert summary["traffic"]["source_object_bytes"] == 2_600_000_000
+    assert summary["artifacts"]["k3x_root_sha256"] == "6" * 64
+    assert captured == {
+        "headers": (_SHARD, _SHARD_2),
+        "output_dir": output.resolve(),
+        "chunk_bytes": 257 * 1024,
+    }
+
+
+def test_cli_two_layer_real_orchestrator_fetches_experts_after_all_trunks(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, int]] = []
+    output = tmp_path / "orchestrated"
+
+    def fake_range(
+        snapshot,
+        shard_path,
+        offset,
+        length,
+        transport,
+        object_directory,
+        *,
+        chunk_bytes,
+    ):
+        calls.append((shard_path, length))
+        return MaterializedRangeObject(
+            tmp_path / f"object-{len(calls)}.bin",
+            f"{len(calls):064x}",
+            length,
+            False,
+            1,
+            min(length, chunk_bytes),
+            length,
+        )
+
+    def fake_source(plan, kda_objects, always_objects, expert_plans, expert_objects):
+        return OfficialLayerSourceBytes(
+            plan.layer_id,
+            SimpleNamespace(),
+            (),
+            (),
+            16,
+            1.0e-5,
+            4.0,
+            25.0,
+        )
+
+    def fake_prepare(layer, item, state, source):
+        expert_id = layer.layer_id * 10 + (0 if item.name == "a" else 1)
+        next_state = OfficialTwoLayerState(
+            state.value,
+            hashlib.sha256(
+                f"{layer.layer_id}:{item.name}".encode()
+            ).hexdigest(),
+        )
+        return OfficialPreparedSourceStep(
+            layer.layer_id,
+            torch.zeros(1),
+            torch.zeros(1),
+            torch.zeros(1),
+            torch.zeros(1),
+            torch.zeros((1, 1), dtype=torch.bfloat16),
+            next_state,
+            hashlib.sha256(f"kda:{layer.layer_id}:{item.name}".encode()).hexdigest(),
+            OfficialMoeRoute((expert_id,), (1.0,)),
+        )
+
+    def fake_finish(prepared, source):
+        width = 7_168
+        output = tuple(float(prepared.layer_id) for _ in range(width))
+        return OfficialTwoLayerStepExecution(
+            output,
+            prepared.state,
+            prepared.kda_output_sha256,
+            prepared.route,
+        )
+
+    def fake_expert(index, header, *, layer_id, expert_id):
+        return SimpleNamespace(
+            layer_id=layer_id,
+            expert_id=expert_id,
+            shard_path=header.shard_path,
+            payload_start=expert_id,
+            payload_end=expert_id + 1,
+            payload_bytes=1,
+            index_sha256=index.sha256,
+            tensors=(),
+        )
+
+    def fake_manufacture(
+        output_directory,
+        tensors,
+        config,
+        metadata,
+        *,
+        chunk_bytes,
+        stop_after_extents=None,
+    ):
+        return OfficialTwoLayerMaterializationReport(
+            output_directory / "source",
+            output_directory / "source" / "source-manifest.json",
+            output_directory / "source" / "model.safetensors",
+            output_directory / "official-two-layer.k3x",
+            True,
+            chunk_bytes,
+            microshard_sha256="4" * 64,
+            tensor_sha256={"tensor": "5" * 64},
+            k3x_root_sha256="6" * 64,
+            oracle_path=output_directory / "official-two-layer-oracle-v1.bin",
+            oracle_sha256="7" * 64,
+            oracle_bytes=12_000_000,
+        )
+
+    monkeypatch.setattr(
+        "k3x_converter.official_two_layer.materialize_official_range_object",
+        fake_range,
+    )
+    monkeypatch.setattr(
+        "k3x_converter.official_two_layer.load_official_layer_source_bytes",
+        fake_source,
+    )
+    monkeypatch.setattr(
+        "k3x_converter.official_two_layer.prepare_official_source_step",
+        fake_prepare,
+    )
+    monkeypatch.setattr(
+        "k3x_converter.official_two_layer.finish_official_source_step",
+        fake_finish,
+    )
+    monkeypatch.setattr(
+        "k3x_converter.official_two_layer.plan_official_expert",
+        fake_expert,
+    )
+    monkeypatch.setattr(
+        "k3x_converter.official_two_layer._load_official_expert_bytes",
+        lambda layer, expert_plans, expert_objects: (),
+    )
+    monkeypatch.setattr(
+        "k3x_converter.official_two_layer.build_official_layer_source_tensors",
+        lambda *args: (),
+    )
+    monkeypatch.setattr(
+        "k3x_converter.official_two_layer.manufacture_official_two_layer_fixture",
+        fake_manufacture,
+    )
+
+    assert main(
+        [
+            "--scope", "two-layer", "--materialize",
+            "--output-dir", str(output),
+        ],
+        transport=_DiscoveryTransport(),
+    ) == 0
+
+    summary = json.loads(capsys.readouterr().out)
+    expert_call_indices = [
+        index for index, (_, length) in enumerate(calls) if length == 1
+    ]
+    assert summary["selected_experts"] == [[10, 11], [20, 21]]
+    assert len(expert_call_indices) == 4
+    assert expert_call_indices[0] == len(calls) - 4
+    assert (output / "two-layer-route-state-manifest.json").is_file()
+    oracle_payload = (output / "official-two-layer-oracle-v1.bin").read_bytes()
+    oracle = parse_official_two_layer_oracle(oracle_payload)
+    assert oracle.output.shape == (2, 7_168)
+    assert torch.equal(oracle.output, torch.full_like(oracle.output, 2.0))
+    assert len(oracle.states) == 2
+    with pytest.raises(K3XError, match="INVALID_OFFICIAL_TWO_LAYER_ORACLE"):
+        parse_official_two_layer_oracle(oracle_payload[:-1])
 
 
 def test_cli_kda_layer_materialization_prints_canonical_report(

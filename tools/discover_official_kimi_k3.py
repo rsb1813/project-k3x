@@ -24,6 +24,10 @@ from k3x_converter.official_moe import (
     materialize_official_moe_slice,
     plan_official_moe_slice,
 )
+from k3x_converter.official_two_layer import (
+    materialize_official_two_layer,
+    plan_official_two_layer,
+)
 from k3x_converter.official_source import (
     Transport,
     discover_official_snapshot,
@@ -343,6 +347,86 @@ def _build_layer_materialization_record(
     return record
 
 
+def _build_two_layer_record(
+    *,
+    snapshot,
+    index,
+    config,
+    headers,
+    plan,
+    transport,
+    wall_seconds: float,
+    materialization=None,
+) -> dict[str, object]:
+    requests, maximum_response = _transport_numbers(transport)
+    materialized = materialization is not None
+    record: dict[str, object] = {
+        "format": (
+            "k3x-official-two-layer-materialization-v1"
+            if materialized
+            else "k3x-official-two-layer-discovery-v1"
+        ),
+        "scope": "two-layer",
+        "mode": "materialize" if materialized else "dry-run",
+        "repository": snapshot.repository,
+        "requested_revision": snapshot.requested_revision,
+        "resolved_revision": snapshot.resolved_revision,
+        "observed_at": snapshot.observed_at,
+        "snapshot_sha256": snapshot.canonical_sha256,
+        "index_sha256": index.sha256,
+        "config_sha256": config.sha256,
+        "source_blob_id": plan.layers[0].source_blob_id,
+        "layer_ids": list(plan.layer_ids),
+        "shard_paths": list(plan.shard_paths),
+        "base_payload_bytes": plan.base_payload_bytes,
+        "maximum_two_position_bytes": plan.maximum_two_position_bytes,
+        "selected_experts": (
+            [list(value) for value in materialization.selected_experts]
+            if materialized
+            else [[], []]
+        ),
+        "traffic": {
+            "http_requests": requests,
+            "metadata_bytes": (
+                snapshot.api_bytes
+                + snapshot.files["model.safetensors.index.json"].size
+                + snapshot.files["config.json"].size
+            ),
+            "header_bytes": sum(8 + header.header_length for header in headers),
+            "tensor_payload_bytes": (
+                materialization.downloaded_payload_bytes if materialized else 0
+            ),
+            "maximum_response_bytes": maximum_response,
+        },
+        "reader_valid": materialized,
+        "provenance": "transport-pinned-ranges",
+        "full_shard_verified": False,
+        "wall_seconds": wall_seconds,
+    }
+    if materialized:
+        record["traffic"].update(
+            source_object_bytes=materialization.requested_payload_bytes,
+            materialization_requests=materialization.requests,
+            reused_objects=materialization.reused_objects,
+            maximum_response_bytes=max(
+                maximum_response, materialization.maximum_response_bytes
+            ),
+        )
+        record["optional_features"] = (
+            OPTIONAL_STORAGE_FIXTURE | OPTIONAL_OFFICIAL_MOE_FIXTURE
+        )
+        record["artifacts"] = {
+            "microshard_sha256": materialization.microshard_sha256,
+            "tensor_sha256": dict(materialization.tensor_sha256 or {}),
+            "k3x_root_sha256": materialization.k3x_root_sha256,
+            "route_manifest": materialization.route_manifest_path.name,
+            "oracle_filename": materialization.oracle_path.name,
+            "oracle_sha256": materialization.oracle_sha256,
+            "oracle_bytes": materialization.oracle_bytes,
+        }
+    return record
+
+
 def main(
     argv: list[str] | None = None,
     *,
@@ -350,7 +434,9 @@ def main(
 ) -> int:
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument(
-        "--scope", choices=("expert", "moe-ffn", "kda-layer"), default="expert"
+        "--scope",
+        choices=("expert", "moe-ffn", "kda-layer", "two-layer"),
+        default="expert",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true")
@@ -365,9 +451,13 @@ def main(
         parser.error("--materialize-expert requires --output-dir")
     if args.materialize and args.output_dir is None:
         parser.error("--materialize requires --output-dir")
-    if args.materialize and args.scope not in {"moe-ffn", "kda-layer"}:
-        parser.error("--materialize requires --scope moe-ffn or kda-layer")
-    if args.scope in {"moe-ffn", "kda-layer"} and args.materialize_expert:
+    if args.materialize and args.scope not in {
+        "moe-ffn", "kda-layer", "two-layer"
+    }:
+        parser.error(
+            "--materialize requires --scope moe-ffn, kda-layer, or two-layer"
+        )
+    if args.scope in {"moe-ffn", "kda-layer", "two-layer"} and args.materialize_expert:
         parser.error("--materialize-expert requires --scope expert")
     if args.summary_csv is not None and not args.materialize_expert:
         parser.error("--summary-csv requires --materialize-expert")
@@ -380,6 +470,64 @@ def main(
     snapshot = discover_official_snapshot(transport)
     index = load_official_index(snapshot, transport)
     config = load_official_config(snapshot, transport)
+    if args.scope == "two-layer":
+        source_file = snapshot.files.get("modeling_kimi_linear.py")
+        if (
+            source_file is None
+            or source_file.size != 51_506
+            or source_file.blob_id != OFFICIAL_KDA_SOURCE_BLOB_ID
+            or source_file.lfs_sha256 is not None
+        ):
+            raise K3XError("INVALID_OFFICIAL_LAYER_SOURCE")
+        headers = []
+        layers = []
+        for layer_id in (1, 2):
+            selected_name = (
+                f"language_model.model.layers.{layer_id}.self_attn.q_proj.weight"
+            )
+            shard_path = index.weight_map.get(selected_name)
+            if shard_path is None:
+                raise K3XError("INVALID_OFFICIAL_LAYER_SOURCE")
+            header = inspect_official_shard_header(snapshot, shard_path, transport)
+            headers.append(header)
+            layers.append(
+                plan_official_kda_layer(
+                    index,
+                    header,
+                    config,
+                    source_blob_id=source_file.blob_id,
+                    layer_id=layer_id,
+                )
+            )
+        two_layer_plan = plan_official_two_layer(layers[0], layers[1])
+        materialization = None
+        if args.materialize:
+            output_dir = _validate_output_dir(args.output_dir)
+            materialization = materialize_official_two_layer(
+                snapshot,
+                index,
+                config,
+                (headers[0], headers[1]),
+                two_layer_plan,
+                transport,
+                output_dir,
+                chunk_bytes=args.chunk_bytes,
+            )
+        record = _build_two_layer_record(
+            snapshot=snapshot,
+            index=index,
+            config=config,
+            headers=headers,
+            plan=two_layer_plan,
+            transport=transport,
+            materialization=materialization,
+            wall_seconds=time.perf_counter() - started,
+        )
+        if args.summary_json is not None:
+            _write_json_atomic(args.summary_json, record)
+        json.dump(record, sys.stdout, sort_keys=True, separators=(",", ":"))
+        sys.stdout.write("\n")
+        return 0
     if args.scope == "kda-layer":
         selected_name = "language_model.model.layers.1.self_attn.q_proj.weight"
     elif args.scope == "moe-ffn":

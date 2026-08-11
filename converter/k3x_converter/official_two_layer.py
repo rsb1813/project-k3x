@@ -1,9 +1,11 @@
 # 공식 Kimi K3 레이어 1·2의 의존형 제조 계획을 구성합니다.
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
+import json
 import math
+import os
 from pathlib import Path
 import re
 import struct
@@ -17,6 +19,7 @@ from k3x_ref.official_kda import (
     OfficialKdaState,
     OfficialKdaWeights,
     official_kda,
+    zero_official_kda_state,
 )
 
 from .format import K3XError
@@ -24,17 +27,34 @@ from .official_layer import (
     OFFICIAL_KDA_SOURCE_BLOB_ID,
     OfficialLayerInput,
     OfficialLayerPlan,
+    OfficialLayerRouteStep,
+    OfficialLayerRoutes,
     _attention_residual,
     _rms_norm,
     _state_digest,
     _tensor_digest,
+    build_official_layer_source_tensors,
+    official_layer_inputs,
+    plan_official_kda_layer,
 )
 from .official_moe import (
+    MaterializedRangeObject,
     OfficialMoeSourceTensor,
     OfficialMoeRoute,
     assemble_official_moe_source,
+    materialize_official_range_object,
     prepare_official_moe_hidden,
     route_official_hidden,
+)
+from .official_source import (
+    ExpertPlan,
+    OfficialConfig,
+    OfficialIndex,
+    OfficialShardHeader,
+    OfficialSnapshot,
+    Transport,
+    _released_storage_config,
+    plan_official_expert,
 )
 from .reader import K3XReader
 from .writer import convert
@@ -112,6 +132,39 @@ class OfficialTwoLayerMaterializationReport:
     k3x_path: Path
     completed: bool
     maximum_source_read_bytes: int
+    selected_experts: tuple[tuple[int, ...], tuple[int, ...]] = ((), ())
+    requested_payload_bytes: int = 0
+    downloaded_payload_bytes: int = 0
+    reused_objects: int = 0
+    requests: int = 0
+    maximum_response_bytes: int = 0
+    microshard_sha256: str = ""
+    tensor_sha256: dict[str, str] | None = None
+    k3x_root_sha256: str = ""
+    trace: OfficialTwoLayerTrace | None = None
+    route_manifest_path: Path | None = None
+    oracle_path: Path | None = None
+    oracle_sha256: str = ""
+    oracle_bytes: int = 0
+
+
+@dataclass(frozen=True)
+class OfficialTwoLayerOracle:
+    output: torch.Tensor
+    states: tuple[OfficialKdaState, OfficialKdaState]
+
+
+@dataclass(frozen=True)
+class OfficialPreparedSourceStep:
+    layer_id: int
+    prefix: torch.Tensor
+    latent: torch.Tensor
+    shared: torch.Tensor
+    routed_norm: torch.Tensor
+    routed_up: torch.Tensor
+    state: OfficialTwoLayerState
+    kda_output_sha256: str
+    route: OfficialMoeRoute
 
 
 @dataclass(frozen=True)
@@ -173,6 +226,124 @@ def _valid_digest(value: str) -> bool:
         return bytes.fromhex(value).hex() == value
     except ValueError:
         return False
+
+
+_TWO_LAYER_ORACLE_HEADER = struct.Struct("<8sQQQQ")
+_TWO_LAYER_ORACLE_MAGIC = b"K3XORC2\0"
+_TWO_LAYER_OUTPUT_VALUES = 2 * 7_168
+_TWO_LAYER_CONV_VALUES = 3 * 12_288
+_TWO_LAYER_RECURRENT_VALUES = 96 * 128 * 128
+
+
+def _tensor_bytes(value: torch.Tensor) -> bytes:
+    return value.detach().cpu().contiguous().view(torch.uint8).numpy().tobytes()
+
+
+def _official_two_layer_oracle_payload(
+    trace: OfficialTwoLayerTrace,
+    states: tuple[OfficialTwoLayerState, OfficialTwoLayerState],
+) -> bytes:
+    output = torch.tensor(trace.outputs, dtype=torch.bfloat16)
+    values = tuple(state.value for state in states)
+    if (
+        output.shape != (2, 7_168)
+        or any(not isinstance(value, OfficialKdaState) for value in values)
+        or any(
+            value.conv_q.shape != (1, 3, 12_288)
+            or value.conv_k.shape != (1, 3, 12_288)
+            or value.conv_v.shape != (1, 3, 12_288)
+            or value.recurrent_v_first.shape != (1, 96, 128, 128)
+            or value.conv_q.dtype != torch.bfloat16
+            or value.conv_k.dtype != torch.bfloat16
+            or value.conv_v.dtype != torch.bfloat16
+            or value.recurrent_v_first.dtype != torch.float32
+            for value in values
+        )
+    ):
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_ORACLE")
+    return b"".join(
+        (
+            _TWO_LAYER_ORACLE_HEADER.pack(
+                _TWO_LAYER_ORACLE_MAGIC,
+                _TWO_LAYER_OUTPUT_VALUES,
+                len(values),
+                _TWO_LAYER_CONV_VALUES,
+                _TWO_LAYER_RECURRENT_VALUES,
+            ),
+            _tensor_bytes(output),
+            *(
+                payload
+                for value in values
+                for payload in (
+                    _tensor_bytes(value.conv_q),
+                    _tensor_bytes(value.conv_k),
+                    _tensor_bytes(value.conv_v),
+                    _tensor_bytes(value.recurrent_v_first),
+                )
+            ),
+        )
+    )
+
+
+def parse_official_two_layer_oracle(payload: bytes) -> OfficialTwoLayerOracle:
+    expected_bytes = (
+        _TWO_LAYER_ORACLE_HEADER.size
+        + _TWO_LAYER_OUTPUT_VALUES * 2
+        + 2
+        * (
+            3 * _TWO_LAYER_CONV_VALUES * 2
+            + _TWO_LAYER_RECURRENT_VALUES * 4
+        )
+    )
+    if len(payload) != expected_bytes:
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_ORACLE")
+    magic, output_values, layers, conv_values, recurrent_values = (
+        _TWO_LAYER_ORACLE_HEADER.unpack_from(payload)
+    )
+    if (
+        magic != _TWO_LAYER_ORACLE_MAGIC
+        or output_values != _TWO_LAYER_OUTPUT_VALUES
+        or layers != 2
+        or conv_values != _TWO_LAYER_CONV_VALUES
+        or recurrent_values != _TWO_LAYER_RECURRENT_VALUES
+    ):
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_ORACLE")
+    storage = bytearray(payload[_TWO_LAYER_ORACLE_HEADER.size :])
+    words = torch.frombuffer(storage, dtype=torch.uint16)
+    cursor = _TWO_LAYER_OUTPUT_VALUES
+    output = words[:cursor].view(torch.bfloat16).reshape(2, 7_168).clone()
+    states: list[OfficialKdaState] = []
+    for _ in range(2):
+        conv_values_by_kind = []
+        for _ in range(3):
+            end = cursor + _TWO_LAYER_CONV_VALUES
+            conv_values_by_kind.append(
+                words[cursor:end]
+                .view(torch.bfloat16)
+                .reshape(1, 3, 12_288)
+                .clone()
+            )
+            cursor = end
+        recurrent_words = _TWO_LAYER_RECURRENT_VALUES * 2
+        end = cursor + recurrent_words
+        recurrent = (
+            words[cursor:end]
+            .view(torch.float32)
+            .reshape(1, 96, 128, 128)
+            .clone()
+        )
+        cursor = end
+        states.append(
+            OfficialKdaState(
+                conv_values_by_kind[0],
+                conv_values_by_kind[1],
+                conv_values_by_kind[2],
+                recurrent,
+            )
+        )
+    if cursor != words.numel():
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_ORACLE")
+    return OfficialTwoLayerOracle(output, (states[0], states[1]))
 
 
 def official_two_layer_state(value: OfficialKdaState) -> OfficialTwoLayerState:
@@ -273,18 +444,18 @@ def _mxfp4_forward(
     )
 
 
-def _execute_official_source_bytes(
+def prepare_official_source_step(
     layer: OfficialLayerPlan,
     item: OfficialLayerInput,
     state: OfficialTwoLayerState,
     source: OfficialLayerSourceBytes,
-) -> OfficialTwoLayerStepExecution:
+) -> OfficialPreparedSourceStep:
     if (
         layer.layer_id != source.layer_id
         or not isinstance(state.value, OfficialKdaState)
         or state.sha256 != _state_digest(state.value)
         or isinstance(source.top_k, bool)
-        or not 0 < source.top_k <= len(source.experts)
+        or source.top_k <= 0
         or not math.isfinite(source.rms_norm_epsilon)
         or source.rms_norm_epsilon <= 0.0
         or not math.isfinite(source.situ_beta)
@@ -385,13 +556,6 @@ def _execute_official_source_bytes(
         tensors["router_correction"],
         top_k=source.top_k,
     )
-    expert_by_id = {expert.expert_id: expert for expert in source.experts}
-    if (
-        len(expert_by_id) != len(source.experts)
-        or any(not 0 <= expert_id < 896 for expert_id in expert_by_id)
-        or any(expert_id not in expert_by_id for expert_id in route.expert_ids)
-    ):
-        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE")
     latent = _bf16_matvec(prepared, tensors["routed_down"])
     shared = _dense_ffn(
         prepared,
@@ -401,24 +565,182 @@ def _execute_official_source_bytes(
         source.situ_beta,
         source.situ_linear_beta,
     )
-    mixed = torch.zeros_like(latent, dtype=torch.float32)
-    for expert_id, contribution in zip(route.expert_ids, route.contributions):
+    return OfficialPreparedSourceStep(
+        layer.layer_id,
+        prefix,
+        latent,
+        shared,
+        tensors["routed_norm"],
+        tensors["routed_up"],
+        official_two_layer_state(kda.state),
+        _tensor_digest(kda_output, b"kda-output-bf16\0"),
+        route,
+    )
+
+
+def finish_official_source_step(
+    prepared: OfficialPreparedSourceStep,
+    source: OfficialLayerSourceBytes,
+) -> OfficialTwoLayerStepExecution:
+    if prepared.layer_id != source.layer_id:
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE")
+    expert_by_id = {expert.expert_id: expert for expert in source.experts}
+    if (
+        len(expert_by_id) != len(source.experts)
+        or any(not 0 <= expert_id < 896 for expert_id in expert_by_id)
+        or any(
+            expert_id not in expert_by_id
+            for expert_id in prepared.route.expert_ids
+        )
+    ):
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE")
+    mixed = torch.zeros_like(prepared.latent, dtype=torch.float32)
+    for expert_id, contribution in zip(
+        prepared.route.expert_ids, prepared.route.contributions
+    ):
         mixed += contribution * _mxfp4_forward(
-            latent,
+            prepared.latent,
             expert_by_id[expert_id],
             source.situ_beta,
             source.situ_linear_beta,
         ).float()
     mixed = mixed.to(torch.bfloat16)
-    routed_norm = _rms_norm(mixed, tensors["routed_norm"])
-    routed = _bf16_matvec(routed_norm, tensors["routed_up"])
-    combined = (routed.float() + shared.float()).to(torch.bfloat16)
-    output = (prefix.float() + combined.float()).to(torch.bfloat16)
+    routed_norm = _rms_norm(mixed, prepared.routed_norm)
+    routed = _bf16_matvec(routed_norm, prepared.routed_up)
+    combined = (routed.float() + prepared.shared.float()).to(torch.bfloat16)
+    output = (prepared.prefix.float() + combined.float()).to(torch.bfloat16)
     return OfficialTwoLayerStepExecution(
         tuple(float(value) for value in output.float()),
-        official_two_layer_state(kda.state),
-        _tensor_digest(kda_output, b"kda-output-bf16\0"),
-        route,
+        prepared.state,
+        prepared.kda_output_sha256,
+        prepared.route,
+    )
+
+
+def _verified_object_payload(value: MaterializedRangeObject) -> bytes:
+    if (
+        value.length <= 0
+        or not value.path.is_file()
+        or value.path.stat().st_size != value.length
+    ):
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_OBJECT")
+    payload = value.path.read_bytes()
+    if hashlib.sha256(payload).hexdigest() != value.sha256:
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_OBJECT")
+    return payload
+
+
+def load_official_layer_source_bytes(
+    plan: OfficialLayerPlan,
+    kda_objects: dict[str, MaterializedRangeObject],
+    always_objects: dict[str, MaterializedRangeObject],
+    expert_plans: dict[int, ExpertPlan],
+    expert_objects: dict[int, MaterializedRangeObject],
+) -> OfficialLayerSourceBytes:
+    expected_kda = {item.official_name for item in plan.kda_tensors}
+    expected_always = {item.official_name for item in plan.moe_plan.always_active}
+    if (
+        set(kda_objects) != expected_kda
+        or set(always_objects) != expected_always
+        or set(expert_plans) != set(expert_objects)
+    ):
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_OBJECT_SET")
+    tensors: list[tuple[str, OfficialSourceTensorBytes]] = []
+    dense_objects = kda_objects | always_objects
+    for item in (*plan.kda_tensors, *plan.moe_plan.always_active):
+        value = dense_objects[item.official_name]
+        payload = _verified_object_payload(value)
+        if len(payload) != item.length:
+            raise K3XError("INVALID_OFFICIAL_TWO_LAYER_OBJECT")
+        tensors.append(
+            (item.role, OfficialSourceTensorBytes(item.dtype, item.shape, payload))
+        )
+
+    experts = _load_official_expert_bytes(
+        plan, expert_plans, expert_objects
+    )
+    return OfficialLayerSourceBytes(
+        plan.layer_id,
+        OfficialKdaConfig(7_168, 96, 128, 4, 1.0e-5, -5.0),
+        tuple(tensors),
+        experts,
+        16,
+        1.0e-5,
+        4.0,
+        25.0,
+    )
+
+
+def _load_official_expert_bytes(
+    plan: OfficialLayerPlan,
+    expert_plans: dict[int, ExpertPlan],
+    expert_objects: dict[int, MaterializedRangeObject],
+) -> tuple[OfficialMxfp4ExpertBytes, ...]:
+    if set(expert_plans) != set(expert_objects):
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_OBJECT_SET")
+    shapes = {
+        "gate": (3_072, 3_584),
+        "up": (3_072, 3_584),
+        "down": (3_584, 3_072),
+    }
+    experts: list[OfficialMxfp4ExpertBytes] = []
+    for expert_id in sorted(expert_plans):
+        expert_plan = expert_plans[expert_id]
+        value = expert_objects[expert_id]
+        if (
+            expert_plan.layer_id != plan.layer_id
+            or expert_plan.expert_id != expert_id
+            or expert_plan.shard_path != plan.shard_path
+            or expert_plan.index_sha256 != plan.index_sha256
+            or value.length != expert_plan.payload_bytes
+        ):
+            raise K3XError("INVALID_OFFICIAL_TWO_LAYER_OBJECT")
+        payload = _verified_object_payload(value)
+        parts: dict[str, dict[str, bytes]] = {}
+        for item in expert_plan.tensors:
+            start = item.offset - expert_plan.payload_start
+            end = start + item.length
+            if start < 0 or end > len(payload):
+                raise K3XError("INVALID_OFFICIAL_TWO_LAYER_OBJECT")
+            kind = (
+                "packed"
+                if item.canonical_name.endswith(".weight_packed")
+                else "scale"
+            )
+            parts.setdefault(item.role, {})[kind] = payload[start:end]
+        if set(parts) != {"gate", "up", "down"} or any(
+            set(value) != {"packed", "scale"} for value in parts.values()
+        ):
+            raise K3XError("INVALID_OFFICIAL_TWO_LAYER_OBJECT")
+        matrices = {
+            role: OfficialMxfp4MatrixBytes(
+                parts[role]["packed"],
+                parts[role]["scale"],
+                shapes[role][0],
+                shapes[role][1],
+                32,
+            )
+            for role in ("gate", "up", "down")
+        }
+        experts.append(
+            OfficialMxfp4ExpertBytes(
+                expert_id,
+                matrices["gate"],
+                matrices["up"],
+                matrices["down"],
+            )
+        )
+    return tuple(experts)
+
+
+def _execute_official_source_bytes(
+    layer: OfficialLayerPlan,
+    item: OfficialLayerInput,
+    state: OfficialTwoLayerState,
+    source: OfficialLayerSourceBytes,
+) -> OfficialTwoLayerStepExecution:
+    return finish_official_source_step(
+        prepare_official_source_step(layer, item, state, source), source
     )
 
 
@@ -504,6 +826,7 @@ def manufacture_official_two_layer_fixture(
         chunk_bytes=chunk_bytes,
         stop_after_extents=stop_after_extents,
     )
+    reader = None
     if converted.completed:
         reader = K3XReader.open(k3x_path)
         active_layers = {
@@ -521,6 +844,336 @@ def manufacture_official_two_layer_fixture(
         k3x_path,
         converted.completed,
         converted.maximum_source_read_bytes,
+        microshard_sha256=assembled.microshard_sha256,
+        tensor_sha256=assembled.tensor_sha256,
+        k3x_root_sha256=(
+            reader.superblock.root_sha256.hex() if reader is not None else ""
+        ),
+    )
+
+
+def _write_json_atomic(path: Path, value: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_suffix(path.suffix + ".partial")
+    payload = json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n"
+    with partial.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write(payload)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(partial, path)
+
+
+def materialize_official_two_layer(
+    snapshot: OfficialSnapshot,
+    index: OfficialIndex,
+    config: OfficialConfig,
+    headers: tuple[OfficialShardHeader, OfficialShardHeader],
+    plan: OfficialTwoLayerPlan,
+    transport: Transport,
+    output_directory: Path,
+    *,
+    chunk_bytes: int = 8 * 1024 * 1024,
+) -> OfficialTwoLayerMaterializationReport:
+    source_file = snapshot.files.get("modeling_kimi_linear.py")
+    if len(headers) != 2:
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_MATERIALIZATION")
+    expected_layers = tuple(
+        plan_official_kda_layer(
+            index,
+            header,
+            config,
+            source_blob_id=OFFICIAL_KDA_SOURCE_BLOB_ID,
+            layer_id=layer_id,
+        )
+        for layer_id, header in zip(_LAYER_IDS, headers)
+    )
+    expected = plan_official_two_layer(expected_layers[0], expected_layers[1])
+    if (
+        chunk_bytes <= 0
+        or snapshot.repository != "moonshotai/Kimi-K3"
+        or snapshot.resolved_revision
+        != "9f62e4e9fffbd0a83ddd60e1c209d828994b3569"
+        or source_file is None
+        or source_file.size != 51_506
+        or source_file.blob_id != OFFICIAL_KDA_SOURCE_BLOB_ID
+        or source_file.lfs_sha256 is not None
+        or plan != expected
+        or tuple(header.shard_path for header in headers) != plan.shard_paths
+        or any(
+            (shard := snapshot.files.get(header.shard_path)) is None
+            or shard.size != header.file_size
+            or shard.lfs_sha256 is None
+            for header in headers
+        )
+    ):
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_MATERIALIZATION")
+
+    bounded_chunk = min(chunk_bytes, 8 * 1024 * 1024)
+    output_directory = Path(output_directory)
+    output_directory.mkdir(parents=True, exist_ok=True)
+    object_directory = output_directory / "objects"
+    materialized: list[MaterializedRangeObject] = []
+    kda_objects: list[dict[str, MaterializedRangeObject]] = [{}, {}]
+    always_objects: list[dict[str, MaterializedRangeObject]] = [{}, {}]
+    expert_plans: list[dict[int, ExpertPlan]] = [{}, {}]
+    expert_objects: list[dict[int, MaterializedRangeObject]] = [{}, {}]
+
+    def fetch_range(
+        layer_index: int, offset: int, length: int
+    ) -> MaterializedRangeObject:
+        value = materialize_official_range_object(
+            snapshot,
+            plan.layers[layer_index].shard_path,
+            offset,
+            length,
+            transport,
+            object_directory,
+            chunk_bytes=bounded_chunk,
+        )
+        materialized.append(value)
+        return value
+
+    for layer_index, layer in enumerate(plan.layers):
+        kda_objects[layer_index] = {
+            item.official_name: fetch_range(layer_index, item.offset, item.length)
+            for item in layer.kda_tensors
+        }
+        always_objects[layer_index] = {
+            item.official_name: fetch_range(layer_index, item.offset, item.length)
+            for item in layer.moe_plan.always_active
+        }
+
+    sources = [
+        load_official_layer_source_bytes(
+            layer,
+            kda_objects[layer_index],
+            always_objects[layer_index],
+            {},
+            {},
+        )
+        for layer_index, layer in enumerate(plan.layers)
+    ]
+    kda_config = OfficialKdaConfig(7_168, 96, 128, 4, 1.0e-5, -5.0)
+    states = [
+        official_two_layer_state(
+            zero_official_kda_state(kda_config, 1, torch.device("cpu"))
+        )
+        for _ in plan.layers
+    ]
+    inputs = official_layer_inputs()
+    executions: list[OfficialTwoLayerStepExecution] = []
+    for item in inputs:
+        current = item
+        for layer_index, layer in enumerate(plan.layers):
+            prepared = prepare_official_source_step(
+                layer, current, states[layer_index], sources[layer_index]
+            )
+            for expert_id in prepared.route.expert_ids:
+                if expert_id in expert_plans[layer_index]:
+                    continue
+                expert_plan = plan_official_expert(
+                    index,
+                    headers[layer_index],
+                    layer_id=layer.layer_id,
+                    expert_id=expert_id,
+                )
+                expert_value = fetch_range(
+                    layer_index,
+                    expert_plan.payload_start,
+                    expert_plan.payload_bytes,
+                )
+                expert_plans[layer_index][expert_id] = expert_plan
+                expert_objects[layer_index][expert_id] = expert_value
+            source = replace(
+                sources[layer_index],
+                experts=_load_official_expert_bytes(
+                    layer,
+                    expert_plans[layer_index],
+                    expert_objects[layer_index],
+                ),
+            )
+            result = finish_official_source_step(prepared, source)
+            executions.append(result)
+            states[layer_index] = result.state
+            output_sha256 = _float_digest(result.output)
+            current = OfficialLayerInput(
+                item.name,
+                result.output,
+                item.block_source,
+                output_sha256,
+                item.block_sha256,
+            )
+
+    execution_iterator = iter(executions)
+    trace = derive_official_two_layer_trace(
+        plan,
+        inputs,
+        (
+            official_two_layer_state(
+                zero_official_kda_state(kda_config, 1, torch.device("cpu"))
+            ),
+            official_two_layer_state(
+                zero_official_kda_state(kda_config, 1, torch.device("cpu"))
+            ),
+        ),
+        lambda _layer, _item, _state: next(execution_iterator),
+    )
+    try:
+        next(execution_iterator)
+    except StopIteration:
+        pass
+    else:
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_TRACE")
+
+    oracle_payload = _official_two_layer_oracle_payload(
+        trace, (states[0], states[1])
+    )
+    parse_official_two_layer_oracle(oracle_payload)
+    oracle_path = output_directory / "official-two-layer-oracle-v1.bin"
+    oracle_partial = oracle_path.with_suffix(oracle_path.suffix + ".partial")
+    with oracle_partial.open("wb") as stream:
+        stream.write(oracle_payload)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(oracle_partial, oracle_path)
+    oracle_sha256 = hashlib.sha256(oracle_payload).hexdigest()
+
+    layer_routes: list[OfficialLayerRoutes] = []
+    for layer_index, layer_id in enumerate(_LAYER_IDS):
+        steps = tuple(step for step in trace.steps if step.layer_id == layer_id)
+        layer_routes.append(
+            OfficialLayerRoutes(
+                tuple(
+                    OfficialLayerRouteStep(
+                        step.position,
+                        step.consumes_state_sha256,
+                        step.state_sha256,
+                        step.kda_output_sha256,
+                        step.route,
+                    )
+                    for step in steps
+                ),
+                trace.selected_experts[layer_index],
+                trace.initial_state_sha256[layer_index],
+                trace.final_state_sha256[layer_index],
+            )
+        )
+    tensors = tuple(
+        tensor
+        for layer_index, layer in enumerate(plan.layers)
+        for tensor in build_official_layer_source_tensors(
+            layer,
+            layer_routes[layer_index],
+            expert_plans[layer_index],
+            kda_objects[layer_index],
+            always_objects[layer_index],
+            expert_objects[layer_index],
+        )
+    )
+    metadata: dict[str, object] = {
+        "format": "k3x-official-two-layer-v1",
+        "layer_ids": [1, 2],
+        "step_order": ["a:1", "a:2", "b:1", "b:2"],
+        "repository": snapshot.repository,
+        "resolved_revision": snapshot.resolved_revision,
+        "snapshot_sha256": snapshot.canonical_sha256,
+        "index_sha256": index.sha256,
+        "config_sha256": config.sha256,
+        "source_blob_id": OFFICIAL_KDA_SOURCE_BLOB_ID,
+        "shard_paths": list(plan.shard_paths),
+        "steps": [
+            {
+                "position": step.position,
+                "layer_id": step.layer_id,
+                "hidden_input_sha256": step.hidden_input_sha256,
+                "block_sha256": step.block_sha256,
+                "consumes_state_sha256": step.consumes_state_sha256,
+                "state_sha256": step.state_sha256,
+                "kda_output_sha256": step.kda_output_sha256,
+                "expert_ids": list(step.route.expert_ids),
+                "contributions": list(step.route.contributions),
+                "contribution_sha256": step.contribution_sha256,
+                "output_sha256": step.output_sha256,
+            }
+            for step in trace.steps
+        ],
+        "selected_experts": [list(value) for value in trace.selected_experts],
+        "final_state_sha256": list(trace.final_state_sha256),
+        "oracle": {
+            "format": "k3x-official-two-layer-oracle-v1",
+            "filename": oracle_path.name,
+            "sha256": oracle_sha256,
+            "bytes": len(oracle_payload),
+        },
+        "objects": [
+            {
+                "layer_id": layer.layer_id,
+                "trunks": [
+                    {
+                        "name": item.official_name,
+                        "range": [item.offset, item.offset + item.length],
+                        "sha256": (
+                            (kda_objects[layer_index] | always_objects[layer_index])[
+                                item.official_name
+                            ].sha256
+                        ),
+                    }
+                    for item in (*layer.kda_tensors, *layer.moe_plan.always_active)
+                ],
+                "experts": [
+                    {
+                        "expert_id": expert_id,
+                        "range": [
+                            expert_plans[layer_index][expert_id].payload_start,
+                            expert_plans[layer_index][expert_id].payload_end,
+                        ],
+                        "sha256": expert_objects[layer_index][expert_id].sha256,
+                    }
+                    for expert_id in trace.selected_experts[layer_index]
+                ],
+            }
+            for layer_index, layer in enumerate(plan.layers)
+        ],
+    }
+    report = manufacture_official_two_layer_fixture(
+        output_directory,
+        tensors,
+        _released_storage_config(),
+        metadata,
+        chunk_bytes=bounded_chunk,
+    )
+    route_manifest_path = output_directory / "two-layer-route-state-manifest.json"
+    requested_payload_bytes = sum(item.length for item in materialized)
+    downloaded_payload_bytes = sum(item.response_bytes for item in materialized)
+    metadata["traffic"] = {
+        "requested_payload_bytes": requested_payload_bytes,
+        "downloaded_payload_bytes": downloaded_payload_bytes,
+        "reused_objects": sum(1 for item in materialized if item.reused),
+        "requests": sum(item.requests for item in materialized),
+        "maximum_response_bytes": max(
+            (item.maximum_response_bytes for item in materialized), default=0
+        ),
+    }
+    metadata["artifact"] = {
+        "filename": report.k3x_path.name,
+        "k3x_root_sha256": report.k3x_root_sha256,
+        "source_sha256": report.microshard_sha256,
+        "tensor_sha256": report.tensor_sha256,
+    }
+    _write_json_atomic(route_manifest_path, metadata)
+    return replace(
+        report,
+        selected_experts=trace.selected_experts,
+        requested_payload_bytes=requested_payload_bytes,
+        downloaded_payload_bytes=downloaded_payload_bytes,
+        reused_objects=metadata["traffic"]["reused_objects"],
+        requests=metadata["traffic"]["requests"],
+        maximum_response_bytes=metadata["traffic"]["maximum_response_bytes"],
+        trace=trace,
+        route_manifest_path=route_manifest_path,
+        oracle_path=oracle_path,
+        oracle_sha256=oracle_sha256,
+        oracle_bytes=len(oracle_payload),
     )
 
 
