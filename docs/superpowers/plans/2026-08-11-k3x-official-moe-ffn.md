@@ -132,7 +132,7 @@ git commit -m "feat: add native BF16 K3X tensors"
 - Produces: `OfficialMoePlan`, `OfficialMoeRoutes`, `OfficialMoeMaterializationReport`, `plan_official_moe_slice(...)`, and `materialize_official_moe_slice(...)`.
 - Produces: CLI modes `--scope moe-ffn --dry-run` and explicit `--materialize` with `--output-dir`.
 
-- [ ] **Step 1: Add failing config, tensor-set, and input tests**
+- [x] **Step 1: Add failing config, tensor-set, and input tests**
 
 Require `OfficialConfig` to bind these official values: hidden 7168, experts 896, top-k 16, shared experts 2, latent 3584, expert intermediate 3072, SiTU beta 4, linear beta 25, latent norm enabled, and RMS epsilon `1e-5`.
 
@@ -147,7 +147,7 @@ case_b_block[i] = (((43 * i + 19) % 269) - 134) / 1024
 
 Require all planned ranges to belong to shard 2, remain within the pinned file size, and preserve the accepted physical first-use order.
 
-- [ ] **Step 2: Run planner RED**
+- [x] **Step 2: Run planner RED**
 
 Run:
 
@@ -160,7 +160,7 @@ PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
 
 Expected: `official_moe` and the extended config fields do not exist.
 
-- [ ] **Step 3: Implement pure planning and routing helpers**
+- [x] **Step 3: Implement pure planning and routing helpers**
 
 Add frozen dataclasses whose serialized fields contain repository, resolved revision, index/config/shard identities, exact tensor metadata, input SHA-256 values, selected route IDs, canonical contribution values, and selected union. Implement the official route calculation in FP32 with BF16-decoded router weights:
 

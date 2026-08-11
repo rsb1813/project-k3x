@@ -1,5 +1,6 @@
 # K3X 고정 레이아웃과 corruption rejection을 검증합니다.
 import os
+import hashlib
 import json
 import struct
 from pathlib import Path
@@ -46,7 +47,8 @@ def _write_bf16_source(
         separators=(",", ":"),
     ).encode("utf-8")
     shard_name = "bf16.safetensors"
-    (source / shard_name).write_bytes(struct.pack("<Q", len(header)) + header + payload)
+    shard_bytes = struct.pack("<Q", len(header)) + header + payload
+    (source / shard_name).write_bytes(shard_bytes)
     config = json.loads(
         (config_source / "source-manifest.json").read_text(encoding="utf-8")
     )["config"]
@@ -56,6 +58,9 @@ def _write_bf16_source(
         "config": config,
         "packed_shapes": {},
         "weight_map": {name: shard_name},
+        "tensor_order": [name],
+        "source_sha256": hashlib.sha256(shard_bytes).hexdigest(),
+        "tensor_sha256": {name: hashlib.sha256(payload).hexdigest()},
     }
     (source / "source-manifest.json").write_text(
         json.dumps(manifest, sort_keys=True, separators=(",", ":")),

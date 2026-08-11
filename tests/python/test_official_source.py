@@ -175,9 +175,15 @@ def _released_config() -> dict[str, object]:
             "hidden_size": 7_168,
             "routed_expert_hidden_size": 3_584,
             "moe_intermediate_size": 3_072,
+            "moe_renormalize": True,
+            "moe_router_activation_func": "sigmoid",
+            "num_expert_group": 1,
+            "topk_group": 1,
             "activation_situ_beta": 4.0,
             "activation_situ_linear_beta": 25.0,
             "routed_scaling_factor": 1.0,
+            "latent_moe_use_norm": True,
+            "rms_norm_eps": 1.0e-5,
         },
     }
 
@@ -356,6 +362,16 @@ def test_config_binds_git_blob_and_released_text_dimensions() -> None:
     assert config.hidden_size == 7_168
     assert config.num_experts == 896
     assert config.top_k == 16
+    assert config.num_shared_experts == 2
+    assert config.activation_situ_beta == 4.0
+    assert config.activation_situ_linear_beta == 25.0
+    assert config.latent_moe_use_norm is True
+    assert config.rms_norm_eps == 1.0e-5
+    assert config.moe_renormalize is True
+    assert config.moe_router_activation_func == "sigmoid"
+    assert config.num_expert_group == 1
+    assert config.topk_group == 1
+    assert config.routed_scaling_factor == 1.0
 
 
 def test_config_rejects_blob_or_dimension_drift_before_any_range() -> None:
@@ -615,6 +631,16 @@ def _official_config_record() -> OfficialConfig:
         16,
         3_584,
         3_072,
+        2,
+        4.0,
+        25.0,
+        True,
+        1.0e-5,
+        True,
+        "sigmoid",
+        1,
+        1,
+        1.0,
     )
 
 

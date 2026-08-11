@@ -50,9 +50,15 @@ def _config_body() -> bytes:
             "hidden_size": 7_168,
             "routed_expert_hidden_size": 3_584,
             "moe_intermediate_size": 3_072,
+            "moe_renormalize": True,
+            "moe_router_activation_func": "sigmoid",
+            "num_expert_group": 1,
+            "topk_group": 1,
             "activation_situ_beta": 4.0,
             "activation_situ_linear_beta": 25.0,
             "routed_scaling_factor": 1.0,
+            "latent_moe_use_norm": True,
+            "rms_norm_eps": 1.0e-5,
         },
     }
     return json.dumps(value, separators=(",", ":")).encode()
