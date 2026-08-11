@@ -106,6 +106,14 @@ struct BackendRuntimeStats {
     std::uint64_t official_kda_device_state_continuations{};
     std::uint64_t official_kda_device_state_publications{};
     std::uint64_t official_kda_device_state_invalidations{};
+    std::uint64_t official_moe_route_prepare_calls{};
+    std::uint64_t official_moe_route_prepare_kernel_launches{};
+    std::uint64_t official_moe_router_logit_d2h_bytes{};
+    std::uint64_t official_moe_prepared_seeds{};
+    std::uint64_t official_moe_prepared_consumes{};
+    std::uint64_t official_moe_prepared_discards{};
+    std::uint64_t official_moe_prepared_invalidations{};
+    std::uint64_t official_moe_prepared_slot_bytes{};
     std::uint64_t pinned_host_bytes{};
     std::uint64_t peak_pinned_host_bytes{};
     std::uint64_t async_prefetch_calls{};
@@ -171,6 +179,26 @@ struct OfficialMoeFfnResult {
     bool executed{};
     std::vector<float> output;
     std::vector<std::uint32_t> selected_expert_ids;
+};
+
+struct OfficialMoeRoutePrepareView {
+    Bf16VectorView residual_norm;
+    Bf16WeightView residual_proj;
+    Bf16VectorView post_norm;
+    Bf16WeightView router;
+};
+
+struct OfficialMoePreparedToken {
+    std::uint64_t owner{};
+    std::uint64_t generation{};
+
+    bool operator==(const OfficialMoePreparedToken&) const = default;
+};
+
+struct OfficialMoeRoutePrepareResult {
+    bool executed{};
+    OfficialMoePreparedToken prepared;
+    std::vector<float> router_logits;
 };
 
 struct DenseVectorView {
@@ -321,6 +349,24 @@ public:
         std::uint32_t, ProfilePhase) {
         return Result<OfficialMoeFfnResult>::failure(
             ErrorCode::backend_unavailable);
+    }
+    virtual Result<OfficialMoeRoutePrepareResult> prepare_official_moe_route(
+        std::span<const float>, std::span<const float>,
+        OfficialMoeRoutePrepareView, float, std::uint32_t, ProfilePhase) {
+        return Result<OfficialMoeRoutePrepareResult>::failure(
+            ErrorCode::backend_unavailable);
+    }
+    virtual Result<OfficialMoeFfnResult> official_mxfp4_moe_ffn_prepared(
+        OfficialMoePreparedToken, OfficialMoeFfnView,
+        std::span<const Mxfp4MlpView>, std::span<const std::uint32_t>,
+        std::span<const float>, float, float, std::optional<float>,
+        std::uint32_t, ProfilePhase) {
+        return Result<OfficialMoeFfnResult>::failure(
+            ErrorCode::backend_unavailable);
+    }
+    virtual Result<bool> discard_official_moe_prepared(
+        OfficialMoePreparedToken) {
+        return Result<bool>::failure(ErrorCode::backend_unavailable);
     }
     virtual Result<OfficialKdaCudaResult> official_kda(
         std::span<const float>, OfficialKdaCudaView,

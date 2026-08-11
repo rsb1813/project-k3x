@@ -467,7 +467,7 @@
 - [x] Accept D-070 and write the M32 design.
 - [x] Write and self-review the detailed TDD implementation plan.
 - [ ] Write and witness CUDA RED tests for preparation parity and token lifetime.
-- [ ] Implement exact device residual preparation and raw router logits.
+- [x] Implement exact device residual preparation and raw router logits.
 - [ ] Implement opaque prepared-activation consumption and wrapper cleanup.
 - [ ] Add explicit harness mode and strict B-0033 evidence tooling.
 - [ ] Run actual-artifact correctness, sanitizer, and production-guard gates.

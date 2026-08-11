@@ -813,7 +813,7 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-070 — Measure exact device route preparation before adding another official layer
 
 - Date: 2026-08-11.
-- Status: accepted as the Milestone 32 bounded experiment; not implemented or measured yet.
+- Status: accepted; canonical routing and the CUDA backend primitive are implemented and tested, while wrapper integration and B-0033 remain incomplete and unmeasured.
 - Decision: keep host routing as the default and add an explicit two-stage CUDA path that computes exact MLP Attention Residual, post RMSNorm, and 896 raw router logits on device, retains prefix/prepared activation behind a single-use opaque token, runs canonical natural Top-16 selection on the host, and consumes the token in the existing exact resident MXFP4 FFN.
 - Alternatives considered: materialize a second official layer immediately; issue one monolithic whole-layer CUDA call including device Top-K; optimize existing KDA or expert kernels without first closing the remaining host routing boundary.
 - Evidence: B-0032 device incremental/full-host medians differ by only 1.611085 ms, but both retain roughly 35 ms per sequence outside their roughly 34 ms aggregate CUDA kernel totals. The current wrapper performs residual preparation and the 896 by 7,168 router loop on the CPU and re-enters the backend for the FFN.
