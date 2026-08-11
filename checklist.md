@@ -455,7 +455,7 @@
 - [x] Implement the dedicated device-state allocation and opaque token contract.
 - [x] Add exact official-layer wrapper and explicit harness telemetry.
 - [x] Build and verify the strict B-0032 evidence transaction.
-- [ ] Run actual-artifact correctness and Compute Sanitizer gates.
-- [ ] Run B-0032 exactly once and seal the evidence.
-- [ ] Run the complete verification matrix and synchronize README/TITAN Ledger.
+- [x] Run actual-artifact correctness and Compute Sanitizer gates.
+- [x] Run B-0032 exactly once and seal the evidence.
+- [x] Run the complete verification matrix and synchronize README/TITAN Ledger.
 - [ ] Publish M31 and verify pull-request and post-merge CI.

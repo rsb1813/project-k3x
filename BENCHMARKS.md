@@ -1302,3 +1302,39 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Actual admission-mode AB incremental resident Compute Sanitizer: `ERROR SUMMARY: 0 errors` with `--launch-timeout 0`; measured interval records 28 hits, zero scans/bytes/time, zero warm weight H2D, and maximum error `0.00048828125`.
 - Production guard: `k3x_run` exits 4 with `NON_EXECUTABLE_ARTIFACT` on the unchanged bounded layer fixture.
 - Public integration: branch correctness `31493248372`, pull-request correctness `31493267425`, and pull-request CodeQL `31493267404` passed. PR #52 rebase-merged at `51182575b32b49afa4b1fb2586f31df058a74155`; post-merge `main` correctness `31493550970` and CodeQL `31493549669` passed.
+
+## B-0032 — official KDA device-state handoff
+
+- Date: 2026-08-11.
+- Evidence commit: `992e0de`; implementation commits `fa79e86`, `a830fa9`, `84a5d0d`, and undefined-mode guard `9999918`.
+- Hardware: AMD Ryzen 7 9800X3D, NVIDIA GeForce RTX 5080 16 GB, driver 591.86, CUDA 13.3.1, WSL2 Ubuntu 24.04.4 on Windows 11.
+- Model/checkpoint: the unchanged bounded official layer-1 fixture from `moonshotai/Kimi-K3` revision `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`; 1,829,256,704 source-object bytes and 1,829,310,720 K3X bytes; no complete shard/checkpoint.
+- Mode: exact resident admission with incremental host round trip, incremental device handoff, and full host round trip; three warmups and twenty measured two-position sequences; natural Top-16 routes and disjoint 32-expert union unchanged.
+- Context length: two fixed layer-boundary positions. This benchmark has no token semantics.
+
+| Row | Median | p05 | p95 | Kernel / sequence | Orchestration / sequence | State H2D / D2H |
+|---|---:|---:|---:|---:|---:|---:|
+| Incremental host | 73,192,169 ns | 70,663,570 ns | 74,723,294 ns | 33,772,262.4 ns | 39,023,029.3 ns | 260,505,600 / 260,505,600 B |
+| Incremental device | 69,835,612 ns | 67,384,546 ns | 71,854,965 ns | 33,887,020.8 ns | 35,815,361.7 ns | 130,252,800 / 130,252,800 B |
+| Full host | 68,224,527 ns | 66,958,871 ns | 72,100,858 ns | 33,734,271.8 ns | 35,167,668.75 ns | 130,252,800 / 130,252,800 B |
+
+- Derived paired changes: device handoff lowers the incremental wall median by 4.585951%, or 3,356,557 ns. Aggregate kernel time changes +0.339801%, orchestration falls 3,207,667.6 ns per sequence, and the device-incremental/full-host median gap is 1,611,085 ns.
+- Correctness: every row has output SHA-256 `3bc173301781ec02502c29a1d8ac2951139ba51cfef593f858bbac65cd748617`, final V-first state SHA-256 `5f0ce4680ca343648838ef274cc3f8526c5174eba9922b44b8f37715c2901073`, maximum absolute error `0.00048828125`, finite output, and exact route/contribution parity.
+- Traffic: incremental host/device activation H2D is 263,979,520/133,726,720 bytes and total D2H is 262,799,360/132,546,560 bytes. Device handoff removes exactly 130,252,800 bytes in each direction over twenty sequences. Every row has zero measured weight H2D, 1,816,322,048 resident weight bytes, zero cache misses/bypasses, and 440 logical Reader calls for 3,658,513,408 requested/completed bytes.
+- State operations: the device row records 20 seeds, 20 continuations, 20 publications, and zero invalidations. Host rows record no device-state operation. Incremental rows execute 40 KDA calls and 640 launches; full executes 20 calls and 480 launches.
+- Peak tracked VRAM / process RSS: host incremental 1,824,612,416 / 2,200,453,120 bytes; device incremental 1,824,612,416 / 2,193,940,480 bytes; full host 1,825,310,016 / 2,193,661,952 bytes.
+- Evidence SHA-256: artifact `9f0c29fcb18b8cdab5aeeec67d8e5e0113b8dffb7352a2dcdac1ae41ae5198c6`; manifest `cf0dd554d5dfc7db640cb3313f7527e6c354a6fd74f9011cd747348b247168d4`; runner `1422a1776dab47b8f26673876ec64c2d3991e7922af5a16c4751828c5df56225`; aggregate `88db7c3e8210035204a3e6679c482782f8223de1b49edd39f5d407ad3edab339`; summary JSON `42cb8809b6e7b0b0a23f152f8377cdaffa1d5a6d0efd31d7182322d146963d5f`; summary CSV `9abfb06e0bc936211e258b39f2aa2cc0bf88e1c3ec553dd68e9427291fc79c11`.
+- Raw JSON SHA-256: host incremental `06dce7ab0cf4523ed2e42c1c0a2a053a1e20753e835b865841a558c60b03b9df`; device incremental `5b0a7e9b0d1dab70226fdff7aa5d5e0efe835fbdfc65dfc8060a8d5f24e052f0`; full host `e47de6eb60682e7b03dff7d8292fa30be896356ec818689d9edac0f41475ce67`.
+- Decode tok/s, prefill tok/s, TTFT, physical NVMe GB/token, physical H2D GB/token, GPU utilization, GPU memory bandwidth, coding quality, speculative acceptance, adaptive Top-K, and quality benchmarks: not measured.
+- Enabled optimization: exact device-state handoff only in the device row. Admission and resident weights are common controls. No proxy, pruning, adaptive Top-K, speculation, reduced precision, routing change, or production default changed.
+
+## Milestone 31 final local verification matrix
+
+- Date: 2026-08-11.
+- CPU: CTest 19/19; Python 578 passed, 125 skipped.
+- liburing/direct capability: CTest 20/20; Python 584 passed, 119 skipped with `K3X_TEST_IO_URING=1 K3X_TEST_DIRECT=1`.
+- ASan/UBSan: CTest 20/20.
+- CUDA with the actual bounded artifact: CTest 34/34; Python 688 passed, 15 skipped with `K3X_TEST_CUDA=1`.
+- B-0032/B-0031/B-0030 evidence-tool tests: 46/46 passed; strict B-0032 artifact/manifest/runner/raw/CSV/aggregate rehash passed.
+- Actual device-state AB incremental resident-admission Compute Sanitizer: `ERROR SUMMARY: 0 errors` with `--launch-timeout 0`; measured state H2D/D2H is 6,512,640/6,512,640 bytes, seeds/continuations/publications are 1/1/1, invalidations are zero, warm weight H2D is zero, and maximum error is `0.00048828125`.
+- Production guard: `k3x_run` exits 4 with `NON_EXECUTABLE_ARTIFACT` and creates no output on the unchanged bounded layer fixture.
