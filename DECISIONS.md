@@ -664,3 +664,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: this closes the execution contract needed by the pinned fixture without hiding BF16 expansion in host memory or weakening the fail-closed production artifact boundary.
 - Rejected claims: this does not prove official full-size parity, changing Top-16 residency pressure, end-to-end token generation, quality, or a CUDA default.
 - Revisit: evaluate kernel fusion, residency policy, and a wider device boundary only after the pinned official B-0029 result exposes real dimensions and traffic.
+
+## D-058 — Bind the final artifact root into the durable route manifest
+
+- Date: 2026-08-11.
+- Status: accepted and implemented at `a109409` and consumed by `bdab0da`.
+- Decision: preserve the pre-fetch route-manifest publication, then atomically add a final artifact record containing filename, K3X root, source digest, and per-source-tensor digests only after conversion and Reader verification succeed.
+- Alternatives considered: hard-code a root before materialization; trust a caller-supplied artifact independently from its routes; create a second execution manifest; finalize the existing route manifest after conversion.
+- Evidence: the materializer test proves the route manifest exists before expert planning and that the successful final record carries the Reader-observed root. The harness independently rejects malformed/fixed-identity manifests and a generic storage fixture before CUDA construction; 18 synthetic tests pass and three real-fixture smoke cases remain skipped.
+- Benchmark result: none. This is an identity and recovery contract, not B-0029.
+- Reason accepted: the same manifest now binds route derivation and exact artifact bytes without weakening restart durability or inventing a root before the real bytes exist.
+- Rejected claims: a self-consistent transport-pinned manifest is not a complete-shard signature, publisher attestation, official full-size execution, or performance result.
+- Revisit: consider a separate signed execution manifest only if production manufacturing needs immutable pre- and post-conversion records with distinct retention policies.

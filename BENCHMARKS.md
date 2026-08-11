@@ -1055,3 +1055,13 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Verification result: CPU CTest 17/17 and CUDA CTest 30/30 passed. `/usr/local/cuda-13.3/bin/compute-sanitizer --tool memcheck --error-exitcode=99 ./build-cuda/test_cuda_official_moe` reported `ERROR SUMMARY: 0 errors`. `git diff --check` passed before commit.
 - Decode tok/s, prefill tok/s, TTFT, latency distribution, VRAM peak, system RAM, physical NVMe GB/token, physical H2D GB/token, average Top-K, speculative acceptance, quality, GPU utilization, and GPU bandwidth: not measured and not applicable to this tiny correctness gate.
 - Interpretation: this verifies the CUDA contract needed by the pinned harness. It is not B-0029 and does not establish official full-size performance or a runtime default.
+
+## Milestone 28 Task 5 verification — pinned official MoE harness
+
+- Date: 2026-08-11.
+- Commits: `a109409`, `bdab0da`.
+- Hardware/model: WSL2 synthetic CLI/identity fixtures plus the tiny CUDA boundary; no official M28 multi-expert payload.
+- Mode: strict manifest parsing and fixed identity, checksum Reader/root binding, released tensor metadata/order checks, route/contribution recomputation, portable oracle preparation, and A/B/alternating transient/resident execution schema.
+- Verification result: `tests/python/test_cuda_official_moe.py` passes 18 tests with 3 ignored-real-fixture skips. CUDA CTest passes 30/30. Focused Compute Sanitizer reports `ERROR SUMMARY: 0 errors`. The harness source also compiles with `-Wall -Wextra -Wpedantic -Werror`.
+- Decode tok/s, prefill tok/s, TTFT, official latency, VRAM, system RAM, physical NVMe GB/token, physical H2D GB/token, cache hit rate, quality, GPU utilization, and GPU bandwidth: not measured.
+- Interpretation: only the harness and fail-closed gates are verified. The three skipped smoke cases must run on the bounded ignored fixture before B-0029 or any official execution claim.

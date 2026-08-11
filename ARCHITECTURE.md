@@ -414,6 +414,10 @@ The native CUDA half is implemented at `bb634e1` as a dedicated opt-in `official
 
 The tiny transient/resident CUDA fixture matches the portable oracle within the required `2e-2` maximum absolute tolerance, preserves selected order, rejects malformed aliases/routes/capacity, and verifies zero second-call resident weight H2D. CPU CTest passes 17/17, CUDA CTest passes 30/30, and Compute Sanitizer reports zero errors for the new boundary. This is synthetic correctness evidence only. The pinned official harness, bounded real fixture, and B-0029 remain pending.
 
+The pinned harness is implemented at `bdab0da`. Final materialization atomically augments the already-durable route manifest with the K3X root, source digest, and per-source-tensor digests. The harness rejects duplicate-key or non-finite JSON, verifies fixed repository/snapshot/config/index/shard/input identities, binds the manifest root to a checksum-verified Reader, validates exact physical tensor order and released BF16/MXFP4 metadata, recomputes both natural routes, and requires contribution parity within `1e-6` before CUDA construction. Cases `a`, `b`, and `alternating` share one canonical schema; alternating uses one resident table across A then B. The harness cannot generate artifacts or enter production `k3x_run`.
+
+Synthetic CLI and fail-closed coverage passes 18 tests; three real-fixture smoke cases are skipped until the bounded ignored fixture is materialized. Therefore the harness is implemented, but official full-size parity, B-0029, and performance remain unmeasured.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.
