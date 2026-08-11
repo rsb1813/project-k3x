@@ -2495,6 +2495,358 @@ public:
             {true, std::move(output)});
     }
 
+    Result<OfficialMoeFfnResult> official_mxfp4_moe_ffn(
+        std::span<const float> hidden, std::span<const float> prefix,
+        OfficialMoeFfnView weights, std::span<const Mxfp4MlpView> experts,
+        std::span<const std::uint32_t> expert_ids,
+        std::span<const float> contributions, float epsilon, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) override {
+        const auto operation_start = std::chrono::steady_clock::now();
+        const auto finite = [](std::span<const float> values) {
+            return std::all_of(values.begin(), values.end(),
+                               [](float value) { return std::isfinite(value); });
+        };
+        const auto valid_bf16 = [](Bf16WeightView view) {
+            return view.tensor_id && view.rows && view.cols &&
+                   view.rows <= std::numeric_limits<std::size_t>::max() /
+                                   view.cols &&
+                   view.values.size() == view.rows * view.cols;
+        };
+        if (options_.kind != BackendKind::cuda_custom ||
+            options_.cuda_boundary != CudaBoundaryMode::moe_layer ||
+            options_.cuda_allocation != CudaAllocationMode::reused ||
+            options_.cuda_transfer != CudaTransferMode::synchronous ||
+            options_.cuda_batching != CudaBatchingMode::resident_grid ||
+            hidden.empty() || hidden.size() != prefix.size() ||
+            experts.empty() || experts.size() > 65535 ||
+            experts.size() != expert_ids.size() ||
+            experts.size() != contributions.size() || !finite(hidden) ||
+            !finite(prefix) || !finite(contributions) ||
+            !std::isfinite(epsilon) || epsilon <= 0.0F ||
+            !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
+            (situ_linear &&
+             (!std::isfinite(*situ_linear) || *situ_linear <= 0.0F)) ||
+            !valid_bf16(weights.routed_down) ||
+            !valid_bf16(weights.routed_up) ||
+            !valid_bf16(weights.shared.gate) ||
+            !valid_bf16(weights.shared.up) ||
+            !valid_bf16(weights.shared.down) ||
+            !weights.routed_norm.tensor_id ||
+            weights.routed_norm.values.empty()) {
+            return Result<OfficialMoeFfnResult>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+        const auto hidden_width = hidden.size();
+        const auto latent_width = weights.routed_down.rows;
+        const auto routed_width = experts.front().down.rows;
+        const auto intermediate_width = experts.front().gate.rows;
+        const auto shared_width = weights.shared.gate.rows;
+        if (weights.routed_down.cols != hidden_width ||
+            weights.routed_norm.values.size() != routed_width ||
+            weights.routed_up.rows != hidden_width ||
+            weights.routed_up.cols != routed_width ||
+            weights.shared.gate.cols != hidden_width ||
+            weights.shared.up.rows != shared_width ||
+            weights.shared.up.cols != hidden_width ||
+            weights.shared.down.rows != hidden_width ||
+            weights.shared.down.cols != shared_width) {
+            return Result<OfficialMoeFfnResult>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+        std::unordered_set<std::uint32_t> selected_ids;
+        std::unordered_set<std::uint64_t> tensor_ids;
+        const auto insert_tensor = [&tensor_ids](std::uint64_t id) {
+            return id && tensor_ids.insert(id).second;
+        };
+        if (!insert_tensor(weights.routed_down.tensor_id) ||
+            !insert_tensor(weights.routed_norm.tensor_id) ||
+            !insert_tensor(weights.routed_up.tensor_id) ||
+            !insert_tensor(weights.shared.gate.tensor_id) ||
+            !insert_tensor(weights.shared.up.tensor_id) ||
+            !insert_tensor(weights.shared.down.tensor_id)) {
+            return Result<OfficialMoeFfnResult>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+        double contribution_sum = 0.0;
+        std::uint64_t total_weight_bytes = 0;
+        const std::array bf16_views{
+            weights.routed_down,
+            Bf16WeightView{weights.routed_norm.values, 1, routed_width,
+                           weights.routed_norm.tensor_id},
+            weights.routed_up, weights.shared.gate, weights.shared.up,
+            weights.shared.down};
+        for (const auto& view : bf16_views) {
+            total_weight_bytes += view.values.size_bytes();
+        }
+        for (std::size_t index = 0; index < experts.size(); ++index) {
+            if (!selected_ids.insert(expert_ids[index]).second ||
+                contributions[index] <= 0.0F ||
+                experts[index].gate.cols != latent_width ||
+                experts[index].gate.rows != intermediate_width ||
+                experts[index].up.cols != latent_width ||
+                experts[index].up.rows != intermediate_width ||
+                experts[index].down.cols != intermediate_width ||
+                experts[index].down.rows != routed_width ||
+                experts[index].gate.group_size != 32 ||
+                experts[index].up.group_size != 32 ||
+                experts[index].down.group_size != 32 ||
+                !valid_mxfp4_size(latent_width, experts[index].gate) ||
+                !valid_mxfp4_size(latent_width, experts[index].up) ||
+                !valid_mxfp4_size(intermediate_width, experts[index].down)) {
+                return Result<OfficialMoeFfnResult>::failure(
+                    ErrorCode::invalid_mxfp4);
+            }
+            contribution_sum += contributions[index];
+            for (const auto& view : std::array{
+                     experts[index].gate, experts[index].up,
+                     experts[index].down}) {
+                if (!insert_tensor(view.tensor_id)) {
+                    return Result<OfficialMoeFfnResult>::failure(
+                        ErrorCode::invalid_mxfp4);
+                }
+                total_weight_bytes +=
+                    view.packed.size_bytes() + view.scales.size_bytes();
+            }
+        }
+        if (std::abs(contribution_sum - 1.0) > 1.0e-5 ||
+            (options_.cuda_weights == CudaWeightMode::resident &&
+             (resident_weights_ == nullptr ||
+              total_weight_bytes > options_.cuda_resident_bytes))) {
+            return Result<OfficialMoeFfnResult>::failure(
+                ErrorCode::invalid_mxfp4);
+        }
+
+        std::vector<std::unique_ptr<cuda::DeviceAllocation>> transient;
+        transient.reserve(bf16_views.size() + experts.size() * 6);
+        std::uint64_t uploaded_weight_bytes = 0;
+        const auto acquire = [&](cuda::ResidentWeightKey key,
+                                 std::span<const std::byte> primary,
+                                 std::span<const std::byte> secondary)
+            -> Result<cuda::ResidentAcquisition> {
+            if (resident_weights_) {
+                auto value = resident_weights_->acquire(key, primary, secondary);
+                if (!value || value.value().disposition ==
+                                  cuda::ResidentDisposition::bypass) {
+                    return Result<cuda::ResidentAcquisition>::failure(
+                        ErrorCode::invalid_mxfp4);
+                }
+                uploaded_weight_bytes += value.value().uploaded_bytes;
+                return value;
+            }
+            auto first = std::make_unique<cuda::DeviceAllocation>(
+                &memory_stats_, &runtime_stats_);
+            auto second = std::make_unique<cuda::DeviceAllocation>(
+                &memory_stats_, &runtime_stats_);
+            if (first->allocate(primary.size()) != cudaSuccess ||
+                (!secondary.empty() &&
+                 second->allocate(secondary.size()) != cudaSuccess) ||
+                cudaMemcpyAsync(first->get(), primary.data(), primary.size(),
+                                cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+                (!secondary.empty() &&
+                 cudaMemcpyAsync(second->get(), secondary.data(),
+                                 secondary.size(), cudaMemcpyHostToDevice,
+                                 stream_) != cudaSuccess)) {
+                return Result<cuda::ResidentAcquisition>::failure(
+                    ErrorCode::backend_unavailable);
+            }
+            const auto* primary_pointer = first->get();
+            const auto* secondary_pointer =
+                secondary.empty() ? nullptr : second->get();
+            uploaded_weight_bytes += primary.size() + secondary.size();
+            transient.push_back(std::move(first));
+            if (!secondary.empty()) transient.push_back(std::move(second));
+            return Result<cuda::ResidentAcquisition>::success(
+                {cuda::ResidentDisposition::admitted, primary_pointer,
+                 secondary_pointer, primary.size() + secondary.size()});
+        };
+
+        std::array<const std::uint16_t*, 6> device_bf16{};
+        for (std::size_t index = 0; index < bf16_views.size(); ++index) {
+            const auto& view = bf16_views[index];
+            auto value = acquire(
+                {view.tensor_id, cuda::WeightRepresentation::dense_bf16,
+                 view.rows, view.cols, 0}, std::as_bytes(view.values), {});
+            if (!value) {
+                return Result<OfficialMoeFfnResult>::failure(
+                    value.error(), value.message());
+            }
+            device_bf16[index] = static_cast<const std::uint16_t*>(
+                value.value().primary);
+        }
+        std::vector<cuda::Mxfp4DeviceMatrix> descriptors(experts.size() * 3);
+        for (std::size_t expert = 0; expert < experts.size(); ++expert) {
+            const std::array views{
+                experts[expert].gate, experts[expert].up, experts[expert].down};
+            for (std::size_t projection = 0; projection < views.size(); ++projection) {
+                const auto& view = views[projection];
+                auto value = acquire(
+                    {view.tensor_id, cuda::WeightRepresentation::mxfp4,
+                     view.rows, view.cols, view.group_size},
+                    view.packed, view.scales);
+                if (!value) {
+                    return Result<OfficialMoeFfnResult>::failure(
+                        value.error(), value.message());
+                }
+                descriptors[projection * experts.size() + expert] = {
+                    static_cast<const std::uint8_t*>(value.value().primary),
+                    static_cast<const std::uint8_t*>(value.value().secondary)};
+            }
+        }
+
+        const auto hidden_bytes = hidden.size_bytes();
+        const auto latent_bytes = latent_width * sizeof(float);
+        const auto routed_bytes = routed_width * sizeof(float);
+        const auto shared_bytes = shared_width * sizeof(float);
+        const auto expert_intermediate_count =
+            experts.size() * intermediate_width;
+        const auto expert_intermediate_bytes =
+            expert_intermediate_count * sizeof(float);
+        const auto expert_output_bytes =
+            experts.size() * routed_width * sizeof(float);
+        const auto contribution_bytes = contributions.size_bytes();
+        const auto descriptor_bytes =
+            descriptors.size() * sizeof(cuda::Mxfp4DeviceMatrix);
+        if (layer_input_scratch_.reserve(hidden_bytes * 2) != cudaSuccess ||
+            layer_routed_latent_scratch_.reserve(latent_bytes) != cudaSuccess ||
+            layer_descriptor_scratch_.reserve(descriptor_bytes) != cudaSuccess ||
+            layer_expert_gate_scratch_.reserve(expert_intermediate_bytes) != cudaSuccess ||
+            layer_expert_up_scratch_.reserve(expert_intermediate_bytes) != cudaSuccess ||
+            layer_expert_activation_scratch_.reserve(expert_intermediate_bytes) != cudaSuccess ||
+            layer_expert_output_scratch_.reserve(expert_output_bytes) != cudaSuccess ||
+            layer_contribution_scratch_.reserve(contribution_bytes) != cudaSuccess ||
+            layer_mixed_scratch_.reserve(routed_bytes) != cudaSuccess ||
+            layer_normalized_scratch_.reserve(routed_bytes) != cudaSuccess ||
+            layer_routed_hidden_scratch_.reserve(hidden_bytes) != cudaSuccess ||
+            layer_shared_gate_scratch_.reserve(shared_bytes) != cudaSuccess ||
+            layer_shared_up_scratch_.reserve(shared_bytes) != cudaSuccess ||
+            layer_shared_activation_scratch_.reserve(shared_bytes) != cudaSuccess ||
+            layer_shared_hidden_scratch_.reserve(hidden_bytes) != cudaSuccess ||
+            layer_final_hidden_scratch_.reserve(hidden_bytes) != cudaSuccess) {
+            return Result<OfficialMoeFfnResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        auto* device_hidden = static_cast<float*>(layer_input_scratch_.get());
+        auto* device_prefix = device_hidden + hidden.size();
+        auto* device_latent = static_cast<float*>(layer_routed_latent_scratch_.get());
+        auto* device_descriptors = static_cast<cuda::Mxfp4DeviceMatrix*>(layer_descriptor_scratch_.get());
+        auto* device_gate = static_cast<float*>(layer_expert_gate_scratch_.get());
+        auto* device_up = static_cast<float*>(layer_expert_up_scratch_.get());
+        auto* device_activation = static_cast<float*>(layer_expert_activation_scratch_.get());
+        auto* device_expert_output = static_cast<float*>(layer_expert_output_scratch_.get());
+        auto* device_contributions = static_cast<float*>(layer_contribution_scratch_.get());
+        auto* device_mixed = static_cast<float*>(layer_mixed_scratch_.get());
+        auto* device_normalized = static_cast<float*>(layer_normalized_scratch_.get());
+        auto* device_routed = static_cast<float*>(layer_routed_hidden_scratch_.get());
+        auto* device_shared_gate = static_cast<float*>(layer_shared_gate_scratch_.get());
+        auto* device_shared_up = static_cast<float*>(layer_shared_up_scratch_.get());
+        auto* device_shared_activation = static_cast<float*>(layer_shared_activation_scratch_.get());
+        auto* device_shared = static_cast<float*>(layer_shared_hidden_scratch_.get());
+        auto* device_combined = static_cast<float*>(layer_final_hidden_scratch_.get());
+        if (cudaMemcpyAsync(device_hidden, hidden.data(), hidden_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+            cudaMemcpyAsync(device_prefix, prefix.data(), hidden_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+            cudaMemcpyAsync(device_contributions, contributions.data(),
+                            contribution_bytes, cudaMemcpyHostToDevice,
+                            stream_) != cudaSuccess ||
+            cudaMemcpyAsync(device_descriptors, descriptors.data(),
+                            descriptor_bytes, cudaMemcpyHostToDevice,
+                            stream_) != cudaSuccess) {
+            return Result<OfficialMoeFfnResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        if (cuda::launch_bf16_matvec(device_hidden, device_bf16[0],
+                                     device_latent, latent_width, hidden_width,
+                                     stream_) != cudaSuccess ||
+            cuda::launch_round_bf16_inplace(device_prefix, hidden_width,
+                                            stream_) != cudaSuccess ||
+            cuda::launch_mxfp4_matvec_grid(
+                device_latent, device_descriptors, device_gate,
+                intermediate_width, latent_width, experts.size(), 1,
+                cuda::ExpertGridInputLayout::shared_token_major, stream_) != cudaSuccess ||
+            cuda::launch_mxfp4_matvec_grid(
+                device_latent, device_descriptors + experts.size(), device_up,
+                intermediate_width, latent_width, experts.size(), 1,
+                cuda::ExpertGridInputLayout::shared_token_major, stream_) != cudaSuccess ||
+            cuda::launch_situ_glu(device_gate, device_up, device_activation,
+                                  expert_intermediate_count, situ_beta,
+                                  situ_linear.has_value(),
+                                  situ_linear.value_or(0.0F), false,
+                                  stream_) != cudaSuccess ||
+            cuda::launch_mxfp4_matvec_grid(
+                device_activation, device_descriptors + experts.size() * 2,
+                device_expert_output, routed_width, intermediate_width,
+                experts.size(), 1,
+                cuda::ExpertGridInputLayout::expert_token_major, stream_) != cudaSuccess ||
+            cuda::launch_round_bf16_inplace(
+                device_expert_output, experts.size() * routed_width,
+                stream_) != cudaSuccess ||
+            cuda::launch_ordered_expert_mix_bf16(
+                device_expert_output, device_contributions, contributions,
+                device_mixed, routed_width, stream_) != cudaSuccess ||
+            cuda::launch_bf16_rms_norm(device_mixed, device_bf16[1],
+                                       device_normalized, routed_width,
+                                       epsilon, stream_) != cudaSuccess ||
+            cuda::launch_bf16_matvec(device_normalized, device_bf16[2],
+                                     device_routed, hidden_width, routed_width,
+                                     stream_) != cudaSuccess ||
+            cuda::launch_bf16_matvec(device_hidden, device_bf16[3],
+                                     device_shared_gate, shared_width,
+                                     hidden_width, stream_) != cudaSuccess ||
+            cuda::launch_bf16_matvec(device_hidden, device_bf16[4],
+                                     device_shared_up, shared_width,
+                                     hidden_width, stream_) != cudaSuccess ||
+            cuda::launch_situ_glu(device_shared_gate, device_shared_up,
+                                  device_shared_activation, shared_width,
+                                  situ_beta, situ_linear.has_value(),
+                                  situ_linear.value_or(0.0F), false,
+                                  stream_) != cudaSuccess ||
+            cuda::launch_bf16_matvec(device_shared_activation,
+                                     device_bf16[5], device_shared,
+                                     hidden_width, shared_width,
+                                     stream_) != cudaSuccess ||
+            cuda::launch_bf16_vector_add(device_routed, device_shared,
+                                         device_combined, hidden_width,
+                                         stream_) != cudaSuccess ||
+            cuda::launch_bf16_vector_add(device_prefix, device_combined,
+                                         device_routed, hidden_width,
+                                         stream_) != cudaSuccess) {
+            return Result<OfficialMoeFfnResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        std::vector<float> output(hidden_width);
+        if (cudaMemcpyAsync(output.data(), device_routed, hidden_bytes,
+                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+            cudaStreamSynchronize(stream_) != cudaSuccess) {
+            return Result<OfficialMoeFfnResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        const auto activation_bytes = hidden_bytes * 2 + contribution_bytes +
+                                      descriptor_bytes;
+        ++runtime_stats_.stream_synchronization_count;
+        runtime_stats_.activation_h2d_bytes += activation_bytes;
+        runtime_stats_.weight_h2d_bytes += uploaded_weight_bytes;
+        runtime_stats_.device_to_host_bytes += hidden_bytes;
+        ++runtime_stats_.resident_moe_layer_calls;
+        runtime_stats_.resident_moe_layer_experts += experts.size();
+        runtime_stats_.resident_moe_layer_kernel_launches += 17;
+        runtime_stats_.resident_moe_layer_contribution_h2d_bytes +=
+            contribution_bytes;
+        record(phase, ProfileOperation::weight_host_to_device,
+               NumericPrecision::bf16_rounded, layer, operation_start, 0,
+               uploaded_weight_bytes, 0, true);
+        record(phase, ProfileOperation::activation_host_to_device,
+               NumericPrecision::bf16_rounded, layer, operation_start, 0,
+               activation_bytes, 0, true);
+        record(phase, ProfileOperation::device_to_host,
+               NumericPrecision::bf16_rounded, layer, operation_start, 0,
+               hidden_bytes, 0, true);
+        return Result<OfficialMoeFfnResult>::success(
+            {true, std::move(output),
+             {expert_ids.begin(), expert_ids.end()}});
+    }
+
     Result<std::vector<std::vector<float>>> mxfp4_situ_mlp_batch(
         std::span<const float> inputs, std::size_t batch_size,
         Mxfp4MlpView expert, float situ_beta,

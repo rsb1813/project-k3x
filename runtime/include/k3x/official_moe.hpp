@@ -12,22 +12,6 @@
 
 namespace k3x {
 
-struct Bf16WeightView {
-    std::span<const std::uint16_t> values;
-    std::size_t rows{};
-    std::size_t cols{};
-};
-
-struct Bf16VectorView {
-    std::span<const std::uint16_t> values;
-};
-
-struct Bf16MlpView {
-    Bf16WeightView gate;
-    Bf16WeightView up;
-    Bf16WeightView down;
-};
-
 struct OfficialExpertView {
     std::uint32_t expert_id{};
     Mxfp4MlpView weights;
