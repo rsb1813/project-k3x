@@ -785,3 +785,27 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: the experiment is smaller, reversible, and evidence-driven. It can remove or retain a validation boundary before wider official materialization multiplies the same cost.
 - Rejected claims: no default change, token-rate projection, or claim that validation alone explains the entire wall delta is accepted without the next ablation.
 - Revisit: after isolated validation and orchestration counters exist, choose between admission validation, larger device-resident state, or a wider official multi-layer boundary from measured results.
+
+## D-068 — Retain per-call default after accepting exact KDA admission as an opt-in path
+
+- Date: 2026-08-11.
+- Status: accepted and implemented through B-0031; public integration pending.
+- Decision: reuse the backend-wide immutable identity registry for fourteen official KDA views, require exact resident execution and atomic first admission, expose the mode explicitly in the official-layer harness, and retain `per-call` as the global default.
+- Alternatives considered: make admission the default immediately; add a KDA-specific cache; bypass backend validation from the benchmark; proceed directly to a wider official graph.
+- Evidence: B-0031 preserves identical routes, contributions, output/final-state digests, resident bytes, zero warm weight H2D, and `0.00048828125` maximum error. Incremental/full medians fall by 59.819421%/44.463194%, measured validation time is 103.874127/55.731721 ms per sequence, and paired kernel totals change by less than 0.4%.
+- Benchmark result: incremental per-call/admission medians are 175.667985/70.584413 ms; full per-call/admission medians are 121.067320/67.236923 ms. Admission leaves a 3.347490 ms incremental/full gap.
+- Reason accepted: one exact identity authority removes a measured repeated host scan without weakening dynamic input/state checks or duplicating trust logic. Keeping the default unchanged prevents a bounded one-layer WSL2 result from becoming a premature production policy.
+- Rejected claims: B-0031 is not token throughput, quality, physical memory/PCIe/NVMe traffic, native-Linux evidence, full-model cache behavior, or proof that admission should be globally default.
+- Revisit: after a bounded multi-layer or token-loop path exists, compare admission lifetime/identity ownership under actual runtime residency and measure the remaining 3.347490 ms host/API gap before changing defaults.
+
+## D-069 — Attribute device-resident KDA state handoff before widening the official graph
+
+- Date: 2026-08-11.
+- Status: accepted as the next bounded non-cloud experiment after M30 publication.
+- Decision: keep exact admission opt-in and isolate KDA state residency across incremental calls so token A's state can feed token B without an intermediate 6,512,640-byte D2H plus H2D round trip. Preserve an explicit final-state publication path and the current host-state reference mode.
+- Alternatives considered: materialize a second official layer immediately; fuse host Attention Residual and routing first; make admission the default; start Cloud Run/full-checkpoint work.
+- Evidence: B-0031 admission incremental/full medians are 70.584413/67.236923 ms with nearly identical 33.889030/33.958984 ms kernel time. Incremental performs two state transfers in each direction while full performs one, leaving a 3.347490 ms wall gap after validation is removed.
+- Benchmark result: none for persistent state. B-0031 supplies only the selection evidence and must not be relabeled as a state-residency result.
+- Reason accepted: this is the smallest exact, reversible experiment that targets the remaining measured incremental/full distinction without new model payload, routing changes, or a wider correctness closure.
+- Rejected claims: the 3.347490 ms gap is not proven to be entirely state-copy cost, and this decision does not authorize a default change, token-rate projection, full checkpoint download, or paid cloud resources.
+- Revisit: after a fixed state-residency ablation, choose common host residual/routing orchestration versus wider official multi-layer execution from measured wall/kernel/traffic results.

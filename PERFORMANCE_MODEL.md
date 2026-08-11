@@ -229,6 +229,19 @@ Resident incremental/full medians are 168.577563/114.804882 ms per two-token lay
 
 The transient A row measures 262.801334 ms median, 15.774184 ms kernel time per call, 243.242947 ms orchestration time per call, and 30,711,316,480 logical warm weight-H2D bytes over twenty calls. Reader counters report 3,658,513,408 requested/completed bytes per harness process for every row; these are logical Reader bytes, not physical NVMe traffic. None of these complete-layer sequence measurements has token semantics or supports a TPS estimate.
 
+## Milestone 30 official KDA validation attribution
+
+The runtime KDA weight set is 887,800,832 bytes: 887,160,832 BF16 bytes plus 640,000 F32 bytes across fourteen views. Under exact per-call validation, a two-call incremental sequence scans 1,775,601,664 host bytes and a one-call full sequence scans 887,800,832 bytes. B-0031's twenty measured sequences therefore scan 35,512,033,280 and 17,756,016,640 bytes. Admission scans 887,800,832 bytes once during cold execution and records only exact identity hits after cold admission and warmups.
+
+| B-0031 case | Per-call median | Admission median | Paired change | Per-call validation / sequence | Admission hits |
+|---|---:|---:|---:|---:|---:|
+| A-to-B incremental | 175.667985 ms | 70.584413 ms | -59.819421% | 103.874127 ms | 28 per sequence |
+| A+B full | 121.067320 ms | 67.236923 ms | -44.463194% | 55.731721 ms | 14 per sequence |
+
+The paired aggregate CUDA kernel changes are -0.382490% incremental and -0.389219% full. All rows retain 1,816,322,048 resident weight bytes and zero measured weight H2D. Incremental/full admission medians differ by 3.347490 ms, compared with 54.600665 ms under per-call validation in the same B-0031 transaction. The remaining gap includes the extra KDA API call, state round trip, synchronization, and host residual/routing work; B-0031 does not separately attribute those terms.
+
+These are two-position complete-layer boundary measurements under WSL2. They are not bytes/token, token throughput, physical host-memory bandwidth, PCIe traffic, NVMe traffic, utilization, quality, or native-Linux authority. The exact `per-call` path remains the default until a later production-policy decision has multi-layer and end-to-end evidence.
+
 ## Required production measurements
 
 Before selecting a default storage or kernel path, the Linux target must record decode and prefill rates, TTFT, GPU utilization and memory bandwidth, VRAM and host RAM, NVMe and RAM-to-GPU GB/token, expert-cache hit rate, speculative acceptance, unique experts per block, adaptive Top-K, cold rescues, per-kernel time, and I/O stall time. Every result must carry an ablation configuration and quality mode.

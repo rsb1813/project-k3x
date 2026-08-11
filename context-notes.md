@@ -795,3 +795,13 @@
 - Controlled evidence tests mutate every validation counter/time category, validation identity, forbidden schema, cross-row output identity, raw JSON, CSV, and strict iteration identity. Failed transactions remove the partial directory and publish nothing.
 - B-0031 plus B-0030 evidence-tool regressions pass 24/24, Python compile validation passes, and `git diff --check` passes. No formal B-0031 directory or timing result exists at this implementation checkpoint.
 - The first formal command reached no benchmark subprocess and created no partial output because direct script execution could not resolve the package-qualified `tools` import. The runner now selects package import when imported and sibling import when executed directly; a subprocess `--help` regression fixes this exact boundary before the matrix is restarted.
+
+## 2026-08-11 — Milestone 30 formal B-0031 and final local verification
+
+- The restarted fixed 3-warmup/20-sequence four-row transaction completed in 360.1 seconds and atomically published B-0031. No row was rerun or selected for favorable timing.
+- Incremental per-call/admission medians are 175.667985/70.584413 ms, a 59.819421% reduction. Full per-call/admission medians are 121.067320/67.236923 ms, a 44.463194% reduction. Validation consumes 103.874127/55.731721 ms per sequence on the per-call rows, while paired kernel totals change by less than 0.4%.
+- All four rows preserve exact routes, contributions, output and final-state digests, 1,816,322,048 resident bytes, zero warm weight H2D, and `0.00048828125` maximum error. Admission leaves a 3.347490 ms incremental/full median gap.
+- Strict verification, independent raw/CSV/summary SHA-256 cross-checks, and committed evidence tests pass. Aggregate SHA-256 is `5d6ba38a0d959902c5ab8e7f7bce4f13254f018644430a18490864c173b30a1f`; summary CSV is `ea4bcd6b6f613d4a07bdb4e8aa14cb989f2ef11a3fcdfd473112a846e0883501`.
+- Actual admission incremental Compute Sanitizer reports `ERROR SUMMARY: 0 errors`. Production `k3x_run` remains fail-closed with exit 4 and `NON_EXECUTABLE_ARTIFACT`.
+- Fresh final verification passes CPU CTest 19/19 plus Python 558/122, liburing/direct CTest 20/20 plus Python 560/120, ASan/UBSan CTest 20/20, and CUDA CTest 34/34 plus actual-artifact Python 659/21.
+- D-068 accepts admission as an exact opt-in path but retains `per-call` as the default. This one-layer WSL2 result does not establish token throughput, quality, physical traffic, native-Linux behavior, or full-model lifetime safety.

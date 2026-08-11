@@ -2,14 +2,16 @@
 
 ## Current milestone
 
-Milestone 29's official layer-1 KDA transformer boundary is publicly complete through formal B-0030 and the full verification matrix. Its fail-closed planner, independent PyTorch and portable C++ KDA oracles, bounded manufacturing, portable/native-CUDA complete-layer execution, strict artifact preflight, 32-expert official fixture, source-byte oracle sidecar, committed evidence verifier, actual-artifact sanitizer gate, and public CI are implemented and verified. The bounded artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
+Milestone 30's official KDA admission-validation attribution is locally complete through formal B-0031 and the full verification matrix; public integration is pending. The backend now admits all fourteen immutable official KDA views atomically under exact resident identity while retaining dynamic hidden/state checks and the `per-call` default. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
 
-State audited last on 2026-08-11 from public M29 head `2a4bfaf40284204ab314938f8112b280915f77df`. Fresh local verification passes CPU CTest 19/19 plus Python 541/119, liburing/direct CTest 20/20 plus Python 543/117, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus actual-artifact Python 639/21, committed B-0030 verification 9/9, and actual AB incremental resident Compute Sanitizer with zero errors. PR #50 branch/PR correctness and CodeQL plus post-merge `main` correctness `31488078940` and CodeQL `31488078974` passed. The ignored bounded fixture contains 17 KDA tensors, eleven always-active MoE tensors, and a 32-expert union; no complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-11 from local M30 evidence commit `fb33d84` over public M29 head `2a4bfaf40284204ab314938f8112b280915f77df`. Fresh verification passes CPU CTest 19/19 plus Python 558/122, liburing/direct CTest 20/20 plus Python 560/120, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus actual-artifact Python 659/21, B-0031 evidence-tool/B-0030 regressions 26/26, strict B-0031 rehash, and actual admission-mode AB incremental Compute Sanitizer with zero errors. The ignored bounded fixture is unchanged; no complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
 - Milestone 0 deterministic synthetic K3-compatible PyTorch graph, K3X v1 streaming converter, strict Python/C++ readers, and independent portable C++20 runtime.
 - Milestone 28 bounded official layer-1 MoE FFN manufacturing, exact natural Top-16 A/B routing, 32-expert union, portable/CUDA parity, exact residency, B-0029 evidence, and full local verification without a complete shard or checkpoint.
+- Milestone 29 bounded official layer-1 Attention-Residual/KDA/MoE execution, exact full/incremental state parity, B-0030 evidence, public PR #50, and post-merge CI without a complete shard or checkpoint.
+- Milestone 30 exact official KDA immutable-weight admission, atomic identity failure recovery, explicit harness telemetry, fixed B-0031 evidence, actual-artifact sanitizer, and complete local verification.
 - Milestone 25 strict generic source containment and ownership, bounded canonical safetensors metadata, exact resume-ledger schema, committed-prefix validation, and fail-atomic orphan-suffix recovery without changing K3X v1.
 - Milestone 26 fixed-authority HTTPS discovery, content-addressed snapshot/index/config/header identity, exact official expert planning, atomic real-byte materialization, K3X round-trip, and strict B-0027 JSON/CSV verification.
 - B-0027 official layer-1 expert-0 conversion with 59,799,719 metadata bytes, 818,704 header bytes, 17,547,264 tensor-payload bytes, Reader validity, and explicit `transport-pinned-range` provenance.
@@ -111,18 +113,9 @@ State audited last on 2026-08-11 from public M29 head `2a4bfaf40284204ab314938f8
 
 ## Work in progress
 
-- M29 design research is complete. The pinned source Git blob matches repository metadata; header-only inspection identifies 17 new tensors totaling 887,843,840 bytes; and D-061 selects the explicit layer-1 recurrent-state boundary.
-- M29 Task 1 is implemented and verified. Strict config/source/header/tensor planning composes the M28 MoE plan and returns exact byte bounds without payload access; 64 official source/MoE/layer/CLI tests pass.
-- M29 Task 2 is implemented and verified. The independent scalar oracle passes exact BF16 full/incremental output and convolution-state parity, `1e-6` FP32 recurrent-state parity, an independently reconstructed nonzero-state recurrence, and strict negative contracts across 17 focused tests.
-- M29 Task 3 is implemented and verified. The M28 transaction primitives now manufacture all pre-route objects, publish explicit V-first full/incremental state linkage before selected experts, assemble exact execution order, revalidate the complete plan before payload, and expose a zero-payload `kda-layer` dry-run/materialization CLI. The combined recovery/source-integrity regression passes 123 tests.
-- M29 Task 4 is implemented and verified. The Reader-free portable C++ KDA consumes native BF16/F32 views, owns explicit V-first state, matches every independent PyTorch boundary, and passes full CPU CTest 18/18 plus Python C++ parity 114/32.
-- M29 Task 5A is implemented and verified. The Reader-free portable complete layer preserves both Attention Residual boundaries, composes the KDA and MoE authorities, matches full/incremental state and changing natural routes, and passes full CPU CTest 19/19 plus Python C++ parity 115/32.
-- M29 Task 5B is implemented and verified. The dedicated harness validates strict manifest/state/route/source identities plus exact artifact root, converter source fingerprint, reconstructed microshard digest, tensor order/dtype/shape, and every data/auxiliary digest before backend construction.
-- M29 Task 5C is implemented and verified. The ignored 1,829,310,720-byte artifact contains the naturally derived 32-expert union. A 6,541,344-byte source-byte oracle sidecar is manifest-bound; official portable full/incremental execution preserves exact route IDs and passes fixed measured numerical gates before intentional `BACKEND_UNAVAILABLE`. CPU CTest 19/19, CUDA CTest 32/32, and focused Python 67/4 pass.
-- M29 Task 6 is implemented and verified locally. The native `sm_120` boundary keeps Attention Residual/RMSNorm/router host-side while KDA and exact native-MXFP4 MoE execute on CUDA. Tiny transient/resident and full/incremental parity, CPU CTest 19/19, CUDA CTest 34/34, focused Python 175/8, and both new Compute Sanitizer runs pass. The actual resident A-to-B cold smoke preserves exact routes/state and matches the complete-layer oracle within `0.00048828125`.
-- M29 Task 7 is implemented and verified locally. The fixed fsynced atomic B-0030 pipeline enforces three rows, exact 3/20 official identity, BF16/F32/MXFP4 plus KDA-state and Reader traffic formulas, process peak RSS, full/incremental output/state digests, raw/CSV/aggregate hashes, and no token/quality/physical-traffic fields. Runner tests pass 8/8 and actual one-sample probes confirm all formulas, including 24 launches for two-token full KDA versus 32 for two incremental calls.
-- Formal B-0030 is committed at `bbdccb9`. A transient, resident incremental, and resident full medians are 262,801,334, 168,577,563, and 114,804,882 ns. Both resident rows retain 1,816,322,048 exact weight bytes, transfer zero warm weight bytes, and preserve exact full/incremental output plus final-state digests with maximum error `0.00048828125`.
-- The accepted design is commit `5f04768` and the detailed eight-task TDD plan is commit `b7a6c0e`. Implementation, evidence, full verification, README, TITAN Ledger, PR #50, and post-merge CI are complete at public head `2a4bfaf`.
+- M30 implementation, formal B-0031, evidence rehash, actual-artifact sanitizer, full local verification, README, and TITAN Ledger synchronization are complete. Public pull-request integration and post-merge CI remain.
+- Formal B-0031 is committed at `fb33d84`. Incremental per-call/admission medians are 175,667,985/70,584,413 ns; full medians are 121,067,320/67,236,923 ns. All rows preserve exact route/output/state identity, zero warm weight H2D, 1,816,322,048 resident bytes, and `0.00048828125` maximum error.
+- D-068 retains per-call as the default and admission as an exact opt-in. D-069 selects device-resident KDA state handoff as the next bounded non-cloud experiment after M30 publication.
 
 - M28 Task 2 is complete at `0b0c944`: the route manifest is durable before expert fetching, only the natural A/B first-use union is planned, object reuse is rehashed, response bytes are measured separately from logical source bytes, and production generation remains fail-closed.
 - M28 Task 3 is complete at `8a13cf5`: the dimension-driven CPU oracle preserves explicit BF16 boundaries, validates the natural route before execution, decodes native MXFP4 experts exactly, and matches independent PyTorch intermediate values without production dispatch.
@@ -157,13 +150,13 @@ State audited last on 2026-08-11 from public M29 head `2a4bfaf40284204ab314938f8
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Current implementation branch: `codex/milestone-twenty-nine-official-layer` from public head `ab3cf43`.
+- Current implementation branch: `codex/milestone-thirty-kda-admission` from public head `3c3da61`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build`, `build-liburing`, `build-asan`, and `build-cuda`.
 
 ## Known failures and blockers
 
 - Windows Smart App Control still blocks unsigned `k3x_run.exe`; WSL2 is the verified local CUDA path and native Linux remains the final performance authority.
-- The production-executable checkpoint is synthetic and tiny. The bounded official M29 artifact executes only through the dedicated benchmark harness and remains rejected by `k3x_run`; no complete shard or full checkpoint has been downloaded. B-0030 is one complete layer-boundary sequence, not token throughput or full-model evidence.
+- The production-executable checkpoint is synthetic and tiny. The bounded official M29/M30 artifact executes only through the dedicated benchmark harness and remains rejected by `k3x_run`; no complete shard or full checkpoint has been downloaded. B-0031 is one complete layer-boundary sequence attribution, not token throughput or full-model evidence.
 - M26 binds transport, snapshot, index, config, shard header, range, tensor, microshard, and K3X identities, but does not recompute the complete shard LFS digest or provide signed publisher provenance. Production conversion needs stronger complete-object or authenticated-chunk verification.
 - The graph remains CPU-driven outside FFN blocks. KDA, MLA, routing, score mixing, residual work, state management, and non-FFN boundaries remain on the host.
 - L1 misses use ordered Reader batches into pageable host vectors. Deadline mode may run one such blocking batch on a worker, but there is no cross-layer asynchronous L2 pipeline, transition predictor, or N/N+1/N+2 triple buffering.
@@ -182,8 +175,8 @@ State audited last on 2026-08-11 from public M29 head `2a4bfaf40284204ab314938f8
 
 ## Next concrete tasks
 
-1. Implement D-067 as a bounded immutable KDA validation/orchestration attribution experiment with the exact default retained.
-2. Re-run applicable tests and a fixed non-ranking ablation before deciding whether admission validation or a wider device-resident boundary becomes the next implementation step.
+1. Publish M30 through a public pull request and verify branch, pull-request, and post-merge correctness/CodeQL.
+2. Implement D-069 as a bounded exact device-resident KDA state-handoff experiment with the host-state reference path retained.
 3. Keep the artifact non-executable; do not download a complete shard/checkpoint or create paid cloud resources.
 
 ## Hardware assumptions
@@ -201,13 +194,17 @@ State audited last on 2026-08-11 from public M29 head `2a4bfaf40284204ab314938f8
 
 ## Latest measured bottleneck
 
-B-0030 is the latest formal performance measurement. Resident A-to-B incremental and A+B full medians are 168,577,563 and 114,804,882 ns per two-token complete-layer sequence. Both keep 1,816,322,048 weight bytes resident, transfer zero warm weight bytes, and preserve exact output/final-state digests with maximum error `0.00048828125`.
+B-0031 is the latest formal performance measurement. Incremental per-call/admission medians are 175,667,985/70,584,413 ns and full per-call/admission medians are 121,067,320/67,236,923 ns per two-position complete-layer sequence. All rows keep 1,816,322,048 weight bytes resident, transfer zero warm weight bytes, and preserve exact output/final-state digests with maximum error `0.00048828125`.
 
-The full-call median is 31.897887% lower, but aggregate profiled device time per sequence is only 0.416216% lower: 31.595311 ms full versus 31.727365 ms incremental. Measured orchestration is 83.120495 ms full versus 137.088436 ms incremental. The next bounded bottleneck is therefore per-call host/API work, including the currently repeated immutable KDA validation scan; B-0030 does not yet time validation separately or prove it explains the entire 53.772681 ms wall delta.
+Admission removes 59.819421% incremental and 44.463194% full wall time while paired aggregate kernel totals change by less than 0.4%. Per-call validation measures 103.874127/55.731721 ms per sequence and admission reduces the incremental/full median gap to 3.347490 ms. The next bounded distinction is the extra incremental KDA state round trip and API/synchronization boundary; common host residual/routing orchestration remains about 33–37 ms per sequence.
 
-D-067 selects a separate admission-validation/orchestration attribution experiment before another official layer is materialized or CUDA kernels are tuned. The exact per-call validation path remains the default until that experiment passes correctness and measurement gates. Native-Linux physical NVMe/PCIe traffic, full-model cache pressure, token throughput, GPU utilization/bandwidth, and coding quality remain unmeasured.
+D-069 selects an exact device-resident KDA state-handoff experiment before another official layer is materialized. Per-call validation remains the default and admission remains opt-in. Native-Linux physical NVMe/PCIe traffic, full-model cache pressure, token throughput, GPU utilization/bandwidth, and coding quality remain unmeasured.
 
 ## Last known-good state
+
+- Local M30 evidence commit `fb33d84` records B-0031 with aggregate SHA-256 `5d6ba38a0d959902c5ab8e7f7bce4f13254f018644430a18490864c173b30a1f`, summary CSV SHA-256 `ea4bcd6b6f613d4a07bdb4e8aa14cb989f2ef11a3fcdfd473112a846e0883501`, and strict committed-evidence verification.
+- Fresh M30 verification passes CPU CTest 19/19 plus Python 558/122, liburing/direct CTest 20/20 plus Python 560/120, ASan/UBSan CTest 20/20, and CUDA CTest 34/34 plus actual-artifact Python 659/21. Actual admission-mode AB incremental Compute Sanitizer reports `ERROR SUMMARY: 0 errors` with `--launch-timeout 0`.
+- Production `k3x_run` exits 4 with `NON_EXECUTABLE_ARTIFACT`. M30 public integration is pending; the latest public head remains M29 publication head `3c3da615f2f807d5640d077de6c5dcf6fd4ac626`.
 
 - Local M29 evidence commit `bbdccb9` records formal B-0030 with aggregate SHA-256 `86f0007af7da007d6646dec6fa8fba4008c1bf7bedff53971d5d31926c9f6452` and summary CSV SHA-256 `1e5af9bb7d5b9abb16f62962bbce3584b62014873b12ce7642868e919770a635`. Strict committed-evidence verification passes 9/9.
 - Fresh M29 final verification passes CPU CTest 19/19 plus Python 541/119, liburing/direct CTest 20/20 plus Python 543/117, ASan/UBSan CTest 20/20, and CUDA CTest 34/34 plus Python 639/21 against the actual bounded artifact. Actual AB incremental resident Compute Sanitizer reports `ERROR SUMMARY: 0 errors`; `--launch-timeout 0` is required because preflight exceeds the tool's default attach timeout.

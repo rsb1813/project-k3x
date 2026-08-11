@@ -442,7 +442,7 @@
 - [x] Implement and test atomic admission for fourteen official KDA immutable views.
 - [x] Expose official-layer validation CLI and cold/measured telemetry.
 - [x] Implement and verify the strict B-0031 evidence transaction.
-- [ ] Run actual-artifact correctness and Compute Sanitizer gates.
-- [ ] Run B-0031 exactly once and seal the evidence.
-- [ ] Run the complete verification matrix and synchronize README/TITAN Ledger.
+- [x] Run actual-artifact correctness and Compute Sanitizer gates.
+- [x] Run B-0031 exactly once and seal the evidence.
+- [x] Run the complete verification matrix and synchronize README/TITAN Ledger.
 - [ ] Publish M30 and verify pull-request and post-merge CI.
