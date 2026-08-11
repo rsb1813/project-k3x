@@ -1117,3 +1117,14 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Actual alternating resident Compute Sanitizer: `ERROR SUMMARY: 0 errors`; maximum absolute error `0.00048828125`; warm weight H2D zero.
 - A full-matrix precursor exposed two incomplete BF16 source-integrity fields in a Python test helper. Commit `bdfc0b6` added the source/tensor digests and canonical tensor order; focused CPU and liburing BF16 tests then passed 2/2 before this fresh matrix.
 - Public integration: branch correctness `31465297042`, pull-request correctness `31465320780`, and pull-request CodeQL `31465320778` passed. PR #48 rebase-merged at `eb2c20860ee9c7c612b9b74984170bd8b4443ba1`; post-merge `main` correctness `31465590414` and CodeQL `31465590416` passed.
+
+## Milestone 29 design metadata gate — not a benchmark
+
+- Date: 2026-08-11.
+- Commit: pending design commit.
+- Hardware: metadata-only HTTPS inspection from the current development host; no GPU execution.
+- Model/checkpoint: `moonshotai/Kimi-K3` revision `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`.
+- Observation: pinned `modeling_kimi_linear.py` is 51,506 bytes and recomputes to Git blob `b8c41e8bfce768d74d8da3a37e693f5ee43876a0`; 17 layer-1 KDA/self-Attention-Residual header entries total 887,843,840 payload bytes in `model-00002-of-000096.safetensors`.
+- Network scope: repository API, 59,764,096-byte index metadata, 818,696-byte safetensors header, 51,506-byte pinned source, and small config metadata only. No tensor payload, complete shard, checkpoint, or paid resource was used.
+- Decode tok/s, prefill tok/s, TTFT, VRAM, system RAM, NVMe GB/token, H2D GB/token, cache hit rate, Top-K average, speculative acceptance, quality, layer latency, utilization, and bandwidth: not measured.
+- Interpretation: this entry establishes the bounded M29 planning envelope and the `A_log[128]` checkpoint contract. It is not B-0030 and supports no performance conclusion.

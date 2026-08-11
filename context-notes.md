@@ -673,3 +673,11 @@
 - Public PR #48 carried 47 files and the complete native-BF16, bounded manufacturing, portable/CUDA MoE FFN, harness, B-0029 evidence, and synchronized ledger lineage. The ignored 941 MB fixture was not tracked.
 - Branch correctness `31465297042`, pull-request correctness `31465320780`, and pull-request CodeQL `31465320778` passed. PR #48 was marked ready only after those checks and rebase-merged at `eb2c20860ee9c7c612b9b74984170bd8b4443ba1`.
 - Post-merge `main` correctness `31465590414` and CodeQL `31465590416` passed. M28 is publicly complete; the next session starts from M29's bounded complete-layer design boundary rather than rediscovering M28.
+
+## 2026-08-11 — Milestone 29 official KDA layer design
+
+- The pinned 51,506-byte `modeling_kimi_linear.py` recomputes to Git blob `b8c41e8bfce768d74d8da3a37e693f5ee43876a0`, matching repository metadata. Header-only inspection of `model-00002-of-000096.safetensors` identifies exactly 17 new layer-1 KDA/self-Attention-Residual tensors and 887,843,840 payload bytes; no tensor payload or complete shard was downloaded.
+- The checkpoint stores F32 `A_log[128]`, while the pinned Python constructor initializes `[num_heads]=[96]`. The KDA paper defines channel-wise decay in key dimension 128. M29 therefore treats the checkpoint header plus paper as authoritative and adds a fail-closed `[128]` contract instead of silently copying the constructor mismatch.
+- The accepted boundary supplies deterministic layer-1 hidden/source-bank vectors and zero initial KDA state, then executes tokens A and B both together and incrementally. Including embeddings/layer 0 is rejected for this milestone; KDA-only execution is an implementation gate but not completion.
+- The final natural expert union is derived after KDA and is not required to match M28. Existing content-addressed M28 objects may be reused only after rehashing, and only missing selected experts are fetched.
+- The complete-layer unaligned payload is `1,267,744,256 + 17,547,264 * U` bytes for natural union size `U`, bounded by 1,829,256,704 bytes at `U=32`. B-0030 remains an isolated layer benchmark and must not emit or imply token throughput.

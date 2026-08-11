@@ -213,6 +213,18 @@ The resident A median is 89.54% lower than transient A in this single WSL2 run. 
 
 The tool's H2D counters are logical CUDA copy bytes, not independently observed PCIe bus traffic. The fixture begins after attention output and ends after the FFN residual boundary, so these values cannot be multiplied into tok/s without KDA, MLA, Attention Residual, layer scheduling, cache pressure across layers, and token-loop measurements. Physical NVMe and RAM-to-GPU GB/token, GPU utilization, memory bandwidth, and quality remain unmeasured.
 
+## Milestone 29 official KDA layer planning model
+
+M29 adds 887,843,840 bytes of official layer-1 self-Attention-Residual, normalization, KDA projection, convolution, decay, beta, output-gate, output-normalization, and output-projection tensors. With the 379,900,416-byte always-active M28 FFN bank and `U` selected experts of 17,547,264 bytes each, the unaligned fixture payload is
+
+`W(U) = 1,267,744,256 + 17,547,264 * U` bytes.
+
+Natural Top-16 routing gives `16 <= U <= 32`, so `W(U)` is between 1,548,500,480 and 1,829,256,704 bytes. This is a storage bound, not measured resident VRAM or transfer traffic. Alignment, directories, manifests, scratch, activations, CUDA libraries, and allocator overhead are additional.
+
+One sequence's persistent layer-1 KDA state is 6,512,640 bytes: 6,291,456 FP32 recurrent bytes plus 221,184 BF16 convolution-history bytes. Two boundary input vectors and two source-bank vectors add 57,344 BF16 bytes for a two-token fixture. The state is fixed per sequence at this layer; unlike MLA KV state it does not grow with decoded length.
+
+If every layer tensor and the natural selected union are resident, the lower-bound logical warm weight H2D is zero. This is an engineering invariant to test, not a measured B-0030 result. Transient per-call H2D, activation/state traffic, peak VRAM, and complete-layer latency remain unknown until the formal fixed benchmark runs.
+
 ## Required production measurements
 
 Before selecting a default storage or kernel path, the Linux target must record decode and prefill rates, TTFT, GPU utilization and memory bandwidth, VRAM and host RAM, NVMe and RAM-to-GPU GB/token, expert-cache hit rate, speculative acceptance, unique experts per block, adaptive Top-K, cold rescues, per-kernel time, and I/O stall time. Every result must carry an ablation configuration and quality mode.

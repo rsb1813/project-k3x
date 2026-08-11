@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2026-real%20expert-20a46b?style=flat-square)](#milestone-26--official-bounded-range-discovery)
+[![Milestone](https://img.shields.io/badge/milestone%2029-official%20layer%20design-20a46b?style=flat-square)](#milestone-29--official-kda-transformer-layer)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -445,6 +445,14 @@ B-0029 now measures a 97.096 ms transient median and a 10.154 ms exact-resident 
 The full M28 verification matrix passes CPU CTest 17/17 with Python 507 passed and 97 skipped, liburing CTest 18/18 with Python 509 passed and 95 skipped, ASan/UBSan CTest 18/18, and CUDA CTest 30/30 with Python 592 passed and 12 skipped. Compute Sanitizer reports zero errors on the actual alternating resident path. The next boundary is one complete official transformer layer, adding KDA/MLA/Attention Residual around the now-validated FFN before any end-to-end token claim.
 
 Public PR [#48](https://github.com/rsb1813/project-k3x/pull/48) rebase-merged Milestone 28 at `eb2c208`. Branch correctness, pull-request correctness, C++/Python CodeQL, and post-merge `main` correctness/CodeQL all passed.
+
+## Milestone 29 — official KDA transformer layer
+
+M29 is designed and accepted, but not yet implemented or benchmarked. It extends the bounded official fixture from the measured MoE FFN boundary to the complete layer-1 graph: self Attention Residual, input RMSNorm, KDA with incremental convolution/recurrent state, MLP Attention Residual, natural Top-16 Stable LatentMoE, and final prefix accumulation.
+
+Header-only inspection found exactly 17 new tensors and 887,843,840 payload bytes. The complete unaligned fixture will be `1,267,744,256 + 17,547,264 * U` bytes for the naturally derived two-token expert union `U`, bounded by 1,829,256,704 bytes. No tensor payload was downloaded during design.
+
+The checkpoint stores channel-wise F32 `A_log[128]`, while its pinned Python constructor creates `[96]`. K3X treats the checkpoint header and KDA paper as authoritative, fails closed on `[96]`, and validates a two-token full call against incremental A-then-B execution including all convolution state, FP32 recurrent state, routes, contributions, and layer outputs. The artifact remains non-executable through `k3x_run` until independent CPU/CUDA whole-layer parity and B-0030 pass. This milestone makes no token-rate or quality claim.
 
 ## Quick start
 

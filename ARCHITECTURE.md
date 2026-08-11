@@ -422,6 +422,16 @@ The B-0029 evidence tool is implemented at `ba3a0d2`. Its matrix is fixed to A t
 
 B-0029 is now measured on RTX 5080 under WSL2. Route A transient has a 97,095,781 ns median and transfers 12,955,299,840 logical weight-H2D bytes over twenty calls. Exact residency reduces the A median to 10,153,939 ns and warm weight-H2D to zero while retaining 647,764,992 resident weight bytes. Alternating A+B residency has a 20,201,466 ns sequence median, zero warm weight-H2D, 928,521,216 resident weight bytes, and `0.00048828125` maximum absolute error. These are complete MoE FFN sublayer call/sequence measurements, not transformer-layer latency, token throughput, physical PCIe/NVMe traffic, utilization, or quality.
 
+## Milestone 29 accepted official KDA layer boundary
+
+Milestone 29 is accepted but not yet implemented. It closes official layer 1 from the self-attention Attention Residual through KDA, the MLP Attention Residual, the already validated natural Top-16 MoE FFN, and final prefix accumulation. The boundary receives deterministic layer-1 hidden/source-bank vectors and explicit KDA state; it does not import embeddings or layer-0 weights. A KDA-only path is an implementation gate rather than milestone completion.
+
+Pinned metadata identifies 17 new layer-1 tensors totaling 887,843,840 unaligned bytes, all in `model-00002-of-000096.safetensors`. Combined with the existing always-active MoE tensors and a natural expert union of size `U`, the unaligned payload is `1,267,744,256 + 17,547,264 * U` bytes. The upper bound at `U=32` is 1,829,256,704 bytes. The actual route union and aligned artifact size remain unknown until the independent KDA oracle derives routes; no route or input may be searched to reduce payload.
+
+The checkpoint stores F32 `A_log[128]`, while the pinned Python constructor initializes `[96]`. The KDA paper defines channel-wise decay at head dimension 128. The M29 planner and all backends therefore require `[128]` and fail closed on `[96]`. Mathematical recurrent state is key-by-value, while the pinned call requests V-first physical state storage; K3X records that layout explicitly even though both dimensions are 128.
+
+The fixture executes tokens A and B both as one two-token call and as two incremental calls from zero state. The initial state is 221,184 BF16 convolution-history bytes plus 6,291,456 FP32 recurrent bytes. Whole-sequence and incremental outputs, final state, natural routes, and contributions must agree before CUDA or B-0030 evidence is accepted. The final artifact retains the storage-fixture guard and remains rejected by `k3x_run`.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.
