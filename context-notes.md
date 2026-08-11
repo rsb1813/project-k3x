@@ -590,3 +590,13 @@
 
 - Branch correctness `31455570571`, pull-request correctness `31455597581`, and pull-request CodeQL `31455597565` passed. PR #46 was rebase-merged at public integration head `ec08b827`.
 - Post-merge `main` correctness `31455776634` and CodeQL `31455776673` both passed. M27 is publicly integrated; M28 now owns the dependency-closed real router-selected Top-16 plus shared-expert FFN boundary.
+
+## 2026-08-11 — Milestone 28 official MoE FFN design and plan
+
+- Public documentation PR #47 was rebase-merged at `01428f55`. Its push correctness `31457148284`, pull-request correctness `31457166189`, pull-request CodeQL `31457166199`, post-merge correctness `31457415104`, and post-merge CodeQL `31457415100` all passed.
+- The official implementation, config, model index, and shard-2 header were inspected at pinned revision `9f62e4e9fffbd0a83ddd60e1c209d828994b3569` without downloading tensor payloads. Layer 1 requires eleven always-active BF16 tensors totaling 379,900,416 bytes plus 17,547,264 bytes per selected native-MXFP4 expert.
+- M28 accepts one dependency-closed non-executable K3X fixture. Splitting trunk and expert artifacts would expand multi-reader identity and transaction scope, while authentic layer-1 activations require earlier KDA/attention dependencies and are deferred.
+- Two deterministic FP32 prefix/block-residual inputs derive natural independent Top-16 routes. M28 performs no preferred-expert search, substitution, pruning, proxy, or adaptive Top-K behavior.
+- K3X v1 retains version and record sizes but gains native BF16 dtype 3 plus required feature bit 0. The official fixture also sets the existing storage-fixture optional bit, so production `k3x_run` remains fail-closed.
+- The detailed plan is `docs/superpowers/plans/2026-08-11-k3x-official-moe-ffn.md`. It separates BF16 format, bounded materialization, portable oracle, CUDA boundary, pinned harness, evidence tooling, and the sole formal B-0029 run into seven semantic TDD units.
+- User authorization permits autonomous non-billable work through the pre-Cloud-Run milestones. Full checkpoint/shard download and paid Cloud Run provisioning remain outside this milestone.

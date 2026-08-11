@@ -393,3 +393,19 @@
 - [x] 전체 correctness, sanitizer, B-0008 측정, TITAN Ledger 갱신.
 - [x] Final review Important 2건의 source integrity 및 resume ledger 검증을 테스트 우선으로 수정.
 - [x] Public GitHub PR, CI, main 반영과 post-merge CI 확인.
+
+## Milestone 28 — Official dependency-closed MoE FFN
+
+- [x] Re-read the TITAN Ledger and the public M27 integration state.
+- [x] Inspect the pinned official Kimi K3 graph, config, index, and shard header without downloading tensor payloads.
+- [x] Compare a dependency-closed artifact, split trunk/expert artifacts, and authentic activation generation.
+- [x] Write and self-review the accepted official MoE FFN design.
+- [x] Write the detailed TDD implementation plan and continuity notes.
+- [ ] Add fail-closed native BF16 tensors to K3X v1.
+- [ ] Implement two-phase bounded official MoE source planning and materialization.
+- [ ] Implement the portable BF16/MXFP4 official MoE oracle.
+- [ ] Implement native BF16 CUDA residency and the official MoE boundary.
+- [ ] Implement the pinned fixture harness and strict B-0029 tooling.
+- [ ] Materialize the bounded real fixture without a full shard or checkpoint.
+- [ ] Run correctness, sanitizer, B-0029, full verification, and evidence cross-checks.
+- [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.
