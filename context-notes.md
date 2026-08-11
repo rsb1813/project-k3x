@@ -843,3 +843,9 @@
 - The harness accepts explicit `--state-transfer host|device`, restricts device execution to `ab-incremental + resident + admission`, and emits cold/measured state-operation counters only when the option is explicit. Implicit B-0030/B-0031 schemas remain unchanged.
 - Tiny failure-cleanup and exact device handoff tests pass. The actual bounded device smoke passes with measured 6,512,640-byte state H2D and D2H, one seed/continuation/publication, zero invalidations, zero warm weight H2D, and the existing maximum-error gate.
 - Focused official-layer Python passes 28/28 in 218.63 seconds. CUDA KDA/layer/MoE tests pass 3/3; the non-CUDA build and backend test pass.
+
+## 2026-08-11 — Milestone 31 Task 3 strict evidence tool
+
+- B-0032 fixes three resident-admission rows in order: incremental host state, incremental device handoff, and full host state. The device row must reduce activation H2D, total D2H, state H2D, and state D2H by exactly 6,512,640 bytes per measured sequence.
+- The schema extends B-0031 only with explicit state-transfer identity plus four cold and four measured state-operation counters. It reuses the B-0030/B-0031 manifest, validation, canonical JSON, LF CSV, checksum, fsync, and atomic-directory authorities without modifying historical evidence.
+- RED failed at import because the tool did not exist. GREEN passes B-0032/B-0031/B-0030 evidence-tool regressions 46/46 plus Python compile validation. No formal B-0032 process has run and no timing result exists.

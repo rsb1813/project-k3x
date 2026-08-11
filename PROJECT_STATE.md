@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 31 Tasks 1 and 2 are locally implemented and verified after public completion of M30. The raw official KDA backend owns one dedicated device-state slot with an opaque owner/generation token, and the official-layer wrapper plus explicit harness option execute exact seed/final-publication handoff while retaining host round trip as the default and oracle. B-0032 does not exist yet. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
+Milestone 31 Tasks 1 through 3 are locally implemented and verified after public completion of M30. The raw official KDA backend owns one dedicated device-state slot, the official-layer wrapper plus explicit harness execute exact seed/final-publication handoff, and the strict fixed B-0032 transaction is implemented. No formal B-0032 result exists yet; host round trip remains the default and oracle. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
 
 State audited last on 2026-08-11 from public M30 publication head `cd1cbd0d10d0231b4392d1aaec21dedd016ea3b1`. Fresh M30 verification passes CPU CTest 19/19 plus Python 558/122, liburing/direct CTest 20/20 plus Python 560/120, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus actual-artifact Python 659/21, B-0031 evidence-tool/B-0030 regressions 26/26, strict B-0031 rehash, and actual admission-mode AB incremental Compute Sanitizer with zero errors. PR #52 integrated M30; publication PR #53 and final `main` correctness `31494813241` plus CodeQL `31494813220` passed. The ignored bounded fixture is unchanged; no complete shard, full checkpoint, or paid cloud resource is in use.
 
@@ -117,6 +117,7 @@ State audited last on 2026-08-11 from public M30 publication head `cd1cbd0d10d02
 - Formal B-0031 is committed at `fb33d84`. Incremental per-call/admission medians are 175,667,985/70,584,413 ns; full medians are 121,067,320/67,236,923 ns. All rows preserve exact route/output/state identity, zero warm weight H2D, 1,816,322,048 resident bytes, and `0.00048828125` maximum error.
 - M31 Task 1 implements the dedicated single device-state allocation plus opaque owner/generation token. Tiny exact parity, transfer, generation, cross-owner, identity, and invalidation tests pass.
 - M31 Task 2 implements official-layer token propagation, downstream-failure discard, explicit closed harness telemetry, and the actual bounded device-state smoke. Historical implicit schemas remain unchanged; B-0032 is pending.
+- M31 Task 3 implements the fixed three-row B-0032 generator/verifier with exact state traffic/counter formulas, canonical raw/summary JSON, LF CSV, digests, fsync, and atomic publication. Controlled evidence regressions pass; no formal process has run.
 - D-068 retains per-call as the default and admission as an exact opt-in. D-069 selects device-resident KDA state handoff as the current bounded non-cloud experiment.
 
 - M28 Task 2 is complete at `0b0c944`: the route manifest is durable before expert fetching, only the natural A/B first-use union is planned, object reuse is rehashed, response bytes are measured separately from logical source bytes, and production generation remains fail-closed.
@@ -177,8 +178,8 @@ State audited last on 2026-08-11 from public M30 publication head `cd1cbd0d10d02
 
 ## Next concrete tasks
 
-1. Write controlled RED tests for the fixed three-row B-0032 transaction, exact traffic formulas, parity, digests, and atomic publication.
-2. Implement the minimum strict verifier, then run actual-artifact correctness and sanitizer gates before one formal B-0032 transaction.
+1. Review the complete M31 diff and run actual-artifact host/device correctness, strict production guard, and device-state Compute Sanitizer gates.
+2. Run the fixed three-row B-0032 transaction exactly once only after those capability gates pass, then strictly verify and commit its evidence.
 3. Keep the artifact non-executable; do not download a complete shard/checkpoint or create paid cloud resources.
 
 ## Hardware assumptions
@@ -210,6 +211,7 @@ D-069 selects an exact device-resident KDA state-handoff experiment before anoth
 - Publication PR #53 rebase-merged at `cd1cbd0d10d0231b4392d1aaec21dedd016ea3b1`; final public `main` correctness `31494813241` and CodeQL `31494813220` passed. That public head contains M31 design artifacts only.
 - Local M31 Task 1 focused CUDA KDA/official-layer/MoE-layer tests pass 3/3, the non-CUDA build completes, and the backend test passes 1/1. No actual-artifact M31 run or performance measurement exists yet.
 - Local M31 Task 2 official-layer Python passes 28/28, CUDA KDA/layer/MoE tests pass 3/3, and the actual device smoke records exact output/state gates with 6,512,640 state bytes in each direction. This is correctness and logical-traffic evidence, not B-0032 performance evidence.
+- Local M31 Task 3 B-0032/B-0031/B-0030 evidence-tool tests pass 46/46 and the new tool passes Python compile validation. Formal B-0032 evidence is absent.
 
 - Local M29 evidence commit `bbdccb9` records formal B-0030 with aggregate SHA-256 `86f0007af7da007d6646dec6fa8fba4008c1bf7bedff53971d5d31926c9f6452` and summary CSV SHA-256 `1e5af9bb7d5b9abb16f62962bbce3584b62014873b12ce7642868e919770a635`. Strict committed-evidence verification passes 9/9.
 - Fresh M29 final verification passes CPU CTest 19/19 plus Python 541/119, liburing/direct CTest 20/20 plus Python 543/117, ASan/UBSan CTest 20/20, and CUDA CTest 34/34 plus Python 639/21 against the actual bounded artifact. Actual AB incremental resident Compute Sanitizer reports `ERROR SUMMARY: 0 errors`; `--launch-timeout 0` is required because preflight exceeds the tool's default attach timeout.
