@@ -235,11 +235,11 @@ Commit message: `feat: retain official inter-layer activations`.
 - Both modes use device KDA states, resident admission-validated weights, canonical host natural Top-16, and exact selected experts.
 - The dedicated harness validates the two-layer artifact, trace manifest, oracle, tensor order, and closed telemetry schema before execution.
 
-- [ ] **Step 1: Write wrapper and CLI RED tests.**
+- [x] **Step 1: Write wrapper RED tests; CLI RED remains with the dedicated harness.**
 
 Require host/device exact route IDs, contribution tolerance, per-layer state/output digests, final output parity, zero warm weight H2D, and explicit activation/state/route counters. Require the device row to report zero inter-layer hidden transfer bytes. Add invalid artifact, swapped layer, missing tensor/expert, wrong trace, invalid mode, insufficient residency, and production-guard cases.
 
-- [ ] **Step 2: Witness target and parsing RED.**
+- [x] **Step 2: Witness the missing target and wrapper API RED; parsing RED remains pending.**
 
 Build `test_cuda_official_two_layer` and run `pytest -q tests/python/test_cuda_official_two_layer.py`. Expected result: target/module/executable paths do not exist.
 
