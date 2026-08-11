@@ -186,6 +186,19 @@ For `C` complete released-size layer calls, per-call validation reads `C × 469,
 
 These profiler-off medians establish host validation as the dominant B-0023 wall term at this boundary. They do not model token throughput, system-RAM bandwidth under a full checkpoint, PCIe contention, NVMe traffic, or native-Linux scheduling. After admission, expert-count-dependent CUDA work and host orchestration become the next visible terms.
 
+## Milestone 27 official expert residency model
+
+B-0028 replaces the released repeated-view fixture with one pinned official layer-1 expert-0 payload. The payload remains exactly `E = 17,547,264` bytes. Both modes perform one cold admission of `E`; over `C = 20` measured calls, transient execution transfers `CE = 350,945,280` weight bytes while exact residency transfers zero measured weight bytes and reports `3C = 60` tensor hits.
+
+| Mode | Cold latency | Warm median | Kernel total, 20 calls | Weight H2D, 20 calls | Activation H2D | D2H | Resident / peak VRAM |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Transient | 7,122,628 ns | 2,508,377 ns | 6,309,888 ns | 350,945,280 B | 286,720 B | 286,720 B | 0 / 5,914,624 B |
+| Resident | 7,748,006 ns | 331,868 ns | 2,692,992 ns | 0 B | 286,720 B | 286,720 B | 17,547,264 / 23,461,888 B |
+
+The resident warm median is 86.77% lower in this bounded run, or 7.56 times the transient median. The single cold resident call is 8.78% slower than the single cold transient call, so residency is valuable only when reuse occurs. These wall and kernel observations come from one deterministic WSL2 run and must not be projected to a full layer or tok/s.
+
+The arithmetic natural Top-16 routed payload remains `16E = 280,756,224` bytes per MoE layer before shared-expert, router, descriptor, activation, and workspace bytes. B-0028 proves that one real expert can occupy exact L0 residency and avoid repeated H2D; it does not prove that a changing natural Top-16 set fits a useful L0 policy or avoids L1/L2 traffic. M28 must therefore measure a real router-selected Top-16 set plus the real shared-expert path as one dependency-closed FFN sublayer before extrapolating cache hit rate or layer latency.
+
 ## Required production measurements
 
 Before selecting a default storage or kernel path, the Linux target must record decode and prefill rates, TTFT, GPU utilization and memory bandwidth, VRAM and host RAM, NVMe and RAM-to-GPU GB/token, expert-cache hit rate, speculative acceptance, unique experts per block, adaptive Top-K, cold rescues, per-kernel time, and I/O stall time. Every result must carry an ablation configuration and quality mode.

@@ -318,7 +318,7 @@ git commit -m "bench: add official expert CUDA ablation"
 - Consumes: Tasks 1-3 and the ignored B-0027 K3X artifact.
 - Produces: canonical B-0028 evidence and a measured M28 boundary decision.
 
-- [ ] **Step 1: Build the exact native CUDA target and verify artifact identity**
+- [x] **Step 1: Build the exact native CUDA target and verify artifact identity**
 
 Run:
 
@@ -329,7 +329,7 @@ sha256sum artifacts/m26-official/live/expert-l1-e0.k3x
 
 Expected artifact SHA-256: `e08293cd854ed11913bd8f1bc3a51d1eb577202fd5fd9b5b7e3c96ef1bccecc7`.
 
-- [ ] **Step 2: Run B-0028 once**
+- [x] **Step 2: Run B-0028 once**
 
 Run:
 
@@ -343,19 +343,19 @@ PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python tools/ablate
 
 Do not rerun to select a preferred timing. Rerun only after a documented correctness or evidence defect, and replace every affected raw/summary artifact together.
 
-- [ ] **Step 3: Independently verify staged evidence**
+- [x] **Step 3: Independently verify staged evidence**
 
 Run the strict verifier against summary JSON/CSV, recompute every tracked file digest from Git blobs, and compare raw rows with the summary. Require both rows to satisfy parity and traffic invariants. Record measured values exactly; do not infer tok/s.
 
-- [ ] **Step 4: Run the complete verification matrix**
+- [x] **Step 4: Run the complete verification matrix**
 
 Run CPU CTest/pytest, liburing/direct CTest/pytest, ASan/UBSan CTest, CUDA CTest/pytest, the real transient/resident tests, and Compute Sanitizer. Capture exact pass/skip counts and do not reuse M26 counts.
 
-- [ ] **Step 5: Update README and TITAN Ledger**
+- [x] **Step 5: Update README and TITAN Ledger**
 
 Record B-0028 date, commit, hardware, WSL2 environment, official revision, one-expert scope, transient/resident cold and warm latency, CPU error, H2D, D2H, VRAM, cache residency, kernel time, enabled options, and every unmeasured charter metric. Add D-053 benchmark evidence and decide only the next M28 slice. Update `PROJECT_STATE.md` after every other document.
 
-- [ ] **Step 6: Final review and semantic evidence commit**
+- [x] **Step 6: Final review and semantic evidence commit**
 
 Review the complete diff for Critical/Important correctness, evidence, identity, timing, and claim-boundary issues. Apply at most one focused correction/re-review cycle unless a verified Critical remains. Commit evidence and synchronized documents with a single benchmark-scoped message.
 

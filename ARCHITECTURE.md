@@ -390,9 +390,13 @@ This is implemented storage/conversion compatibility, not real graph execution. 
 
 ## Milestone 27 official expert CUDA execution
 
-Milestone 27's pinned identity, dedicated benchmark-only official-expert path, and strict two-case B-0028 evidence tool are implemented and locally verified. The path binds the B-0027 K3X root, gate/up/down ordered digest, optional features, layer/expert IDs, payload bytes, and shapes before constructing a CPU or CUDA backend. It executes one exact layer-1 expert-0 FFN, compares all 3,584 outputs with the portable CPU backend, and separately exposes transient and exact-capacity resident CUDA traffic and latency. The evidence tool fixes transient-before-resident order, rehashes raw/summary/artifact/runner bytes, and rejects token, quality, or physical-NVMe claims. Formal B-0028 measurement and public integration remain in progress.
+Milestone 27's pinned identity, dedicated benchmark-only official-expert path, and strict two-case B-0028 evidence tool are implemented, measured, and locally verified. The path binds the B-0027 K3X root, gate/up/down ordered digest, optional features, layer/expert IDs, payload bytes, and shapes before constructing a CPU or CUDA backend. It executes one exact layer-1 expert-0 FFN, compares all 3,584 outputs with the portable CPU backend, and separately exposes transient and exact-capacity resident CUDA traffic and latency. The evidence tool fixes transient-before-resident order, rehashes raw/summary/artifact/runner bytes, and rejects token, quality, or physical-NVMe claims.
+
+B-0028 records a transient median of 2,508,377 ns and resident median of 331,868 ns after three warmups, with identical `3.0267983675e-9` maximum CPU-oracle error. Both modes admit 17,547,264 cold weight bytes. Twenty transient calls transfer 350,945,280 weight bytes, while the resident row transfers zero measured weight bytes and records 60 exact tensor hits. This establishes reuse value at one real expert boundary, not a throughput default or a model-level cache policy.
 
 The executable remains outside `k3x_run`; `OPTIONAL_STORAGE_FIXTURE` generation continues to fail with `NON_EXECUTABLE_ARTIFACT`. M27 does not claim a full MoE layer because routed projections, normalization, shared experts, routing, and the surrounding trunk are not real official weights. That dependency closure remains a separate M28 decision after B-0028.
+
+The accepted M28 boundary is a dependency-closed real MoE FFN sublayer, not another repeated-view microbenchmark. It must bind the real router, compute all 896 scores, preserve natural Top-16 selection, acquire the exact selected routed experts, execute the real shared expert, apply mixing and residual behavior, and compare the complete sublayer output with an independent reference. Attention/KDA/MLA closure and token generation remain later boundaries unless the real sublayer dependencies require them.
 
 ## TITAN component registry
 

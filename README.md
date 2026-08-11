@@ -34,9 +34,9 @@ flowchart LR
 ```
 
 > [!IMPORTANT]
-> The executable graph still uses a tiny synthetic model, but Milestone 26 has now converted one exact 17,547,264-byte native-MXFP4 expert from the pinned official Kimi K3 checkpoint. That artifact is deliberately non-executable and is not a full-model throughput claim. No complete shard, full checkpoint, or paid cloud resource was used.
+> The executable token graph still uses a tiny synthetic model, but Milestone 27 now executes one exact 17,547,264-byte native-MXFP4 expert from the pinned official Kimi K3 checkpoint on RTX 5080 and matches the portable CPU oracle within `3.0267983675e-9`. This is one FFN expert, not routing, a full layer, token generation, or a full-model throughput claim. No complete shard, full checkpoint, or paid cloud resource was used.
 
-| Public milestone | GitHub status | Evidence |
+| Milestone | GitHub status | Evidence |
 |---|---|---|
 | Milestone 11 | [PR #11 merged](https://github.com/rsb1813/project-k3x/pull/11) at `edc6d605` | B-0012 adaptive Top-K and exact rescue |
 | Milestone 12 | [PR #12 merged](https://github.com/rsb1813/project-k3x/pull/12) at `9e59a9db` | B-0013 routed CUDA accumulation |
@@ -54,8 +54,9 @@ flowchart LR
 | Milestone 24 | [PR #40 merged](https://github.com/rsb1813/project-k3x/pull/40) at `13a403f` | B-0025 measures direct, whole-update, and bounded ordered-set CUDA Graph behavior across stable, alternating, and rotating traces |
 | Milestone 25 | [PR #42 merged](https://github.com/rsb1813/project-k3x/pull/42) at `ca8c544e` | B-0026 validates bounded fresh/resume/orphan conversion and strict external-input rejection without real weights |
 | Milestone 26 | [PR #44 merged](https://github.com/rsb1813/project-k3x/pull/44) at `5b6345db` | B-0027 verifies one pinned official 17,547,264-byte expert range, content-addressed conversion, and the non-executable runtime guard |
+| Milestone 27 | Publication pending on `codex/milestone-twenty-seven-real-cuda-expert` | B-0028 executes the pinned official expert on RTX 5080 and verifies exact transient/resident traffic and CPU-oracle parity |
 
-PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 26 integration head `5b6345db`; both branch and pull-request correctness passed, all pull-request CodeQL checks passed, and post-merge `main` correctness `31386873905` and CodeQL `31386873928` succeeded.
+PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 26 integration head `5b6345db`; both branch and pull-request correctness passed, all pull-request CodeQL checks passed, and post-merge `main` correctness `31386873905` and CodeQL `31386873928` succeeded. Milestone 27 evidence is currently local and is not described as publicly integrated until its PR and post-merge checks pass.
 
 ## Why a dedicated engine
 
@@ -410,7 +411,20 @@ The evidence verifier binds deterministic repository, snapshot, config, index, s
 | Microshard SHA-256 | `ed3f07d595f37d90b1688de21ba0cdc012ee92c67dd92c460c0c73b2ef374a34` |
 | K3X root SHA-256 | `d585d283325e13e1316a0194c2d6274dd89ef75a28b96b02f02733290b7658be` |
 
-The evidence level is explicitly `transport-pinned-range`, not `full-shard-verified`: the complete 16.99 GB shard was not downloaded, so its full LFS digest was not recomputed. Real tensor and K3X bytes remain ignored below `artifacts/`; only canonical JSON/CSV identities and measurements are committed. M27 owns the first actual CUDA layer execution over these real bytes.
+The evidence level is explicitly `transport-pinned-range`, not `full-shard-verified`: the complete 16.99 GB shard was not downloaded, so its full LFS digest was not recomputed. Real tensor and K3X bytes remain ignored below `artifacts/`; only canonical JSON/CSV identities and measurements are committed. M27 owns the first actual CUDA expert execution over these real bytes.
+
+## Milestone 27 — official expert CUDA execution
+
+The dedicated `k3x_cuda_official_expert_bench` verifies the fixed B-0027 K3X root, ordered gate/up/down digest, optional features, layer/expert IDs, payload bytes, and shapes before constructing either backend. It runs one real layer-1 expert-0 SiTU FFN on the portable CPU backend and native `sm_120` CUDA path. The general `k3x_run` storage-fixture guard is unchanged.
+
+B-0028 records three warmups and twenty measured calls for transient and exact-capacity resident modes. Both modes preserve all 3,584 outputs within `3.0267983675e-9` maximum absolute error.
+
+| Mode | Cold latency | Warm median | p05–p95 | Measured weight H2D | Activation H2D / D2H | Resident bytes | Peak VRAM |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Transient | 7,122,628 ns | 2,508,377 ns | 1,865,439–2,649,090 ns | 350,945,280 B | 286,720 / 286,720 B | 0 B | 5,914,624 B |
+| Resident | 7,748,006 ns | 331,868 ns | 319,489–366,599 ns | 0 B | 286,720 / 286,720 B | 17,547,264 B | 23,461,888 B |
+
+Resident execution lowers this bounded warm median by 86.77% and removes all measured repeated weight H2D after the identical 17,547,264-byte cold admission. The comparison is one deterministic expert under WSL2; it does not establish token throughput, natural routing, multi-expert pressure, native-Linux behavior, GPU utilization, memory bandwidth, physical PCIe/NVMe traffic, or coding quality. M28 therefore closes the smallest meaningful real MoE FFN sublayer next: real router scores, natural Top-16 selection, exact selected routed experts, the real shared expert, mixing, and residual behavior.
 
 ## Quick start
 
@@ -682,6 +696,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Synthetic profiler and reproducible JSON/CSV output.
 - [x] Strict converter source, safetensors, resume-ledger, and orphan-suffix trust boundaries with B-0026 evidence.
 - [x] Pinned official index/config/header discovery and one exact real native-MXFP4 expert conversion with B-0027 evidence.
+- [x] Pinned official expert CPU-oracle/RTX 5080 execution with strict transient/resident B-0028 evidence.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.
@@ -738,7 +753,7 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
 - Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0025 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; transient, bounded-resident, resident-grid, resident MoE-layer, admission-validation, and CUDA Graph paths are exact opt-in experiments. B-0025 finds mixed stable/alternating deltas and rotating churn 6.09%–11.57% slower, so no graph default changes. There is no learned DSpark drafter, reduced-precision draft path, eviction-capable draft residency, device-resident whole-token graph, or full-model speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
-- The converter has processed one bounded official Kimi K3 expert range, but not a complete shard or the full checkpoint. Its evidence is transport-pinned range identity, not recomputed full-object LFS verification or signed publisher provenance.
+- The converter and dedicated CUDA harness have processed and executed one bounded official Kimi K3 expert range, but not natural routing, a complete real layer, a complete shard, or the full checkpoint. Its evidence is transport-pinned range identity, not recomputed full-object LFS verification or signed publisher provenance.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.
 - No open-source license has been selected yet; public visibility does not itself grant reuse rights.
 
