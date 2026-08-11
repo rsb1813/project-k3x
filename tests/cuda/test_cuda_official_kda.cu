@@ -419,6 +419,27 @@ int device_state_fail_closed() {
     const k3x::OfficialKdaCudaStateView initial_state{
         zero.conv_q, zero.conv_k, zero.conv_v, zero.recurrent_v_first};
     const k3x::OfficialKdaCudaStateView no_host_state{};
+
+    auto invalid_mode_backend = k3x::make_cuda_backend(options(
+        k3x::CudaWeightMode::resident, 1 << 20,
+        k3x::CudaWeightValidationMode::admission));
+    if (!invalid_mode_backend) return 69;
+    const auto invalid_mode_before = invalid_mode_backend.value()->runtime_stats();
+    const auto invalid_mode = invalid_mode_backend.value()->official_kda(
+        std::span(fixture.hidden).first(4), fixture.cuda_weights(),
+        no_host_state, fixture.cuda_config, 7, k3x::ProfilePhase::decode,
+        {static_cast<k3x::OfficialKdaStateMode>(255), {}});
+    const auto invalid_mode_after = invalid_mode_backend.value()->runtime_stats();
+    if (invalid_mode || invalid_mode.error() != k3x::ErrorCode::invalid_extent ||
+        invalid_mode_after.official_kda_calls !=
+            invalid_mode_before.official_kda_calls ||
+        invalid_mode_after.official_kda_kernel_launches !=
+            invalid_mode_before.official_kda_kernel_launches ||
+        invalid_mode_after.activation_h2d_bytes !=
+            invalid_mode_before.activation_h2d_bytes ||
+        invalid_mode_after.device_to_host_bytes !=
+            invalid_mode_before.device_to_host_bytes) return 70;
+
     const auto seed = backend.value()->official_kda(
         std::span(fixture.hidden).first(4), fixture.cuda_weights(),
         initial_state, fixture.cuda_config, 7, k3x::ProfilePhase::decode,
