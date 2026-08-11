@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2030-KDA%20admission%20validation-20a46b?style=flat-square)](#milestone-30--official-kda-admission-validation)
+[![Milestone](https://img.shields.io/badge/milestone%2032-device%20route%20preparation-20a46b?style=flat-square)](#milestone-32--exact-device-route-preparation)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -771,6 +771,12 @@ Tiny CUDA parity and route, missing-expert, and FFN failure cleanup pass under C
 | Device route | 63.767134 ms | 40.163418 ms | 23.597272 ms | 1,829,210,112 B |
 
 Device route preparation lowers the median by 0.690344%, or 0.443273 ms, while aggregate kernel time rises 27.294141% and orchestration falls 9.279958 ms per sequence. It adds 12,888,064 resident BF16 bytes and 7,168 logical logit D2H bytes per sequence. This mixed one-layer WSL2 result does not support changing the host default or claiming token throughput, quality, physical PCIe traffic, or full-model speed. The next evidence boundary is bounded multi-layer execution, where retained activations and route work can amortize API synchronization.
+
+## Milestone 33 — official two-layer closure in progress
+
+M33 targets real official decoder layers 1 and 2 as the smallest bounded multi-layer boundary. Implemented work now validates their pinned metadata, schedules A1→A2→B1→B2 with independent KDA states, and executes a tiny exact source-byte oracle. The oracle decodes BF16/F32 payload bytes and native MXFP4 packed/scale bytes, retains natural routing, runs selected experts serially, and binds inter-layer outputs and route contributions by digest.
+
+Local commit `0b7dc19` passes 10 focused tests and 45 focused plus historical official KDA/MoE/layer tests. This is correctness evidence only. The dependency-ordered two-layer materializer, K3X v1 round-trip artifact, portable/CUDA runtime, B-0034 measurement, full checkpoint, token throughput, and paid Cloud Run work do not exist yet.
 
 ## Quality contract
 
