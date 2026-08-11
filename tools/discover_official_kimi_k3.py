@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 from k3x_converter.format import K3XError
+from k3x_converter.official_moe import plan_official_moe_slice
 from k3x_converter.official_source import (
     Transport,
     discover_official_snapshot,
@@ -163,12 +164,51 @@ def _build_record(
     return record
 
 
+def _build_moe_dry_run_record(
+    *, snapshot, index, config, header, plan, transport, wall_seconds: float
+) -> dict[str, object]:
+    requests, maximum_response = _transport_numbers(transport)
+    return {
+        "format": "k3x-official-moe-discovery-v1",
+        "scope": "moe-ffn",
+        "mode": "dry-run",
+        "repository": snapshot.repository,
+        "requested_revision": snapshot.requested_revision,
+        "resolved_revision": snapshot.resolved_revision,
+        "observed_at": snapshot.observed_at,
+        "snapshot_sha256": snapshot.canonical_sha256,
+        "index_sha256": index.sha256,
+        "config_sha256": config.sha256,
+        "shard_path": plan.shard_path,
+        "always_active_tensor_count": len(plan.always_active),
+        "always_active_bytes": plan.always_active_bytes,
+        "expert_payload_bytes": plan.expert_payload_bytes,
+        "maximum_two_case_bytes": plan.maximum_two_case_bytes,
+        "selected_experts": list(plan.selected_experts),
+        "traffic": {
+            "http_requests": requests,
+            "metadata_bytes": (
+                snapshot.api_bytes
+                + snapshot.files["model.safetensors.index.json"].size
+                + snapshot.files["config.json"].size
+            ),
+            "header_bytes": 8 + header.header_length,
+            "tensor_payload_bytes": 0,
+            "maximum_response_bytes": maximum_response,
+        },
+        "provenance": "transport-pinned-ranges",
+        "full_shard_verified": False,
+        "wall_seconds": wall_seconds,
+    }
+
+
 def main(
     argv: list[str] | None = None,
     *,
     transport: Transport | None = None,
 ) -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--scope", choices=("expert", "moe-ffn"), default="expert")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--materialize-expert", action="store_true")
@@ -179,6 +219,8 @@ def main(
     args = parser.parse_args(argv)
     if args.materialize_expert and args.output_dir is None:
         parser.error("--materialize-expert requires --output-dir")
+    if args.scope == "moe-ffn" and args.materialize_expert:
+        parser.error("--scope moe-ffn is dry-run only")
     if args.summary_csv is not None and not args.materialize_expert:
         parser.error("--summary-csv requires --materialize-expert")
     if transport is None:
@@ -191,13 +233,31 @@ def main(
     index = load_official_index(snapshot, transport)
     config = load_official_config(snapshot, transport)
     selected_name = (
-        "language_model.model.layers.1.block_sparse_moe.experts.0."
+        "language_model.model.layers.1.block_sparse_moe.gate.weight"
+        if args.scope == "moe-ffn"
+        else "language_model.model.layers.1.block_sparse_moe.experts.0."
         "w1.weight_packed"
     )
     shard_path = index.weight_map.get(selected_name)
     if shard_path is None:
         raise K3XError("INVALID_OFFICIAL_EXPERT")
     header = inspect_official_shard_header(snapshot, shard_path, transport)
+    if args.scope == "moe-ffn":
+        moe_plan = plan_official_moe_slice(index, header, config, layer_id=1)
+        record = _build_moe_dry_run_record(
+            snapshot=snapshot,
+            index=index,
+            config=config,
+            header=header,
+            plan=moe_plan,
+            transport=transport,
+            wall_seconds=time.perf_counter() - started,
+        )
+        if args.summary_json is not None:
+            _write_json_atomic(args.summary_json, record)
+        json.dump(record, sys.stdout, sort_keys=True, separators=(",", ":"))
+        sys.stdout.write("\n")
+        return 0
     plan = plan_official_expert(index, header, layer_id=1, expert_id=0)
     materialization = None
     selected_mode = "dry-run"
@@ -237,4 +297,3 @@ def main(
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
