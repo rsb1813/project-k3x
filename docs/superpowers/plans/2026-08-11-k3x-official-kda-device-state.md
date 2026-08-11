@@ -59,10 +59,10 @@
 - Create: `tools/ablate_official_kda_device_state.py`
 - Create: `tests/python/test_official_kda_device_state_ablation.py`
 
-- [ ] Write controlled RED verifier tests for the fixed host-incremental/device-incremental/full-host row order, exact formulas, parity, digests, LF CSV, fsync, and atomic publication.
-- [ ] Implement the minimum non-ranking transaction by reusing B-0031 canonical and manifest authorities without changing historical evidence.
-- [ ] Run focused GREEN, compile validation, and mutation tests.
-- [ ] Self-review and commit as `test: add strict B-0032 state-handoff evidence`.
+- [x] Write controlled RED verifier tests for the fixed host-incremental/device-incremental/full-host row order, exact formulas, parity, digests, LF CSV, fsync, and atomic publication.
+- [x] Implement the minimum non-ranking transaction by reusing B-0031 canonical and manifest authorities without changing historical evidence.
+- [x] Run focused GREEN, compile validation, and mutation tests.
+- [x] Self-review and commit as `test: add strict B-0032 state-handoff evidence`.
 
 ### Task 4: Formal B-0032, verification, Ledger, and publication
 
