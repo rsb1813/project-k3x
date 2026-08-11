@@ -430,12 +430,14 @@ def assemble_official_moe_source(
     *,
     chunk_bytes: int = 8 * 1024 * 1024,
     official_metadata: dict[str, object] | None = None,
+    official_metadata_key: str = "official_moe",
 ) -> AssembledOfficialMoeSource:
     if (
         chunk_bytes <= 0
         or not tensors
         or not isinstance(config, dict)
         or (official_metadata is not None and not isinstance(official_metadata, dict))
+        or official_metadata_key not in {"official_moe", "official_layer"}
     ):
         raise K3XError("INVALID_OFFICIAL_MOE_SOURCE")
     names = tuple(item.name for item in tensors)
@@ -520,7 +522,7 @@ def assemble_official_moe_source(
         "tensor_sha256": tensor_digests,
     }
     if official_metadata is not None:
-        manifest["official_moe"] = official_metadata
+        manifest[official_metadata_key] = official_metadata
     manifest_path = source_directory / "source-manifest.json"
     _write_json_atomic(manifest_path, manifest)
     return AssembledOfficialMoeSource(

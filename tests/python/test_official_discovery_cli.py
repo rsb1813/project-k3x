@@ -29,6 +29,26 @@ _DATA_START = 818_704
 _PAYLOAD_START = 1_268_562_960
 _PAYLOAD_END = 1_286_110_224
 _BASE = "language_model.model.layers.1.block_sparse_moe.experts.0"
+_KDA_SOURCE_BLOB = "b8c41e8bfce768d74d8da3a37e693f5ee43876a0"
+_KDA_SPECIFICATIONS = (
+    ("self_attention_res_norm.weight", "BF16", [7_168]),
+    ("self_attention_res_proj.weight", "BF16", [1, 7_168]),
+    ("input_layernorm.weight", "BF16", [7_168]),
+    ("self_attn.q_proj.weight", "BF16", [12_288, 7_168]),
+    ("self_attn.q_conv1d.weight", "F32", [12_288, 1, 4]),
+    ("self_attn.k_proj.weight", "BF16", [12_288, 7_168]),
+    ("self_attn.k_conv1d.weight", "F32", [12_288, 1, 4]),
+    ("self_attn.v_proj.weight", "BF16", [12_288, 7_168]),
+    ("self_attn.v_conv1d.weight", "F32", [12_288, 1, 4]),
+    ("self_attn.f_a_proj.weight", "BF16", [128, 7_168]),
+    ("self_attn.f_b_proj.weight", "BF16", [12_288, 128]),
+    ("self_attn.A_log", "F32", [128]),
+    ("self_attn.dt_bias", "F32", [12_288]),
+    ("self_attn.b_proj.weight", "BF16", [96, 7_168]),
+    ("self_attn.g_proj.weight", "BF16", [12_288, 7_168]),
+    ("self_attn.o_norm.weight", "F32", [128]),
+    ("self_attn.o_proj.weight", "BF16", [7_168, 12_288]),
+)
 
 
 def _git_blob_id(body: bytes) -> str:
@@ -86,6 +106,12 @@ def _index_body(shards: tuple[str, ...]) -> bytes:
     weight_map.update(
         {f"unused.{index}": path for index, path in enumerate(shards) if path != _SHARD}
     )
+    weight_map.update(
+        {
+            f"language_model.model.layers.1.{name}": _SHARD
+            for name, _, _ in _KDA_SPECIFICATIONS
+        }
+    )
     always_active = (
         "mlp_res_norm.weight",
         "mlp_res_proj.weight",
@@ -129,7 +155,19 @@ def _header_body() -> bytes:
         ("block_sparse_moe.shared_experts.up_proj.weight", "BF16", [6144, 7168]),
         ("block_sparse_moe.shared_experts.down_proj.weight", "BF16", [7168, 6144]),
     )
-    cursor = 700_000_000
+    cursor = 0
+    kda: dict[str, object] = {}
+    for suffix, dtype, shape in _KDA_SPECIFICATIONS:
+        values = 1
+        for dimension in shape:
+            values *= dimension
+        length = values * (4 if dtype == "F32" else 2)
+        kda[f"language_model.model.layers.1.{suffix}"] = {
+            "dtype": dtype,
+            "shape": shape,
+            "data_offsets": [cursor, cursor + length],
+        }
+        cursor += length
     always: dict[str, object] = {}
     for suffix, dtype, shape in always_specifications:
         values = 1
@@ -142,18 +180,10 @@ def _header_body() -> bytes:
             "data_offsets": [cursor, cursor + length],
         }
         cursor += length
+    assert cursor == selected[0][2][0]
     value: dict[str, object] = {
-        "before": {
-            "dtype": "I16",
-            "shape": [1],
-            "data_offsets": [0, 700_000_000],
-        },
+        **kda,
         **always,
-        "between": {
-            "dtype": "I16",
-            "shape": [1],
-            "data_offsets": [cursor, selected[0][2][0]],
-        },
         **{
             f"{_BASE}.{suffix}": {
                 "dtype": "U8",
@@ -184,6 +214,11 @@ class _DiscoveryTransport:
         length = _PAYLOAD_END - _PAYLOAD_START
         self.payload = (cycle * ((length + 255) // 256))[:length]
         siblings: list[dict[str, object]] = [
+            {
+                "rfilename": "modeling_kimi_linear.py",
+                "size": 51_506,
+                "blobId": _KDA_SOURCE_BLOB,
+            },
             {
                 "rfilename": "config.json",
                 "size": len(self.config),
@@ -309,6 +344,105 @@ def test_cli_moe_scope_dry_run_plans_dependency_closed_bytes_without_payload(
     assert summary["maximum_two_case_bytes"] == 941_412_864
     assert summary["selected_experts"] == []
     assert summary["traffic"]["tensor_payload_bytes"] == 0
+    assert transport.payload_requested is False
+
+
+def test_cli_kda_layer_scope_dry_run_plans_complete_layer_without_payload(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    summary_path = tmp_path / "layer-dry-run.json"
+    transport = _DiscoveryTransport()
+
+    assert main(
+        ["--scope", "kda-layer", "--summary-json", str(summary_path)],
+        transport=transport,
+    ) == 0
+
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert json.loads(capsys.readouterr().out) == summary
+    assert summary["format"] == "k3x-official-kda-layer-discovery-v1"
+    assert summary["scope"] == "kda-layer"
+    assert summary["mode"] == "dry-run"
+    assert summary["kda_tensor_count"] == 17
+    assert summary["kda_payload_bytes"] == 887_843_840
+    assert summary["base_payload_bytes"] == 1_267_744_256
+    assert summary["maximum_two_token_bytes"] == 1_829_256_704
+    assert summary["traffic"]["tensor_payload_bytes"] == 0
+    assert transport.payload_requested is False
+
+
+def test_cli_kda_layer_materialization_prints_canonical_report(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = tmp_path / "artifacts"
+    summary_path = tmp_path / "summary.json"
+    captured: dict[str, object] = {}
+
+    def fake_materialize(
+        snapshot,
+        index,
+        config,
+        header,
+        plan,
+        transport,
+        output_dir,
+        *,
+        chunk_bytes,
+    ):
+        captured.update(output_dir=output_dir, chunk_bytes=chunk_bytes)
+        return SimpleNamespace(
+            selected_experts=(7, 8),
+            requested_payload_bytes=1_267_744_268,
+            downloaded_payload_bytes=654_321,
+            reused_objects=4,
+            requests=9,
+            maximum_response_bytes=8 * 1024 * 1024,
+            microshard_sha256="4" * 64,
+            tensor_sha256={"tensor": "5" * 64},
+            k3x_root_sha256="6" * 64,
+        )
+
+    monkeypatch.setattr(
+        "tools.discover_official_kimi_k3.materialize_official_kda_layer",
+        fake_materialize,
+    )
+
+    assert main(
+        [
+            "--scope", "kda-layer", "--materialize",
+            "--output-dir", str(output),
+            "--summary-json", str(summary_path),
+        ],
+        transport=_DiscoveryTransport(),
+    ) == 0
+
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert json.loads(capsys.readouterr().out) == summary
+    assert summary["format"] == "k3x-official-kda-layer-materialization-v1"
+    assert summary["mode"] == "materialize"
+    assert summary["selected_experts"] == [7, 8]
+    assert summary["traffic"]["tensor_payload_bytes"] == 654_321
+    assert summary["traffic"]["source_object_bytes"] == 1_267_744_268
+    assert summary["artifacts"]["k3x_root_sha256"] == "6" * 64
+    assert captured == {"output_dir": output.resolve(), "chunk_bytes": 257 * 1024}
+
+
+def test_cli_kda_layer_rejects_source_blob_drift_before_payload() -> None:
+    transport = _DiscoveryTransport()
+    api = json.loads(transport.api)
+    source = next(
+        item
+        for item in api["siblings"]
+        if item["rfilename"] == "modeling_kimi_linear.py"
+    )
+    source["blobId"] = "0" * 40
+    transport.api = json.dumps(api, separators=(",", ":")).encode()
+
+    with pytest.raises(K3XError, match="INVALID_OFFICIAL_LAYER_SOURCE"):
+        main(["--scope", "kda-layer"], transport=transport)
+
     assert transport.payload_requested is False
 
 
