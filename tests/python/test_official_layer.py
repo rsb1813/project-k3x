@@ -143,6 +143,37 @@ def _plan_inputs() -> tuple[OfficialIndex, OfficialShardHeader]:
     return index, header
 
 
+def _plan_inputs_for_layer(
+    layer_id: int, shard: str
+) -> tuple[OfficialIndex, OfficialShardHeader]:
+    marker = f".layers.{layer_id}."
+    metadata = {
+        item.name.replace(".layers.1.", marker): TensorMetadata(
+            item.name.replace(".layers.1.", marker),
+            item.dtype,
+            item.shape,
+            item.offset,
+            item.length,
+        )
+        for item in _metadata().values()
+    }
+    index = OfficialIndex(
+        sum(item.length for item in metadata.values()),
+        MappingProxyType({name: shard for name in metadata}),
+        (shard,),
+        len(metadata),
+        "8" * 64,
+    )
+    header = OfficialShardHeader(
+        shard,
+        16_990_911_504,
+        818_696,
+        818_704,
+        MappingProxyType(metadata),
+    )
+    return index, header
+
+
 def test_official_kda_layer_plan_binds_exact_execution_order_and_bytes() -> None:
     index, header = _plan_inputs()
 
@@ -167,6 +198,46 @@ def test_official_kda_layer_plan_binds_exact_execution_order_and_bytes() -> None
     assert next(
         item for item in plan.kda_tensors if item.role == "kda_a_log"
     ).shape == (128,)
+
+
+def test_official_kda_layer_plan_accepts_bounded_layer_two_identity() -> None:
+    shard = "model-00003-of-000096.safetensors"
+    index, header = _plan_inputs_for_layer(2, shard)
+
+    plan = plan_official_kda_layer(
+        index,
+        header,
+        _config(),
+        source_blob_id=_SOURCE_BLOB,
+        layer_id=2,
+    )
+
+    assert plan.layer_id == 2
+    assert plan.shard_path == shard
+    assert tuple(item.official_name for item in plan.kda_tensors) == tuple(
+        f"language_model.model.layers.2.{suffix}" for suffix, *_ in _KDA_SPECS
+    )
+    assert tuple(item.canonical_name for item in plan.kda_tensors) == tuple(
+        f"model.layers.2.{suffix}" for suffix, *_ in _KDA_SPECS
+    )
+    assert plan.kda_payload_bytes == 887_843_840
+    assert plan.base_payload_bytes == 1_267_744_256
+
+
+@pytest.mark.parametrize("layer_id", [0, 3])
+def test_official_kda_layer_plan_rejects_layers_outside_bounded_pair(
+    layer_id: int,
+) -> None:
+    index, header = _plan_inputs_for_layer(layer_id, _SHARD)
+
+    with pytest.raises(K3XError, match="INVALID_OFFICIAL_LAYER"):
+        plan_official_kda_layer(
+            index,
+            header,
+            _config(),
+            source_blob_id=_SOURCE_BLOB,
+            layer_id=layer_id,
+        )
 
 
 def test_official_kda_layer_plan_rejects_head_shaped_a_log() -> None:
