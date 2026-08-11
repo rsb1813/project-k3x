@@ -427,7 +427,7 @@ int device_state_fail_closed() {
     const auto invalid_mode_before = invalid_mode_backend.value()->runtime_stats();
     const auto invalid_mode = invalid_mode_backend.value()->official_kda(
         std::span(fixture.hidden).first(4), fixture.cuda_weights(),
-        no_host_state, fixture.cuda_config, 7, k3x::ProfilePhase::decode,
+        no_host_state, fixture.cuda_config, 1, k3x::ProfilePhase::decode,
         {static_cast<k3x::OfficialKdaStateMode>(255), {}});
     const auto invalid_mode_after = invalid_mode_backend.value()->runtime_stats();
     if (invalid_mode || invalid_mode.error() != k3x::ErrorCode::invalid_extent ||
@@ -442,31 +442,31 @@ int device_state_fail_closed() {
 
     const auto seed = backend.value()->official_kda(
         std::span(fixture.hidden).first(4), fixture.cuda_weights(),
-        initial_state, fixture.cuda_config, 7, k3x::ProfilePhase::decode,
+        initial_state, fixture.cuda_config, 1, k3x::ProfilePhase::decode,
         {k3x::OfficialKdaStateMode::device_seed, {}});
     if (!seed || seed.value().state_published ||
         !close(seed.value().output, oracle_a.value().output)) return 63;
 
     const auto wrong_owner = other.value()->official_kda(
         std::span(fixture.hidden).last(4), fixture.cuda_weights(),
-        no_host_state, fixture.cuda_config, 7, k3x::ProfilePhase::decode,
+        no_host_state, fixture.cuda_config, 1, k3x::ProfilePhase::decode,
         {k3x::OfficialKdaStateMode::device_publish,
          seed.value().device_state});
     const auto wrong_layer = backend.value()->official_kda(
         std::span(fixture.hidden).last(4), fixture.cuda_weights(),
-        no_host_state, fixture.cuda_config, 8, k3x::ProfilePhase::decode,
+        no_host_state, fixture.cuda_config, 2, k3x::ProfilePhase::decode,
         {k3x::OfficialKdaStateMode::device_publish,
          seed.value().device_state});
     auto wrong_config = fixture.cuda_config;
     wrong_config.rms_norm_epsilon = 2.0e-5F;
     const auto config_mismatch = backend.value()->official_kda(
         std::span(fixture.hidden).last(4), fixture.cuda_weights(),
-        no_host_state, wrong_config, 7, k3x::ProfilePhase::decode,
+        no_host_state, wrong_config, 1, k3x::ProfilePhase::decode,
         {k3x::OfficialKdaStateMode::device_publish,
          seed.value().device_state});
     const auto unexpected_host = backend.value()->official_kda(
         std::span(fixture.hidden).last(4), fixture.cuda_weights(),
-        initial_state, fixture.cuda_config, 7, k3x::ProfilePhase::decode,
+        initial_state, fixture.cuda_config, 1, k3x::ProfilePhase::decode,
         {k3x::OfficialKdaStateMode::device_continue,
          seed.value().device_state});
     if (wrong_owner || wrong_owner.error() != k3x::ErrorCode::invalid_state ||
@@ -478,7 +478,7 @@ int device_state_fail_closed() {
 
     const auto continued = backend.value()->official_kda(
         std::span(fixture.hidden).last(4), fixture.cuda_weights(),
-        no_host_state, fixture.cuda_config, 7, k3x::ProfilePhase::decode,
+        no_host_state, fixture.cuda_config, 1, k3x::ProfilePhase::decode,
         {k3x::OfficialKdaStateMode::device_continue,
          seed.value().device_state});
     if (!continued || continued.value().state_published ||
@@ -493,11 +493,11 @@ int device_state_fail_closed() {
 
     const auto host = backend.value()->official_kda(
         std::span(fixture.hidden).first(4), fixture.cuda_weights(),
-        initial_state, fixture.cuda_config, 7, k3x::ProfilePhase::decode);
+        initial_state, fixture.cuda_config, 1, k3x::ProfilePhase::decode);
     if (!host || !host.value().state_published) return 67;
     const auto invalidated = backend.value()->official_kda(
         std::span(fixture.hidden).last(4), fixture.cuda_weights(),
-        no_host_state, fixture.cuda_config, 7, k3x::ProfilePhase::decode,
+        no_host_state, fixture.cuda_config, 1, k3x::ProfilePhase::decode,
         {k3x::OfficialKdaStateMode::device_publish,
          continued.value().device_state});
     const auto after_host = backend.value()->runtime_stats();
@@ -505,6 +505,160 @@ int device_state_fail_closed() {
         invalidated.error() != k3x::ErrorCode::invalid_state ||
         after_host.official_kda_calls != 3 ||
         after_host.official_kda_device_state_invalidations != 1) return 68;
+    return 0;
+}
+
+int two_layer_device_states() {
+    const Fixture fixture;
+    const auto zero = k3x::zero_official_kda_state(fixture.cpu_config);
+    const auto first_one = k3x::official_kda_cpu(
+        std::span(fixture.hidden).first(4), fixture.cpu_weights(), zero,
+        fixture.cpu_config);
+    const auto first_two = k3x::official_kda_cpu(
+        std::span(fixture.hidden).last(4), fixture.cpu_weights(), zero,
+        fixture.cpu_config);
+    if (!first_one || !first_two) return 71;
+    const auto second_one = k3x::official_kda_cpu(
+        std::span(fixture.hidden).last(4), fixture.cpu_weights(),
+        first_one.value().state, fixture.cpu_config);
+    const auto second_two = k3x::official_kda_cpu(
+        std::span(fixture.hidden).first(4), fixture.cpu_weights(),
+        first_two.value().state, fixture.cpu_config);
+    if (!second_one || !second_two) return 72;
+    const auto third_one = k3x::official_kda_cpu(
+        std::span(fixture.hidden).first(4), fixture.cpu_weights(),
+        second_one.value().state, fixture.cpu_config);
+    const auto third_two = k3x::official_kda_cpu(
+        std::span(fixture.hidden).last(4), fixture.cpu_weights(),
+        second_two.value().state, fixture.cpu_config);
+    if (!third_one || !third_two) return 72;
+
+    auto backend = k3x::make_cuda_backend(options(
+        k3x::CudaWeightMode::resident, 1 << 20,
+        k3x::CudaWeightValidationMode::admission));
+    if (!backend) return 73;
+    const k3x::OfficialKdaCudaStateView initial_state{
+        zero.conv_q, zero.conv_k, zero.conv_v, zero.recurrent_v_first};
+    const k3x::OfficialKdaCudaStateView no_host_state{};
+    const auto seed_one = backend.value()->official_kda(
+        std::span(fixture.hidden).first(4), fixture.cuda_weights(),
+        initial_state, fixture.cuda_config, 1, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    const auto seed_two = backend.value()->official_kda(
+        std::span(fixture.hidden).last(4), fixture.cuda_weights(),
+        initial_state, fixture.cuda_config, 2, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    if (!seed_one || !seed_two ||
+        seed_one.value().device_state == seed_two.value().device_state)
+        return 74;
+
+    const auto continue_one = backend.value()->official_kda(
+        std::span(fixture.hidden).last(4), fixture.cuda_weights(),
+        no_host_state, fixture.cuda_config, 1, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_continue,
+         seed_one.value().device_state});
+    const auto continue_two = backend.value()->official_kda(
+        std::span(fixture.hidden).first(4), fixture.cuda_weights(),
+        no_host_state, fixture.cuda_config, 2, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_continue,
+         seed_two.value().device_state});
+    if (!continue_one || !continue_two ||
+        continue_one.value().device_state == seed_one.value().device_state ||
+        continue_two.value().device_state == seed_two.value().device_state ||
+        continue_one.value().device_state == continue_two.value().device_state ||
+        !close(continue_one.value().output, second_one.value().output) ||
+        !close(continue_two.value().output, second_two.value().output))
+        return 75;
+
+    const auto publish_one = backend.value()->official_kda(
+        std::span(fixture.hidden).first(4), fixture.cuda_weights(),
+        no_host_state, fixture.cuda_config, 1, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_publish,
+         continue_one.value().device_state});
+    const auto publish_two = backend.value()->official_kda(
+        std::span(fixture.hidden).last(4), fixture.cuda_weights(),
+        no_host_state, fixture.cuda_config, 2, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_publish,
+         continue_two.value().device_state});
+    if (!publish_one || !publish_two ||
+        publish_one.value().conv_q != third_one.value().state.conv_q ||
+        publish_one.value().conv_k != third_one.value().state.conv_k ||
+        publish_one.value().conv_v != third_one.value().state.conv_v ||
+        !close(publish_one.value().recurrent_v_first,
+               third_one.value().state.recurrent_v_first) ||
+        !close(publish_one.value().output, third_one.value().output) ||
+        publish_two.value().conv_q != third_two.value().state.conv_q ||
+        publish_two.value().conv_k != third_two.value().state.conv_k ||
+        publish_two.value().conv_v != third_two.value().state.conv_v ||
+        !close(publish_two.value().recurrent_v_first,
+               third_two.value().state.recurrent_v_first) ||
+        !close(publish_two.value().output, third_two.value().output))
+        return 75;
+
+    const auto stats = backend.value()->runtime_stats();
+    const std::uint64_t state_bytes = 3 * 2 * 4 * sizeof(std::uint16_t) +
+                                      2 * 2 * 2 * sizeof(float);
+    if (stats.official_kda_state_h2d_bytes != 2 * state_bytes ||
+        stats.official_kda_state_d2h_bytes != 2 * state_bytes ||
+        stats.official_kda_device_state_seeds != 2 ||
+        stats.official_kda_device_state_continuations != 4 ||
+        stats.official_kda_device_state_publications != 2 ||
+        stats.official_kda_device_state_invalidations != 0)
+        return 76;
+
+    auto isolated = k3x::make_cuda_backend(options(
+        k3x::CudaWeightMode::resident, 1 << 20,
+        k3x::CudaWeightValidationMode::admission));
+    if (!isolated) return 77;
+    const auto isolated_one = isolated.value()->official_kda(
+        std::span(fixture.hidden).first(4), fixture.cuda_weights(),
+        initial_state, fixture.cuda_config, 1, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    const auto isolated_two = isolated.value()->official_kda(
+        std::span(fixture.hidden).last(4), fixture.cuda_weights(),
+        initial_state, fixture.cuda_config, 2, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    const auto host_one = isolated.value()->official_kda(
+        std::span(fixture.hidden).first(4), fixture.cuda_weights(),
+        initial_state, fixture.cuda_config, 1, k3x::ProfilePhase::decode);
+    if (!isolated_one || !isolated_two || !host_one) return 77;
+    const auto invalid_one = isolated.value()->official_kda(
+        std::span(fixture.hidden).last(4), fixture.cuda_weights(),
+        no_host_state, fixture.cuda_config, 1, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_publish,
+         isolated_one.value().device_state});
+    const auto valid_two = isolated.value()->official_kda(
+        std::span(fixture.hidden).first(4), fixture.cuda_weights(),
+        no_host_state, fixture.cuda_config, 2, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_publish,
+         isolated_two.value().device_state});
+    if (invalid_one || invalid_one.error() != k3x::ErrorCode::invalid_state ||
+        !valid_two ||
+        !close(valid_two.value().output, second_two.value().output) ||
+        isolated.value()->runtime_stats()
+                .official_kda_device_state_invalidations != 1)
+        return 77;
+
+    const auto live = backend.value()->official_kda(
+        std::span(fixture.hidden).first(4), fixture.cuda_weights(),
+        initial_state, fixture.cuda_config, 1, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    const auto overwrite = backend.value()->official_kda(
+        std::span(fixture.hidden).last(4), fixture.cuda_weights(),
+        initial_state, fixture.cuda_config, 1, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    if (!live || overwrite ||
+        overwrite.error() != k3x::ErrorCode::invalid_state ||
+        !backend.value()->discard_official_kda_device_state(
+            live.value().device_state))
+        return 77;
+
+    const auto third_layer = backend.value()->official_kda(
+        std::span(fixture.hidden).first(4), fixture.cuda_weights(),
+        initial_state, fixture.cuda_config, 3, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}});
+    if (third_layer || third_layer.error() != k3x::ErrorCode::invalid_state)
+        return 78;
     return 0;
 }
 
@@ -516,5 +670,6 @@ int main() {
     if (const auto result = invalid()) return result;
     if (const auto result = admission_validation()) return result;
     if (const auto result = device_state_handoff()) return result;
-    return device_state_fail_closed();
+    if (const auto result = device_state_fail_closed()) return result;
+    return two_layer_device_states();
 }
