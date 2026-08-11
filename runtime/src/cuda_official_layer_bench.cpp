@@ -31,6 +31,8 @@
 #include <utility>
 #include <vector>
 
+#include <sys/resource.h>
+
 namespace {
 
 namespace json = k3x::strict_json;
@@ -1134,6 +1136,44 @@ void write_u32_array(std::ostream& stream,
     stream << ']';
 }
 
+void write_float_array(std::ostream& stream, std::span<const float> values) {
+    stream << '[';
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (index) stream << ',';
+        stream << values[index];
+    }
+    stream << ']';
+}
+
+std::uint64_t percentile(std::vector<std::uint64_t> values,
+                         std::size_t percent) {
+    std::sort(values.begin(), values.end());
+    const auto index = (values.size() - 1) * percent / 100;
+    return values[index];
+}
+
+std::uint64_t median(std::vector<std::uint64_t> values) {
+    std::sort(values.begin(), values.end());
+    return values[values.size() / 2];
+}
+
+std::string output_digest(
+    std::span<const k3x::OfficialLayerCudaStepResult> first,
+    std::span<const k3x::OfficialLayerCudaStepResult> second = {}) {
+    static constexpr char identity[] = "k3x-official-layer-output-bf16-v1\0";
+    k3x::Sha256Hasher digest;
+    digest.update(std::as_bytes(std::span(identity).first(sizeof(identity) - 1)));
+    for (const auto steps : {first, second}) {
+        for (const auto& step : steps) {
+            std::vector<std::uint16_t> words(step.output.size());
+            std::transform(step.output.begin(), step.output.end(), words.begin(),
+                           encode_bf16);
+            digest.update(std::as_bytes(std::span(words)));
+        }
+    }
+    return digest_hex(digest.finish());
+}
+
 bool observe_cuda_result(const k3x::OfficialLayerCudaResult& actual,
                          const k3x::OfficialLayerResult& expected,
                          float& maximum_error) {
@@ -1232,20 +1272,36 @@ int main(int argc, char** argv) {
     }
     const auto weights = loaded->cuda_views();
     float maximum_error{};
+    std::string published_output_digest;
+    std::string published_state_digest;
+    const auto publish = [&](std::string output, std::string state) {
+        if ((!published_output_digest.empty() &&
+             published_output_digest != output) ||
+            (!published_state_digest.empty() && published_state_digest != state)) {
+            return false;
+        }
+        published_output_digest = std::move(output);
+        published_state_digest = std::move(state);
+        return true;
+    };
     const auto execute = [&]() {
         if (arguments->case_mode == CaseMode::a) {
             auto result = k3x::official_layer_cuda(
                 *backend.value(), std::span(inputs).first(1), weights, zero,
                 config, 16, 4, 25, 1, k3x::ProfilePhase::decode);
             return result && observe_cuda_result(
-                result.value(), reference.first, maximum_error);
+                result.value(), reference.first, maximum_error) &&
+                publish(output_digest(result.value().steps),
+                        state_digest(result.value().kda_state));
         }
         if (arguments->case_mode == CaseMode::ab_full) {
             auto result = k3x::official_layer_cuda(
                 *backend.value(), inputs, weights, zero, config, 16, 4, 25,
                 1, k3x::ProfilePhase::decode);
             return result && observe_cuda_result(
-                result.value(), reference.full, maximum_error);
+                result.value(), reference.full, maximum_error) &&
+                publish(output_digest(result.value().steps),
+                        state_digest(result.value().kda_state));
         }
         auto first = k3x::official_layer_cuda(
             *backend.value(), std::span(inputs).first(1), weights, zero,
@@ -1284,8 +1340,21 @@ int main(int argc, char** argv) {
                second.value().kda_state.conv_v == reference.full.kda.state.conv_v &&
                f32_error(second.value().kda_state.recurrent_v_first,
                          reference.full.kda.state.recurrent_v_first)
-                       .maximum_absolute <= kRecurrentAbsoluteTolerance;
+                       .maximum_absolute <= kRecurrentAbsoluteTolerance &&
+               publish(output_digest(first.value().steps, second.value().steps),
+                       state_digest(second.value().kda_state));
     };
+    const auto cold_stats_before = backend.value()->runtime_stats();
+    const auto cold_profile_before = profiler.summary();
+    const auto cold_start = std::chrono::steady_clock::now();
+    if (!execute()) {
+        write_error(k3x::ErrorCode::invalid_state,
+                    "official layer CUDA cold result mismatch");
+        return 4;
+    }
+    const auto cold_latency = elapsed(cold_start);
+    const auto cold_stats_after = backend.value()->runtime_stats();
+    const auto cold_profile_after = profiler.summary();
     for (std::uint64_t index = 0; index < arguments->warmups; ++index) {
         if (!execute()) {
             write_error(k3x::ErrorCode::invalid_state,
@@ -1313,6 +1382,41 @@ int main(int argc, char** argv) {
         samples.begin(), samples.end(), std::uint64_t{});
     const auto kernel_time = profile_after.device_nanoseconds -
         profile_before.device_nanoseconds;
+    constexpr std::uint64_t kKdaF32Bytes = 640'000;
+    constexpr std::uint64_t kKdaBf16Bytes = 887'160'832;
+    constexpr std::uint64_t kMoeBf16Bytes = 367'008'768;
+    constexpr std::uint64_t kExpertBytes = 17'547'264;
+    const auto cold_experts = arguments->case_mode == CaseMode::a
+        ? 16ULL : static_cast<std::uint64_t>(manifest->selected.size());
+    const auto transient = arguments->weight_mode == WeightMode::transient;
+    const auto measured_bf16 = transient
+        ? arguments->iterations * (kKdaBf16Bytes + kMoeBf16Bytes) : 0ULL;
+    const auto measured_f32 = transient
+        ? arguments->iterations * kKdaF32Bytes : 0ULL;
+    const auto measured_mxfp4 = transient
+        ? arguments->iterations * 16ULL * kExpertBytes : 0ULL;
+    const auto cold_bf16 = kKdaBf16Bytes + kMoeBf16Bytes;
+    const auto cold_f32 = kKdaF32Bytes;
+    const auto cold_mxfp4 = cold_experts * kExpertBytes;
+    const auto measured_weight = stats_after.weight_h2d_bytes -
+        stats_before.weight_h2d_bytes;
+    const auto cold_weight = cold_stats_after.weight_h2d_bytes -
+        cold_stats_before.weight_h2d_bytes;
+    if (measured_weight != measured_bf16 + measured_f32 + measured_mxfp4 ||
+        cold_weight != cold_bf16 + cold_f32 + cold_mxfp4) {
+        write_error(k3x::ErrorCode::invalid_state,
+                    "official layer CUDA precision traffic mismatch");
+        return 4;
+    }
+    const auto reader_counters = reader.value().counters();
+    rusage usage{};
+    if (getrusage(RUSAGE_SELF, &usage) != 0 || usage.ru_maxrss <= 0) {
+        write_error(k3x::ErrorCode::invalid_state,
+                    "official layer process RSS unavailable");
+        return 4;
+    }
+    const auto process_peak_rss =
+        static_cast<std::uint64_t>(usage.ru_maxrss) * 1024ULL;
     std::cout << std::setprecision(12)
         << "{\"artifact_kind\":\"official_kimi_k3_kda_layer\""
         << ",\"repository\":\"moonshotai/Kimi-K3\""
@@ -1326,18 +1430,43 @@ int main(int argc, char** argv) {
                                                              "transient")
         << "\",\"token_semantics\":false,\"routing_semantics\":true"
         << ",\"full_transformer_layer\":true,\"quality_measured\":false"
-        << ",\"route_a\":";
+        << ",\"k3x_root_sha256\":\"" << manifest->root_sha256 << "\""
+        << ",\"warmups\":" << arguments->warmups
+        << ",\"iterations\":" << arguments->iterations
+        << ",\"selected_union\":";
+    write_u32_array(std::cout, manifest->selected);
+    std::cout << ",\"route_a\":";
     write_u32_array(std::cout, reference.full.steps[0].route.expert_ids);
     std::cout << ",\"route_b\":";
     write_u32_array(std::cout, reference.full.steps[1].route.expert_ids);
-    std::cout << ",\"warmups\":" << arguments->warmups
-        << ",\"iterations\":" << arguments->iterations
-        << ",\"latency_nanoseconds_total\":" << latency_sum
+    std::cout << ",\"route_a_contributions\":";
+    write_float_array(std::cout, reference.full.steps[0].route.contributions);
+    std::cout << ",\"route_b_contributions\":";
+    write_float_array(std::cout, reference.full.steps[1].route.contributions);
+    std::cout << ",\"output_sha256\":\"" << published_output_digest << "\""
+        << ",\"state_sha256\":\"" << published_state_digest << "\""
+        << ",\"source_bytes\":" << 1'829'256'704ULL
+        << ",\"k3x_bytes\":" << reader.value().superblock().file_length
+        << ",\"cold_latency_nanoseconds\":" << cold_latency
+        << ",\"cold_kernel_nanoseconds\":"
+        << cold_profile_after.device_nanoseconds -
+               cold_profile_before.device_nanoseconds
+        << ",\"cold_weight_h2d_bytes\":"
+        << cold_weight
+        << ",\"cold_bf16_weight_h2d_bytes\":" << cold_bf16
+        << ",\"cold_f32_weight_h2d_bytes\":" << cold_f32
+        << ",\"cold_mxfp4_weight_h2d_bytes\":" << cold_mxfp4
+        << ",\"latency_nanoseconds_p05\":" << percentile(samples, 5)
+        << ",\"latency_nanoseconds_median\":" << median(samples)
+        << ",\"latency_nanoseconds_p95\":" << percentile(samples, 95)
         << ",\"kernel_nanoseconds\":" << kernel_time
         << ",\"orchestration_nanoseconds\":"
         << latency_sum - std::min(latency_sum, kernel_time)
         << ",\"weight_h2d_bytes\":"
-        << stats_after.weight_h2d_bytes - stats_before.weight_h2d_bytes
+        << measured_weight
+        << ",\"bf16_weight_h2d_bytes\":" << measured_bf16
+        << ",\"f32_weight_h2d_bytes\":" << measured_f32
+        << ",\"mxfp4_weight_h2d_bytes\":" << measured_mxfp4
         << ",\"activation_h2d_bytes\":"
         << stats_after.activation_h2d_bytes - stats_before.activation_h2d_bytes
         << ",\"device_to_host_bytes\":"
@@ -1357,7 +1486,28 @@ int main(int argc, char** argv) {
         << stats_after.official_kda_output_d2h_bytes -
                stats_before.official_kda_output_d2h_bytes
         << ",\"resident_weight_bytes\":" << stats_after.resident_weight_bytes
+        << ",\"peak_resident_weight_bytes\":"
+        << stats_after.peak_resident_weight_bytes
+        << ",\"weight_cache_hits\":"
+        << stats_after.weight_cache_hits - stats_before.weight_cache_hits
+        << ",\"weight_cache_misses\":"
+        << stats_after.weight_cache_misses - stats_before.weight_cache_misses
+        << ",\"weight_cache_bypasses\":"
+        << stats_after.weight_cache_bypasses - stats_before.weight_cache_bypasses
+        << ",\"device_allocation_count\":"
+        << stats_after.device_allocation_count - stats_before.device_allocation_count
+        << ",\"stream_synchronization_count\":"
+        << stats_after.stream_synchronization_count -
+               stats_before.stream_synchronization_count
         << ",\"peak_vram_bytes\":" << memory.peak_device_bytes
+        << ",\"process_peak_rss_bytes\":" << process_peak_rss
+        << ",\"reader_read_calls\":" << reader_counters.calls
+        << ",\"reader_requested_bytes\":" << reader_counters.requested_bytes
+        << ",\"reader_completed_bytes\":" << reader_counters.completed_bytes
+        << ",\"reader_storage_submitted_bytes\":"
+        << reader_counters.storage_submitted_bytes
+        << ",\"reader_storage_completed_bytes\":"
+        << reader_counters.storage_completed_bytes
         << ",\"maximum_absolute_error\":" << maximum_error
         << ",\"all_finite\":true}\n";
     return maximum_error <= 2.0e-2F ? 0 : 4;

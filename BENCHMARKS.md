@@ -1216,3 +1216,12 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Cold capability counters: 381,907,507 ns wall time; 32,897,536 ns aggregate profiled device time; 32 KDA kernel launches over two KDA calls; 1,816,322,048 weight-H2D/resident bytes; 13,198,976 activation-H2D bytes; 13,139,968 total D2H bytes; 13,025,280 KDA-state bytes in each direction; 57,344 KDA-output D2H bytes; 1,824,612,416 tracked peak device bytes.
 - Decode tok/s, prefill tok/s, TTFT, VRAM from an independent process observer, system RAM, physical NVMe GB/token, physical H2D GB/token, cache hit rate, average full-model Top-K, speculative acceptance, utilization, memory bandwidth, coding quality, and end-to-end model quality: not measured.
 - Interpretation: this is one cold capability/correctness smoke with zero warmups, not B-0030. It proves the dependency-closed official layer fits and executes on RTX 5080 but supports no warm performance, token-rate, physical-traffic, quality, native-Linux, or default-policy conclusion.
+
+## Milestone 29 Task 7 verification — B-0030 evidence tooling
+
+- Date: 2026-08-11.
+- Mode: fixed A transient, A-to-B incremental resident, and A+B full resident order; strict 3 warmups/20 samples for official verification; fsynced atomic partial-directory publication; canonical raw JSON, LF-only CSV, summary, aggregate, and artifact/manifest/runner digests. The closed schema includes BF16/F32/MXFP4 weight traffic, process peak RSS, and Reader logical/storage counters.
+- Verification: focused runner tests pass 8/8; Python compile validation passes; focused official MoE/KDA/layer CUDA CTest passes 3/3. Actual one-sample capability probes confirm all closed traffic formulas and exact full/incremental BF16 output plus V-first final-state digest parity.
+- Negative coverage: forbidden token/TTFT/quality/physical-traffic metrics, schema drift, route/contribution drift, traffic drift, numerical divergence, non-finite output, resident warm weight H2D, raw/CSV/aggregate mutation, row-order drift, and full/incremental output/state divergence fail before final publication.
+- All performance fields: not recorded as formal evidence. No B-0030 output directory exists at this implementation checkpoint.
+- Interpretation: this verifies the non-ranking evidence pipeline only. It is not B-0030 and supports no performance or default-policy conclusion.
