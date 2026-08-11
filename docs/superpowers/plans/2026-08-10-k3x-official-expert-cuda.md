@@ -251,11 +251,11 @@ git commit -m "feat: execute pinned official expert on CUDA"
 - Consumes: Task 2 canonical JSON executable output.
 - Produces: `run_ablation(...)`, `verify_summary(...)`, raw `transient.json`, raw `resident.json`, `summary.json`, and LF-only `summary.csv`.
 
-- [ ] **Step 1: Write RED tests with a controlled fake runner**
+- [x] **Step 1: Write RED tests with a controlled fake runner**
 
 The fake runner emits one schema-complete row selected by `--weight-mode`. Test exact case order, warmup/iteration forwarding, raw JSON digests, LF-only CSV, canonical aggregate digest, and `strict_official=False` verification. Add independent mutations for wrong identity, forbidden `decode_tok_s`, resident measured H2D, transient H2D formula, parity above `1e-6`, raw digest, CSV parity, and case order.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -265,7 +265,7 @@ PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest te
 
 Expected: import fails because `tools.ablate_official_expert_cuda` does not exist.
 
-- [ ] **Step 3: Implement the two-case runner**
+- [x] **Step 3: Implement the two-case runner**
 
 Use this fixed matrix.
 
@@ -277,7 +277,7 @@ Invoke the runner with `--model`, `--weight-mode`, `--warmup`, and `--iterations
 
 The strict summary binds artifact file SHA-256 `e08293cd854ed11913bd8f1bc3a51d1eb577202fd5fd9b5b7e3c96ef1bccecc7`, B-0027 summary JSON SHA-256 `57ebd9d85ed3ae55a4e2ab01f023bc451faf02cd7b6e69f478d11e3ea73e982a`, all fixed C++ identities, warmup 3, iterations 20, raw and runner digests, aggregate digest, CSV digest/parity, and forbidden-field absence. `strict_official=False` skips only the real artifact and fixed 3/20 gates for synthetic unit tests.
 
-- [ ] **Step 4: Run GREEN and mutation tests**
+- [x] **Step 4: Run GREEN and mutation tests**
 
 Run:
 
@@ -287,7 +287,7 @@ PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest te
 
 Expected: all runner, parity, digest, invariant, and mutation tests pass.
 
-- [ ] **Step 5: Self-review and commit**
+- [x] **Step 5: Self-review and commit**
 
 Confirm the tool never copies the artifact and never emits token, quality, or physical-NVMe fields. Then commit:
 

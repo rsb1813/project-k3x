@@ -569,3 +569,10 @@
 - The first real-artifact GREEN attempt passed identity, CUDA execution, CPU-oracle parity, and weight-H2D invariants but reported zero runtime D2H bytes. Root-cause tracing showed that `mxfp4_situ_mlp_group_impl` recorded D2H in the profiler while omitting the corresponding `BackendRuntimeStats` increment used by the new canonical schema.
 - A CUDA FFN runtime-counter regression witnessed exit 58 before the one-line backend correction. After the correction, the focused CUDA test and all six official-harness Python cases passed. Direct transient/resident calls both reported `3.0267983675e-9` maximum absolute error; transient measured 17,547,264 weight-H2D bytes and resident measured zero after cold admission.
 - The complete CUDA CTest suite passes 28/28. The actual resident official-expert invocation under CUDA 13.3 Compute Sanitizer reports `ERROR SUMMARY: 0 errors`. These direct timings remain Task 2 validation, not formal B-0028 evidence.
+
+## 2026-08-11 — Milestone 27 B-0028 evidence tooling
+
+- Task 3 witnessed the planned import RED before `tools.ablate_official_expert_cuda` existed. The implementation runs exactly transient then resident, forwards only model/mode/warmup/iterations, and emits compact sorted LF raw JSON plus one LF-only summary CSV.
+- The verifier independently enforces the complete harness schema, fixed official identities, mode-specific weight-H2D and residency formulas, activation/D2H and synchronization formulas, finite `1e-6` parity, raw digests, canonical aggregate, CSV digest/parity, and forbidden metric absence.
+- `strict_official=False` skips only the fixed artifact SHA and 3/20 measurement gate. Strict mode additionally requires actual artifact and runner paths so their bytes are rehashed rather than trusting summary strings.
+- Ten controlled runner and mutation tests pass; the combined Task 2/3 focused suite passes 16 tests against the ignored actual artifact. The tool reads and hashes the artifact but never copies it or emits token, quality, or physical-NVMe measurements.
