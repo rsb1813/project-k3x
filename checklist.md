@@ -404,7 +404,7 @@
 - [x] Add fail-closed native BF16 tensors to K3X v1.
 - [x] Implement two-phase bounded official MoE source planning and materialization.
 - [x] Implement the portable BF16/MXFP4 official MoE oracle.
-- [ ] Implement native BF16 CUDA residency and the official MoE boundary.
+- [x] Implement native BF16 CUDA residency and the official MoE boundary.
 - [ ] Implement the pinned fixture harness and strict B-0029 tooling.
 - [ ] Materialize the bounded real fixture without a full shard or checkpoint.
 - [ ] Run correctness, sanitizer, B-0029, full verification, and evidence cross-checks.

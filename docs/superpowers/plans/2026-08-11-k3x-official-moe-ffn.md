@@ -293,13 +293,13 @@ git commit -m "feat: add official MoE portable oracle"
 - Produces: `Bf16MlpView`, `OfficialMoeFfnView`, `OfficialMoeFfnResult`, and `ComputeBackend::official_mxfp4_moe_ffn(...)`.
 - Consumes: Task 3 normalized BF16 hidden input, prefix residual, canonical routes, BF16 K3X views, and existing `Mxfp4MlpView` experts.
 
-- [ ] **Step 1: Add failing synthetic CUDA boundary tests**
+- [x] **Step 1: Add failing synthetic CUDA boundary tests**
 
 Create tiny BF16 literal routed/shared weights and two literal MXFP4 experts. Compare transient and resident CUDA results against Task 3 CPU oracle. Require one final output vector, finite values, maximum absolute error at most `2e-2`, exact selected expert order, and no mutation of caller buffers.
 
 For resident mode, snapshot stats around a second call and require zero weight H2D, all BF16 and MXFP4 tensors resident, and unchanged output. Require invalid BF16 byte count, aliasing tensor IDs, duplicate experts, wrong contribution count, and insufficient resident capacity to fail before execution.
 
-- [ ] **Step 2: Run CUDA RED**
+- [x] **Step 2: Run CUDA RED**
 
 Run:
 
@@ -310,13 +310,13 @@ cmake --build build-cuda --target test_cuda_official_moe
 
 Expected: target or API is absent.
 
-- [ ] **Step 3: Implement native BF16 views and residency**
+- [x] **Step 3: Implement native BF16 views and residency**
 
 Add views over raw `std::uint16_t` BF16 storage. Admission copies those bytes once and keys residency by tensor ID, byte count, dimensions, and immutable digest/validation state. Do not construct an intermediate host `std::vector<float>` or rebuild BF16 host storage on calls.
 
 The dedicated method accepts normalized hidden and prefix residual prepared by Task 3, executes routed down, selected expert FFNs, weighted mix, routed norm/up, shared gate/up/SiTU/down, routed/shared add, and final prefix add on one stream, then performs exactly one final D2H. Retain CPU Attention Residual, postnorm, and router outside the CUDA method.
 
-- [ ] **Step 4: Run CUDA GREEN and traffic assertions**
+- [x] **Step 4: Run CUDA GREEN and traffic assertions**
 
 Run:
 
@@ -327,7 +327,7 @@ ctest --test-dir build-cuda -R cuda_official_moe --output-on-failure
 
 Expected: transient and resident outputs pass, the second resident call records zero weight H2D, and one D2H vector is recorded per call.
 
-- [ ] **Step 5: Run CUDA regression and sanitizer**
+- [x] **Step 5: Run CUDA regression and sanitizer**
 
 Run complete CUDA CTest, then:
 

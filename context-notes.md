@@ -637,3 +637,10 @@
 - Python parity RED failed because the C++ test emitted no boundary record. The `--dump` test mode now emits only the already-validated tiny boundaries; PyTorch independently recomputes all values and matches at `1e-6`.
 - Malformed route count, duplicate IDs, non-finite or non-unit contribution mass, duplicate/missing expert payloads, malformed router dimensions, and invalid MXFP4 views fail before `OfficialMoeResult` publication.
 - Commit `8a13cf5` passes CPU CTest 17/17 and full `test_cpp_parity.py` 113 passed/32 skipped. No network, filesystem, CUDA, global state, official payload, B-0029, token, or quality measurement is involved.
+
+## 2026-08-11 — Milestone 28 native BF16 CUDA boundary
+
+- Initial CUDA RED failed because `OfficialMoeFfnView` and `official_mxfp4_moe_ffn` did not exist. The minimal boundary keeps Task 3 Attention Residual/postnorm/router on CPU and consumes only the prepared hidden vector, prefix residual, canonical route, raw BF16 tensors, and native MXFP4 experts.
+- Both transient and resident paths use byte-native BF16/MXFP4 storage. The resident second call adds zero weight H2D and increases exact tensor hits; one final output vector is the only D2H result.
+- Self-review found that the CPU oracle rounds the prefix residual before final addition. The fixture now uses non-BF16-exact prefix values and CUDA explicitly rounds the device prefix before addition.
+- Commit `bb634e1` passes CPU CTest 17/17, CUDA CTest 30/30, focused transient/resident parity, and Compute Sanitizer with zero errors. This is a tiny correctness/traffic gate only; official payload, B-0029, token rate, quality, and physical traffic remain unmeasured.

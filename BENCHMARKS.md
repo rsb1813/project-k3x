@@ -1043,3 +1043,15 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Verification result: CPU CTest 17/17 passed. The complete `tests/python/test_cpp_parity.py` run passed 113 tests with 32 capability skips in 21.75 seconds. `git diff --check` passed.
 - Decode tok/s, prefill tok/s, TTFT, VRAM, system RAM, physical NVMe GB/token, H2D GB/token, cache hit rate, average Top-K, speculative acceptance, quality, GPU utilization, and GPU bandwidth: not measured and not applicable to this tiny correctness oracle.
 - Interpretation: this is the independent CPU authority for Task 4 CUDA parity. It is not B-0029 and cannot support a full-size latency, traffic, cache, token, or quality claim.
+
+## Milestone 28 Task 4 verification — native BF16 CUDA official MoE boundary
+
+- Date: 2026-08-11.
+- Commit: `bb634e1`.
+- Hardware/model: NVIDIA GeForce RTX 5080 under WSL2 with a tiny dimension-driven literal BF16/MXFP4 fixture; no official M28 tensor payload.
+- Mode: dedicated opt-in transient and bounded exact resident CUDA boundary over routed down, two selected expert FFNs, ordered weighted mix, routed norm/up, shared SiTU-GLU, combination, and prefix addition.
+- Correctness result: both modes match the Task 3 portable oracle within `2e-2`, retain exact selected-expert order, leave caller buffers unchanged, and reject tensor-ID aliasing, duplicate expert IDs, contribution-count mismatch, and insufficient resident capacity.
+- Traffic result: each successful call performs one final output-vector D2H. A second resident call adds zero weight H2D, increases resident hits, and retains nonzero resident bytes. Raw BF16 and native MXFP4 bytes are admitted without a host FP32 weight copy.
+- Verification result: CPU CTest 17/17 and CUDA CTest 30/30 passed. `/usr/local/cuda-13.3/bin/compute-sanitizer --tool memcheck --error-exitcode=99 ./build-cuda/test_cuda_official_moe` reported `ERROR SUMMARY: 0 errors`. `git diff --check` passed before commit.
+- Decode tok/s, prefill tok/s, TTFT, latency distribution, VRAM peak, system RAM, physical NVMe GB/token, physical H2D GB/token, average Top-K, speculative acceptance, quality, GPU utilization, and GPU bandwidth: not measured and not applicable to this tiny correctness gate.
+- Interpretation: this verifies the CUDA contract needed by the pinned harness. It is not B-0029 and does not establish official full-size performance or a runtime default.

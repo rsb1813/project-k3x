@@ -620,7 +620,7 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-054 — Close a real MoE FFN sublayer before a full transformer layer
 
 - Date: 2026-08-11.
-- Status: accepted; bounded storage planning/materialization is implemented at `0b0c944`, while CPU/CUDA execution and measurement remain pending.
+- Status: accepted; bounded storage planning/materialization, the portable CPU oracle, and the synthetic CUDA execution boundary are implemented through `bb634e1`, while official fixture execution and B-0029 remain pending.
 - Decision: the next real-weight boundary binds the official router, computes all 896 scores, preserves natural Top-16 selection, materializes and executes the exact selected routed experts, executes the real shared expert, and verifies the complete mixing/residual FFN sublayer against an independent reference.
 - Alternatives considered: repeat the single expert with more IDs; benchmark a caller-selected four-expert set; close the real MoE FFN sublayer; download enough attention/KDA/MLA tensors for a complete transformer layer immediately.
 - Evidence: B-0028 proves exact single-expert CUDA execution and shows that warm exact residency removes 350,945,280 measured weight-H2D bytes over twenty calls, but it has no routing, shared-expert, changing-set, or output-mixing semantics. A repeated or caller-selected set would not close those correctness gaps, while a complete transformer layer would widen source and graph dependencies before the MoE boundary is independently proven.
@@ -644,7 +644,7 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-056 — Separate natural route derivation from pure portable MoE execution
 
 - Date: 2026-08-11.
-- Status: accepted and implemented at `8a13cf5`; CUDA integration is pending.
+- Status: accepted and implemented at `8a13cf5`; the separate CUDA consumer is implemented at `bb634e1`.
 - Decision: expose one pure function that derives the canonical natural route from BF16 hidden/router weights and correction bias, and a separate pure CPU oracle that consumes the validated route plus BF16/MXFP4 views. Both remain dimension-driven; official released dimensions belong to the later pinned fixture validator.
 - Alternatives considered: embed routing inside the CPU oracle; reuse the production synthetic `ModelSession`; call the existing backend interface at every operation; keep a small standalone pure oracle.
 - Evidence: the C++ test fixes BF16 decode patterns and every tiny graph boundary, while Python/PyTorch independently recomputes the same hidden state, route, contributions, two expert outputs, mixed latent, routed/shared outputs, and final vector. CPU CTest passes 17/17 and `test_cpp_parity.py` passes 113 with 32 capability skips.
@@ -652,3 +652,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: separating route identity from execution lets CPU and CUDA consume exactly the same selected IDs/contributions and makes malformed route data fail before output without coupling the oracle to production session state.
 - Rejected claims: this does not prove CUDA parity, official full-size execution, B-0029, token throughput, cache behavior, or quality.
 - Revisit: keep the split unless the pinned harness reveals a route-manifest identity that cannot be validated before execution.
+
+## D-057 — Keep the official MoE CUDA boundary byte-native and opt-in
+
+- Date: 2026-08-11.
+- Status: accepted and implemented at `bb634e1`; official full-size validation is pending.
+- Decision: add one dedicated CUDA method that consumes Task 3 prepared hidden/prefix data, canonical routes, raw BF16 views, and native MXFP4 experts. Keep both transient and bounded exact resident modes, one final output D2H, and no production dispatch/default change.
+- Alternatives considered: convert BF16 tensors to host FP32 and reuse generic dense calls; compose existing public backend calls with intermediate D2H transfers; add a dependency-closed byte-native CUDA boundary.
+- Evidence: the focused transient/resident fixture matches the portable oracle within `2e-2`, selected order is exact, caller buffers are unchanged, malformed aliases/routes/capacity fail, and the second resident call adds zero weight H2D while increasing cache hits. CPU CTest passes 17/17, CUDA CTest passes 30/30, and Compute Sanitizer reports `ERROR SUMMARY: 0 errors`.
+- Benchmark result: none. The fixture is tiny and records correctness/traffic invariants only; no B-0029, latency distribution, token rate, quality, physical PCIe, or NVMe result exists.
+- Reason accepted: this closes the execution contract needed by the pinned fixture without hiding BF16 expansion in host memory or weakening the fail-closed production artifact boundary.
+- Rejected claims: this does not prove official full-size parity, changing Top-16 residency pressure, end-to-end token generation, quality, or a CUDA default.
+- Revisit: evaluate kernel fusion, residency policy, and a wider device boundary only after the pinned official B-0029 result exposes real dimensions and traffic.
