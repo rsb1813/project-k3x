@@ -761,3 +761,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: it is the smallest dependency-closed native boundary that tests official KDA state movement and exact MoE composition without conflating the next optimization step with routing/residual fusion.
 - Rejected claims: the cold smoke is not token throughput, quality, physical PCIe/NVMe traffic, utilization, bandwidth, native-Linux evidence, or a production default.
 - Revisit: after fixed B-0030 evidence attributes warm kernel and orchestration cost, decide whether host routing/residual fusion or a bounded multi-layer trace is the next measured step.
+
+## D-066 — Publish B-0030 as one fixed atomic three-row transaction
+
+- Date: 2026-08-11.
+- Status: accepted and implemented; formal measurement remains pending.
+- Decision: fix B-0030 to A transient, A-to-B incremental resident, and A+B full resident in that order, with exactly three warmups and twenty measured samples. Require full/incremental BF16 output and final V-first state digests to match, and atomically publish raw JSON, LF-only CSV, summary, and all hashes only after every invariant passes.
+- Alternatives considered: allow arbitrary rows and sample counts; rerun or select favorable samples; adapt the strict M28 evidence transaction with complete-layer state/launch formulas and cross-row parity.
+- Evidence: the runner tests pass 8/8 and focused CUDA CTest passes 3/3. Actual one-sample probes independently confirm A transient traffic, resident incremental traffic, full KDA's 24-launch topology, and byte-identical full/incremental output/state digests. The final schema additionally binds BF16/F32/MXFP4 copy categories, process peak RSS, and Reader logical/storage counters.
+- Benchmark result: none. The one-sample probes are capability checks and are not retained as B-0030 evidence.
+- Reason accepted: a closed non-ranking transaction prevents post-hoc row/sample selection and turns routing, state traffic, residency, numerical parity, and evidence identity into executable acceptance gates.
+- Rejected claims: implementation and smoke success do not constitute B-0030, token throughput, quality, physical PCIe/NVMe traffic, utilization, bandwidth, native-Linux evidence, or a default policy.
+- Revisit: schema expansion requires a new version if a later process-level observer supplies physical counters or token semantics; do not silently add them to v1.
