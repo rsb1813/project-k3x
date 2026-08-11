@@ -763,3 +763,11 @@
 - Public PR #50 carried the complete official KDA layer implementation, bounded B-0030 evidence, English README, and synchronized TITAN Ledger. The ignored 1.829 GB artifact and 6.5 MB oracle sidecar were not tracked.
 - Branch correctness `31487723904`, pull-request correctness `31487748354`, and pull-request CodeQL `31487748339` passed. PR #50 was ready, clean, and rebase-merged at public head `2a4bfaf40284204ab314938f8112b280915f77df`.
 - Post-merge `main` correctness `31488078940` and CodeQL `31488078974` passed. Milestone 29 is publicly complete; D-067 is the next bounded non-cloud experiment.
+
+## 2026-08-11 — Milestone 30 official KDA admission-validation design
+
+- B-0030 showed a 53.772681 ms resident full-versus-incremental wall gap while per-sequence device time differed by only 0.416216%. This selects attribution, not a causal conclusion.
+- The existing official KDA boundary structurally validates and finiteness-scans eight BF16 plus six F32 immutable views on every call. Their runtime payload totals 887,800,832 bytes; dynamic hidden and KDA state are a separate per-call safety boundary.
+- M30 reuses the M23 `CudaWeightValidationMode`, immutable identity registry, and counters. A KDA-specific cache and a harness-only bypass were rejected because both would create a second trust model.
+- Admission is resident-only, exact-identity, and atomic across all fourteen views. A failed first scan must leave no partial identities, resident uploads, scratch work, or launches. The default remains `per-call`.
+- B-0031 is fixed to resident incremental/full crossed with per-call/admission. It reuses the ignored M29 artifact, changes no tensor bytes or graph semantics, and makes no token, physical-traffic, utilization, bandwidth, or quality claim.
