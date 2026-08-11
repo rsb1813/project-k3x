@@ -448,7 +448,7 @@ Public PR [#48](https://github.com/rsb1813/project-k3x/pull/48) rebase-merged Mi
 
 ## Milestone 29 — official KDA transformer layer
 
-M29 is locally complete through formal B-0030 and the full verification matrix. It extends the bounded official fixture from the measured MoE FFN boundary to the complete layer-1 graph: self Attention Residual, input RMSNorm, KDA with incremental convolution/recurrent state, MLP Attention Residual, natural Top-16 Stable LatentMoE, and final prefix accumulation. Public integration remains pending.
+M29 is publicly complete through formal B-0030 and the full verification matrix. It extends the bounded official fixture from the measured MoE FFN boundary to the complete layer-1 graph: self Attention Residual, input RMSNorm, KDA with incremental convolution/recurrent state, MLP Attention Residual, natural Top-16 Stable LatentMoE, and final prefix accumulation.
 
 Header-only inspection found exactly 17 new tensors and 887,843,840 payload bytes. The bounded materialization selected two disjoint natural Top-16 routes, so `U=32` and the exact source-object payload is 1,829,256,704 bytes. It produced a 1,829,310,720-byte ignored K3X artifact without downloading the complete 16.99 GB shard or checkpoint. A verified reuse pass fetched zero tensor-payload bytes.
 
@@ -467,6 +467,8 @@ The sole formal B-0030 transaction is committed at `bbdccb9`. A transient measur
 | A+B full resident | 114.804882 ms | 31.595311 ms | 83.120495 ms | 0 B | 1,825,310,016 B |
 
 The full and incremental kernel totals differ by only 0.416216%, while wall time differs by 53.772681 ms. This identifies per-call host orchestration and immutable KDA validation as the next attribution target; it does not prove the validation scan alone causes the entire delta. B-0030 has no token semantics and makes no TPS, TTFT, quality, physical PCIe/NVMe, utilization, bandwidth, or native-Linux claim.
+
+Public PR [#50](https://github.com/rsb1813/project-k3x/pull/50) rebase-merged Milestone 29 at `2a4bfaf`. Both branch and pull-request correctness, pull-request C++/Python CodeQL, and post-merge `main` correctness/CodeQL passed.
 
 The first Task 1 gate now parses and binds the exact KDA configuration, pinned source blob, 17 tensor dtypes/shapes/ranges, M28 MoE plan, and byte formulas before payload access. The live metadata-only plan returns layer 1, 17 tensors, 887,843,840 KDA bytes, 1,267,744,256 base bytes, and a 1,829,256,704-byte two-route maximum. Official source/MoE/layer/CLI regression coverage passes 64 tests; malformed linear-attention layer sets and `A_log[96]` fail closed.
 

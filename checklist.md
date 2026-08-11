@@ -430,4 +430,4 @@
 - [x] Materialize the bounded fixture without a complete shard/checkpoint.
 - [x] Run correctness, sanitizer, B-0030, full verification, and evidence cross-checks.
 - [x] Synchronize README and the TITAN Ledger locally.
-- [ ] Publish Milestone 29 and verify pull-request and post-merge CI.
+- [x] Publish Milestone 29 and verify pull-request and post-merge CI.

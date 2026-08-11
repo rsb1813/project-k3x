@@ -424,7 +424,7 @@ B-0029 is now measured on RTX 5080 under WSL2. Route A transient has a 97,095,78
 
 ## Milestone 29 accepted official KDA layer boundary
 
-Milestone 29 is locally implemented and verified through formal B-0030; public integration remains pending. It closes official layer 1 from the self-attention Attention Residual through KDA, the MLP Attention Residual, the already validated natural Top-16 MoE FFN, and final prefix accumulation. The boundary receives deterministic layer-1 hidden/source-bank vectors and explicit KDA state; it does not import embeddings or layer-0 weights. A KDA-only path remains an implementation gate rather than milestone completion.
+Milestone 29 is publicly implemented and verified through formal B-0030 at integration head `2a4bfaf`. It closes official layer 1 from the self-attention Attention Residual through KDA, the MLP Attention Residual, the already validated natural Top-16 MoE FFN, and final prefix accumulation. The boundary receives deterministic layer-1 hidden/source-bank vectors and explicit KDA state; it does not import embeddings or layer-0 weights. A KDA-only path remains an implementation gate rather than milestone completion.
 
 Pinned metadata identifies 17 new layer-1 tensors totaling 887,843,840 unaligned bytes, all in `model-00002-of-000096.safetensors`. Combined with the existing always-active MoE tensors and a natural expert union of size `U`, the unaligned payload is `1,267,744,256 + 17,547,264 * U` bytes. The fixed A/B inputs derived two disjoint Top-16 routes, so `U=32`, the unaligned source-object payload is 1,829,256,704 bytes, and the ignored K3X artifact is 1,829,310,720 bytes. No route or input was searched to reduce payload.
 
