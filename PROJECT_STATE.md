@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 31 is publicly complete through implementation PR #54 and publication PR #55. Milestone 32 Tasks 1 through 3 implement canonical raw-logit routing, exact CUDA residual/router preparation, opaque single-use prepared-activation consumption, official-layer integration, and an explicit harness mode. Tiny and bounded actual-artifact host/device correctness smoke gates pass; B-0033 evidence tooling and formal measurement are not implemented yet. Host routing remains the default. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
+Milestone 31 is publicly complete through implementation PR #54 and publication PR #55. Milestone 32 Tasks 1 through 4 implement canonical raw-logit routing, exact CUDA residual/router preparation, opaque single-use prepared-activation consumption, official-layer integration, an explicit harness mode, and strict B-0033 evidence tooling. Tiny and bounded actual-artifact host/device correctness smoke gates pass; formal B-0033 has not run. Host routing remains the default. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
 
-State audited last on 2026-08-12 on `codex/milestone-thirty-two-device-routing`; the public baseline remains M31 publication head `c46d6139673d442a83858e637d268e0d92a7784a`. M32 Task 3 passes the tiny CUDA wrapper, three downstream cleanup paths, Compute Sanitizer with zero errors, 13 focused CLI parser cases, and one host plus one device-route actual-artifact smoke. The ignored bounded fixture is unchanged; no complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-12 on `codex/milestone-thirty-two-device-routing`; the public baseline remains M31 publication head `c46d6139673d442a83858e637d268e0d92a7784a`. M32 Task 4 passes 65 B-0030 through B-0033 evidence tests and one actual 0/1 two-row smoke with strict non-official verification. The formal 3/20 B-0033 transaction remains unrun. The ignored bounded fixture is unchanged; no complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -118,7 +118,7 @@ State audited last on 2026-08-12 on `codex/milestone-thirty-two-device-routing`;
 - Formal B-0032 host/device incremental medians are 73,192,169/69,835,612 ns; full host is 68,224,527 ns. Device handoff removes exactly 6,512,640 state bytes in each direction per sequence and lowers the incremental median 4.585951% while aggregate kernel time changes +0.339801%.
 - All B-0032 rows preserve exact route/output/state identity, zero warm weight H2D, 1,816,322,048 resident bytes, and `0.00048828125` maximum error. The device row records 20 seeds, continuations, and publications with zero invalidations.
 - Publicly integrated D-068 retains per-call as the default and admission as opt-in. D-069 retains host round trip as the default and device state as an exact single-slot experiment; multi-session policy, VAULT persistence, and a production state registry remain unimplemented.
-- D-070 and the M32 design are accepted. The backend route-preparation interface, deterministic CUDA kernels, opaque lifetime, exact prepared FFN consumption, wrapper, explicit harness schema, and cleanup telemetry exist; strict evidence tooling and formal B-0033 remain.
+- D-070 and the M32 design are accepted. The backend route-preparation interface, deterministic CUDA kernels, opaque lifetime, exact prepared FFN consumption, wrapper, explicit harness schema, cleanup telemetry, and strict B-0033 evidence tooling exist; formal B-0033 remains unrun.
 - M32 Task 1 provides one canonical raw-logit routing authority. Task 2 implements the CUDA primitive. Task 3 preserves the omitted host path, requires device-state resident admission for explicit device routing, and passes tiny plus bounded actual-artifact parity with zero warm weight H2D.
 
 - M28 Task 2 is complete at `0b0c944`: the route manifest is durable before expert fetching, only the natural A/B first-use union is planned, object reuse is rehashed, response bytes are measured separately from logical source bytes, and production generation remains fail-closed.
@@ -179,9 +179,9 @@ State audited last on 2026-08-12 on `codex/milestone-thirty-two-device-routing`;
 
 ## Next concrete tasks
 
-1. Write strict B-0033 RED tests for the fixed host/device route-preparation evidence transaction and every one-field mutation.
-2. Implement the minimum atomic B-0033 publisher/verifier without changing historical B-0030 through B-0032 schemas.
-3. Run production-guard, sanitizer, full regression, and one formal B-0033 transaction before synchronizing final M32 documentation. Do not download a complete shard/checkpoint or create paid cloud resources.
+1. Run the actual bounded device-route Compute Sanitizer and production non-executable guard.
+2. Run the sole formal fixed 3-warmup/20-sequence B-0033 transaction, strict rehash, and independent formula checks.
+3. Run the complete CPU/liburing/ASan/CUDA verification matrix, synchronize final M32 documentation, and publish. Do not download a complete shard/checkpoint or create paid cloud resources.
 
 ## Hardware assumptions
 
