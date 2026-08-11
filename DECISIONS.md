@@ -705,7 +705,7 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-061 — Close layer 1 at an explicit recurrent-state boundary
 
 - Date: 2026-08-11.
-- Status: accepted for M29; not implemented or measured.
+- Status: accepted and partially implemented through bounded manufacturing and independent Python/C++ KDA oracles; complete-layer execution and measurement remain pending.
 - Decision: supply deterministic layer-1 hidden/source-bank vectors and explicit zero KDA state, then execute two tokens through the complete layer both together and incrementally. Require checkpoint-authoritative F32 `A_log[128]` and explicit V-first recurrent-state storage. Keep the final artifact non-executable through `k3x_run`.
 - Alternatives considered: include embeddings and layer 0; stop at a KDA-only official boundary; close layer 1 around explicit state inputs.
 - Evidence: the pinned source blob matches repository metadata, layer 1 is KDA, the exact 17-tensor header payload is 887,843,840 bytes, and the KDA paper defines channel-wise decay. The checkpoint header exposes `A_log[128]` while the source constructor initializes `[96]`, so silent source imitation would be incorrect.

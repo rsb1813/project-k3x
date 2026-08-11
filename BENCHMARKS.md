@@ -1161,3 +1161,14 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Negative/ordering coverage: source blob and complete-plan drift fail before payload; all 28 pre-route objects precede route derivation; the route-state manifest exists before selected expert planning; only the selected union is requested; source order begins with all 17 KDA tensors and ends with the existing M28 shared expert order.
 - Decode tok/s, prefill tok/s, TTFT, VRAM, system RAM, NVMe GB/token, H2D GB/token, cache hit rate, average Top-K, speculative acceptance, quality, official route union, layer latency, utilization, and bandwidth: not measured.
 - Interpretation: this verifies manufacturing code and a live zero-payload planning boundary. It is not official materialization, complete-layer execution, CUDA evidence, B-0030, or a performance result.
+
+## Milestone 29 Task 4 verification — portable C++ KDA oracle
+
+- Date: 2026-08-11.
+- Hardware/model: CPU tiny literal `hidden=4`, `heads=2`, `head_dim=2`, convolution width 3 fixture; no official tensor payload.
+- Mode: native BF16 word views, F32 short-convolution weights, channel-wise decay, scalar-per-head beta, FP32 recurrence with V-first owned state, and full two-token versus incremental A-then-B execution.
+- Verification: full CPU build succeeds; CPU CTest passes 18/18; focused official expert/MoE/KDA CTest passes 3/3; Python C++ parity passes 114 tests with 32 capability skips in 21.83 seconds; source and test compile with `-Wall -Wextra -Wpedantic -Werror`; `git diff --check` passes.
+- Parity: every projected, convolved, normalized Q/K/V, decay, beta, recurrent, gated, output, convolution-state, and recurrent-state field matches the independent PyTorch oracle within `1e-6`; BF16 outputs and convolution-state words are exact.
+- Negative coverage: malformed A-log length, non-finite F32 weight, recurrent-state length drift, checked dimension products, native BF16 finiteness, and derived non-finite values fail before result publication. Input state remains unchanged.
+- Decode tok/s, prefill tok/s, TTFT, VRAM, system RAM, NVMe GB/token, H2D GB/token, cache hit rate, average Top-K, speculative acceptance, quality, official layer latency, utilization, and bandwidth: not measured.
+- Interpretation: this is a tiny portable correctness oracle. It is not Reader integration, official payload execution, complete-layer parity, CUDA evidence, B-0030, or a performance benchmark.

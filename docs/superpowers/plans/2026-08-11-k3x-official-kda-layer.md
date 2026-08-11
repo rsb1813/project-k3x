@@ -246,11 +246,11 @@ git commit -m "feat: manufacture bounded official KDA layer"
 - Produces: `Result<OfficialKdaResult> official_kda_cpu(span<float> hidden, OfficialKdaWeightsView, const OfficialKdaState&, const OfficialKdaConfig&)`.
 - Consumes: native BF16/F32 byte views and no Reader, filesystem, network, CUDA, or global state.
 
-- [ ] **Step 1: Add C++ tiny RED and Python dump parity**
+- [x] **Step 1: Add C++ tiny RED and Python dump parity**
 
 Register `test_official_kda`. Reuse the Task 2 tiny literals, require full/incremental state parity, and expose `--dump` JSON containing projection, convolution, decay, beta, recurrent, gated, projected, and final-state values. Python independently recomputes every field.
 
-- [ ] **Step 2: Configure/build and witness RED**
+- [x] **Step 2: Configure/build and witness RED**
 
 ```bash
 cmake -S . -B build -DK3X_ENABLE_CUDA=OFF
@@ -259,11 +259,11 @@ cmake --build build --target test_official_kda -j2
 
 Expected: CMake fails because `runtime/src/official_kda.cpp` is absent.
 
-- [ ] **Step 3: Implement the minimum portable recurrence**
+- [x] **Step 3: Implement the minimum portable recurrence**
 
 Decode BF16 words explicitly, preserve F32 convolution/A-log/bias/norm, use checked dimension products before allocation, and publish a result only after every shape, dtype, layout, and finiteness check passes. Keep state conversion local and deterministic.
 
-- [ ] **Step 4: Run focused GREEN and Python parity**
+- [x] **Step 4: Run focused GREEN and Python parity**
 
 ```bash
 cmake --build build --target test_official_kda -j2
@@ -272,7 +272,7 @@ PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
   tests/python/test_cpp_parity.py -q
 ```
 
-- [ ] **Step 5: Self-review and commit**
+- [x] **Step 5: Self-review and commit**
 
 ```bash
 git diff --check
