@@ -265,23 +265,23 @@ Commit message: `feat: execute bounded official two-layer closure`.
 - Produce exactly two rows in host-round-trip then device-closure order.
 - Fix three warmups, twenty measured A/B traces, resident admission, device KDA state, canonical host routing, and one immutable two-layer artifact/manifest/oracle identity.
 
-- [ ] **Step 1: Write controlled verifier RED.**
+- [x] **Step 1: Write controlled verifier RED.**
 
 Require exact row order/configuration, artifact/manifest/oracle/runner identity, route/contribution/output/final-state parity, zero warm weight H2D, transfer formulas, state/hidden/prepared lifetime counters, forbidden metric absence, LF CSV, fsync, atomic directory replacement, and rejection of every one-field mutation.
 
-- [ ] **Step 2: Witness import RED.**
+- [x] **Step 2: Witness import RED.**
 
 Run `pytest -q tests/python/test_official_two_layer_ablation.py`. Expected result: import fails because the tool does not exist.
 
-- [ ] **Step 3: Implement the minimum publisher/verifier.**
+- [x] **Step 3: Implement the minimum publisher/verifier.**
 
 Reuse B-0033 canonical serialization and staging authorities without changing historical schemas. Add no ranking or timing interpretation to the verifier.
 
-- [ ] **Step 4: Run GREEN and B-0030 through B-0033 regressions.**
+- [x] **Step 4: Run GREEN and B-0030 through B-0033 regressions.**
 
 Run the new evidence suite, all four historical official-layer evidence suites, Python compile validation, and `git diff --check`.
 
-- [ ] **Step 5: Self-review and commit.**
+- [x] **Step 5: Self-review and commit.**
 
 Commit message: `test: add strict B-0034 two-layer evidence`.
 

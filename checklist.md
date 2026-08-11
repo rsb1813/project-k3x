@@ -491,7 +491,7 @@
 - [x] Add the opaque inter-layer hidden token and full CUDA front/tail bridge.
 - [x] Add the exact host-round-trip/device-closure A1→A2→B1→B2 CUDA wrapper.
 - [x] Add explicit two-layer harness mode and closed telemetry.
-- [ ] Add strict B-0034 evidence tooling.
+- [x] Add strict B-0034 evidence tooling.
 - [ ] Run actual-artifact correctness, sanitizer, production-guard, and full regression gates.
 - [ ] Run B-0034 exactly once and seal the evidence.
 - [ ] Synchronize README and TITAN Ledger, publish M33, and verify CI.
