@@ -969,3 +969,11 @@
 - A fixture-lifetime failure initially corrupted the first expert ID because an `OfficialMoeWeights` span referenced a returned local vector. The test now owns both expert arrays for the fixture lifetime; focused CTest and direct execution pass without changing production code.
 - Four official portable CTests and two focused cross-language tests pass. The new source and test pass `-Wall -Wextra -Wpedantic -Werror`; the repository-wide warning build stops on pre-existing `reader.cpp` warnings and was not broadened into an unrelated cleanup. Four ASan/UBSan official tests pass.
 - This task downloaded no official payload, complete shard, or checkpoint, ran no performance benchmark, and provisioned no paid resource. The next implementation boundary is the capacity-two layer-keyed CUDA KDA state registry.
+
+## 2026-08-12 — Milestone 33 Task 4 two-slot CUDA KDA state
+
+- The controlled CUDA RED passed compilation and failed `cuda_official_kda` after seeding layer 1 and then layer 2 because the second seed replaced the backend's one global state slot.
+- Commit `8580df8` replaces that single device-state buffer and metadata with exactly two grow-only slots keyed to layers 1 and 2. Owner identity remains backend-wide, generations remain globally unique, and host round trips use separate scratch storage.
+- The ownership test interleaves two seeds, two continues, and two publishes against independent CPU oracles; verifies exact state/output parity and unchanged state H2D/D2H accounting; rejects live overwrite and layer 3; and proves a layer-1 host round trip invalidates only layer 1 while layer 2 remains publishable.
+- CUDA official MoE/KDA/layer CTest passes 3/3, non-CUDA unavailable passes, and focused M31 device-state Python regressions pass 21/21. A CUDA `-Wall -Wextra -Werror` build passes after excluding one pre-existing missing-field initializer warning; `-Wpedantic` cannot be used because it rejects NVCC-generated line directives. Compute Sanitizer reports `ERROR SUMMARY: 0 errors`.
+- No benchmark, official M33 payload, complete shard/checkpoint, production default change, or paid resource was created. The next boundary is the opaque inter-layer hidden/block token and CUDA front/tail bridge.

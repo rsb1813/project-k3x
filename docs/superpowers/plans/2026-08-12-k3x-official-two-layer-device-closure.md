@@ -155,23 +155,23 @@ Commit message: `feat: add exact official two-layer oracle`.
 - Preserve existing single-layer seed/continue/publish behavior and telemetry.
 - Consume a state token before mutation and issue an independently generated successor for the same layer.
 
-- [ ] **Step 1: Write two-slot RED ownership tests.**
+- [x] **Step 1: Write two-slot RED ownership tests.**
 
 Require simultaneous layer-1/layer-2 seeds, alternating continuations, independent publications, exact host parity, and unchanged state H2D/D2H accounting. Reject a third layer, stale generation, cross-backend token, wrong-layer continuation, overwrite, double publish, and partial-failure reuse.
 
-- [ ] **Step 2: Witness CUDA RED.**
+- [x] **Step 2: Witness CUDA RED.**
 
 Build and run `test_cuda_official_kda` and `test_cuda_official_layer`. Expected result: the second seed invalidates or overwrites the first state under the current global slot.
 
-- [ ] **Step 3: Implement the fixed registry.**
+- [x] **Step 3: Implement the fixed registry.**
 
 Replace the single state scratch/metadata with two fixed slots keyed to layers 1 and 2. Keep owner identity backend-wide and make generations unique. Validate every token/config/layer before state upload or launch. Do not allocate a map, eviction policy, or session registry.
 
-- [ ] **Step 4: Run GREEN, historical state tests, and sanitizer.**
+- [x] **Step 4: Run GREEN, historical state tests, and sanitizer.**
 
 Run CUDA KDA/layer tests, non-CUDA unavailable tests, M31 device-state Python regressions, and Compute Sanitizer with `--launch-timeout 0`.
 
-- [ ] **Step 5: Self-review and commit.**
+- [x] **Step 5: Self-review and commit.**
 
 Commit message: `feat: retain two official KDA layer states`.
 
