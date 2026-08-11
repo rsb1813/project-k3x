@@ -291,7 +291,7 @@ def _validate_record(
             "mxfp4_weight_h2d_bytes": total_calls * _TOP_K * _EXPERT_BYTES,
             "weight_h2d_bytes": total_calls * (_COMMON_BYTES + _TOP_K * _EXPERT_BYTES),
             "resident_weight_bytes": 0, "peak_resident_weight_bytes": 0,
-            "weight_cache_hits": 0, "device_allocation_count": total_calls * 38,
+            "weight_cache_hits": 0, "device_allocation_count": total_calls * 102,
         }
     else:
         resident = _COMMON_BYTES + selected_count * _EXPERT_BYTES
