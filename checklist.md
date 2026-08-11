@@ -410,4 +410,4 @@
 - [x] Materialize the bounded real fixture without a full shard or checkpoint.
 - [x] Run correctness, sanitizer, B-0029, full verification, and evidence cross-checks.
 - [x] Synchronize the TITAN Ledger and complete final self-review.
-- [ ] Publish, merge, and verify public `main`.
+- [x] Publish through PR #48, rebase-merge, and verify public `main` correctness and CodeQL.

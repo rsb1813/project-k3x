@@ -667,3 +667,9 @@
 - B-0029 measures A transient/resident medians of 97,095,781/10,153,939 ns and an alternating resident A+B sequence median of 20,201,466 ns. Both resident rows have zero measured warm weight H2D. The resident A working set is 647,764,992 bytes, the two-route union is 928,521,216 bytes, and alternating parity error is `0.00048828125`. No token, quality, physical PCIe/NVMe, utilization, bandwidth, or complete-layer result is claimed.
 - A first full CPU matrix exposed that the BF16 Python fixture helper omitted source/tensor integrity fields. Commit `bdfc0b6` added `source_sha256`, `tensor_sha256`, and canonical `tensor_order`. Fresh final verification passes CPU CTest 17/17 plus Python 507/97, liburing CTest 18/18 plus Python 509/95, ASan/UBSan CTest 18/18, CUDA CTest 30/30 plus actual-artifact Python 592/12, and actual alternating resident Compute Sanitizer with zero errors.
 - D-060 selects one complete official transformer layer as M29's next boundary. KDA/MLA/Attention Residual must surround the validated FFN before kernel tuning or end-to-end token claims.
+
+## 2026-08-11 — Milestone 28 public integration
+
+- Public PR #48 carried 47 files and the complete native-BF16, bounded manufacturing, portable/CUDA MoE FFN, harness, B-0029 evidence, and synchronized ledger lineage. The ignored 941 MB fixture was not tracked.
+- Branch correctness `31465297042`, pull-request correctness `31465320780`, and pull-request CodeQL `31465320778` passed. PR #48 was marked ready only after those checks and rebase-merged at `eb2c20860ee9c7c612b9b74984170bd8b4443ba1`.
+- Post-merge `main` correctness `31465590414` and CodeQL `31465590416` passed. M28 is publicly complete; the next session starts from M29's bounded complete-layer design boundary rather than rediscovering M28.
