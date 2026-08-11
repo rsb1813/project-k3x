@@ -787,3 +787,10 @@
 - New validation fields are emitted only when `--validation` is explicitly supplied. The implicit default output remains byte-schema compatible with B-0030 rather than retroactively changing its closed raw records.
 - The actual bounded artifact passes the complete harness suite 25/25. Incremental admission cold execution records 14 scans, 14 hits, and 887,800,832 scanned bytes; its measured execution records 28 hits, zero scans/bytes/time, zero warm weight H2D, and unchanged numerical tolerance.
 - B-0030 controlled evidence tests pass 9/9. Its strict verifier correctly rejects the newly rebuilt M30 executable as `runner_sha256 diverged`; final historical verification must use the preserved M29 runner identity rather than weakening or rewriting B-0030 evidence.
+
+## 2026-08-11 — Milestone 30 Task 3 strict B-0031 tooling
+
+- The B-0031 tool imports the established B-0030 canonical JSON, manifest identity, complete-layer traffic, hashing, fsync, and scalar serialization authorities. It adds only the four-row validation matrix, nine validation fields, their closed formulas, and cross-row exactness gates.
+- The matrix is incremental per-call/admission followed by full per-call/admission. Every subprocess is exact resident and receives an explicit validation option, so the legacy implicit B-0030 schema remains separate.
+- Controlled evidence tests mutate every validation counter/time category, validation identity, forbidden schema, cross-row output identity, raw JSON, CSV, and strict iteration identity. Failed transactions remove the partial directory and publish nothing.
+- B-0031 plus B-0030 evidence-tool regressions pass 24/24, Python compile validation passes, and `git diff --check` passes. No formal B-0031 directory or timing result exists at this implementation checkpoint.

@@ -441,7 +441,7 @@
 - [x] Write the detailed TDD implementation plan.
 - [x] Implement and test atomic admission for fourteen official KDA immutable views.
 - [x] Expose official-layer validation CLI and cold/measured telemetry.
-- [ ] Implement and verify the strict B-0031 evidence transaction.
+- [x] Implement and verify the strict B-0031 evidence transaction.
 - [ ] Run actual-artifact correctness and Compute Sanitizer gates.
 - [ ] Run B-0031 exactly once and seal the evidence.
 - [ ] Run the complete verification matrix and synchronize README/TITAN Ledger.
