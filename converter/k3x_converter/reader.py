@@ -18,6 +18,9 @@ from .format import (
     LayerRecord,
     Superblock,
     TensorRecord,
+    DType,
+    Quantization,
+    REQUIRED_BF16_TENSORS,
     decode_directory,
     root_sha256,
     validate_extent_layout,
@@ -66,6 +69,29 @@ class K3XReader:
                                  superblock.model_config_length, actual_length)
             tensor_records = tuple(TensorRecord.decode(item) for item in
                                    decode_directory(tensor_bytes, b"TENS", TENSOR_RECORD_BYTES))
+            has_bf16 = False
+            for record in tensor_records:
+                if record.dtype != DType.BF16:
+                    continue
+                has_bf16 = True
+                values = 1
+                for dimension in record.dimensions:
+                    values *= dimension
+                if (
+                    record.quantization != Quantization.NONE
+                    or not record.data_length
+                    or record.data_length != record.logical_length
+                    or record.logical_length != values * 2
+                    or record.auxiliary_offset
+                    or record.auxiliary_length
+                    or record.auxiliary_crc32c
+                ):
+                    raise K3XError("INVALID_TENSOR_FEATURE")
+            feature_enabled = bool(
+                superblock.required_features & REQUIRED_BF16_TENSORS
+            )
+            if has_bf16 != feature_enabled:
+                raise K3XError("INVALID_TENSOR_FEATURE")
             layer_records = tuple(LayerRecord.decode(item) for item in
                                   decode_directory(layer_bytes, b"LAYR", LAYER_RECORD_BYTES))
             expert_records = tuple(ExpertRecord.decode(item) for item in

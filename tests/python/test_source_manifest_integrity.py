@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from k3x_converter.format import K3XError
+from k3x_converter.source_manifest import load_source_manifest
 from k3x_converter.writer import convert
 
 
@@ -213,3 +214,17 @@ def test_converter_accepts_normalized_relative_shard_subdirectory(
     report = convert(synthetic_source, tmp_path / "nested.k3x", chunk_bytes=257)
 
     assert report.completed is True
+
+
+def test_source_manifest_accepts_official_moe_fixture_format(
+    synthetic_source: Path,
+) -> None:
+    manifest = _manifest(synthetic_source)
+    manifest["format"] = "k3-official-moe-slice-v1"
+    manifest["artifact_kind"] = "official_moe_fixture"
+    _write_manifest(synthetic_source, manifest)
+
+    loaded = load_source_manifest(synthetic_source)
+
+    assert loaded["format"] == "k3-official-moe-slice-v1"
+    assert loaded["artifact_kind"] == "official_moe_fixture"

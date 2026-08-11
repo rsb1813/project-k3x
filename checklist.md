@@ -401,7 +401,7 @@
 - [x] Compare a dependency-closed artifact, split trunk/expert artifacts, and authentic activation generation.
 - [x] Write and self-review the accepted official MoE FFN design.
 - [x] Write the detailed TDD implementation plan and continuity notes.
-- [ ] Add fail-closed native BF16 tensors to K3X v1.
+- [x] Add fail-closed native BF16 tensors to K3X v1.
 - [ ] Implement two-phase bounded official MoE source planning and materialization.
 - [ ] Implement the portable BF16/MXFP4 official MoE oracle.
 - [ ] Implement native BF16 CUDA residency and the official MoE boundary.

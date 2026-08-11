@@ -37,6 +37,7 @@ def load_source_manifest(source: Path) -> dict[str, object]:
     if manifest.get("format") not in {
         "synthetic-k3-source-v1",
         "k3-storage-slice-v1",
+        "k3-official-moe-slice-v1",
     }:
         raise K3XError("UNSUPPORTED_SOURCE_FORMAT")
     if not isinstance(manifest.get("config"), dict) or not isinstance(

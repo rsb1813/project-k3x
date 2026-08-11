@@ -84,6 +84,28 @@ int main(int argc, char** argv) {
     }
     if (reader.value().tensors().empty()) return 3;
     if (argc == 3) {
+        if (std::string_view(argv[2]) == "bf16") {
+            const auto& record = reader.value().tensors().front();
+            const auto payload = reader.value().read_tensor(record.tensor_id);
+            constexpr std::array<std::byte, 12> expected{
+                std::byte{0x00}, std::byte{0x00}, std::byte{0x80}, std::byte{0x3f},
+                std::byte{0x00}, std::byte{0x40}, std::byte{0x40}, std::byte{0x40},
+                std::byte{0x80}, std::byte{0x40}, std::byte{0xa0}, std::byte{0x40},
+            };
+            return reader.value().superblock().required_features ==
+                        k3x::required_bf16_tensors &&
+                    reader.value().superblock().optional_features ==
+                        (k3x::optional_storage_fixture |
+                         k3x::optional_official_moe_fixture) &&
+                    record.dtype == 3 && record.quantization == 0 &&
+                    record.data_length == expected.size() &&
+                    record.logical_length == expected.size() &&
+                    record.auxiliary_length == 0 && payload &&
+                    std::equal(payload.value().begin(), payload.value().end(),
+                               expected.begin(), expected.end())
+                ? 0
+                : 15;
+        }
         if (std::string_view(argv[2]) == "storage-fixture") {
             return reader.value().superblock().optional_features ==
                     k3x::optional_storage_fixture

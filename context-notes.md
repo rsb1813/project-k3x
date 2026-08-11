@@ -600,3 +600,10 @@
 - K3X v1 retains version and record sizes but gains native BF16 dtype 3 plus required feature bit 0. The official fixture also sets the existing storage-fixture optional bit, so production `k3x_run` remains fail-closed.
 - The detailed plan is `docs/superpowers/plans/2026-08-11-k3x-official-moe-ffn.md`. It separates BF16 format, bounded materialization, portable oracle, CUDA boundary, pinned harness, evidence tooling, and the sole formal B-0029 run into seven semantic TDD units.
 - User authorization permits autonomous non-billable work through the pre-Cloud-Run milestones. Full checkpoint/shard download and paid Cloud Run provisioning remain outside this milestone.
+
+## 2026-08-11 — Milestone 28 Task 1 native BF16 K3X contract
+
+- Python RED failed at import because BF16 feature constants did not exist. The first C++ RED failed at compilation because the matching required/optional feature constants were absent. Separate negative RED tests then proved that malformed BF16 byte lengths and BF16 payloads disguised as MXFP4 were accepted before the focused fixes.
+- K3X v1 now accepts dtype 3 only as exact two-byte BF16 with quantization NONE, no auxiliary extent, and required feature bit 0. Python and C++ Readers require the feature bit and observed BF16 tensor set to agree and continue to reject all unknown required bits at the superblock.
+- The official source format sets both `OPTIONAL_STORAGE_FIXTURE` and `OPTIONAL_OFFICIAL_MOE_FIXTURE`, preserving the existing production non-executable guard. Existing source formats, record sizes, and K3X version remain unchanged.
+- Focused Python/reader coverage passed 42 tests with 4 environment skips, CPU CTest passed 16/16, and converter/resume/safetensors/storage regressions passed 82 tests. `git diff --check` passed.

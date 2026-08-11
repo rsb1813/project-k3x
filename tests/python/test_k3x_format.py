@@ -8,7 +8,9 @@ import google_crc32c
 import pytest
 
 from k3x_converter.format import (
+    OPTIONAL_OFFICIAL_MOE_FIXTURE,
     OPTIONAL_STORAGE_FIXTURE,
+    REQUIRED_BF16_TENSORS,
     SUPERBLOCK_BYTES,
     DType,
     ExpertRecord,
@@ -24,6 +26,41 @@ from k3x_converter.reader import K3XReader
 from k3x_converter.safetensors_reader import inspect_shard, iter_tensor_chunks
 from k3x_converter.writer import convert
 from k3x_ref.storage_fixture import write_bounded_expert_source
+
+
+_BF16_BYTES = bytes.fromhex("0000803f004040408040a040")
+
+
+def _write_bf16_source(
+    source: Path,
+    config_source: Path,
+    *,
+    payload: bytes = _BF16_BYTES,
+    data_end: int = 12,
+) -> None:
+    source.mkdir()
+    name = "model.layers.0.bf16_probe.weight"
+    header = json.dumps(
+        {name: {"dtype": "BF16", "shape": [2, 3], "data_offsets": [0, data_end]}},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    shard_name = "bf16.safetensors"
+    (source / shard_name).write_bytes(struct.pack("<Q", len(header)) + header + payload)
+    config = json.loads(
+        (config_source / "source-manifest.json").read_text(encoding="utf-8")
+    )["config"]
+    manifest = {
+        "format": "k3-official-moe-slice-v1",
+        "artifact_kind": "official_moe_fixture",
+        "config": config,
+        "packed_shapes": {},
+        "weight_map": {name: shard_name},
+    }
+    (source / "source-manifest.json").write_text(
+        json.dumps(manifest, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
 
 
 def test_superblock_has_literal_offsets_and_zero_reserved_bytes() -> None:
@@ -109,12 +146,118 @@ def test_reader_rejects_unknown_required_feature(synthetic_source: Path, tmp_pat
     convert(synthetic_source, artifact, chunk_bytes=257)
     with artifact.open("r+b") as stream:
         block = bytearray(stream.read(SUPERBLOCK_BYTES))
-        struct.pack_into("<Q", block, 24, 1)
+        struct.pack_into("<Q", block, 24, 1 << 63)
         struct.pack_into("<I", block, 4092, google_crc32c.value(bytes(block[:4092])))
         stream.seek(0)
         stream.write(block)
     with pytest.raises(K3XError, match="UNSUPPORTED_REQUIRED_FEATURE"):
         K3XReader.open(artifact, verify_root=False)
+
+
+def test_official_bf16_source_round_trips_exact_bytes(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    source = tmp_path / "bf16-source"
+    _write_bf16_source(source, synthetic_source)
+    artifact = tmp_path / "bf16.k3x"
+
+    report = convert(source, artifact, chunk_bytes=5)
+    reader = K3XReader.open(artifact)
+    record = reader.tensor_records[0]
+
+    assert report.completed is True
+    assert reader.superblock.required_features == REQUIRED_BF16_TENSORS
+    assert reader.superblock.optional_features == (
+        OPTIONAL_STORAGE_FIXTURE | OPTIONAL_OFFICIAL_MOE_FIXTURE
+    )
+    assert record.dtype == DType.BF16
+    assert record.quantization == Quantization.NONE
+    assert record.dimensions == (2, 3)
+    assert record.data_length == 12
+    assert record.logical_length == 12
+    assert record.auxiliary_offset == 0
+    assert record.auxiliary_length == 0
+    assert reader.read_tensor_extents(record) == (_BF16_BYTES, b"")
+
+
+def test_reader_rejects_bf16_tensor_without_required_feature(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    source = tmp_path / "bf16-source"
+    _write_bf16_source(source, synthetic_source)
+    artifact = tmp_path / "bf16.k3x"
+    convert(source, artifact, chunk_bytes=5)
+
+    with artifact.open("r+b") as stream:
+        block = bytearray(stream.read(SUPERBLOCK_BYTES))
+        struct.pack_into("<Q", block, 24, 0)
+        struct.pack_into("<I", block, 4092, google_crc32c.value(bytes(block[:4092])))
+        stream.seek(0)
+        stream.write(block)
+
+    with pytest.raises(K3XError, match="INVALID_TENSOR_FEATURE"):
+        K3XReader.open(artifact, verify_root=False)
+
+
+def test_converter_rejects_bf16_source_with_wrong_byte_length(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    source = tmp_path / "short-bf16-source"
+    _write_bf16_source(
+        source,
+        synthetic_source,
+        payload=_BF16_BYTES[:-1],
+        data_end=11,
+    )
+
+    with pytest.raises(K3XError, match="INVALID_SOURCE_EXTENT"):
+        convert(source, tmp_path / "short-bf16.k3x", chunk_bytes=5)
+
+
+def test_converter_rejects_bf16_payload_disguised_as_mxfp4(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    source = tmp_path / "bf16-mxfp4-source"
+    source.mkdir()
+    base = "model.layers.0.bf16_probe"
+    packed = base + ".weight_packed"
+    scale = base + ".weight_scale"
+    header = json.dumps(
+        {
+            packed: {
+                "dtype": "BF16",
+                "shape": [2, 3],
+                "data_offsets": [0, 12],
+            },
+            scale: {"dtype": "U8", "shape": [1], "data_offsets": [12, 13]},
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    shard_name = "invalid.safetensors"
+    (source / shard_name).write_bytes(
+        struct.pack("<Q", len(header)) + header + _BF16_BYTES + b"\x7f"
+    )
+    config = json.loads(
+        (synthetic_source / "source-manifest.json").read_text(encoding="utf-8")
+    )["config"]
+    (source / "source-manifest.json").write_text(
+        json.dumps(
+            {
+                "format": "k3-official-moe-slice-v1",
+                "artifact_kind": "official_moe_fixture",
+                "config": config,
+                "packed_shapes": {base: [2, 3]},
+                "weight_map": {packed: shard_name, scale: shard_name},
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(K3XError, match="UNSUPPORTED_SOURCE_DTYPE"):
+        convert(source, tmp_path / "bf16-mxfp4.k3x", chunk_bytes=5)
 
 
 def test_reader_rejects_truncated_file(synthetic_source: Path, tmp_path: Path) -> None:

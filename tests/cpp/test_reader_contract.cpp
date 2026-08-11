@@ -9,6 +9,11 @@
 #include <vector>
 
 int main() {
+    if (k3x::required_bf16_tensors != 1ULL ||
+        k3x::supported_required_features != k3x::required_bf16_tensors ||
+        k3x::optional_official_moe_fixture != 2ULL) {
+        return 4;
+    }
     const k3x::ReaderOptions defaults;
     if (defaults.verify != k3x::VerifyMode::checksums ||
         defaults.io_engine != k3x::L2IoEngine::pread ||

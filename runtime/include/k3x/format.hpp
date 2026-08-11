@@ -12,6 +12,10 @@ constexpr std::size_t layer_record_bytes = 64;
 constexpr std::size_t expert_record_bytes = 64;
 constexpr std::size_t model_config_bytes = 256;
 inline constexpr std::uint64_t optional_storage_fixture = 1ULL << 0;
+inline constexpr std::uint64_t optional_official_moe_fixture = 1ULL << 1;
+inline constexpr std::uint64_t required_bf16_tensors = 1ULL << 0;
+inline constexpr std::uint64_t supported_required_features =
+    required_bf16_tensors;
 
 struct Superblock {
     std::uint32_t state{};
