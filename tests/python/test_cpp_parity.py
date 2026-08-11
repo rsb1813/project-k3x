@@ -385,6 +385,10 @@ def test_official_layer_portable_graph_matches_independent_torch() -> None:
     )
 
 
+def test_official_two_layer_portable_orchestrator_composes_exact_layers() -> None:
+    subprocess.run([str(cpp_binary("test_official_two_layer"))], check=True)
+
+
 def test_cpp_runner_rejects_storage_fixture_before_graph_execution(
     tmp_path: Path,
 ) -> None:
