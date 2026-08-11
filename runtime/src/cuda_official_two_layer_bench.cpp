@@ -1,0 +1,906 @@
+// 공식 두 레이어 artifact와 실행 옵션을 CUDA 생성 전에 엄격히 검증합니다.
+#include "k3x/format.hpp"
+#include "k3x/reader.hpp"
+#include "k3x/checksums.hpp"
+#include "k3x/strict_json.hpp"
+#include "k3x/official_two_layer.hpp"
+#include "official_layer_fixture.hpp"
+
+#include <algorithm>
+#include <array>
+#include <bit>
+#include <charconv>
+#include <chrono>
+#include <cmath>
+#include <cstring>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <limits>
+#include <map>
+#include <optional>
+#include <set>
+#include <span>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
+
+namespace {
+
+namespace json = k3x::strict_json;
+
+enum class Mode { host_round_trip, device_closure };
+
+struct Arguments {
+    std::filesystem::path artifact;
+    std::filesystem::path manifest;
+    std::filesystem::path oracle;
+    Mode mode{Mode::device_closure};
+    std::uint64_t resident_bytes{};
+    std::uint64_t warmup{};
+    std::uint64_t iterations{};
+};
+
+std::optional<std::uint64_t> parse_u64(std::string_view text) {
+    std::uint64_t value{};
+    const auto result = std::from_chars(
+        text.data(), text.data() + text.size(), value);
+    if (result.ec != std::errc{} || result.ptr != text.data() + text.size()) {
+        return std::nullopt;
+    }
+    return value;
+}
+
+std::optional<Arguments> parse_arguments(int argc, char** argv) {
+    if (argc < 2 || argc % 2 == 0) {
+        std::cerr << "arguments must be key-value pairs\n";
+        return std::nullopt;
+    }
+    Arguments result;
+    bool mode_seen = false;
+    for (int index = 1; index < argc; index += 2) {
+        const std::string_view key = argv[index];
+        const std::string_view value = argv[index + 1];
+        if (key == "--artifact") result.artifact = value;
+        else if (key == "--manifest") result.manifest = value;
+        else if (key == "--oracle") result.oracle = value;
+        else if (key == "--mode") {
+            mode_seen = true;
+            if (value == "host-round-trip") {
+                result.mode = Mode::host_round_trip;
+            } else if (value == "device-closure") {
+                result.mode = Mode::device_closure;
+            } else {
+                std::cerr << "invalid mode\n";
+                return std::nullopt;
+            }
+        } else if (key == "--resident-bytes") {
+            const auto parsed = parse_u64(value);
+            if (!parsed) {
+                std::cerr << "invalid resident bytes\n";
+                return std::nullopt;
+            }
+            result.resident_bytes = *parsed;
+        } else if (key == "--warmup") {
+            const auto parsed = parse_u64(value);
+            if (!parsed) {
+                std::cerr << "invalid warmup\n";
+                return std::nullopt;
+            }
+            result.warmup = *parsed;
+        } else if (key == "--iterations") {
+            const auto parsed = parse_u64(value);
+            if (!parsed) {
+                std::cerr << "invalid iterations\n";
+                return std::nullopt;
+            }
+            result.iterations = *parsed;
+        } else {
+            std::cerr << "unknown argument\n";
+            return std::nullopt;
+        }
+    }
+    if (!mode_seen || result.artifact.empty() || result.manifest.empty() ||
+        result.oracle.empty() || !result.resident_bytes ||
+        !result.iterations) {
+        std::cerr << "missing required argument\n";
+        return std::nullopt;
+    }
+    return result;
+}
+
+constexpr std::uint64_t kOracleBytes = 13'053'992;
+constexpr std::array<std::string_view, 17> kKdaSuffixes{
+    "self_attention_res_norm.weight", "self_attention_res_proj.weight",
+    "input_layernorm.weight", "self_attn.q_proj.weight",
+    "self_attn.q_conv1d.weight", "self_attn.k_proj.weight",
+    "self_attn.k_conv1d.weight", "self_attn.v_proj.weight",
+    "self_attn.v_conv1d.weight", "self_attn.f_a_proj.weight",
+    "self_attn.f_b_proj.weight", "self_attn.A_log", "self_attn.dt_bias",
+    "self_attn.b_proj.weight", "self_attn.g_proj.weight",
+    "self_attn.o_norm.weight", "self_attn.o_proj.weight"};
+constexpr std::array<std::string_view, 11> kMoeSuffixes{
+    "mlp_res_norm.weight", "mlp_res_proj.weight",
+    "post_attention_layernorm.weight", "block_sparse_moe.gate.weight",
+    "block_sparse_moe.gate.e_score_correction_bias",
+    "block_sparse_moe.routed_expert_down_proj.weight",
+    "block_sparse_moe.routed_expert_norm.weight",
+    "block_sparse_moe.routed_expert_up_proj.weight",
+    "block_sparse_moe.shared_experts.gate_proj.weight",
+    "block_sparse_moe.shared_experts.up_proj.weight",
+    "block_sparse_moe.shared_experts.down_proj.weight"};
+
+enum class ManifestStatus { valid, syntax_error, identity_error };
+
+struct Manifest {
+    struct Step {
+        std::size_t position{};
+        std::uint32_t layer_id{};
+        std::vector<std::uint32_t> expert_ids;
+        std::vector<float> contributions;
+        std::string consumes_state_sha256;
+        std::string state_sha256;
+        std::string kda_output_sha256;
+        std::string contribution_sha256;
+        std::string output_sha256;
+    };
+
+    std::array<std::vector<std::uint32_t>, 2> selected_experts;
+    std::array<Step, 4> steps;
+    std::array<std::string, 2> final_state_sha256;
+    std::string oracle_filename;
+    std::string oracle_sha256;
+    std::uint64_t oracle_bytes{};
+    std::string artifact_root_sha256;
+    std::string source_sha256;
+    std::map<std::string, std::string> tensor_sha256;
+};
+
+struct ManifestResult {
+    ManifestStatus status{ManifestStatus::syntax_error};
+    Manifest value;
+
+    ManifestResult() = default;
+    ManifestResult(ManifestStatus result_status) : status(result_status) {}
+    ManifestResult(ManifestStatus result_status, Manifest result_value)
+        : status(result_status), value(std::move(result_value)) {}
+};
+
+bool hex_string(std::string_view value, std::size_t size) {
+    return value.size() == size &&
+        std::all_of(value.begin(), value.end(), [](char character) {
+            return (character >= '0' && character <= '9') ||
+                   (character >= 'a' && character <= 'f');
+        });
+}
+
+bool text_is(const json::Value& root, std::string_view key,
+             std::string_view expected) {
+    const auto* value = json::string(json::member(root, key));
+    return value && *value == expected;
+}
+
+bool exact_layer_ids(const json::Value& root) {
+    const auto* values = json::array(json::member(root, "layer_ids"));
+    if (!values || values->size() != 2) return false;
+    for (std::size_t index = 0; index < values->size(); ++index) {
+        const auto* value = json::number(&(*values)[index]);
+        if (!value || *value < 0 || std::floor(*value) != *value ||
+            *value != static_cast<double>(index + 1)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool exact_step_order(const json::Value& root) {
+    constexpr std::array expected{"a:1", "a:2", "b:1", "b:2"};
+    const auto* values = json::array(json::member(root, "step_order"));
+    if (!values || values->size() != expected.size()) return false;
+    for (std::size_t index = 0; index < values->size(); ++index) {
+        const auto* value = json::string(&(*values)[index]);
+        if (!value || *value != expected[index]) return false;
+    }
+    return true;
+}
+
+std::optional<std::vector<std::uint32_t>> expert_ids(
+    const json::Value* value) {
+    const auto* values = json::array(value);
+    if (!values || values->empty() || values->size() > 32) {
+        return std::nullopt;
+    }
+    std::vector<std::uint32_t> result;
+    std::set<std::uint32_t> unique;
+    for (const auto& item : *values) {
+        const auto* number = json::number(&item);
+        if (!number || *number < 0 || *number > 895 ||
+            std::floor(*number) != *number) {
+            return std::nullopt;
+        }
+        const auto id = static_cast<std::uint32_t>(*number);
+        if (!unique.insert(id).second) return std::nullopt;
+        result.push_back(id);
+    }
+    return result;
+}
+
+std::optional<std::vector<float>> contributions(const json::Value* value) {
+    const auto* values = json::array(value);
+    if (!values || values->size() != 16) return std::nullopt;
+    std::vector<float> result;
+    result.reserve(values->size());
+    double total{};
+    for (const auto& item : *values) {
+        const auto* number = json::number(&item);
+        if (!number || !std::isfinite(*number) || *number < 0) {
+            return std::nullopt;
+        }
+        total += *number;
+        result.push_back(static_cast<float>(*number));
+    }
+    if (std::abs(total - 1.0) > 2.0e-5) return std::nullopt;
+    return result;
+}
+
+ManifestResult load_manifest(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary);
+    if (!stream) return {};
+    std::string text{std::istreambuf_iterator<char>(stream), {}};
+    if (text.empty() || text.size() > 16 * 1024 * 1024) return {};
+    auto root = json::Parser(text).parse();
+    if (!root || !json::object(&*root)) return {};
+    if (!text_is(*root, "format", "k3x-official-two-layer-v1") ||
+        !text_is(*root, "repository", "moonshotai/Kimi-K3") ||
+        !text_is(*root, "resolved_revision",
+                 "9f62e4e9fffbd0a83ddd60e1c209d828994b3569") ||
+        !text_is(*root, "snapshot_sha256",
+                 "deaa6394b80afe12976ce8efbbf2463f6808c291d83b029e6b0cfb98de90a4e5") ||
+        !text_is(*root, "index_sha256",
+                 "a1c5210650ce71d2d3ae9ec5a101ac4afd3cf4b10091be589853437eb967febd") ||
+        !text_is(*root, "config_sha256",
+                 "9710e121a58d03ac92c8d6da287a19541994319afbbe6d6202af001ffd379213") ||
+        !text_is(*root, "source_blob_id",
+                 "b8c41e8bfce768d74d8da3a37e693f5ee43876a0") ||
+        !exact_layer_ids(*root) || !exact_step_order(*root)) {
+        return {ManifestStatus::identity_error};
+    }
+    const auto* shard_paths = json::array(json::member(*root, "shard_paths"));
+    if (!shard_paths || shard_paths->size() != 2) {
+        return {ManifestStatus::identity_error};
+    }
+    constexpr std::array expected_shards{
+        "model-00002-of-000096.safetensors",
+        "model-00003-of-000096.safetensors"};
+    for (std::size_t index = 0; index < shard_paths->size(); ++index) {
+        const auto* shard = json::string(&(*shard_paths)[index]);
+        if (!shard || *shard != expected_shards[index]) {
+            return {ManifestStatus::identity_error};
+        }
+    }
+    Manifest manifest;
+    const auto* selected = json::array(json::member(*root, "selected_experts"));
+    if (!selected || selected->size() != 2) {
+        return {ManifestStatus::identity_error};
+    }
+    for (std::size_t layer = 0; layer < 2; ++layer) {
+        auto ids = expert_ids(&(*selected)[layer]);
+        if (!ids) return {ManifestStatus::identity_error};
+        manifest.selected_experts[layer] = std::move(*ids);
+    }
+    const auto* steps = json::array(json::member(*root, "steps"));
+    if (!steps || steps->size() != manifest.steps.size()) {
+        return {ManifestStatus::identity_error};
+    }
+    std::array<std::set<std::uint32_t>, 2> routed_unions;
+    for (std::size_t index = 0; index < steps->size(); ++index) {
+        const auto* step = json::object(&(*steps)[index]);
+        if (!step) return {ManifestStatus::identity_error};
+        const json::Value step_value{*step};
+        const auto* position = json::string(json::member(step_value, "position"));
+        const auto* layer = json::number(json::member(step_value, "layer_id"));
+        auto ids = expert_ids(json::member(step_value, "expert_ids"));
+        auto masses = contributions(json::member(step_value, "contributions"));
+        const auto* consumes = json::string(
+            json::member(step_value, "consumes_state_sha256"));
+        const auto* state = json::string(
+            json::member(step_value, "state_sha256"));
+        const auto* kda_output = json::string(
+            json::member(step_value, "kda_output_sha256"));
+        const auto* contribution = json::string(
+            json::member(step_value, "contribution_sha256"));
+        const auto* output = json::string(
+            json::member(step_value, "output_sha256"));
+        const auto expected_position = index / 2;
+        const auto expected_layer = static_cast<std::uint32_t>(index % 2 + 1);
+        if (!position || *position != (expected_position ? "b" : "a") ||
+            !layer || *layer != expected_layer || !ids || ids->size() != 16 ||
+            !masses || !consumes || !hex_string(*consumes, 64) ||
+            !state || !hex_string(*state, 64) ||
+            !kda_output || !hex_string(*kda_output, 64) ||
+            !contribution || !hex_string(*contribution, 64) ||
+            !output || !hex_string(*output, 64)) {
+            return {ManifestStatus::identity_error};
+        }
+        manifest.steps[index] = {
+            expected_position, expected_layer, std::move(*ids),
+            std::move(*masses), *consumes, *state, *kda_output,
+            *contribution, *output};
+        routed_unions[expected_layer - 1].insert(
+            manifest.steps[index].expert_ids.begin(),
+            manifest.steps[index].expert_ids.end());
+    }
+    for (std::size_t layer = 0; layer < 2; ++layer) {
+        const std::set<std::uint32_t> selected(
+            manifest.selected_experts[layer].begin(),
+            manifest.selected_experts[layer].end());
+        if (selected != routed_unions[layer]) {
+            return {ManifestStatus::identity_error};
+        }
+        if (manifest.steps[layer + 2].consumes_state_sha256 !=
+            manifest.steps[layer].state_sha256) {
+            return {ManifestStatus::identity_error};
+        }
+    }
+    const auto* final_states = json::array(
+        json::member(*root, "final_state_sha256"));
+    if (!final_states || final_states->size() != 2) {
+        return {ManifestStatus::identity_error};
+    }
+    for (std::size_t layer = 0; layer < 2; ++layer) {
+        const auto* digest = json::string(&(*final_states)[layer]);
+        if (!digest || !hex_string(*digest, 64) ||
+            *digest != manifest.steps[layer + 2].state_sha256) {
+            return {ManifestStatus::identity_error};
+        }
+        manifest.final_state_sha256[layer] = *digest;
+    }
+    const auto* oracle = json::object(json::member(*root, "oracle"));
+    const auto* artifact = json::object(json::member(*root, "artifact"));
+    if (!oracle || !artifact ||
+        !text_is(json::Value{*oracle}, "format",
+                 "k3x-official-two-layer-oracle-v1")) {
+        return {ManifestStatus::identity_error};
+    }
+    const json::Value oracle_value{*oracle};
+    const json::Value artifact_value{*artifact};
+    const auto* filename = json::string(json::member(oracle_value, "filename"));
+    const auto* oracle_sha = json::string(json::member(oracle_value, "sha256"));
+    const auto* oracle_bytes = json::number(json::member(oracle_value, "bytes"));
+    const auto* filename_artifact = json::string(
+        json::member(artifact_value, "filename"));
+    const auto* root_sha = json::string(
+        json::member(artifact_value, "k3x_root_sha256"));
+    const auto* source_sha = json::string(
+        json::member(artifact_value, "source_sha256"));
+    const auto* tensor_sha = json::object(
+        json::member(artifact_value, "tensor_sha256"));
+    if (!filename || *filename != "official-two-layer-oracle-v1.bin" ||
+        !oracle_sha || !hex_string(*oracle_sha, 64) || !oracle_bytes ||
+        *oracle_bytes != static_cast<double>(kOracleBytes) ||
+        !filename_artifact || *filename_artifact != "official-two-layer.k3x" ||
+        !root_sha || !hex_string(*root_sha, 64) ||
+        !source_sha || !hex_string(*source_sha, 64) || !tensor_sha) {
+        return {ManifestStatus::identity_error};
+    }
+    manifest.oracle_filename = *filename;
+    manifest.oracle_sha256 = *oracle_sha;
+    manifest.oracle_bytes = kOracleBytes;
+    manifest.artifact_root_sha256 = *root_sha;
+    manifest.source_sha256 = *source_sha;
+    for (const auto& [name, value] : *tensor_sha) {
+        const auto* digest = json::string(&value);
+        if (!digest || !hex_string(*digest, 64)) {
+            return {ManifestStatus::identity_error};
+        }
+        manifest.tensor_sha256.emplace(name, *digest);
+    }
+    return {ManifestStatus::valid, std::move(manifest)};
+}
+
+std::string digest_hex(const std::array<std::byte, 32>& digest) {
+    static constexpr char alphabet[] = "0123456789abcdef";
+    std::string result(64, '0');
+    for (std::size_t index = 0; index < digest.size(); ++index) {
+        const auto value = std::to_integer<unsigned>(digest[index]);
+        result[index * 2] = alphabet[value >> 4U];
+        result[index * 2 + 1] = alphabet[value & 0x0fU];
+    }
+    return result;
+}
+
+struct Oracle {
+    std::array<std::vector<float>, 2> outputs;
+    std::array<k3x::OfficialKdaState, 2> states;
+};
+
+std::uint64_t read_u64(std::string_view bytes, std::size_t offset) {
+    std::uint64_t result{};
+    for (std::size_t index = 0; index < 8; ++index) {
+        result |= static_cast<std::uint64_t>(
+            static_cast<unsigned char>(bytes[offset + index])) << (index * 8);
+    }
+    return result;
+}
+
+std::optional<Oracle> load_oracle(const std::filesystem::path& path,
+                                  const Manifest& manifest) {
+    if (path.filename() != manifest.oracle_filename) return std::nullopt;
+    std::ifstream stream(path, std::ios::binary);
+    if (!stream) return std::nullopt;
+    std::string bytes{std::istreambuf_iterator<char>(stream), {}};
+    if (bytes.size() != manifest.oracle_bytes ||
+        digest_hex(k3x::sha256(std::as_bytes(std::span(bytes)))) !=
+            manifest.oracle_sha256) {
+        return std::nullopt;
+    }
+    constexpr std::array<char, 8> magic{'K', '3', 'X', 'O', 'R', 'C', '2', 0};
+    if (!std::equal(magic.begin(), magic.end(), bytes.begin()) ||
+        read_u64(bytes, 8) != 14'336 || read_u64(bytes, 16) != 2 ||
+        read_u64(bytes, 24) != 36'864 ||
+        read_u64(bytes, 32) != 1'572'864) {
+        return std::nullopt;
+    }
+    std::size_t cursor = 40;
+    const auto read_bf16 = [&](std::size_t count) {
+        std::vector<std::uint16_t> result(count);
+        std::memcpy(result.data(), bytes.data() + cursor, count * 2);
+        cursor += count * 2;
+        return result;
+    };
+    Oracle result;
+    const auto output_words = read_bf16(14'336);
+    for (std::size_t position = 0; position < 2; ++position) {
+        result.outputs[position].resize(7'168);
+        for (std::size_t index = 0; index < 7'168; ++index) {
+            result.outputs[position][index] = k3x::decode_bf16_word(
+                output_words[position * 7'168 + index]);
+        }
+    }
+    for (auto& state : result.states) {
+        state.conv_q = read_bf16(36'864);
+        state.conv_k = read_bf16(36'864);
+        state.conv_v = read_bf16(36'864);
+        state.recurrent_v_first.resize(1'572'864);
+        std::memcpy(state.recurrent_v_first.data(), bytes.data() + cursor,
+                    state.recurrent_v_first.size() * sizeof(float));
+        cursor += state.recurrent_v_first.size() * sizeof(float);
+        if (!std::all_of(
+                state.recurrent_v_first.begin(),
+                state.recurrent_v_first.end(),
+                [](float value) { return std::isfinite(value); })) {
+            return std::nullopt;
+        }
+    }
+    if (cursor != bytes.size()) return std::nullopt;
+    return result;
+}
+
+std::vector<float> input_values(int multiplier, int increment,
+                                int modulus, int offset) {
+    std::vector<float> result(7'168);
+    for (std::size_t index = 0; index < result.size(); ++index) {
+        result[index] = static_cast<float>(
+            ((multiplier * static_cast<int>(index) + increment) % modulus) -
+            offset) / 1024.0F;
+    }
+    return result;
+}
+
+std::array<k3x::OfficialLayerInput, 2> layer_inputs() {
+    return {{
+        {input_values(17, 3, 257, 128), input_values(29, 11, 251, 125)},
+        {input_values(31, 7, 263, 131), input_values(43, 19, 269, 134)},
+    }};
+}
+
+bool close(std::span<const float> left, std::span<const float> right,
+           float tolerance) {
+    if (left.size() != right.size()) return false;
+    for (std::size_t index = 0; index < left.size(); ++index) {
+        if (!std::isfinite(left[index]) || !std::isfinite(right[index]) ||
+            std::abs(left[index] - right[index]) > tolerance) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::uint16_t encode_bf16(float value) {
+    auto bits = std::bit_cast<std::uint32_t>(value);
+    bits += 0x7fffU + ((bits >> 16U) & 1U);
+    return static_cast<std::uint16_t>(bits >> 16U);
+}
+
+std::string float_digest(std::span<const float> values) {
+    return digest_hex(k3x::sha256(std::as_bytes(values)));
+}
+
+std::string contribution_digest(const k3x::OfficialRoute& route) {
+    k3x::Sha256Hasher digest;
+    digest.update(std::as_bytes(std::span(route.expert_ids)));
+    digest.update(std::as_bytes(std::span(route.contributions)));
+    return digest_hex(digest.finish());
+}
+
+std::string kda_output_digest(std::span<const float> values) {
+    static constexpr char identity[] = "kda-output-bf16\0";
+    std::vector<std::uint16_t> words(values.size());
+    std::transform(values.begin(), values.end(), words.begin(), encode_bf16);
+    k3x::Sha256Hasher digest;
+    digest.update(std::as_bytes(
+        std::span(identity).first(sizeof(identity) - 1)));
+    digest.update(std::as_bytes(std::span(words)));
+    return digest_hex(digest.finish());
+}
+
+void update_u64(k3x::Sha256Hasher& digest, std::uint64_t value) {
+    std::array<std::byte, 8> bytes{};
+    for (std::size_t index = 0; index < bytes.size(); ++index) {
+        bytes[index] = std::byte((value >> (index * 8)) & 0xffU);
+    }
+    digest.update(bytes);
+}
+
+template <typename T>
+void update_state_tensor(k3x::Sha256Hasher& digest, std::string_view name,
+                         std::span<const std::uint64_t> shape,
+                         std::span<const T> values) {
+    digest.update(std::as_bytes(std::span(name.data(), name.size())));
+    const std::byte zero{};
+    digest.update(std::span(&zero, 1));
+    for (const auto dimension : shape) update_u64(digest, dimension);
+    digest.update(std::as_bytes(values));
+}
+
+std::string state_digest(const k3x::OfficialKdaState& state) {
+    static constexpr char identity[] =
+        "k3x-official-kda-state-v1\0v-first-fp32\0";
+    k3x::Sha256Hasher digest;
+    digest.update(std::as_bytes(
+        std::span(identity).first(sizeof(identity) - 1)));
+    const std::array<std::uint64_t, 3> conv_shape{1, 3, 12'288};
+    const std::array<std::uint64_t, 4> recurrent_shape{1, 96, 128, 128};
+    update_state_tensor(digest, "conv_q", conv_shape,
+                        std::span(state.conv_q));
+    update_state_tensor(digest, "conv_k", conv_shape,
+                        std::span(state.conv_k));
+    update_state_tensor(digest, "conv_v", conv_shape,
+                        std::span(state.conv_v));
+    update_state_tensor(digest, "recurrent_v_first", recurrent_shape,
+                        std::span(state.recurrent_v_first));
+    return digest_hex(digest.finish());
+}
+
+bool validate_portable(
+    const k3x::OfficialTwoLayerResult& result,
+    const Manifest& manifest, const Oracle& oracle) {
+    if (result.steps.size() != 4) return false;
+    for (std::size_t index = 0; index < result.steps.size(); ++index) {
+        const auto& actual = result.steps[index];
+        const auto& expected = manifest.steps[index];
+        if (actual.position != expected.position ||
+            actual.layer_id != expected.layer_id ||
+            actual.result.route.expert_ids != expected.expert_ids ||
+            !close(actual.result.route.contributions,
+                   expected.contributions, 2.0e-6F) ||
+            contribution_digest(actual.result.route) !=
+                expected.contribution_sha256 ||
+            float_digest(actual.result.moe.output) != expected.output_sha256 ||
+            state_digest(actual.kda_state) != expected.state_sha256 ||
+            kda_output_digest(actual.kda_output) !=
+                expected.kda_output_sha256) {
+            return false;
+        }
+    }
+    for (std::size_t position = 0; position < 2; ++position) {
+        if (!close(result.outputs[position], oracle.outputs[position],
+                   2.0e-5F)) return false;
+    }
+    for (std::size_t layer = 0; layer < 2; ++layer) {
+        const auto& actual = result.final_states[layer];
+        const auto& expected = oracle.states[layer];
+        if (actual.conv_q != expected.conv_q ||
+            actual.conv_k != expected.conv_k ||
+            actual.conv_v != expected.conv_v ||
+            !close(actual.recurrent_v_first,
+                   expected.recurrent_v_first, 5.0e-5F) ||
+            state_digest(actual) != manifest.final_state_sha256[layer]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+float maximum_cuda_error(const k3x::OfficialTwoLayerCudaResult& actual,
+                         const k3x::OfficialTwoLayerResult& expected) {
+    float maximum{};
+    for (std::size_t position = 0; position < 2; ++position) {
+        if (actual.outputs[position].size() != expected.outputs[position].size()) {
+            return std::numeric_limits<float>::infinity();
+        }
+        for (std::size_t index = 0; index < actual.outputs[position].size();
+             ++index) {
+            maximum = std::max(
+                maximum,
+                std::abs(actual.outputs[position][index] -
+                         expected.outputs[position][index]));
+        }
+    }
+    return maximum;
+}
+
+k3x::BackendOptions backend_options(std::uint64_t resident_bytes) {
+    k3x::BackendOptions result;
+    result.kind = k3x::BackendKind::cuda_custom;
+    result.cuda_allocation = k3x::CudaAllocationMode::reused;
+    result.cuda_weights = k3x::CudaWeightMode::resident;
+    result.cuda_batching = k3x::CudaBatchingMode::resident_grid;
+    result.cuda_boundary = k3x::CudaBoundaryMode::moe_layer;
+    result.cuda_resident_bytes = resident_bytes;
+    result.cuda_weight_validation = k3x::CudaWeightValidationMode::admission;
+    return result;
+}
+
+void write_u64_array(std::ostream& stream,
+                     std::span<const std::uint64_t> values) {
+    stream << '[';
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (index) stream << ',';
+        stream << values[index];
+    }
+    stream << ']';
+}
+
+struct ExpectedTensor {
+    std::string record_name;
+    std::string data_name;
+    std::string auxiliary_name;
+};
+
+std::vector<ExpectedTensor> expected_tensors(const Manifest& manifest) {
+    std::vector<ExpectedTensor> expected;
+    for (std::uint32_t layer = 1; layer <= 2; ++layer) {
+        const auto base = "model.layers." + std::to_string(layer) + ".";
+        for (const auto suffix : kKdaSuffixes) {
+            const auto name = base + std::string(suffix);
+            expected.push_back({name, name, {}});
+        }
+        for (const auto suffix : kMoeSuffixes) {
+            const auto name = base + std::string(suffix);
+            expected.push_back({name, name, {}});
+        }
+        for (const auto expert_id : manifest.selected_experts[layer - 1]) {
+            const auto expert = base + "feed_forward.experts." +
+                std::to_string(expert_id) + ".";
+            for (const auto role : {"gate", "up", "down"}) {
+                const auto record = expert + role;
+                expected.push_back({record, record + ".weight_packed",
+                                    record + ".weight_scale"});
+            }
+        }
+    }
+    return expected;
+}
+
+bool validate_tensor_identity(k3x::Reader& reader, const Manifest& manifest) {
+    const auto expected = expected_tensors(manifest);
+    std::size_t expected_digests{};
+    for (const auto& item : expected) {
+        expected_digests += item.auxiliary_name.empty() ? 1 : 2;
+    }
+    if (manifest.tensor_sha256.size() != expected_digests) return false;
+    std::vector<const k3x::TensorRecord*> actual;
+    actual.reserve(reader.tensors().size());
+    for (const auto& record : reader.tensors()) actual.push_back(&record);
+    std::sort(actual.begin(), actual.end(), [](const auto* left, const auto* right) {
+        return left->data_offset < right->data_offset;
+    });
+    if (actual.size() != expected.size()) return false;
+    for (std::size_t index = 0; index < actual.size(); ++index) {
+        const auto& item = expected[index];
+        if (actual[index]->tensor_id !=
+            k3x::fnv1a64(item.record_name.c_str())) {
+            return false;
+        }
+        const auto digest = manifest.tensor_sha256.find(item.data_name);
+        if (digest == manifest.tensor_sha256.end()) return false;
+        auto data = reader.read_tensor(actual[index]->tensor_id);
+        if (!data) return false;
+        if (!item.auxiliary_name.empty()) {
+            auto auxiliary = reader.read_auxiliary(actual[index]->tensor_id);
+            const auto auxiliary_digest = manifest.tensor_sha256.find(
+                item.auxiliary_name);
+            if (!auxiliary ||
+                auxiliary_digest == manifest.tensor_sha256.end() ||
+                digest_hex(k3x::sha256(data.value())) != digest->second ||
+                digest_hex(k3x::sha256(auxiliary.value())) !=
+                    auxiliary_digest->second) {
+                return false;
+            }
+        } else if (digest_hex(k3x::sha256(data.value())) != digest->second) {
+            return false;
+        }
+    }
+    return true;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+    const auto arguments = parse_arguments(argc, argv);
+    if (!arguments) return 2;
+    const auto manifest = load_manifest(arguments->manifest);
+    if (manifest.status == ManifestStatus::syntax_error) {
+        std::cerr << "INVALID_EXTENT: invalid two-layer manifest\n";
+        return 4;
+    }
+    if (manifest.status == ManifestStatus::identity_error) {
+        std::cerr << "INVALID_EXTENT: two-layer manifest identity mismatch\n";
+        return 4;
+    }
+    const auto oracle = load_oracle(arguments->oracle, manifest.value);
+    if (!oracle) {
+        std::cerr << "INVALID_EXTENT: invalid two-layer oracle\n";
+        return 4;
+    }
+    auto reader = k3x::Reader::open(
+        arguments->artifact, k3x::VerifyMode::checksums);
+    if (!reader) {
+        std::cerr << k3x::error_code_name(reader.error()) << ": "
+                  << reader.message() << '\n';
+        return 4;
+    }
+    if (reader.value().superblock().optional_features !=
+        (k3x::optional_storage_fixture |
+         k3x::optional_official_moe_fixture)) {
+        std::cerr << "INVALID_EXTENT: artifact is not two-layer fixture\n";
+        return 4;
+    }
+    if (digest_hex(reader.value().superblock().root_sha256) !=
+        manifest.value.artifact_root_sha256) {
+        std::cerr << "ROOT_SHA256_MISMATCH: manifest root mismatch\n";
+        return 4;
+    }
+    std::set<std::int32_t> tensor_layers;
+    for (const auto& record : reader.value().tensors()) {
+        if (record.layer_id >= 0) tensor_layers.insert(record.layer_id);
+    }
+    if (tensor_layers != std::set<std::int32_t>{1, 2}) {
+        std::cerr << "INVALID_EXTENT: artifact layer identity mismatch\n";
+        return 4;
+    }
+    if (!validate_tensor_identity(reader.value(), manifest.value)) {
+        std::cerr << "INVALID_EXTENT: artifact tensor order mismatch\n";
+        return 4;
+    }
+    auto first = k3x::bench::load_official_layer_fixture(
+        reader.value(), 1, manifest.value.selected_experts[0]);
+    auto second = k3x::bench::load_official_layer_fixture(
+        reader.value(), 2, manifest.value.selected_experts[1]);
+    if (!first || !second) {
+        std::cerr << "INVALID_EXTENT: missing official two-layer tensor\n";
+        return 4;
+    }
+
+    const k3x::OfficialKdaConfig config{
+        7'168, 96, 128, 4, 1.0e-5F, -5.0F};
+    const auto zero = k3x::zero_official_kda_state(config);
+    const std::array<k3x::OfficialKdaState, 2> states{{zero, zero}};
+    const std::array<k3x::OfficialTwoLayerWeights, 2> portable_layers{{
+        {1, first->portable_views()}, {2, second->portable_views()}}};
+    const auto inputs = layer_inputs();
+    const auto portable = k3x::official_two_layer_cpu(
+        inputs, portable_layers, states, config, 16, 4, 25);
+    if (!portable ||
+        !validate_portable(portable.value(), manifest.value, *oracle)) {
+        std::cerr << "INVALID_STATE: portable two-layer oracle mismatch\n";
+        return 4;
+    }
+
+    auto backend = k3x::make_cuda_backend(
+        backend_options(arguments->resident_bytes));
+    if (!backend) {
+        std::cerr << k3x::error_code_name(backend.error()) << ": "
+                  << backend.message() << '\n';
+        return 5;
+    }
+    const std::array<k3x::OfficialTwoLayerCudaWeights, 2> cuda_layers{{
+        {1, first->cuda_views()}, {2, second->cuda_views()}}};
+    const auto mode = arguments->mode == Mode::host_round_trip
+        ? k3x::OfficialTwoLayerCudaMode::host_round_trip
+        : k3x::OfficialTwoLayerCudaMode::device_closure;
+    k3x::OfficialTwoLayerCudaResult last;
+    for (std::uint64_t index = 0; index < arguments->warmup; ++index) {
+        auto warm = k3x::official_two_layer_cuda(
+            *backend.value(), inputs, cuda_layers, states, config, 16, 4, 25,
+            k3x::ProfilePhase::decode, mode);
+        if (!warm) {
+            std::cerr << k3x::error_code_name(warm.error()) << ": "
+                      << warm.message() << '\n';
+            return 5;
+        }
+    }
+    std::vector<std::uint64_t> wall_nanoseconds;
+    wall_nanoseconds.reserve(arguments->iterations);
+    float maximum_error{};
+    for (std::uint64_t index = 0; index < arguments->iterations; ++index) {
+        const auto start = std::chrono::steady_clock::now();
+        auto measured = k3x::official_two_layer_cuda(
+            *backend.value(), inputs, cuda_layers, states, config, 16, 4, 25,
+            k3x::ProfilePhase::decode, mode);
+        const auto elapsed = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - start).count());
+        if (!measured || measured.value().steps.size() != 4) {
+            std::cerr << (measured ? "INVALID_STATE"
+                                  : k3x::error_code_name(measured.error()))
+                      << ": two-layer CUDA execution failed\n";
+            return 5;
+        }
+        for (std::size_t step = 0; step < 4; ++step) {
+            if (measured.value().steps[step].route.expert_ids !=
+                    portable.value().steps[step].result.route.expert_ids ||
+                !close(measured.value().steps[step].route.contributions,
+                       portable.value().steps[step].result.route.contributions,
+                       2.0e-6F)) {
+                std::cerr << "INVALID_STATE: CUDA route mismatch\n";
+                return 5;
+            }
+        }
+        const auto error = maximum_cuda_error(
+            measured.value(), portable.value());
+        if (!std::isfinite(error) || error > 5.0e-4F ||
+            (arguments->warmup &&
+             measured.value().telemetry.weight_h2d_bytes != 0)) {
+            std::cerr << "INVALID_STATE: CUDA parity or warm residency mismatch\n";
+            return 5;
+        }
+        maximum_error = std::max(maximum_error, error);
+        wall_nanoseconds.push_back(elapsed);
+        last = std::move(measured.value());
+    }
+    const auto stats = backend.value()->runtime_stats();
+    std::cout << "{\"schema\":\"k3x-official-two-layer-bench-v1\""
+              << ",\"mode\":\""
+              << (arguments->mode == Mode::host_round_trip
+                      ? "host-round-trip" : "device-closure") << "\""
+              << ",\"warmup\":" << arguments->warmup
+              << ",\"iterations\":" << arguments->iterations
+              << ",\"wall_nanoseconds\":";
+    write_u64_array(std::cout, wall_nanoseconds);
+    std::cout << ",\"maximum_absolute_error\":" << maximum_error
+              << ",\"weight_h2d_bytes\":"
+              << last.telemetry.weight_h2d_bytes
+              << ",\"activation_h2d_bytes\":"
+              << last.telemetry.activation_h2d_bytes
+              << ",\"device_to_host_bytes\":"
+              << last.telemetry.device_to_host_bytes
+              << ",\"state_h2d_bytes\":" << last.telemetry.state_h2d_bytes
+              << ",\"state_d2h_bytes\":" << last.telemetry.state_d2h_bytes
+              << ",\"kda_output_d2h_bytes\":"
+              << last.telemetry.kda_output_d2h_bytes
+              << ",\"router_logit_d2h_bytes\":"
+              << last.telemetry.router_logit_d2h_bytes
+              << ",\"inter_layer_hidden_h2d_bytes\":"
+              << last.telemetry.inter_layer_hidden_h2d_bytes
+              << ",\"inter_layer_hidden_d2h_bytes\":"
+              << last.telemetry.inter_layer_hidden_d2h_bytes
+              << ",\"final_hidden_d2h_bytes\":"
+              << last.telemetry.final_hidden_d2h_bytes
+              << ",\"layer_front_calls\":"
+              << last.telemetry.layer_front_calls
+              << ",\"layer_tail_calls\":"
+              << last.telemetry.layer_tail_calls
+              << ",\"resident_weight_bytes\":"
+              << stats.resident_weight_bytes
+              << ",\"peak_device_bytes\":"
+              << backend.value()->memory_stats().peak_device_bytes
+              << ",\"k3x_root_sha256\":\""
+              << manifest.value.artifact_root_sha256 << "\"}\n";
+    return 0;
+}

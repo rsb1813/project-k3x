@@ -21,6 +21,8 @@ struct OfficialTwoLayerStepResult {
     std::size_t position{};
     std::uint32_t layer_id{};
     OfficialLayerStepResult result;
+    OfficialKdaState kda_state;
+    std::vector<float> kda_output;
 };
 
 struct OfficialTwoLayerResult {
