@@ -144,6 +144,12 @@ struct DensePlan {
     cublasLtMatmulHeuristicResult_t heuristic{};
 };
 
+struct OfficialKdaDeviceStateSlot {
+    std::uint64_t generation{};
+    OfficialKdaCudaConfig config{};
+    bool active{};
+};
+
 class CudaBackend final : public ComputeBackend {
 public:
     CudaBackend(BackendOptions options, Profiler* profiler,
@@ -186,6 +192,8 @@ public:
           layer_final_hidden_scratch_(&memory_stats_, &runtime_stats_),
           official_kda_scratch_(&memory_stats_, &runtime_stats_),
           official_kda_state_(&memory_stats_, &runtime_stats_),
+          official_kda_state_one_(&memory_stats_, &runtime_stats_),
+          official_kda_state_two_(&memory_stats_, &runtime_stats_),
           official_moe_prepared_(&memory_stats_, &runtime_stats_),
           official_moe_route_scratch_(&memory_stats_, &runtime_stats_) {
         device_state_owner_ = next_kda_state_owner.fetch_add(
@@ -2555,6 +2563,9 @@ public:
             state_mode == OfficialKdaStateMode::device_continue;
         const bool device_state_mode =
             state_mode != OfficialKdaStateMode::host_roundtrip;
+        const auto device_state_slot_index =
+            layer == 1 ? std::size_t{0} : layer == 2 ? std::size_t{1}
+                                                   : std::size_t{2};
         if (!valid_state_mode ||
             options_.kind != BackendKind::cuda_custom ||
             options_.cuda_boundary != CudaBoundaryMode::moe_layer ||
@@ -2593,6 +2604,10 @@ public:
              (state_control.token.owner ||
               state_control.token.generation))) {
             return Result<OfficialKdaCudaResult>::failure(ErrorCode::invalid_extent);
+        }
+        if (device_state_mode && device_state_slot_index >= 2) {
+            return Result<OfficialKdaCudaResult>::failure(
+                ErrorCode::invalid_state);
         }
         const auto finite_f32 = [](std::span<const float> values) {
             return std::all_of(values.begin(), values.end(),
@@ -2653,12 +2668,17 @@ public:
                    left.rms_norm_epsilon == right.rms_norm_epsilon &&
                    left.gate_lower_bound == right.gate_lower_bound;
         };
-        if (device_continuation &&
-            (!device_state_active_ ||
-             state_control.token.owner != device_state_owner_ ||
-             state_control.token.generation != device_state_generation_ ||
-             device_state_layer_ != layer ||
-             !same_config(device_state_config_, config))) {
+        auto* device_state_slot = device_state_slot_index < 2
+                                      ? &device_state_slots_[device_state_slot_index]
+                                      : nullptr;
+        if ((state_mode == OfficialKdaStateMode::device_seed &&
+             device_state_slot->active) ||
+            (device_continuation &&
+             (!device_state_slot->active ||
+              state_control.token.owner != device_state_owner_ ||
+              state_control.token.generation !=
+                  device_state_slot->generation ||
+              !same_config(device_state_slot->config, config)))) {
             return Result<OfficialKdaCudaResult>::failure(
                 ErrorCode::invalid_state);
         }
@@ -2865,8 +2885,14 @@ public:
             (conv_total_bytes + alignof(float) - 1) & ~(alignof(float) - 1);
         const auto state_allocation_bytes =
             recurrent_offset + recurrent_count * sizeof(float);
+        auto* state_buffer = &official_kda_state_;
+        if (device_state_slot_index == 0 && device_state_mode) {
+            state_buffer = &official_kda_state_one_;
+        } else if (device_state_slot_index == 1 && device_state_mode) {
+            state_buffer = &official_kda_state_two_;
+        }
         if (official_kda_scratch_.reserve(float_bytes) != cudaSuccess ||
-            official_kda_state_.reserve(state_allocation_bytes) != cudaSuccess) {
+            state_buffer->reserve(state_allocation_bytes) != cudaSuccess) {
             return Result<OfficialKdaCudaResult>::failure(
                 ErrorCode::backend_unavailable);
         }
@@ -2895,7 +2921,7 @@ public:
         auto* gated = take(sequence_projection);
         auto* output = take(sequence_hidden);
         auto* state_cursor =
-            static_cast<std::byte*>(official_kda_state_.get());
+            static_cast<std::byte*>(state_buffer->get());
         auto* conv_cursor = reinterpret_cast<std::uint16_t*>(state_cursor);
         auto* conv_q = conv_cursor;
         auto* conv_k = conv_q + history_count;
@@ -2910,14 +2936,17 @@ public:
             return Result<OfficialKdaCudaResult>::failure(
                 ErrorCode::backend_unavailable);
         }
-        if (device_state_active_ && !device_continuation) {
-            device_state_active_ = false;
+        if (!device_state_mode && device_state_slot &&
+            device_state_slot->active) {
+            device_state_slot->active = false;
             ++runtime_stats_.official_kda_device_state_invalidations;
         } else if (device_continuation) {
-            device_state_active_ = false;
+            device_state_slot->active = false;
         }
-        const auto state_failure = [this, device_state_mode]() {
+        const auto state_failure = [this, device_state_mode,
+                                    device_state_slot]() {
             if (device_state_mode) {
+                device_state_slot->active = false;
                 ++runtime_stats_.official_kda_device_state_invalidations;
             }
             return Result<OfficialKdaCudaResult>::failure(
@@ -3064,9 +3093,9 @@ public:
         if (retain_state) {
             ++device_state_generation_;
             if (!device_state_generation_) ++device_state_generation_;
-            device_state_layer_ = layer;
-            device_state_config_ = config;
-            device_state_active_ = true;
+            device_state_slot->generation = device_state_generation_;
+            device_state_slot->config = config;
+            device_state_slot->active = true;
             result.device_state =
                 {device_state_owner_, device_state_generation_};
         }
@@ -3080,11 +3109,19 @@ public:
 
     Result<bool> discard_official_kda_device_state(
         OfficialKdaDeviceStateToken token) override {
-        if (!device_state_active_ || token.owner != device_state_owner_ ||
-            token.generation != device_state_generation_) {
+        if (token.owner != device_state_owner_) {
             return Result<bool>::failure(ErrorCode::invalid_state);
         }
-        device_state_active_ = false;
+        auto slot = std::find_if(
+            device_state_slots_.begin(), device_state_slots_.end(),
+            [token](const OfficialKdaDeviceStateSlot& candidate) {
+                return candidate.active &&
+                       candidate.generation == token.generation;
+            });
+        if (slot == device_state_slots_.end()) {
+            return Result<bool>::failure(ErrorCode::invalid_state);
+        }
+        slot->active = false;
         ++runtime_stats_.official_kda_device_state_invalidations;
         return Result<bool>::success(true);
     }
@@ -4764,13 +4801,13 @@ private:
     cuda::ScratchBuffer layer_final_hidden_scratch_;
     cuda::ScratchBuffer official_kda_scratch_;
     cuda::ScratchBuffer official_kda_state_;
+    cuda::ScratchBuffer official_kda_state_one_;
+    cuda::ScratchBuffer official_kda_state_two_;
     cuda::ScratchBuffer official_moe_prepared_;
     cuda::ScratchBuffer official_moe_route_scratch_;
     std::uint64_t device_state_owner_{};
     std::uint64_t device_state_generation_{};
-    std::uint32_t device_state_layer_{};
-    OfficialKdaCudaConfig device_state_config_{};
-    bool device_state_active_{};
+    std::array<OfficialKdaDeviceStateSlot, 2> device_state_slots_{};
     std::uint64_t moe_prepared_owner_{};
     std::uint64_t moe_prepared_generation_{};
     std::uint32_t moe_prepared_layer_{};
