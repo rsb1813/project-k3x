@@ -941,3 +941,10 @@
 - Commit `2a938ef` changes only the two planner guards to accept `(1, 2)`. Follow-up test commit `752972a` binds wrong-shard and missing-KDA-identity failures found during self-review. The existing layer-1 materializer, fixed inputs, manifests, artifact name, and production guard are unchanged.
 - Final Task 1 verification passes 111 tests across official MoE/layer/source, source-manifest integrity, and converter resume. Python compilation and `git diff --check` pass.
 - No tensor payload, complete shard, checkpoint, benchmark, or paid resource was used. Task 2 begins with an import-level RED for the dependency-ordered two-layer orchestrator.
+
+## 2026-08-12 — Milestone 33 Task 2 plan and scheduler boundary
+
+- The import-level RED failed because `k3x_converter.official_two_layer` did not exist. Commit `3665182` adds the exact `(1, 2)` composite plan with pinned source/index, nested MoE identity, and fixed byte-bound validation.
+- Self-review found that matching non-official source blobs could pass the first GREEN. A focused RED reproduced the acceptance, and the composite boundary now checks the same pinned `OFFICIAL_KDA_SOURCE_BLOB_ID` as the single-layer planner.
+- A second import RED failed on the missing trace state/execution API. Commit `481309e` adds a pure A1→A2→B1→B2 scheduler that preserves each layer's state chain, propagates the original block source, binds inter-layer activation digests, and records per-layer expert unions.
+- Focused plan/scheduler plus historical official MoE/layer verification passes 33 tests. This is scheduling evidence only: the exact source-byte executor, materializer, artifact, CLI, runtime, and B-0034 do not exist yet, and no payload was read.

@@ -483,6 +483,7 @@
 - [x] Accept D-071 and write the M33 design.
 - [x] Write and self-review the detailed TDD implementation plan.
 - [x] Generalize exact layer-2 MoE/KDA metadata planning without materialization.
+- [x] Compose pinned layer-1/2 plans and the pure interleaved trace scheduler without payload.
 - [ ] Generalize the bounded planner and oracle to an exact layer-1-to-layer-2 trace.
 - [ ] Build and round-trip one execution-ordered two-layer K3X v1 fixture.
 - [ ] Add the capacity-two layer-keyed KDA state registry with ownership tests.
