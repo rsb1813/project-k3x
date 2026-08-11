@@ -338,7 +338,7 @@ compute-sanitizer --tool memcheck --error-exitcode=99 \
 
 Expected: all CUDA CTests pass and Compute Sanitizer reports `ERROR SUMMARY: 0 errors`.
 
-- [ ] **Step 6: Self-review and commit**
+- [x] **Step 6: Self-review and commit**
 
 Confirm the existing FP32 `ResidentMoeLayerView` behavior and production defaults are unchanged, oracle-only allocations are destroyed before measured execution, and reported peak residency covers every live device allocation. Commit:
 
@@ -363,11 +363,11 @@ git commit -m "feat: execute official BF16 MoE on CUDA"
 - Consumes: Task 2 manifest/artifact, Task 3 portable oracle, Task 4 CUDA boundary, and Reader checksum mode.
 - Produces: `k3x_cuda_official_moe_bench` with cases `a`, `b`, and `alternating`, and weight modes `transient` and `resident`.
 
-- [ ] **Step 1: Add failing CLI and identity tests**
+- [x] **Step 1: Add failing CLI and identity tests**
 
 Require paired options `--model`, `--manifest`, `--case`, `--weight-mode`, `--warmup`, and `--iterations`. Reject missing paths, unknown cases/modes, zero iterations, trailing arguments, a generic storage fixture, and every independent mutation of repository, revision, K3X root, tensor identities/shapes/dtypes, input digests, route IDs, route contributions, and selected union before backend construction.
 
-- [ ] **Step 2: Run harness RED**
+- [x] **Step 2: Run harness RED**
 
 Run:
 
@@ -380,23 +380,23 @@ PYTHONPATH=converter:reference K3X_BUILD_DIR=build-cuda \
 
 Expected: source/target is absent.
 
-- [ ] **Step 3: Implement strict load, oracle, and execution flow**
+- [x] **Step 3: Implement strict load, oracle, and execution flow**
 
 Open the artifact with full checksums, parse the canonical manifest with duplicate-key and non-finite-number rejection, validate every fixed identity, and recompute both CPU routes from artifact bytes. Require exact route-set equality and contribution error at most `1e-6` before CUDA construction.
 
 Compute and retain the portable CPU output, destroy temporary oracle-only weight ownership that is not needed by the selected backend, then run the selected CUDA case. `alternating` executes A then B in each iteration using one resident table and reports their exact union behavior.
 
-- [ ] **Step 4: Emit and test the canonical JSON schema**
+- [x] **Step 4: Emit and test the canonical JSON schema**
 
 Emit identity and scope fields, case/mode/warmup/iterations, input and output elements, exact route IDs, selected union, source/K3X bytes, cold and measured latency, p05/median/p95, Attention Residual/router/orchestration/kernel times, BF16/MXFP4/activation H2D, D2H, resident bytes, cache hits/misses/bypasses, allocation/synchronization counts, peak VRAM, maximum absolute error, and finite status.
 
 Set `token_semantics=false`, `full_transformer_layer=false`, `quality_measured=false`, and omit tok/s, quality score, and physical NVMe fields. Enforce transient traffic formulas and resident warm weight H2D zero inside the C++ process.
 
-- [ ] **Step 5: Run synthetic GREEN and actual ignored-artifact smoke**
+- [x] **Step 5: Run synthetic GREEN and record actual ignored-artifact smoke as pending**
 
 Run the Step 2 tests. If the actual M28 artifact exists, run cases A and B once in transient mode and alternating once in resident mode with zero warmups and one iteration. Expected: all identities, routes, parity, finite values, and traffic invariants pass. If it does not exist yet, record the smoke as pending Task 7 rather than weakening tests.
 
-- [ ] **Step 6: Self-review and commit**
+- [x] **Step 6: Self-review and commit**
 
 Confirm identity rejection occurs before CUDA construction, no real artifact is copied or tracked, and the harness cannot call production generation. Commit:
 

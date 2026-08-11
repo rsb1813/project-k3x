@@ -436,7 +436,9 @@ Commit `0b0c944` passes 27 focused materializer/CLI tests and 149 official-sourc
 
 Commit `bb634e1` adds the opt-in byte-native CUDA counterpart. Routed/shared BF16 tensors and selected native-MXFP4 experts stay in their source representation through transient upload or exact bounded residency; the complete FFN boundary executes on one stream and returns one final vector. Tiny transient and resident fixtures match the portable oracle within `2e-2`, a second resident call performs zero additional weight H2D, CUDA CTest passes 30/30, and Compute Sanitizer reports zero errors.
 
-This remains correctness-only evidence. The bounded official M28 fixture has not been downloaded, the pinned harness and B-0029 are next, and no token-rate, quality, physical-NVMe, or full-layer result is claimed.
+Commits `a109409` and `bdab0da` bind the final K3X root back into the durable route manifest and add the strict official fixture harness. It verifies pinned source identity, exact tensor metadata/order, both recomputed routes, CPU-oracle parity, and transient/resident traffic formulas before emitting the B-0029 input schema. Synthetic coverage passes 18 tests; three official-fixture smoke cases remain skipped until bounded materialization.
+
+This remains correctness-only evidence. The bounded official M28 fixture has not been downloaded, B-0029 tooling and bounded materialization are next, and no token-rate, quality, physical-NVMe, or full-layer result is claimed.
 
 ## Quick start
 
@@ -712,6 +714,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Two-phase bounded official MoE planning, natural-route persistence, exact selected-union materialization, and non-executable K3X assembly.
 - [x] Dimension-driven portable BF16/MXFP4 official MoE oracle with independent PyTorch boundary parity.
 - [x] Opt-in native BF16/MXFP4 official MoE CUDA boundary with transient/resident parity and sanitizer coverage.
+- [x] Strict pinned official MoE fixture harness with root binding, route recomputation, and fail-closed synthetic coverage.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.

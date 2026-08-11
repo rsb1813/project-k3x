@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 28 dependency-closed real MoE FFN sublayer is the active engineering boundary. Native BF16 K3X support, exact official tensor planning, deterministic natural route derivation, content-addressed two-phase selected-union materialization, source assembly, explicit CLI orchestration, the pure portable BF16/MXFP4 complete-sublayer oracle, and its opt-in byte-native CUDA boundary are implemented. The pinned official fixture harness, ignored real fixture, and B-0029 remain pending.
+Milestone 28 dependency-closed real MoE FFN sublayer is the active engineering boundary. Native BF16 K3X support, exact official tensor planning, deterministic natural route derivation, content-addressed two-phase selected-union materialization, source assembly, explicit CLI orchestration, the pure portable BF16/MXFP4 oracle, its byte-native CUDA boundary, final artifact/root manifest binding, and the strict pinned fixture harness are implemented. The B-0029 runner/verifier, ignored real fixture, and formal measurement remain pending.
 
-State audited last on 2026-08-11 after M28 Task 4 implementation commit `bb634e1` passed CPU CTest 17/17, CUDA CTest 30/30, and focused Compute Sanitizer with zero errors. One bounded official expert from M27 is present only under ignored `artifacts/`; the M28 multi-expert fixture has not been downloaded. No complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-11 after M28 Task 5 commit `bdab0da` passed 18 harness tests with 3 ignored-real-fixture skips, CUDA CTest 30/30, focused Compute Sanitizer with zero errors, and strict warning compilation. One bounded official expert from M27 is present only under ignored `artifacts/`; the M28 multi-expert fixture has not been downloaded. No complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -113,6 +113,7 @@ State audited last on 2026-08-11 after M28 Task 4 implementation commit `bb634e1
 - M28 Task 2 is complete at `0b0c944`: the route manifest is durable before expert fetching, only the natural A/B first-use union is planned, object reuse is rehashed, response bytes are measured separately from logical source bytes, and production generation remains fail-closed.
 - M28 Task 3 is complete at `8a13cf5`: the dimension-driven CPU oracle preserves explicit BF16 boundaries, validates the natural route before execution, decodes native MXFP4 experts exactly, and matches independent PyTorch intermediate values without production dispatch.
 - M28 Task 4 is complete at `bb634e1`: the opt-in CUDA method executes the routed/shared BF16 and selected native-MXFP4 FFN boundary on one stream, returns one final D2H vector, and reuses byte-native resident weights with zero second-call weight H2D.
+- M28 Task 5 is implemented at `a109409`/`bdab0da`: final materialization binds the Reader root into the route manifest, and the harness validates pinned identities, exact tensor metadata/order, recomputed routes, portable oracles, CUDA parity, and traffic formulas. Actual official smoke remains pending by design.
 - Milestone 27 implementation, B-0028, full local verification, README/TITAN Ledger synchronization, D-054 M28 selection, final Critical/Important review, PR #46 merge, and post-merge correctness/CodeQL are complete.
 - Milestone 26 implementation, live dry-run, one exact official expert conversion, B-0027 verifier, full local verification, final Critical/Important review, README/TITAN Ledger synchronization, PR #44 merge, and post-merge CI are complete.
 - The actual official K3X storage fixture still exits 4 with `NON_EXECUTABLE_ARTIFACT` through `k3x_run`; the separate M27 benchmark-only path executes only the pinned expert FFN and does not weaken that production guard.
@@ -166,9 +167,9 @@ State audited last on 2026-08-11 after M28 Task 4 implementation commit `bb634e1
 
 ## Next concrete tasks
 
-1. Add the pinned official fixture harness with strict artifact, route-manifest, tensor-shape, tensor-order, and execution-identity validation without changing the production `k3x_run` guard.
-2. Add the strict B-0029 runner/verifier and synthetic failure matrix before any live materialization.
-3. Materialize only the bounded ignored M28 fixture after the harness identities are ready, then run parity, traffic, sanitizer, evidence, and full verification gates before any performance claim.
+1. Add the strict B-0029 runner/verifier and synthetic failure matrix before any live materialization.
+2. Materialize only the bounded ignored M28 fixture now that the harness identity is ready, then run the three pending smoke cases.
+3. Run B-0029 once, followed by parity, traffic, sanitizer, evidence, and full verification gates before any performance claim.
 
 ## Hardware assumptions
 
@@ -195,10 +196,11 @@ The derived uncached full-model expert traffic remains 25.83 GB/token, but it is
 
 B-0027 closes the immediate official-source compatibility and bounded real-byte conversion gate. Its 14.972839499-second wall time includes public metadata/header/payload transport and local conversion; it is not a runtime bottleneck, TPS measurement, or physical NVMe result. The next concrete bottleneck is the missing dependency-closed real CUDA layer invocation and independent numerical oracle. Peak converter RSS, complete-shard provenance, native-Linux physical storage behavior, and full-model execution remain unmeasured.
 
-B-0028 remains the latest performance measurement. Twenty transient single-expert calls transfer 350,945,280 weight bytes and have a 2,508,377 ns median; exact residency transfers zero measured weight bytes after cold admission and has a 331,868 ns median. Task 4 now closes only the synthetic complete-FFN CUDA correctness contract. The next evidence bottleneck is the missing pinned official router-selected Top-16 plus shared-expert fixture and B-0029, not CUDA API availability. Physical L2/L1 traffic, natural routed-set reuse, cache pressure, complete-layer latency, token throughput, and quality remain unmeasured.
+B-0028 remains the latest performance measurement. Twenty transient single-expert calls transfer 350,945,280 weight bytes and have a 2,508,377 ns median; exact residency transfers zero measured weight bytes after cold admission and has a 331,868 ns median. Tasks 4–5 close the synthetic complete-FFN CUDA and strict harness contracts only. The next evidence bottleneck is the absent bounded official router-selected Top-16 plus shared-expert fixture and B-0029, not CUDA API availability. Physical L2/L1 traffic, natural routed-set reuse, cache pressure, complete-layer latency, token throughput, and quality remain unmeasured.
 
 ## Last known-good state
 
+- Local M28 Task 5 head `bdab0da` plus manifest binding `a109409` implements the pinned harness. Harness pytest passes 18 with 3 ignored-real-fixture skips; CUDA CTest passes 30/30; focused Compute Sanitizer reports zero errors; strict warning compilation passes. No official M28 payload or performance result was produced.
 - Local M28 Task 4 head `bb634e1` implements the opt-in byte-native official MoE CUDA boundary. CPU CTest passes 17/17, CUDA CTest passes 30/30, and the focused Compute Sanitizer reports `ERROR SUMMARY: 0 errors`. Tiny transient/resident calls match the portable oracle within `2e-2`; the second resident call adds zero weight H2D. No official M28 payload or performance result was produced.
 - Local M28 Task 3 head `8a13cf5` implements the pure official MoE CPU oracle. CPU CTest passes 17/17 and `test_cpp_parity.py` passes 113/113 runnable cases with 32 capability skips; the tiny C++ dump and independent PyTorch graph agree at every recorded boundary within `1e-6`. No official M28 payload or performance result was produced.
 - Local M28 Task 2 head `0b0c944` implements the bounded two-phase materializer and explicit CLI. Focused materializer/CLI tests pass 27/27; the official-source, transport, safetensors, converter-resume, and source-manifest regression matrix passes 149/149 in 13.24 seconds; Python compile validation and `git diff --check` pass. No M28 official payload or performance result was produced.

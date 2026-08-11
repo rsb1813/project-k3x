@@ -405,7 +405,8 @@
 - [x] Implement two-phase bounded official MoE source planning and materialization.
 - [x] Implement the portable BF16/MXFP4 official MoE oracle.
 - [x] Implement native BF16 CUDA residency and the official MoE boundary.
-- [ ] Implement the pinned fixture harness and strict B-0029 tooling.
+- [x] Implement the pinned fixture harness.
+- [ ] Implement strict B-0029 tooling.
 - [ ] Materialize the bounded real fixture without a full shard or checkpoint.
 - [ ] Run correctness, sanitizer, B-0029, full verification, and evidence cross-checks.
 - [ ] Synchronize the TITAN Ledger, complete final review, publish, merge, and verify public `main`.

@@ -644,3 +644,10 @@
 - Both transient and resident paths use byte-native BF16/MXFP4 storage. The resident second call adds zero weight H2D and increases exact tensor hits; one final output vector is the only D2H result.
 - Self-review found that the CPU oracle rounds the prefix residual before final addition. The fixture now uses non-BF16-exact prefix values and CUDA explicitly rounds the device prefix before addition.
 - Commit `bb634e1` passes CPU CTest 17/17, CUDA CTest 30/30, focused transient/resident parity, and Compute Sanitizer with zero errors. This is a tiny correctness/traffic gate only; official payload, B-0029, token rate, quality, and physical traffic remain unmeasured.
+
+## 2026-08-11 — Milestone 28 pinned official MoE harness
+
+- The pre-fetch route manifest could not bind a root that does not exist yet. Commit `a109409` keeps early publication intact and atomically adds the final K3X root/source/tensor digests only after conversion and Reader verification.
+- Harness RED was the absent CMake target. Commit `bdab0da` adds strict duplicate-key/non-finite JSON rejection, pinned source/input identity, exact Reader root/tensor order/shape/dtype checks, both route recomputations, portable CPU oracles, and A/B/alternating CUDA execution with internal traffic formulas.
+- The official CUDA boundary now records kernel-only CUDA-event time; the focused test requires nonzero profiler device time. CUDA CTest remains 30/30 and Compute Sanitizer reports zero errors.
+- Harness pytest passes 18 with 3 skips. Those skips are the actual A transient, B transient, and alternating resident smoke cases; they remain pending because no M28 payload has been materialized.
