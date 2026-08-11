@@ -192,31 +192,31 @@ Commit message: `feat: retain two official KDA layer states`.
 - A device tail consumes the prepared token and either retains final hidden/block for the next layer or publishes final hidden to the host.
 - No inter-layer hidden D2H/H2D occurs on the retained path.
 
-- [ ] **Step 1: Write front/tail RED parity and lifetime tests.**
+- [x] **Step 1: Write front/tail RED parity and lifetime tests.**
 
 Require tiny exact parity at self residual, normalized KDA input, KDA output/state, prefix, prepared hidden, raw logits, selected route, FFN output, and final hidden. Require one layer-1 retained token to feed layer 2 without hidden transfer counters. Reject zero, stale, cross-backend, wrong-producer, wrong-consumer, wrong-width, wrong-slot, double-consumed, and unexpectedly live tokens.
 
-- [ ] **Step 2: Witness CUDA compile RED.**
+- [x] **Step 2: Witness CUDA compile RED.**
 
 Build `test_cuda_official_layer`. Expected result: hidden token and front/tail APIs are undeclared.
 
-- [ ] **Step 3: Implement bounded activation ownership.**
+- [x] **Step 3: Implement bounded activation ownership.**
 
 Add two grow-only ping-pong slots for hidden plus block source. Upload host input only at the first front. Consume and invalidate a prior hidden generation before launching the next front. Ensure prepared-route scratch and final-hidden scratch cannot alias a live slot.
 
-- [ ] **Step 4: Implement the complete device front.**
+- [x] **Step 4: Implement the complete device front.**
 
 Reuse existing exact residual, RMSNorm, KDA, prefix, route-preparation, and resident-weight admission logic without a host KDA-output copy. Return only 896 raw logits and opaque ownership tokens. Keep one canonical host route decision per layer.
 
-- [ ] **Step 5: Implement retain-or-publish tail cleanup.**
+- [x] **Step 5: Implement retain-or-publish tail cleanup.**
 
 Reuse the exact prepared MXFP4/shared FFN. On retain, write the final hidden to the next ping-pong slot and preserve the block source. On publish, copy only the final requested host vector. Discard all outstanding prepared/hidden/state generations on downstream failure according to the wrapper's transaction boundary.
 
-- [ ] **Step 6: Run focused GREEN and sanitizer.**
+- [x] **Step 6: Run focused GREEN and sanitizer.**
 
 Run CUDA official MoE/KDA/layer tests, non-CUDA stubs, strict warning compilation, and Compute Sanitizer on both official MoE and layer targets.
 
-- [ ] **Step 7: Self-review and commit.**
+- [x] **Step 7: Self-review and commit.**
 
 Commit message: `feat: retain official inter-layer activations`.
 
