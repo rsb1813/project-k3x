@@ -2519,6 +2519,9 @@ public:
             options_.cuda_allocation != CudaAllocationMode::reused ||
             options_.cuda_transfer != CudaTransferMode::synchronous ||
             options_.cuda_batching != CudaBatchingMode::resident_grid ||
+            (options_.cuda_weight_validation ==
+                 CudaWeightValidationMode::admission &&
+             options_.cuda_weights != CudaWeightMode::resident) ||
             !config.hidden_size || !config.heads || !config.head_dim ||
             config.conv_width < 2 || config.head_dim > 1024 ||
             !std::isfinite(config.rms_norm_epsilon) ||
@@ -2540,14 +2543,10 @@ public:
             return std::all_of(values.begin(), values.end(),
                                [](float value) { return std::isfinite(value); });
         };
-        const auto valid_bf16 = [](Bf16WeightView view,
-                                   std::size_t rows, std::size_t cols) {
+        const auto valid_bf16_shape = [](Bf16WeightView view,
+                                         std::size_t rows, std::size_t cols) {
             return view.tensor_id && view.rows == rows && view.cols == cols &&
-                   view.values.size() == rows * cols &&
-                   std::all_of(view.values.begin(), view.values.end(),
-                       [](std::uint16_t value) {
-                           return (value & 0x7f80U) != 0x7f80U;
-                       });
+                   view.values.size() == rows * cols;
         };
         const auto valid_bf16_state = [](std::span<const std::uint16_t> values) {
             return std::all_of(values.begin(), values.end(),
@@ -2555,35 +2554,37 @@ public:
                                    return (value & 0x7f80U) != 0x7f80U;
                                });
         };
-        const auto valid_f32 = [&finite_f32](DenseWeightView view,
-                                             std::size_t rows,
-                                             std::size_t cols) {
+        const auto valid_f32_shape = [](DenseWeightView view,
+                                        std::size_t rows,
+                                        std::size_t cols) {
             return view.tensor_id && view.rows == rows && view.cols == cols &&
-                   view.values.size() == rows * cols && finite_f32(view.values);
+                   view.values.size() == rows * cols;
         };
-        const auto valid_vector = [&finite_f32](DenseVectorView view,
-                                                std::size_t size) {
-            return view.tensor_id && view.values.size() == size &&
-                   finite_f32(view.values);
+        const auto valid_vector_shape = [](DenseVectorView view,
+                                           std::size_t size) {
+            return view.tensor_id && view.values.size() == size;
         };
         if (!finite_f32(hidden) || !finite_f32(state.recurrent_v_first) ||
             !valid_bf16_state(state.conv_q) ||
             !valid_bf16_state(state.conv_k) ||
             !valid_bf16_state(state.conv_v) ||
-            !valid_bf16(weights.q_proj, projection, config.hidden_size) ||
-            !valid_bf16(weights.k_proj, projection, config.hidden_size) ||
-            !valid_bf16(weights.v_proj, projection, config.hidden_size) ||
-            !valid_f32(weights.q_conv, projection, config.conv_width) ||
-            !valid_f32(weights.k_conv, projection, config.conv_width) ||
-            !valid_f32(weights.v_conv, projection, config.conv_width) ||
-            !valid_bf16(weights.f_a_proj, config.head_dim, config.hidden_size) ||
-            !valid_bf16(weights.f_b_proj, projection, config.head_dim) ||
-            !valid_vector(weights.a_log, config.head_dim) ||
-            !valid_vector(weights.dt_bias, projection) ||
-            !valid_bf16(weights.b_proj, config.heads, config.hidden_size) ||
-            !valid_bf16(weights.g_proj, projection, config.hidden_size) ||
-            !valid_vector(weights.o_norm, config.head_dim) ||
-            !valid_bf16(weights.o_proj, config.hidden_size, projection)) {
+            !valid_bf16_shape(weights.q_proj, projection, config.hidden_size) ||
+            !valid_bf16_shape(weights.k_proj, projection, config.hidden_size) ||
+            !valid_bf16_shape(weights.v_proj, projection, config.hidden_size) ||
+            !valid_f32_shape(weights.q_conv, projection, config.conv_width) ||
+            !valid_f32_shape(weights.k_conv, projection, config.conv_width) ||
+            !valid_f32_shape(weights.v_conv, projection, config.conv_width) ||
+            !valid_bf16_shape(weights.f_a_proj, config.head_dim,
+                              config.hidden_size) ||
+            !valid_bf16_shape(weights.f_b_proj, projection, config.head_dim) ||
+            !valid_vector_shape(weights.a_log, config.head_dim) ||
+            !valid_vector_shape(weights.dt_bias, projection) ||
+            !valid_bf16_shape(weights.b_proj, config.heads,
+                              config.hidden_size) ||
+            !valid_bf16_shape(weights.g_proj, projection,
+                              config.hidden_size) ||
+            !valid_vector_shape(weights.o_norm, config.head_dim) ||
+            !valid_bf16_shape(weights.o_proj, config.hidden_size, projection)) {
             return Result<OfficialKdaCudaResult>::failure(ErrorCode::invalid_extent);
         }
         const std::array bf16_views{
@@ -2611,6 +2612,114 @@ public:
                 return Result<OfficialKdaCudaResult>::failure(ErrorCode::invalid_extent);
             }
             total_weight_bytes += view.values.size_bytes();
+        }
+        std::array<bool, 8> bf16_validation_hits{};
+        std::array<bool, 8> bf16_validation_scans{};
+        std::array<bool, 6> f32_validation_hits{};
+        std::array<bool, 6> f32_validation_scans{};
+        const auto classify = [this](std::uint64_t tensor_id,
+                                     const void* data, std::size_t bytes,
+                                     std::size_t rows, std::size_t cols,
+                                     bool& hit, bool& scan) {
+            if (options_.cuda_weight_validation ==
+                CudaWeightValidationMode::per_call) {
+                scan = true;
+                return true;
+            }
+            const ImmutableWeightIdentity identity{data, bytes, rows, cols};
+            const auto found = immutable_weights_.find(tensor_id);
+            if (found == immutable_weights_.end()) {
+                scan = true;
+                return true;
+            }
+            if (found->second == identity) {
+                hit = true;
+                return true;
+            }
+            return false;
+        };
+        for (std::size_t index = 0; index < bf16_views.size(); ++index) {
+            const auto& view = bf16_views[index];
+            if (!classify(view.tensor_id, view.values.data(),
+                          view.values.size_bytes(), view.rows, view.cols,
+                          bf16_validation_hits[index],
+                          bf16_validation_scans[index])) {
+                return Result<OfficialKdaCudaResult>::failure(
+                    ErrorCode::invalid_extent);
+            }
+        }
+        for (std::size_t index = 0; index < f32_views.size(); ++index) {
+            const auto& view = f32_views[index];
+            if (!classify(view.tensor_id, view.values.data(),
+                          view.values.size_bytes(), view.rows, view.cols,
+                          f32_validation_hits[index],
+                          f32_validation_scans[index])) {
+                return Result<OfficialKdaCudaResult>::failure(
+                    ErrorCode::invalid_extent);
+            }
+        }
+        const auto validation_start = std::chrono::steady_clock::now();
+        bool immutable_finite = true;
+        bool validation_scanned = false;
+        for (std::size_t index = 0; index < bf16_views.size(); ++index) {
+            if (!bf16_validation_scans[index]) continue;
+            validation_scanned = true;
+            ++runtime_stats_.immutable_validation_scans;
+            runtime_stats_.immutable_validation_bytes +=
+                bf16_views[index].values.size_bytes();
+            if (!std::all_of(
+                    bf16_views[index].values.begin(),
+                    bf16_views[index].values.end(), [](std::uint16_t value) {
+                        return (value & 0x7f80U) != 0x7f80U;
+                    })) {
+                immutable_finite = false;
+            }
+        }
+        for (std::size_t index = 0; index < f32_views.size(); ++index) {
+            if (!f32_validation_scans[index]) continue;
+            validation_scanned = true;
+            ++runtime_stats_.immutable_validation_scans;
+            runtime_stats_.immutable_validation_bytes +=
+                f32_views[index].values.size_bytes();
+            if (!finite_f32(f32_views[index].values)) immutable_finite = false;
+        }
+        if (validation_scanned) {
+            runtime_stats_.immutable_validation_nanoseconds +=
+                static_cast<std::uint64_t>(std::chrono::duration_cast<
+                    std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - validation_start)
+                                               .count());
+        }
+        if (!immutable_finite) {
+            return Result<OfficialKdaCudaResult>::failure(
+                ErrorCode::invalid_extent);
+        }
+        if (options_.cuda_weight_validation ==
+            CudaWeightValidationMode::admission) {
+            for (std::size_t index = 0; index < bf16_views.size(); ++index) {
+                const auto& view = bf16_views[index];
+                if (bf16_validation_hits[index]) {
+                    ++runtime_stats_.immutable_validation_hits;
+                } else {
+                    immutable_weights_.emplace(
+                        view.tensor_id,
+                        ImmutableWeightIdentity{
+                            view.values.data(), view.values.size_bytes(),
+                            view.rows, view.cols});
+                }
+            }
+            for (std::size_t index = 0; index < f32_views.size(); ++index) {
+                const auto& view = f32_views[index];
+                if (f32_validation_hits[index]) {
+                    ++runtime_stats_.immutable_validation_hits;
+                } else {
+                    immutable_weights_.emplace(
+                        view.tensor_id,
+                        ImmutableWeightIdentity{
+                            view.values.data(), view.values.size_bytes(),
+                            view.rows, view.cols});
+                }
+            }
         }
         if (options_.cuda_weights == CudaWeightMode::resident &&
             (!resident_weights_ || total_weight_bytes > options_.cuda_resident_bytes)) {
@@ -4214,7 +4323,7 @@ private:
     BackendMemoryStats memory_stats_{};
     BackendRuntimeStats runtime_stats_{};
     struct ImmutableWeightIdentity {
-        const float* data{};
+        const void* data{};
         std::size_t bytes{};
         std::size_t rows{};
         std::size_t cols{};
