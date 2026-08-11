@@ -8,6 +8,7 @@
 #include "mxfp4.cuh"
 #include "moe_layer.cuh"
 #include "official_kda.cuh"
+#include "official_moe_route.cuh"
 #include "resident_weights.cuh"
 #include "situ.cuh"
 
@@ -38,6 +39,7 @@ namespace k3x {
 namespace {
 
 std::atomic<std::uint64_t> next_kda_state_owner{1};
+std::atomic<std::uint64_t> next_moe_prepared_owner{1};
 
 class StreamOwner {
 public:
@@ -183,11 +185,19 @@ public:
           layer_shared_hidden_scratch_(&memory_stats_, &runtime_stats_),
           layer_final_hidden_scratch_(&memory_stats_, &runtime_stats_),
           official_kda_scratch_(&memory_stats_, &runtime_stats_),
-          official_kda_state_(&memory_stats_, &runtime_stats_) {
+          official_kda_state_(&memory_stats_, &runtime_stats_),
+          official_moe_prepared_(&memory_stats_, &runtime_stats_),
+          official_moe_route_scratch_(&memory_stats_, &runtime_stats_) {
         device_state_owner_ = next_kda_state_owner.fetch_add(
             1, std::memory_order_relaxed);
         if (!device_state_owner_) {
             device_state_owner_ = next_kda_state_owner.fetch_add(
+                1, std::memory_order_relaxed);
+        }
+        moe_prepared_owner_ = next_moe_prepared_owner.fetch_add(
+            1, std::memory_order_relaxed);
+        if (!moe_prepared_owner_) {
+            moe_prepared_owner_ = next_moe_prepared_owner.fetch_add(
                 1, std::memory_order_relaxed);
         }
         runtime_stats_.async_engine_count = async_engine_count;
@@ -3079,6 +3089,223 @@ public:
         return Result<bool>::success(true);
     }
 
+    Result<OfficialMoeRoutePrepareResult> prepare_official_moe_route(
+        std::span<const float> prefix, std::span<const float> block,
+        OfficialMoeRoutePrepareView weights, float epsilon,
+        std::uint32_t layer, ProfilePhase phase) override {
+        const auto operation_start = std::chrono::steady_clock::now();
+        const auto finite_f32 = [](std::span<const float> values) {
+            return std::all_of(values.begin(), values.end(),
+                               [](float value) { return std::isfinite(value); });
+        };
+        const auto valid_bf16 = [](Bf16WeightView view,
+                                   std::size_t rows, std::size_t cols) {
+            return view.tensor_id && view.rows == rows && view.cols == cols &&
+                   rows && cols && rows <=
+                       std::numeric_limits<std::size_t>::max() / cols &&
+                   view.values.size() == rows * cols;
+        };
+        if (options_.kind != BackendKind::cuda_custom ||
+            options_.cuda_boundary != CudaBoundaryMode::moe_layer ||
+            options_.cuda_allocation != CudaAllocationMode::reused ||
+            options_.cuda_transfer != CudaTransferMode::synchronous ||
+            options_.cuda_batching != CudaBatchingMode::resident_grid ||
+            options_.cuda_weights != CudaWeightMode::resident ||
+            !resident_weights_ || prefix.empty() || prefix.size() != block.size() ||
+            !finite_f32(prefix) || !finite_f32(block) ||
+            !std::isfinite(epsilon) || epsilon <= 0.0F ||
+            !weights.residual_norm.tensor_id ||
+            weights.residual_norm.values.size() != prefix.size() ||
+            !valid_bf16(weights.residual_proj, 1, prefix.size()) ||
+            !weights.post_norm.tensor_id ||
+            weights.post_norm.values.size() != prefix.size() ||
+            !valid_bf16(weights.router, weights.router.rows, prefix.size())) {
+            return Result<OfficialMoeRoutePrepareResult>::failure(
+                ErrorCode::invalid_extent);
+        }
+        const std::array views{
+            Bf16WeightView{weights.residual_norm.values, 1, prefix.size(),
+                           weights.residual_norm.tensor_id},
+            weights.residual_proj,
+            Bf16WeightView{weights.post_norm.values, 1, prefix.size(),
+                           weights.post_norm.tensor_id},
+            weights.router};
+        std::unordered_set<std::uint64_t> tensor_ids;
+        std::uint64_t total_weight_bytes{};
+        std::array<ImmutableWeightIdentity, 4> identities{};
+        std::array<bool, 4> validation_hits{};
+        std::array<bool, 4> validation_scans{};
+        for (std::size_t index = 0; index < views.size(); ++index) {
+            const auto& view = views[index];
+            if (!tensor_ids.insert(view.tensor_id).second) {
+                return Result<OfficialMoeRoutePrepareResult>::failure(
+                    ErrorCode::invalid_extent);
+            }
+            total_weight_bytes += view.values.size_bytes();
+            identities[index] = {view.values.data(), view.values.size_bytes(),
+                                 view.rows, view.cols};
+            if (options_.cuda_weight_validation ==
+                CudaWeightValidationMode::per_call) {
+                validation_scans[index] = true;
+            } else {
+                const auto found = immutable_weights_.find(view.tensor_id);
+                if (found == immutable_weights_.end()) {
+                    validation_scans[index] = true;
+                } else if (found->second == identities[index]) {
+                    validation_hits[index] = true;
+                } else {
+                    return Result<OfficialMoeRoutePrepareResult>::failure(
+                        ErrorCode::invalid_extent);
+                }
+            }
+        }
+        if (total_weight_bytes > options_.cuda_resident_bytes) {
+            return Result<OfficialMoeRoutePrepareResult>::failure(
+                ErrorCode::invalid_extent);
+        }
+        const auto validation_start = std::chrono::steady_clock::now();
+        bool scanned{};
+        for (std::size_t index = 0; index < views.size(); ++index) {
+            if (!validation_scans[index]) continue;
+            scanned = true;
+            ++runtime_stats_.immutable_validation_scans;
+            runtime_stats_.immutable_validation_bytes +=
+                views[index].values.size_bytes();
+            if (!std::all_of(
+                    views[index].values.begin(), views[index].values.end(),
+                    [](std::uint16_t value) {
+                        return (value & 0x7f80U) != 0x7f80U;
+                    })) {
+                return Result<OfficialMoeRoutePrepareResult>::failure(
+                    ErrorCode::invalid_extent);
+            }
+        }
+        if (scanned) {
+            runtime_stats_.immutable_validation_nanoseconds +=
+                static_cast<std::uint64_t>(std::chrono::duration_cast<
+                    std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - validation_start)
+                                               .count());
+        }
+        if (options_.cuda_weight_validation ==
+            CudaWeightValidationMode::admission) {
+            for (std::size_t index = 0; index < views.size(); ++index) {
+                if (validation_hits[index]) {
+                    ++runtime_stats_.immutable_validation_hits;
+                } else {
+                    immutable_weights_.emplace(views[index].tensor_id,
+                                               identities[index]);
+                }
+            }
+        }
+        std::array<const std::uint16_t*, 4> device_views{};
+        std::uint64_t uploaded_weight_bytes{};
+        for (std::size_t index = 0; index < views.size(); ++index) {
+            const auto& view = views[index];
+            auto acquired = resident_weights_->acquire(
+                {view.tensor_id, cuda::WeightRepresentation::dense_bf16,
+                 view.rows, view.cols, 0},
+                std::as_bytes(view.values), {});
+            if (!acquired || acquired.value().disposition ==
+                                 cuda::ResidentDisposition::bypass) {
+                return Result<OfficialMoeRoutePrepareResult>::failure(
+                    ErrorCode::invalid_extent);
+            }
+            uploaded_weight_bytes += acquired.value().uploaded_bytes;
+            device_views[index] = static_cast<const std::uint16_t*>(
+                acquired.value().primary);
+        }
+        const auto hidden_bytes = prefix.size_bytes();
+        const auto logits_bytes = weights.router.rows * sizeof(float);
+        const auto scratch_bytes = hidden_bytes * 2 + logits_bytes;
+        if (official_moe_prepared_.reserve(hidden_bytes * 2) != cudaSuccess ||
+            official_moe_route_scratch_.reserve(scratch_bytes) != cudaSuccess ||
+            official_moe_route_event_start_.ensure() != cudaSuccess ||
+            official_moe_route_event_end_.ensure() != cudaSuccess) {
+            return Result<OfficialMoeRoutePrepareResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        if (moe_prepared_active_) {
+            moe_prepared_active_ = false;
+            ++runtime_stats_.official_moe_prepared_invalidations;
+        }
+        auto* prepared_prefix =
+            static_cast<float*>(official_moe_prepared_.get());
+        auto* prepared_hidden = prepared_prefix + prefix.size();
+        auto* input_prefix =
+            static_cast<float*>(official_moe_route_scratch_.get());
+        auto* input_block = input_prefix + prefix.size();
+        auto* device_logits = input_block + block.size();
+        OfficialMoeRoutePrepareResult result;
+        result.executed = true;
+        result.router_logits.resize(weights.router.rows);
+        if (cudaMemcpyAsync(input_prefix, prefix.data(), hidden_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+            cudaMemcpyAsync(input_block, block.data(), hidden_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+            cudaEventRecord(official_moe_route_event_start_.get(), stream_) !=
+                cudaSuccess ||
+            cuda::launch_official_moe_prepare(
+                input_prefix, input_block, device_views[0], device_views[1],
+                device_views[2], prepared_prefix, prepared_hidden,
+                prefix.size(), epsilon, stream_) != cudaSuccess ||
+            cuda::launch_official_moe_router_logits(
+                prepared_hidden, device_views[3], device_logits,
+                weights.router.rows, weights.router.cols, stream_) != cudaSuccess ||
+            cudaEventRecord(official_moe_route_event_end_.get(), stream_) !=
+                cudaSuccess ||
+            cudaMemcpyAsync(result.router_logits.data(), device_logits,
+                            logits_bytes, cudaMemcpyDeviceToHost, stream_) !=
+                cudaSuccess ||
+            cudaStreamSynchronize(stream_) != cudaSuccess ||
+            !finite_f32(result.router_logits)) {
+            return Result<OfficialMoeRoutePrepareResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        float milliseconds{};
+        if (cudaEventElapsedTime(&milliseconds,
+                                 official_moe_route_event_start_.get(),
+                                 official_moe_route_event_end_.get()) !=
+            cudaSuccess) {
+            return Result<OfficialMoeRoutePrepareResult>::failure(
+                ErrorCode::backend_unavailable);
+        }
+        ++moe_prepared_generation_;
+        if (!moe_prepared_generation_) ++moe_prepared_generation_;
+        moe_prepared_layer_ = layer;
+        moe_prepared_width_ = prefix.size();
+        moe_prepared_active_ = true;
+        result.prepared = {moe_prepared_owner_, moe_prepared_generation_};
+        ++runtime_stats_.stream_synchronization_count;
+        runtime_stats_.weight_h2d_bytes += uploaded_weight_bytes;
+        runtime_stats_.activation_h2d_bytes += hidden_bytes * 2;
+        runtime_stats_.device_to_host_bytes += logits_bytes;
+        ++runtime_stats_.official_moe_route_prepare_calls;
+        runtime_stats_.official_moe_route_prepare_kernel_launches += 2;
+        runtime_stats_.official_moe_router_logit_d2h_bytes += logits_bytes;
+        ++runtime_stats_.official_moe_prepared_seeds;
+        runtime_stats_.official_moe_prepared_slot_bytes = hidden_bytes * 2;
+        record(phase, ProfileOperation::moe_mix,
+               NumericPrecision::bf16_rounded, layer, operation_start,
+               total_weight_bytes, uploaded_weight_bytes,
+               static_cast<std::uint64_t>(
+                   std::llround(static_cast<double>(milliseconds) * 1.0e6)),
+               true);
+        return Result<OfficialMoeRoutePrepareResult>::success(
+            std::move(result));
+    }
+
+    Result<bool> discard_official_moe_prepared(
+        OfficialMoePreparedToken token) override {
+        if (!moe_prepared_active_ || token.owner != moe_prepared_owner_ ||
+            token.generation != moe_prepared_generation_) {
+            return Result<bool>::failure(ErrorCode::invalid_state);
+        }
+        moe_prepared_active_ = false;
+        ++runtime_stats_.official_moe_prepared_discards;
+        return Result<bool>::success(true);
+    }
+
     Result<OfficialMoeFfnResult> official_mxfp4_moe_ffn(
         std::span<const float> hidden, std::span<const float> prefix,
         OfficialMoeFfnView weights, std::span<const Mxfp4MlpView> experts,
@@ -3086,6 +3313,35 @@ public:
         std::span<const float> contributions, float epsilon, float situ_beta,
         std::optional<float> situ_linear, std::uint32_t layer,
         ProfilePhase phase) override {
+        if (moe_prepared_active_) {
+            moe_prepared_active_ = false;
+            ++runtime_stats_.official_moe_prepared_invalidations;
+        }
+        return official_mxfp4_moe_ffn_impl(
+            hidden, prefix, std::nullopt, weights, experts, expert_ids,
+            contributions, epsilon, situ_beta, situ_linear, layer, phase);
+    }
+
+    Result<OfficialMoeFfnResult> official_mxfp4_moe_ffn_prepared(
+        OfficialMoePreparedToken prepared, OfficialMoeFfnView weights,
+        std::span<const Mxfp4MlpView> experts,
+        std::span<const std::uint32_t> expert_ids,
+        std::span<const float> contributions, float epsilon, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) override {
+        return official_mxfp4_moe_ffn_impl(
+            {}, {}, prepared, weights, experts, expert_ids, contributions,
+            epsilon, situ_beta, situ_linear, layer, phase);
+    }
+
+    Result<OfficialMoeFfnResult> official_mxfp4_moe_ffn_impl(
+        std::span<const float> hidden, std::span<const float> prefix,
+        std::optional<OfficialMoePreparedToken> prepared,
+        OfficialMoeFfnView weights, std::span<const Mxfp4MlpView> experts,
+        std::span<const std::uint32_t> expert_ids,
+        std::span<const float> contributions, float epsilon, float situ_beta,
+        std::optional<float> situ_linear, std::uint32_t layer,
+        ProfilePhase phase) {
         const auto operation_start = std::chrono::steady_clock::now();
         const auto finite = [](std::span<const float> values) {
             return std::all_of(values.begin(), values.end(),
@@ -3102,11 +3358,17 @@ public:
             options_.cuda_allocation != CudaAllocationMode::reused ||
             options_.cuda_transfer != CudaTransferMode::synchronous ||
             options_.cuda_batching != CudaBatchingMode::resident_grid ||
-            hidden.empty() || hidden.size() != prefix.size() ||
+            (!prepared && (hidden.empty() || hidden.size() != prefix.size())) ||
+            (prepared &&
+             (!hidden.empty() || !prefix.empty() || !moe_prepared_active_ ||
+              prepared->owner != moe_prepared_owner_ ||
+              prepared->generation != moe_prepared_generation_ ||
+              moe_prepared_layer_ != layer || !moe_prepared_width_)) ||
             experts.empty() || experts.size() > 65535 ||
             experts.size() != expert_ids.size() ||
-            experts.size() != contributions.size() || !finite(hidden) ||
-            !finite(prefix) || !finite(contributions) ||
+            experts.size() != contributions.size() ||
+            (!prepared && (!finite(hidden) || !finite(prefix))) ||
+            !finite(contributions) ||
             !std::isfinite(epsilon) || epsilon <= 0.0F ||
             !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
             (situ_linear &&
@@ -3121,7 +3383,7 @@ public:
             return Result<OfficialMoeFfnResult>::failure(
                 ErrorCode::invalid_mxfp4);
         }
-        const auto hidden_width = hidden.size();
+        const auto hidden_width = prepared ? moe_prepared_width_ : hidden.size();
         const auto latent_width = weights.routed_down.rows;
         const auto routed_width = experts.front().down.rows;
         const auto intermediate_width = experts.front().gate.rows;
@@ -3199,6 +3461,10 @@ public:
               total_weight_bytes > options_.cuda_resident_bytes))) {
             return Result<OfficialMoeFfnResult>::failure(
                 ErrorCode::invalid_mxfp4);
+        }
+        if (prepared) {
+            moe_prepared_active_ = false;
+            ++runtime_stats_.official_moe_prepared_consumes;
         }
 
         std::vector<std::unique_ptr<cuda::DeviceAllocation>> transient;
@@ -3278,7 +3544,7 @@ public:
             }
         }
 
-        const auto hidden_bytes = hidden.size_bytes();
+        const auto hidden_bytes = hidden_width * sizeof(float);
         const auto latent_bytes = latent_width * sizeof(float);
         const auto routed_bytes = routed_width * sizeof(float);
         const auto shared_bytes = shared_width * sizeof(float);
@@ -3308,10 +3574,11 @@ public:
             layer_shared_hidden_scratch_.reserve(hidden_bytes) != cudaSuccess ||
             layer_final_hidden_scratch_.reserve(hidden_bytes) != cudaSuccess) {
             return Result<OfficialMoeFfnResult>::failure(
-                ErrorCode::backend_unavailable);
+                ErrorCode::backend_unavailable,
+                "official MoE FFN scratch allocation failed");
         }
         auto* device_hidden = static_cast<float*>(layer_input_scratch_.get());
-        auto* device_prefix = device_hidden + hidden.size();
+        auto* device_prefix = device_hidden + hidden_width;
         auto* device_latent = static_cast<float*>(layer_routed_latent_scratch_.get());
         auto* device_descriptors = static_cast<cuda::Mxfp4DeviceMatrix*>(layer_descriptor_scratch_.get());
         auto* device_gate = static_cast<float*>(layer_expert_gate_scratch_.get());
@@ -3327,10 +3594,22 @@ public:
         auto* device_shared_activation = static_cast<float*>(layer_shared_activation_scratch_.get());
         auto* device_shared = static_cast<float*>(layer_shared_hidden_scratch_.get());
         auto* device_combined = static_cast<float*>(layer_final_hidden_scratch_.get());
-        if (cudaMemcpyAsync(device_hidden, hidden.data(), hidden_bytes,
-                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
-            cudaMemcpyAsync(device_prefix, prefix.data(), hidden_bytes,
-                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+        const auto* prepared_prefix = prepared
+            ? static_cast<const float*>(official_moe_prepared_.get())
+            : nullptr;
+        const auto* prepared_hidden = prepared
+            ? prepared_prefix + hidden_width
+            : nullptr;
+        if ((!prepared &&
+             (cudaMemcpyAsync(device_hidden, hidden.data(), hidden_bytes,
+                              cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+              cudaMemcpyAsync(device_prefix, prefix.data(), hidden_bytes,
+                              cudaMemcpyHostToDevice, stream_) != cudaSuccess)) ||
+            (prepared &&
+             (cudaMemcpyAsync(device_hidden, prepared_hidden, hidden_bytes,
+                              cudaMemcpyDeviceToDevice, stream_) != cudaSuccess ||
+              cudaMemcpyAsync(device_prefix, prepared_prefix, hidden_bytes,
+                              cudaMemcpyDeviceToDevice, stream_) != cudaSuccess)) ||
             cudaMemcpyAsync(device_contributions, contributions.data(),
                             contribution_bytes, cudaMemcpyHostToDevice,
                             stream_) != cudaSuccess ||
@@ -3338,7 +3617,8 @@ public:
                             descriptor_bytes, cudaMemcpyHostToDevice,
                             stream_) != cudaSuccess) {
             return Result<OfficialMoeFfnResult>::failure(
-                ErrorCode::backend_unavailable);
+                ErrorCode::backend_unavailable,
+                "official MoE FFN activation upload failed");
         }
         if (official_moe_event_start_.ensure() != cudaSuccess ||
             official_moe_event_end_.ensure() != cudaSuccess ||
@@ -3401,16 +3681,20 @@ public:
                                          stream_) != cudaSuccess ||
             cudaEventRecord(official_moe_event_end_.get(), stream_) != cudaSuccess) {
             return Result<OfficialMoeFfnResult>::failure(
-                ErrorCode::backend_unavailable);
+                ErrorCode::backend_unavailable,
+                "official MoE FFN kernel launch failed");
         }
         std::vector<float> output(hidden_width);
         if (cudaMemcpyAsync(output.data(), device_routed, hidden_bytes,
                             cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
             cudaStreamSynchronize(stream_) != cudaSuccess) {
             return Result<OfficialMoeFfnResult>::failure(
-                ErrorCode::backend_unavailable);
+                ErrorCode::backend_unavailable,
+                "official MoE FFN output transfer failed");
         }
-        const auto activation_bytes = hidden_bytes * 2 + contribution_bytes +
+        const auto activation_bytes =
+                                      (prepared ? 0 : hidden_bytes * 2) +
+                                      contribution_bytes +
                                       descriptor_bytes;
         ++runtime_stats_.stream_synchronization_count;
         runtime_stats_.activation_h2d_bytes += activation_bytes;
@@ -3426,7 +3710,8 @@ public:
                                  official_moe_event_start_.get(),
                                  official_moe_event_end_.get()) != cudaSuccess) {
             return Result<OfficialMoeFfnResult>::failure(
-                ErrorCode::backend_unavailable);
+                ErrorCode::backend_unavailable,
+                "official MoE FFN event timing failed");
         }
         const auto device_nanoseconds = static_cast<std::uint64_t>(
             std::llround(static_cast<double>(elapsed_milliseconds) * 1.0e6));
@@ -4479,11 +4764,18 @@ private:
     cuda::ScratchBuffer layer_final_hidden_scratch_;
     cuda::ScratchBuffer official_kda_scratch_;
     cuda::ScratchBuffer official_kda_state_;
+    cuda::ScratchBuffer official_moe_prepared_;
+    cuda::ScratchBuffer official_moe_route_scratch_;
     std::uint64_t device_state_owner_{};
     std::uint64_t device_state_generation_{};
     std::uint32_t device_state_layer_{};
     OfficialKdaCudaConfig device_state_config_{};
     bool device_state_active_{};
+    std::uint64_t moe_prepared_owner_{};
+    std::uint64_t moe_prepared_generation_{};
+    std::uint32_t moe_prepared_layer_{};
+    std::size_t moe_prepared_width_{};
+    bool moe_prepared_active_{};
     EventOwner dense_event_start_;
     EventOwner dense_event_end_;
     EventOwner mxfp4_event_start_;
@@ -4492,6 +4784,8 @@ private:
     EventOwner official_moe_event_end_;
     EventOwner official_kda_event_start_;
     EventOwner official_kda_event_end_;
+    EventOwner official_moe_route_event_start_;
+    EventOwner official_moe_route_event_end_;
     std::vector<std::unique_ptr<EventOwner>> dense_group_event_starts_;
     std::vector<std::unique_ptr<EventOwner>> dense_group_event_ends_;
     std::vector<std::unique_ptr<EventOwner>> mxfp4_group_event_starts_;

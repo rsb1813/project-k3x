@@ -47,6 +47,7 @@ if(K3X_ENABLE_CUDA)
         runtime/cuda/mxfp4.cu
         runtime/cuda/moe_layer.cu
         runtime/cuda/official_kda.cu
+        runtime/cuda/official_moe_route.cu
         runtime/cuda/pinned_memory.cu
         runtime/cuda/resident_weights.cu
         runtime/cuda/situ.cu

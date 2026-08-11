@@ -881,3 +881,10 @@
 - The initial command used the stale distro label `Ubuntu` and failed before compilation with `WSL_E_DISTRO_NOT_FOUND`. The registered distro is `Ubuntu-24.04`; the plan commands were corrected before the actual RED.
 - The controlled RED failed because `route_official_moe_logits` was undeclared. GREEN moves only sigmoid, correction, natural Top-K ordering/tie breaking, selected mass, and contribution normalization into the shared helper.
 - The existing BF16 router matvec delegates to the helper and returns bit-identical route fields on the tiny fixture. Explicit tie, non-finite, length, Top-K, and zero-mass cases fail or pass as required. Portable official expert/MoE/KDA/layer CTest passes 4/4.
+
+## 2026-08-12 — Milestone 32 Task 2 CUDA preparation
+
+- Controlled RED produced 21 expected compile errors for the missing route view, opaque token, prepare/consume/discard API, and telemetry fields.
+- The new CUDA boundary uses one deterministic single-thread BF16 residual/RMS preparation kernel plus a row-parallel raw-logit kernel. It retains exactly two hidden-width F32 vectors in a grow-only slot and returns no prepared activation or device pointer.
+- Initial CTest exposed that the direct diagnostic command had hidden the program status. The real return code was 39. Narrow return codes and error messages localized the first failure to prepared FFN launch: byte count used the intentionally empty host span instead of token width. After that fix, output parity exposed a second instance where the prefix scratch offset used the empty host span and overwrote prepared hidden. Both source calculations now use the validated token width.
+- Final focused verification passes CUDA official 3/3, CUDA MoE-layer 2/2, non-CUDA unavailable, portable official MoE, and Compute Sanitizer with `ERROR SUMMARY: 0 errors`. Host/default behavior, natural routing policy, and production capability remain unchanged.

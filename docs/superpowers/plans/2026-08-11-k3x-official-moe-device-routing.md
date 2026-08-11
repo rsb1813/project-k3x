@@ -77,11 +77,11 @@ Commit message: `refactor: share canonical official MoE routing`.
 - Produces backend operations: `prepare_official_moe_route`, `official_mxfp4_moe_ffn_prepared`, and `discard_official_moe_prepared`.
 - Consumes: Task 1 canonical helper only after raw logits return to the host caller.
 
-- [ ] **Step 1: Write CUDA RED lifetime and parity tests**
+- [x] **Step 1: Write CUDA RED lifetime and parity tests**
 
 Require exact tiny CPU-oracle prepared activation, bounded parity for every raw logit, a nonzero opaque token, empty prepared activation in the public result, one successful prepared FFN consumption, and exact final output. Require rejection of zero, stale, consumed, cross-backend, wrong-layer, wrong-width, mismatched-view, and duplicate-consumption tokens before upload or launch. Require a host/default FFN call and a second preparation to invalidate the outstanding generation.
 
-- [ ] **Step 2: Build and witness CUDA RED**
+- [x] **Step 2: Build and witness CUDA RED**
 
 Run:
 
@@ -91,19 +91,19 @@ rtk wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/c/Users/jolib/Documents/project-k3x
 
 Expected result: compilation fails because the prepare/token/consume API does not exist.
 
-- [ ] **Step 3: Add the minimal public surface and CUDA kernels**
+- [x] **Step 3: Add the minimal public surface and CUDA kernels**
 
 Implement deterministic BF16 prefix/block rounding, two residual projection scores, stable two-way softmax, BF16 mixed residual, BF16 post RMSNorm, and 896 deterministic router dot products. Store prefix, prepared hidden, raw logits, immutable identity, layer, width, owner, and generation in a dedicated grow-only backend slot. Return only logits and token.
 
-- [ ] **Step 4: Implement fail-closed prepared FFN consumption**
+- [x] **Step 4: Implement fail-closed prepared FFN consumption**
 
 Validate the complete token and immutable-view identity before mutation, consume the generation before upload/launch, reuse the existing resident exact FFN kernels with slot-owned prefix/hidden pointers, and make explicit discard idempotently succeed only for the current valid generation. Add exact preparation/consume/discard/invalidation/slot-byte telemetry.
 
-- [ ] **Step 5: Run focused GREEN, stubs, and sanitizer**
+- [x] **Step 5: Run focused GREEN, stubs, and sanitizer**
 
 Run CUDA `cuda_official_moe`, `cuda_moe_layer`, and `cuda_official_kda`; run the non-CUDA `backend_unavailable` build; run Compute Sanitizer on `test_cuda_official_moe` with `--launch-timeout 0`.
 
-- [ ] **Step 6: Self-review and commit**
+- [x] **Step 6: Self-review and commit**
 
 Commit message: `feat: retain official MoE routing activations on device`.
 

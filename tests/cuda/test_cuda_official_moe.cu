@@ -103,6 +103,15 @@ struct Fixture {
              {shared_down, hidden_width, 2, 506}},
         };
     }
+
+    k3x::OfficialMoeRoutePrepareView route_weights() const {
+        return {
+            {residual_norm, 601},
+            {residual_proj, 1, hidden_width, 602},
+            {post_norm, 603},
+            {router, 2, hidden_width, 604},
+        };
+    }
 };
 
 k3x::BackendOptions options(k3x::CudaWeightMode mode, std::uint64_t capacity) {
@@ -200,10 +209,133 @@ int invalid() {
     return 0;
 }
 
+int prepared() {
+    const Fixture fixture;
+    const auto cpu_hidden = k3x::prepare_official_moe_input(
+        fixture.input, fixture.cpu_weights(), 1.0e-5F);
+    if (!cpu_hidden) return 30;
+    auto backend = k3x::make_cuda_backend(
+        options(k3x::CudaWeightMode::resident, 8 * 1024 * 1024));
+    auto other = k3x::make_cuda_backend(
+        options(k3x::CudaWeightMode::resident, 8 * 1024 * 1024));
+    if (!backend || !other) return 31;
+
+    const auto prepare = [&] {
+        return backend.value()->prepare_official_moe_route(
+            fixture.input.prefix_sum, fixture.input.block_residual,
+            fixture.route_weights(), 1.0e-5F, 1,
+            k3x::ProfilePhase::decode);
+    };
+    auto first = prepare();
+    if (!first || !first.value().executed ||
+        first.value().prepared.owner == 0 ||
+        first.value().prepared.generation == 0 ||
+        first.value().router_logits.size() != fixture.correction.size())
+        return 32;
+    std::array<float, 2> expected_logits{};
+    for (std::size_t row = 0; row < expected_logits.size(); ++row) {
+        double sum = 0.0;
+        for (std::size_t column = 0; column < hidden_width; ++column) {
+            sum += static_cast<double>(k3x::decode_bf16_word(
+                       fixture.router[row * hidden_width + column])) *
+                   cpu_hidden.value()[column];
+        }
+        expected_logits[row] = static_cast<float>(sum);
+    }
+    if (!close(first.value().router_logits, expected_logits)) return 33;
+    const auto route = k3x::route_official_moe_logits(
+        first.value().router_logits, fixture.correction, 2);
+    const auto cpu_route = k3x::route_official_moe(
+        cpu_hidden.value(), fixture.cpu_weights().router,
+        fixture.correction, 2);
+    if (!route || !cpu_route ||
+        route.value().expert_ids != cpu_route.value().expert_ids ||
+        route.value().contributions != cpu_route.value().contributions)
+        return 34;
+    const auto stats_after_prepare = backend.value()->runtime_stats();
+    if (stats_after_prepare.official_moe_route_prepare_calls != 1 ||
+        stats_after_prepare.official_moe_route_prepare_kernel_launches != 2 ||
+        stats_after_prepare.official_moe_router_logit_d2h_bytes !=
+            expected_logits.size() * sizeof(float) ||
+        stats_after_prepare.official_moe_prepared_seeds != 1 ||
+        stats_after_prepare.official_moe_prepared_slot_bytes !=
+            hidden_width * sizeof(float) * 2)
+        return 35;
+
+    auto wrong_layer = backend.value()->official_mxfp4_moe_ffn_prepared(
+        first.value().prepared, fixture.cuda_weights(), fixture.experts,
+        route.value().expert_ids, route.value().contributions, 1.0e-5F,
+        4.0F, 25.0F, 2, k3x::ProfilePhase::decode);
+    if (wrong_layer) return 36;
+    auto wrong_width = fixture.cuda_weights();
+    --wrong_width.routed_down.cols;
+    if (backend.value()->official_mxfp4_moe_ffn_prepared(
+            first.value().prepared, wrong_width, fixture.experts,
+            route.value().expert_ids, route.value().contributions, 1.0e-5F,
+            4.0F, 25.0F, 1, k3x::ProfilePhase::decode))
+        return 37;
+    if (other.value()->official_mxfp4_moe_ffn_prepared(
+            first.value().prepared, fixture.cuda_weights(), fixture.experts,
+            route.value().expert_ids, route.value().contributions, 1.0e-5F,
+            4.0F, 25.0F, 1, k3x::ProfilePhase::decode))
+        return 38;
+    const auto consumed = backend.value()->official_mxfp4_moe_ffn_prepared(
+        first.value().prepared, fixture.cuda_weights(), fixture.experts,
+        route.value().expert_ids, route.value().contributions, 1.0e-5F,
+        4.0F, 25.0F, 1, k3x::ProfilePhase::decode);
+    const auto oracle = k3x::official_moe_cpu(
+        fixture.input, fixture.cpu_weights(), route.value(), 1.0e-5F,
+        4.0F, 25.0F);
+    if (!consumed) return 45;
+    if (!oracle) return 46;
+    if (!close(consumed.value().output, oracle.value().output)) return 47;
+    if (backend.value()->official_mxfp4_moe_ffn_prepared(
+            first.value().prepared, fixture.cuda_weights(), fixture.experts,
+            route.value().expert_ids, route.value().contributions, 1.0e-5F,
+            4.0F, 25.0F, 1, k3x::ProfilePhase::decode))
+        return 48;
+    if (backend.value()->runtime_stats().official_moe_prepared_consumes != 1)
+        return 40;
+
+    auto invalidated = prepare();
+    if (!invalidated) return 41;
+    const auto host = backend.value()->official_mxfp4_moe_ffn(
+        cpu_hidden.value(), fixture.input.prefix_sum, fixture.cuda_weights(),
+        fixture.experts, route.value().expert_ids, route.value().contributions,
+        1.0e-5F, 4.0F, 25.0F, 1, k3x::ProfilePhase::decode);
+    if (!host || backend.value()->official_mxfp4_moe_ffn_prepared(
+                     invalidated.value().prepared, fixture.cuda_weights(),
+                     fixture.experts, route.value().expert_ids,
+                     route.value().contributions, 1.0e-5F, 4.0F, 25.0F, 1,
+                     k3x::ProfilePhase::decode))
+        return 42;
+
+    auto stale = prepare();
+    auto current = prepare();
+    if (!stale || !current ||
+        backend.value()->discard_official_moe_prepared(
+            {0, current.value().prepared.generation}) ||
+        backend.value()->official_mxfp4_moe_ffn_prepared(
+            stale.value().prepared, fixture.cuda_weights(), fixture.experts,
+            route.value().expert_ids, route.value().contributions, 1.0e-5F,
+            4.0F, 25.0F, 1, k3x::ProfilePhase::decode) ||
+        !backend.value()->discard_official_moe_prepared(
+            current.value().prepared) ||
+        backend.value()->discard_official_moe_prepared(
+            current.value().prepared))
+        return 43;
+    const auto final_stats = backend.value()->runtime_stats();
+    if (final_stats.official_moe_prepared_discards != 1 ||
+        final_stats.official_moe_prepared_invalidations < 2)
+        return 44;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
     if (const auto result = run(k3x::CudaWeightMode::transient)) return result;
     if (const auto result = run(k3x::CudaWeightMode::resident)) return 10 + result;
-    return invalid();
+    if (const auto result = invalid()) return result;
+    return prepared();
 }

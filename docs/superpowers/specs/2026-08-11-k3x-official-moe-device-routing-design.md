@@ -20,7 +20,7 @@ This is preferred over adding another official layer because B-0032 leaves host 
 
 ## Interfaces
 
-`OfficialMoeRoutePrepareView` owns views for residual norm, residual projection, post norm, router, and correction. `OfficialMoePreparedToken` contains only `owner` and `generation`. `OfficialMoeRoutePrepareResult` contains `executed`, the token, and exactly 896 finite raw logits.
+`OfficialMoeRoutePrepareView` owns views for residual norm, residual projection, post norm, and router. Correction remains a canonical host-policy input and never enters the CUDA preparation API. `OfficialMoePreparedToken` contains only `owner` and `generation`. `OfficialMoeRoutePrepareResult` contains `executed`, the token, and one finite raw logit per router row, which is 896 on the bounded official fixture.
 
 The backend gains three opt-in virtual operations.
 
@@ -45,7 +45,7 @@ Tiny CUDA tests require exact route IDs and bounded numerical parity for logits,
 
 ## Lifetime and failure rules
 
-The backend owns one grow-only prepared-activation slot independent of operation scratch and KDA state. A token is valid only for the exact backend owner, generation, layer, hidden width, and admitted immutable weight identities that created it.
+The backend owns one grow-only prepared-activation slot independent of operation scratch and KDA state. Preparation validates and admits the immutable route weights before seeding the slot. A token is valid only for the exact backend owner, generation, layer, and hidden width that created it.
 
 - A new preparation invalidates any older unconsumed generation before mutation.
 - Consumption validates every field before upload or kernel launch and consumes the token once.
