@@ -32,6 +32,7 @@ add_library(k3x_runtime
     runtime/src/host_expert_store.cpp
     runtime/src/storage_slice.cpp
     runtime/src/official_expert.cpp
+    runtime/src/official_moe.cpp
 )
 if(K3X_ENABLE_CUDA)
     enable_language(CUDA)
@@ -95,6 +96,10 @@ add_test(NAME cuda_graph_cache COMMAND test_cuda_graph_cache)
 add_executable(test_official_expert tests/cpp/test_official_expert.cpp)
 target_link_libraries(test_official_expert PRIVATE k3x_runtime)
 add_test(NAME official_expert COMMAND test_official_expert)
+
+add_executable(test_official_moe tests/cpp/test_official_moe.cpp)
+target_link_libraries(test_official_moe PRIVATE k3x_runtime)
+add_test(NAME official_moe COMMAND test_official_moe)
 
 add_executable(test_host_expert_store tests/cpp/test_host_expert_store.cpp)
 target_link_libraries(test_host_expert_store PRIVATE k3x_runtime)
