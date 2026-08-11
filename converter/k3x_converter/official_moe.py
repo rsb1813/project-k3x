@@ -11,16 +11,25 @@ from pathlib import Path
 
 import torch
 
-from .format import K3XError
+from .format import (
+    K3XError,
+    OPTIONAL_OFFICIAL_MOE_FIXTURE,
+    OPTIONAL_STORAGE_FIXTURE,
+)
 from .official_source import (
+    ExpertPlan,
     OfficialConfig,
     OfficialIndex,
     OfficialShardHeader,
     PlannedTensor,
     OfficialSnapshot,
     Transport,
+    _released_storage_config,
     _fetch_exact_range,
+    plan_official_expert,
 )
+from .reader import K3XReader
+from .writer import CONVERTER_VERSION, convert
 
 
 _HIDDEN_SIZE = 7_168
@@ -129,6 +138,7 @@ class MaterializedRangeObject:
     reused: bool
     requests: int
     maximum_response_bytes: int
+    response_bytes: int = 0
 
 
 @dataclass(frozen=True)
@@ -149,6 +159,24 @@ class AssembledOfficialMoeSource:
     microshard_path: Path
     microshard_sha256: str
     tensor_sha256: dict[str, str]
+
+
+@dataclass(frozen=True)
+class OfficialMoeMaterializationReport:
+    source_directory: Path
+    route_manifest_path: Path
+    manifest_path: Path
+    microshard_path: Path
+    k3x_path: Path
+    selected_experts: tuple[int, ...]
+    requested_payload_bytes: int
+    downloaded_payload_bytes: int
+    reused_objects: int
+    requests: int
+    maximum_response_bytes: int
+    microshard_sha256: str
+    tensor_sha256: dict[str, str]
+    k3x_root_sha256: str
 
 
 def _sha256_path(path: Path, chunk_bytes: int) -> str:
@@ -260,6 +288,7 @@ def materialize_official_range_object(
 
     requests = 0
     maximum_response = 0
+    response_bytes = 0
     mode = "ab" if completed else "wb"
     with partial_path.open(mode) as stream:
         position = start + completed
@@ -275,6 +304,7 @@ def materialize_official_range_object(
             position += len(body)
             completed += len(body)
             requests += 1
+            response_bytes += len(body)
             maximum_response = max(maximum_response, len(body))
             _write_json_atomic(
                 progress_path,
@@ -306,8 +336,91 @@ def materialize_official_range_object(
     )
     progress_path.unlink(missing_ok=True)
     return MaterializedRangeObject(
-        object_path, digest, length, False, requests, maximum_response
+        object_path,
+        digest,
+        length,
+        False,
+        requests,
+        maximum_response,
+        response_bytes,
     )
+
+
+def build_official_moe_source_tensors(
+    plan: OfficialMoePlan,
+    routes: OfficialMoeRoutes,
+    expert_plans: dict[int, ExpertPlan],
+    always_objects: dict[str, MaterializedRangeObject],
+    expert_objects: dict[int, MaterializedRangeObject],
+) -> tuple[OfficialMoeSourceTensor, ...]:
+    if (
+        tuple(expert_plans) != routes.selected_experts
+        or tuple(expert_objects) != routes.selected_experts
+        or set(always_objects) != {item.official_name for item in plan.always_active}
+    ):
+        raise K3XError("INVALID_OFFICIAL_MOE_OBJECT_SET")
+
+    result: list[OfficialMoeSourceTensor] = []
+
+    def add_always(item: PlannedTensor) -> None:
+        materialized = always_objects[item.official_name]
+        if materialized.length != item.length:
+            raise K3XError("INVALID_OFFICIAL_MOE_OBJECT_SET", item.official_name)
+        result.append(
+            OfficialMoeSourceTensor(
+                item.canonical_name,
+                item.dtype,
+                item.shape,
+                materialized.path,
+                0,
+                item.length,
+            )
+        )
+
+    for item in plan.always_active[:6]:
+        add_always(item)
+
+    packed_shapes = {
+        "gate": (3_072, 3_584),
+        "up": (3_072, 3_584),
+        "down": (3_584, 3_072),
+    }
+    for expert_id in routes.selected_experts:
+        expert_plan = expert_plans[expert_id]
+        materialized = expert_objects[expert_id]
+        if (
+            expert_plan.layer_id != plan.layer_id
+            or expert_plan.expert_id != expert_id
+            or expert_plan.shard_path != plan.shard_path
+            or expert_plan.index_sha256 != plan.index_sha256
+            or materialized.length != expert_plan.payload_bytes
+        ):
+            raise K3XError("INVALID_OFFICIAL_MOE_EXPERT_OBJECT", str(expert_id))
+        by_role = {
+            role: tuple(item for item in expert_plan.tensors if item.role == role)
+            for role in ("gate", "up", "down")
+        }
+        if any(len(items) != 2 for items in by_role.values()):
+            raise K3XError("INVALID_OFFICIAL_MOE_EXPERT_OBJECT", str(expert_id))
+        for role in ("gate", "up", "down"):
+            for item in by_role[role]:
+                result.append(
+                    OfficialMoeSourceTensor(
+                        item.canonical_name,
+                        item.dtype,
+                        item.shape,
+                        materialized.path,
+                        item.offset - expert_plan.payload_start,
+                        item.length,
+                        packed_shapes[role]
+                        if item.canonical_name.endswith(".weight_packed")
+                        else None,
+                    )
+                )
+
+    for item in plan.always_active[6:]:
+        add_always(item)
+    return tuple(result)
 
 
 def assemble_official_moe_source(
@@ -316,8 +429,14 @@ def assemble_official_moe_source(
     config: dict[str, object],
     *,
     chunk_bytes: int = 8 * 1024 * 1024,
+    official_metadata: dict[str, object] | None = None,
 ) -> AssembledOfficialMoeSource:
-    if chunk_bytes <= 0 or not tensors or not isinstance(config, dict):
+    if (
+        chunk_bytes <= 0
+        or not tensors
+        or not isinstance(config, dict)
+        or (official_metadata is not None and not isinstance(official_metadata, dict))
+    ):
         raise K3XError("INVALID_OFFICIAL_MOE_SOURCE")
     names = tuple(item.name for item in tensors)
     if len(set(names)) != len(names):
@@ -400,6 +519,8 @@ def assemble_official_moe_source(
         "source_sha256": _sha256_path(microshard_path, chunk_bytes),
         "tensor_sha256": tensor_digests,
     }
+    if official_metadata is not None:
+        manifest["official_moe"] = official_metadata
     manifest_path = source_directory / "source-manifest.json"
     _write_json_atomic(manifest_path, manifest)
     return AssembledOfficialMoeSource(
@@ -658,4 +779,157 @@ def plan_official_moe_slice(
         total,
         _EXPERT_PAYLOAD_BYTES,
         total + 32 * _EXPERT_PAYLOAD_BYTES,
+    )
+
+
+def materialize_official_moe_slice(
+    snapshot: OfficialSnapshot,
+    index: OfficialIndex,
+    config: OfficialConfig,
+    header: OfficialShardHeader,
+    plan: OfficialMoePlan,
+    transport: Transport,
+    output_directory: Path,
+    *,
+    chunk_bytes: int = 8 * 1024 * 1024,
+) -> OfficialMoeMaterializationReport:
+    if (
+        chunk_bytes <= 0
+        or plan.layer_id != 1
+        or plan.shard_path != header.shard_path
+        or plan.index_sha256 != index.sha256
+    ):
+        raise K3XError("INVALID_OFFICIAL_MOE_MATERIALIZATION")
+    bounded_chunk = min(chunk_bytes, 8 * 1024 * 1024)
+    output_directory = Path(output_directory)
+    output_directory.mkdir(parents=True, exist_ok=True)
+    object_directory = output_directory / "objects"
+
+    always_objects: dict[str, MaterializedRangeObject] = {}
+    materialized: list[MaterializedRangeObject] = []
+    for item in plan.always_active:
+        value = materialize_official_range_object(
+            snapshot,
+            plan.shard_path,
+            item.offset,
+            item.length,
+            transport,
+            object_directory,
+            chunk_bytes=bounded_chunk,
+        )
+        always_objects[item.official_name] = value
+        materialized.append(value)
+
+    routes = derive_official_moe_routes(plan, always_objects)
+    inputs = official_moe_inputs()
+    route_manifest = {
+        "format": "k3x-official-moe-routes-v1",
+        "converter_version": CONVERTER_VERSION,
+        "repository": snapshot.repository,
+        "requested_revision": snapshot.requested_revision,
+        "resolved_revision": snapshot.resolved_revision,
+        "snapshot_sha256": snapshot.canonical_sha256,
+        "index_sha256": index.sha256,
+        "config_sha256": config.sha256,
+        "config_git_blob_id": config.git_blob_id,
+        "shard_path": plan.shard_path,
+        "shard_lfs_sha256": snapshot.files[plan.shard_path].lfs_sha256,
+        "inputs": [
+            {
+                "name": item.name,
+                "prefix_sha256": item.prefix_sha256,
+                "block_sha256": item.block_sha256,
+            }
+            for item in inputs
+        ],
+        "routes": [
+            {
+                "name": case.name,
+                "expert_ids": list(case.route.expert_ids),
+                "contributions": list(case.route.contributions),
+            }
+            for case in routes.cases
+        ],
+        "selected_experts": list(routes.selected_experts),
+        "always_active_objects": [
+            {
+                "name": item.official_name,
+                "range": [item.offset, item.offset + item.length],
+                "sha256": always_objects[item.official_name].sha256,
+            }
+            for item in plan.always_active
+        ],
+        "provenance": "transport-pinned-ranges",
+    }
+    route_manifest_path = output_directory / "route-manifest.json"
+    _write_json_atomic(route_manifest_path, route_manifest)
+
+    expert_plans: dict[int, ExpertPlan] = {}
+    expert_objects: dict[int, MaterializedRangeObject] = {}
+    for expert_id in routes.selected_experts:
+        expert_plan = plan_official_expert(
+            index, header, layer_id=plan.layer_id, expert_id=expert_id
+        )
+        value = materialize_official_range_object(
+            snapshot,
+            expert_plan.shard_path,
+            expert_plan.payload_start,
+            expert_plan.payload_bytes,
+            transport,
+            object_directory,
+            chunk_bytes=bounded_chunk,
+        )
+        expert_plans[expert_id] = expert_plan
+        expert_objects[expert_id] = value
+        materialized.append(value)
+
+    tensors = build_official_moe_source_tensors(
+        plan, routes, expert_plans, always_objects, expert_objects
+    )
+    official_metadata = {
+        **route_manifest,
+        "expert_objects": [
+            {
+                "expert_id": expert_id,
+                "range": [
+                    expert_plans[expert_id].payload_start,
+                    expert_plans[expert_id].payload_end,
+                ],
+                "sha256": expert_objects[expert_id].sha256,
+            }
+            for expert_id in routes.selected_experts
+        ],
+    }
+    assembled = assemble_official_moe_source(
+        output_directory,
+        tensors,
+        _released_storage_config(),
+        chunk_bytes=bounded_chunk,
+        official_metadata=official_metadata,
+    )
+    k3x_path = output_directory / "official-moe-l1.k3x"
+    convert(
+        assembled.source_directory,
+        k3x_path,
+        chunk_bytes=bounded_chunk,
+    )
+    reader = K3XReader.open(k3x_path)
+    expected_optional = OPTIONAL_STORAGE_FIXTURE | OPTIONAL_OFFICIAL_MOE_FIXTURE
+    if reader.superblock.optional_features != expected_optional:
+        raise K3XError("INVALID_OFFICIAL_MOE_ARTIFACT")
+    return OfficialMoeMaterializationReport(
+        assembled.source_directory,
+        route_manifest_path,
+        assembled.manifest_path,
+        assembled.microshard_path,
+        k3x_path,
+        routes.selected_experts,
+        sum(item.length for item in materialized),
+        sum(item.response_bytes for item in materialized),
+        sum(1 for item in materialized if item.reused),
+        sum(item.requests for item in materialized),
+        max((item.maximum_response_bytes for item in materialized), default=0),
+        assembled.microshard_sha256,
+        assembled.tensor_sha256,
+        reader.superblock.root_sha256.hex(),
     )

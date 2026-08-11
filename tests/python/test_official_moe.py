@@ -11,29 +11,37 @@ import pytest
 import torch
 
 from k3x_converter.official_moe import (
+    AssembledOfficialMoeSource,
+    OfficialMoeRoute,
+    OfficialMoeRouteCase,
+    OfficialMoeRoutes,
     OfficialMoeSourceTensor,
     MaterializedRangeObject,
     assemble_official_moe_source,
+    build_official_moe_source_tensors,
     derive_official_moe_routes,
     prepare_official_moe_hidden,
     materialize_official_range_object,
+    materialize_official_moe_slice,
     official_moe_inputs,
     plan_official_moe_slice,
     route_official_hidden,
 )
 from k3x_converter.official_source import (
+    ExpertPlan,
     OfficialConfig,
     OfficialFile,
     OfficialIndex,
     OfficialSnapshot,
     OfficialShardHeader,
+    PlannedTensor,
 )
 from k3x_converter.safetensors_reader import TensorMetadata
 from k3x_converter.format import K3XError
 from k3x_converter.format import fnv1a64
 from k3x_converter.official_transport import HttpResponse
 from k3x_converter.reader import K3XReader
-from k3x_converter.writer import convert
+from k3x_converter.writer import ConversionReport, convert
 
 
 _SHARD = "model-00002-of-000096.safetensors"
@@ -278,6 +286,7 @@ def test_range_object_is_chunk_bounded_content_addressed_and_reused(
     assert first.sha256 == hashlib.sha256(expected).hexdigest()
     assert first.reused is False
     assert first.requests == 4
+    assert first.response_bytes == 13
     assert first.maximum_response_bytes == 4
     assert transport.calls == [(10, 13), (14, 17), (18, 21), (22, 22)]
 
@@ -295,6 +304,7 @@ def test_range_object_is_chunk_bounded_content_addressed_and_reused(
     assert second.sha256 == first.sha256
     assert second.reused is True
     assert second.requests == 0
+    assert second.response_bytes == 0
     assert second_transport.calls == []
 
 
@@ -334,6 +344,7 @@ def test_range_object_rejects_corrupt_partial_and_refetches_from_start(
     )
 
     assert result.path.read_bytes() == body[10:23]
+    assert result.response_bytes == 13
     assert resumed.calls[0] == (10, 13)
     assert not tuple(output.glob("*.partial"))
 
@@ -379,6 +390,7 @@ def test_range_object_finalizes_complete_verified_partial_without_refetch(
     )
 
     assert result.path.read_bytes() == body[10:23]
+    assert result.response_bytes == 0
     assert resumed.calls == []
 
 
@@ -538,3 +550,208 @@ def test_route_derivation_decodes_exact_objects_and_builds_first_use_union(
     )
     assert derived.selected_experts == expected_union
     assert set(expected_routes[0][1]) != set(expected_routes[1][1])
+
+
+def _small_expert_plan(expert_id: int, index_sha256: str) -> ExpertPlan:
+    base = f"model.layers.1.feed_forward.experts.{expert_id}"
+    specifications = (
+        ("gate", "weight_packed", 100),
+        ("gate", "weight_scale", 101),
+        ("down", "weight_packed", 102),
+        ("down", "weight_scale", 103),
+        ("up", "weight_packed", 104),
+        ("up", "weight_scale", 105),
+    )
+    tensors = tuple(
+        PlannedTensor(
+            f"official.{expert_id}.{role}.{kind}",
+            f"{base}.{role}.{kind}",
+            role,
+            "U8",
+            (1,),
+            offset,
+            1,
+        )
+        for role, kind, offset in specifications
+    )
+    return ExpertPlan(1, expert_id, _SHARD, 100, 106, 6, index_sha256, tensors)
+
+
+def test_source_tensor_builder_uses_route_union_and_gate_up_down_first_use_order(
+    tmp_path: Path,
+) -> None:
+    metadata = _metadata()
+    index = OfficialIndex(
+        sum(item.length for item in metadata.values()),
+        MappingProxyType({name: _SHARD for name in metadata}),
+        (_SHARD,),
+        len(metadata),
+        "7" * 64,
+    )
+    header = OfficialShardHeader(
+        _SHARD, 16_990_911_504, 818_696, 818_704, MappingProxyType(metadata)
+    )
+    plan = plan_official_moe_slice(index, header, _config(), layer_id=1)
+    routes = OfficialMoeRoutes(
+        (
+            OfficialMoeRouteCase("a", OfficialMoeRoute((9, 3), (0.6, 0.4))),
+            OfficialMoeRouteCase("b", OfficialMoeRoute((3, 5), (0.7, 0.3))),
+        ),
+        (9, 3, 5),
+    )
+    always_objects = {
+        item.official_name: MaterializedRangeObject(
+            tmp_path / f"always-{position}.blob",
+            "a" * 64,
+            item.length,
+            False,
+            1,
+            1,
+        )
+        for position, item in enumerate(plan.always_active)
+    }
+    expert_plans = {
+        expert_id: _small_expert_plan(expert_id, index.sha256)
+        for expert_id in routes.selected_experts
+    }
+    expert_objects = {
+        expert_id: MaterializedRangeObject(
+            tmp_path / f"expert-{expert_id}.blob", "b" * 64, 6, False, 1, 1
+        )
+        for expert_id in routes.selected_experts
+    }
+
+    tensors = build_official_moe_source_tensors(
+        plan, routes, expert_plans, always_objects, expert_objects
+    )
+
+    expert_weights = [
+        item
+        for item in tensors
+        if ".feed_forward.experts." in item.name
+        and item.name.endswith("weight_packed")
+    ]
+    assert [item.name.rsplit(".", 2)[-2] for item in expert_weights] == [
+        "gate", "up", "down", "gate", "up", "down", "gate", "up", "down"
+    ]
+    assert [
+        item.name.split(".experts.", 1)[1].split(".", 1)[0]
+        for item in expert_weights
+    ] == ["9", "9", "9", "3", "3", "3", "5", "5", "5"]
+    assert tensors[0].name.endswith("mlp_res_norm.weight")
+    assert tensors[-1].name.endswith("shared_experts.down_proj.weight")
+
+
+def test_materializer_publishes_routes_before_experts_and_returns_verified_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    metadata = _metadata()
+    index = OfficialIndex(
+        sum(item.length for item in metadata.values()),
+        MappingProxyType({name: _SHARD for name in metadata}),
+        (_SHARD,),
+        len(metadata),
+        "7" * 64,
+    )
+    header = OfficialShardHeader(
+        _SHARD, 16_990_911_504, 818_696, 818_704, MappingProxyType(metadata)
+    )
+    plan = plan_official_moe_slice(index, header, _config(), layer_id=1)
+    snapshot = OfficialSnapshot(
+        "moonshotai/Kimi-K3",
+        "main",
+        "9" * 40,
+        "2026-08-11T00:00:00Z",
+        MappingProxyType(
+            {
+                _SHARD: OfficialFile(
+                    _SHARD, header.file_size, "1" * 40, "2" * 64
+                )
+            }
+        ),
+        1,
+        header.file_size,
+        "3" * 64,
+    )
+    routes = OfficialMoeRoutes(
+        (
+            OfficialMoeRouteCase("a", OfficialMoeRoute((7,), (1.0,))),
+            OfficialMoeRouteCase("b", OfficialMoeRoute((8,), (1.0,))),
+        ),
+        (7, 8),
+    )
+    events: list[str] = []
+    object_counter = 0
+
+    def fake_object(*args, **kwargs):
+        nonlocal object_counter
+        object_counter += 1
+        path = tmp_path / f"object-{object_counter}.blob"
+        path.write_bytes(b"x")
+        return MaterializedRangeObject(
+            path, f"{object_counter:064x}", args[3], False, 1, 1
+        )
+
+    def fake_routes(*args, **kwargs):
+        events.append("routes")
+        return routes
+
+    def fake_expert(*args, expert_id: int, **kwargs):
+        assert (tmp_path / "out" / "route-manifest.json").is_file()
+        events.append(f"expert-{expert_id}")
+        return _small_expert_plan(expert_id, index.sha256)
+
+    assembled_dir = tmp_path / "assembled-source"
+    assembled_dir.mkdir()
+    manifest_path = assembled_dir / "source-manifest.json"
+    microshard_path = assembled_dir / "model.safetensors"
+    manifest_path.write_text("{}\n", encoding="utf-8")
+    microshard_path.write_bytes(b"source")
+
+    def fake_assemble(*args, **kwargs):
+        events.append("assemble")
+        return AssembledOfficialMoeSource(
+            assembled_dir,
+            manifest_path,
+            microshard_path,
+            "4" * 64,
+            {"t": "5" * 64},
+        )
+
+    def fake_convert(source, output, **kwargs):
+        events.append("convert")
+        Path(output).write_bytes(b"k3x")
+        return ConversionReport(True, (), 1, Path(output))
+
+    class _Reader:
+        class _Superblock:
+            root_sha256 = bytes.fromhex("6" * 64)
+            optional_features = 3
+
+        superblock = _Superblock()
+
+    import k3x_converter.official_moe as module
+
+    monkeypatch.setattr(module, "materialize_official_range_object", fake_object)
+    monkeypatch.setattr(module, "derive_official_moe_routes", fake_routes)
+    monkeypatch.setattr(module, "plan_official_expert", fake_expert)
+    monkeypatch.setattr(module, "assemble_official_moe_source", fake_assemble)
+    monkeypatch.setattr(module, "convert", fake_convert)
+    monkeypatch.setattr(module.K3XReader, "open", lambda path: _Reader())
+
+    report = materialize_official_moe_slice(
+        snapshot,
+        index,
+        _config(),
+        header,
+        plan,
+        object(),
+        tmp_path / "out",
+        chunk_bytes=17,
+    )
+
+    assert events == ["routes", "expert-7", "expert-8", "assemble", "convert"]
+    assert report.selected_experts == (7, 8)
+    assert report.requested_payload_bytes == plan.always_active_bytes + 12
+    assert report.k3x_root_sha256 == "6" * 64
+    assert report.route_manifest_path.is_file()

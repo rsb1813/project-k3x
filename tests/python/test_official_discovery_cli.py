@@ -6,6 +6,7 @@ import hashlib
 import json
 import struct
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -297,6 +298,71 @@ def test_cli_moe_scope_dry_run_plans_dependency_closed_bytes_without_payload(
     assert summary["selected_experts"] == []
     assert summary["traffic"]["tensor_payload_bytes"] == 0
     assert transport.payload_requested is False
+
+
+def test_cli_moe_materialization_requires_scope_and_output_directory() -> None:
+    with pytest.raises(SystemExit):
+        main(["--scope", "moe-ffn", "--materialize"], transport=_DiscoveryTransport())
+    with pytest.raises(SystemExit):
+        main(["--materialize", "--output-dir", "elsewhere"], transport=_DiscoveryTransport())
+
+
+def test_cli_moe_materialization_prints_canonical_report(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = tmp_path / "artifacts"
+    summary_path = tmp_path / "summary.json"
+    captured: dict[str, object] = {}
+
+    def fake_materialize(
+        snapshot,
+        index,
+        config,
+        header,
+        plan,
+        transport,
+        output_dir,
+        *,
+        chunk_bytes,
+    ):
+        captured.update(output_dir=output_dir, chunk_bytes=chunk_bytes)
+        return SimpleNamespace(
+            selected_experts=(7, 8),
+            requested_payload_bytes=379_900_428,
+            downloaded_payload_bytes=123_456,
+            reused_objects=0,
+            requests=13,
+            maximum_response_bytes=8 * 1024 * 1024,
+            microshard_sha256="4" * 64,
+            tensor_sha256={"tensor": "5" * 64},
+            k3x_root_sha256="6" * 64,
+        )
+
+    monkeypatch.setattr(
+        "tools.discover_official_kimi_k3.materialize_official_moe_slice",
+        fake_materialize,
+    )
+
+    assert main(
+        [
+            "--scope", "moe-ffn", "--materialize",
+            "--output-dir", str(output),
+            "--summary-json", str(summary_path),
+        ],
+        transport=_DiscoveryTransport(),
+    ) == 0
+
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert json.loads(capsys.readouterr().out) == summary
+    assert summary["format"] == "k3x-official-moe-materialization-v1"
+    assert summary["mode"] == "materialize"
+    assert summary["selected_experts"] == [7, 8]
+    assert summary["traffic"]["tensor_payload_bytes"] == 123_456
+    assert summary["traffic"]["source_object_bytes"] == 379_900_428
+    assert summary["artifacts"]["k3x_root_sha256"] == "6" * 64
+    assert captured == {"output_dir": output.resolve(), "chunk_bytes": 257 * 1024}
 
 
 def test_cli_requires_explicit_live_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
