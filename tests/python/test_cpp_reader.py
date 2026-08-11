@@ -1,18 +1,54 @@
 # C++ reader가 Python writer artifact의 정확한 corruption code를 반환하는지 검증합니다.
 import dataclasses
 import hashlib
+import json
 import os
 import shutil
+import struct
 import subprocess
 from pathlib import Path
 
 import pytest
 
 from conftest import cpp_binary
-from k3x_converter.format import SUPERBLOCK_BYTES, Superblock, root_sha256
+from k3x_converter.format import (
+    SUPERBLOCK_BYTES,
+    Superblock,
+    root_sha256,
+)
 from k3x_converter.reader import K3XReader
 from k3x_converter.writer import convert
 from k3x_ref.storage_fixture import write_bounded_expert_source
+
+
+def _write_bf16_source(source: Path, config_source: Path) -> None:
+    source.mkdir()
+    name = "model.layers.0.bf16_probe.weight"
+    payload = bytes.fromhex("0000803f004040408040a040")
+    header = json.dumps(
+        {name: {"dtype": "BF16", "shape": [2, 3], "data_offsets": [0, 12]}},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    shard_name = "bf16.safetensors"
+    (source / shard_name).write_bytes(struct.pack("<Q", len(header)) + header + payload)
+    config = json.loads(
+        (config_source / "source-manifest.json").read_text(encoding="utf-8")
+    )["config"]
+    (source / "source-manifest.json").write_text(
+        json.dumps(
+            {
+                "format": "k3-official-moe-slice-v1",
+                "artifact_kind": "official_moe_fixture",
+                "config": config,
+                "packed_shapes": {},
+                "weight_map": {name: shard_name},
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        encoding="utf-8",
+    )
 
 
 def _run_reader(path: Path) -> subprocess.CompletedProcess[str]:
@@ -74,6 +110,54 @@ def test_cpp_reader_exposes_storage_fixture_optional_identity(
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_cpp_reader_accepts_exact_bf16_tensor(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    source = tmp_path / "bf16-source"
+    _write_bf16_source(source, synthetic_source)
+    artifact = tmp_path / "bf16.k3x"
+    convert(source, artifact, chunk_bytes=5)
+
+    result = subprocess.run(
+        [str(cpp_binary("test_reader")), str(artifact), "bf16"],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_cpp_reader_rejects_bf16_feature_mismatch_and_quantization(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    source = tmp_path / "bf16-source"
+    _write_bf16_source(source, synthetic_source)
+    valid = tmp_path / "bf16.k3x"
+    convert(source, valid, chunk_bytes=5)
+
+    missing_feature = tmp_path / "missing-feature.k3x"
+    shutil.copyfile(valid, missing_feature)
+    with missing_feature.open("r+b") as stream:
+        block = Superblock.decode(stream.read(SUPERBLOCK_BYTES))
+        stream.seek(0)
+        stream.write(dataclasses.replace(block, required_features=0).encode())
+    result = _run_reader(missing_feature)
+    assert result.returncode == 1
+    assert result.stderr.strip() == "INVALID_DIRECTORY"
+
+    invalid_quantization = tmp_path / "invalid-quantization.k3x"
+    shutil.copyfile(valid, invalid_quantization)
+
+    def set_mxfp4_quantization(stream, block: Superblock) -> None:
+        stream.seek(block.tensor_directory_offset + 16 + 14)
+        stream.write(struct.pack("<H", 1))
+
+    _refinalize_metadata(invalid_quantization, set_mxfp4_quantization)
+    result = _run_reader(invalid_quantization)
+    assert result.returncode == 1
+    assert result.stderr.strip() == "INVALID_DIRECTORY"
 
 
 @pytest.mark.skipif(
@@ -189,7 +273,7 @@ def test_cpp_reader_accepts_python_artifact_and_rejects_corruption(
     with unsupported.open("r+b") as stream:
         block = Superblock.decode(stream.read(SUPERBLOCK_BYTES))
         stream.seek(0)
-        stream.write(dataclasses.replace(block, required_features=1).encode())
+        stream.write(dataclasses.replace(block, required_features=1 << 63).encode())
     result = _run_reader(unsupported)
     assert result.returncode == 1
     assert result.stderr.strip() == "UNSUPPORTED_REQUIRED_FEATURE"

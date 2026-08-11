@@ -456,7 +456,7 @@ Result<Reader> Reader::open(const std::filesystem::path& path,
     if (crc32c(block.first(4092)) != little<std::uint32_t>(block, 4092)) {
         return Result<Reader>::failure(ErrorCode::superblock_crc_mismatch);
     }
-    if (little<std::uint64_t>(block, 24) != 0) {
+    if (little<std::uint64_t>(block, 24) & ~supported_required_features) {
         return Result<Reader>::failure(ErrorCode::unsupported_required_feature);
     }
     if (!all_zero(block.subspan(232, 4092 - 232))) {
@@ -529,10 +529,12 @@ Result<Reader> Reader::open(const std::filesystem::path& path,
          reader.superblock_.model_config_offset + reader.superblock_.model_config_length},
     };
     std::unordered_set<std::uint64_t> tensor_ids;
+    bool has_bf16 = false;
     for (std::size_t index = 0; index < *tensor_count; ++index) {
         const auto raw_record = directory.subspan(16 + index * tensor_record_bytes, tensor_record_bytes);
         auto record = decode_tensor(raw_record);
-        if (record.rank > 4 || (record.dtype != 1 && record.dtype != 2) ||
+        if (record.rank > 4 ||
+            (record.dtype != 1 && record.dtype != 2 && record.dtype != 3) ||
             record.quantization > 1 || little<std::uint32_t>(raw_record, 8) != 0 ||
             little<std::uint8_t>(raw_record, 17) != 0 ||
             little<std::uint16_t>(raw_record, 18) != 0 ||
@@ -550,9 +552,34 @@ Result<Reader> Reader::open(const std::filesystem::path& path,
                            record.auxiliary_crc32c == 0;
         const bool mxfp4 = record.dtype == 2 && record.quantization == 1 &&
                            record.auxiliary_length != 0;
-        if (!record.data_length || !record.logical_length || (!plain && !mxfp4)) {
+        bool bf16 = record.dtype == 3 && record.quantization == 0 &&
+                    record.auxiliary_length == 0 &&
+                    record.auxiliary_offset == 0 &&
+                    record.auxiliary_crc32c == 0;
+        if (bf16) {
+            std::uint64_t values = 1;
+            for (std::size_t dimension = 0; dimension < record.rank;
+                 ++dimension) {
+                const auto size = record.dimensions[dimension];
+                if (size == 0 ||
+                    values > std::numeric_limits<std::uint64_t>::max() / size) {
+                    bf16 = false;
+                    break;
+                }
+                values *= size;
+            }
+            if (bf16 &&
+                (values > std::numeric_limits<std::uint64_t>::max() / 2 ||
+                 record.logical_length != values * 2 ||
+                 record.data_length != record.logical_length)) {
+                bf16 = false;
+            }
+        }
+        if (!record.data_length || !record.logical_length ||
+            (!plain && !mxfp4 && !bf16)) {
             return Result<Reader>::failure(ErrorCode::invalid_directory);
         }
+        has_bf16 = has_bf16 || bf16;
         for (const auto [offset, length] : {std::pair{record.data_offset, record.data_length},
                                            std::pair{record.auxiliary_offset, record.auxiliary_length}}) {
             if (!length) {
@@ -565,6 +592,11 @@ Result<Reader> Reader::open(const std::filesystem::path& path,
             }
         }
         reader.tensors_.push_back(record);
+    }
+    const bool bf16_feature =
+        (reader.superblock_.required_features & required_bf16_tensors) != 0;
+    if (has_bf16 != bf16_feature) {
+        return Result<Reader>::failure(ErrorCode::invalid_directory);
     }
     const auto configured_experts = little<std::uint32_t>(config.value(), 48);
     for (const auto& tensor : reader.tensors_) {

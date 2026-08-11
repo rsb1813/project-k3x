@@ -16,7 +16,9 @@ from .format import (
     EXPERT_RECORD_BYTES,
     LAYER_RECORD_BYTES,
     MODEL_CONFIG_BYTES,
+    OPTIONAL_OFFICIAL_MOE_FIXTURE,
     OPTIONAL_STORAGE_FIXTURE,
+    REQUIRED_BF16_TENSORS,
     SUPERBLOCK_BYTES,
     TENSOR_RECORD_BYTES,
     DType,
@@ -123,15 +125,21 @@ def _load_plans(source: Path) -> tuple[dict, list[_TensorPlan]]:
             if auxiliary_name not in tensors or base not in manifest.get("packed_shapes", {}):
                 raise K3XError("INCOMPLETE_MXFP4_TENSOR", base)
             canonical, auxiliary = base, tensors[auxiliary_name]
+            if tensors[name].dtype != "U8" or auxiliary.dtype != "U8":
+                raise K3XError("UNSUPPORTED_SOURCE_DTYPE", tensors[name].dtype)
             dimensions = tuple(manifest["packed_shapes"][base])
             dtype, quantization = DType.UINT8, Quantization.MXFP4
             consumed.add(auxiliary_name)
         else:
             canonical, auxiliary = name, None
             dimensions = tensors[name].shape
-            if tensors[name].dtype != "F32":
+            if tensors[name].dtype == "F32":
+                dtype = DType.FP32
+            elif tensors[name].dtype == "BF16":
+                dtype = DType.BF16
+            else:
                 raise K3XError("UNSUPPORTED_SOURCE_DTYPE", tensors[name].dtype)
-            dtype, quantization = DType.FP32, Quantization.NONE
+            quantization = Quantization.NONE
         layer_match = _LAYER_RE.match(canonical)
         expert_match = _EXPERT_RE.match(canonical)
         plans.append(_TensorPlan(canonical, tensors[name], auxiliary, dimensions, dtype,
@@ -152,6 +160,11 @@ def _load_plans(source: Path) -> tuple[dict, list[_TensorPlan]]:
         raise K3XError("TENSOR_ID_COLLISION")
     if manifest["format"] == "k3-storage-slice-v1":
         _validate_storage_fixture(manifest, plans)
+    if (
+        manifest["format"] == "k3-official-moe-slice-v1"
+        and manifest.get("artifact_kind") != "official_moe_fixture"
+    ):
+        raise K3XError("INVALID_OFFICIAL_MOE_FIXTURE_KIND")
     return manifest, plans
 
 
@@ -348,13 +361,20 @@ def convert(
     if chunk_bytes <= 0:
         raise K3XError("INVALID_CHUNK_SIZE")
     manifest, plans = _load_plans(source)
-    optional_features = (
-        OPTIONAL_STORAGE_FIXTURE
-        if manifest["format"] == "k3-storage-slice-v1"
+    required_features = (
+        REQUIRED_BF16_TENSORS
+        if any(plan.dtype == DType.BF16 for plan in plans)
         else 0
     )
+    optional_features = 0
+    if manifest["format"] == "k3-storage-slice-v1":
+        optional_features = OPTIONAL_STORAGE_FIXTURE
+    elif manifest["format"] == "k3-official-moe-slice-v1":
+        optional_features = (
+            OPTIONAL_STORAGE_FIXTURE | OPTIONAL_OFFICIAL_MOE_FIXTURE
+        )
     maximum_read = 0
-    if optional_features:
+    if manifest["format"] == "k3-storage-slice-v1":
         maximum_read = _validate_storage_fixture_hashes(
             manifest, plans, source, chunk_bytes
         )
@@ -362,6 +382,8 @@ def convert(
     maximum_read = max(maximum_read, observed)
     config_bytes = _configuration_bytes(manifest["config"])
     fingerprint_bytes = config_bytes
+    if required_features:
+        fingerprint_bytes += struct.pack("<Q", required_features)
     if optional_features:
         fingerprint_bytes += struct.pack("<Q", optional_features)
     config_fingerprint = hashlib.sha256(fingerprint_bytes).hexdigest()
@@ -389,6 +411,7 @@ def convert(
                 if (
                     finalized.superblock.source_sha256 != source_fingerprint
                     or finalized.superblock.file_uuid != bytes.fromhex(ledger.file_uuid)
+                    or finalized.superblock.required_features != required_features
                     or finalized.superblock.optional_features != optional_features
                     or finalized.model_config != config_bytes
                 ):
@@ -468,10 +491,15 @@ def convert(
                 if stop_after_extents is not None and newly_written >= stop_after_extents:
                     return ConversionReport(False, tuple(reused), maximum_read, output)
             data, auxiliary = extent_values
-            logical_length = (
-                plan.dimensions[0] * plan.dimensions[1] * 4
-                if plan.quantization == Quantization.MXFP4 else data[1]
-            )
+            values = 1
+            for dimension in plan.dimensions:
+                values *= dimension
+            if plan.quantization == Quantization.MXFP4:
+                logical_length = values * 4
+            elif plan.dtype == DType.BF16:
+                logical_length = values * 2
+            else:
+                logical_length = values * 4
             records.append(TensorRecord(
                 fnv1a64(plan.name), 0, plan.dtype, plan.quantization, plan.dimensions,
                 plan.layer_id, plan.expert_id, data[0], data[1], logical_length,
@@ -494,6 +522,7 @@ def convert(
         directory_digest = hashlib.sha256(b"".join(data for _, data in offsets)).digest()
         block = Superblock(
             source_fingerprint, file_uuid, state=1,
+            required_features=required_features,
             optional_features=optional_features,
             tensor_directory_offset=offsets[0][0], tensor_directory_length=len(tensor_directory),
             layer_directory_offset=offsets[1][0], layer_directory_length=len(layer_directory),

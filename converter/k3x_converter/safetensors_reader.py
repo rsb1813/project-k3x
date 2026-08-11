@@ -11,7 +11,7 @@ from .format import K3XError
 
 _MAX_HEADER_BYTES = 100_000_000
 _METADATA_KEYS = {"dtype", "shape", "data_offsets"}
-_KNOWN_DTYPE_BYTES = {"F32": 4, "U8": 1}
+_KNOWN_DTYPE_BYTES = {"F32": 4, "BF16": 2, "U8": 1}
 
 
 @dataclass(frozen=True)

@@ -43,13 +43,13 @@
 - Produces: source format `k3-official-moe-slice-v1` with artifact kind `official_moe_fixture`.
 - Consumes: existing `SourceTensor`, `_TensorPlan`, `Superblock`, `TensorRecord`, and Reader validation paths.
 
-- [ ] **Step 1: Add failing Python format and writer tests**
+- [x] **Step 1: Add failing Python format and writer tests**
 
 Create a minimal local safetensors shard containing one `BF16` tensor with shape `(2, 3)` and the exact bytes `00 00 80 3f 00 40 40 40 80 40 a0 40`. Require conversion to emit dtype 3, quantization NONE, data length 12, logical length 12, no auxiliary extent, and required feature bit 0. Require `K3XReader.read_tensor_extents()` to return the exact twelve bytes.
 
 Add independent negative tests for a BF16 tensor with an MXFP4 auxiliary, odd byte length, logical length unequal to `2 * product(dimensions)`, missing required bit, and an unknown required bit. Each mutation must fail with the existing stable error family rather than being accepted as FP32.
 
-- [ ] **Step 2: Run Python RED**
+- [x] **Step 2: Run Python RED**
 
 Run:
 
@@ -61,7 +61,7 @@ PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
 
 Expected: the new source manifest is rejected and `DType.BF16` is absent.
 
-- [ ] **Step 3: Implement the minimal Python contract**
+- [x] **Step 3: Implement the minimal Python contract**
 
 Add these exact constants and recognition rules.
 
@@ -79,11 +79,11 @@ class DType(enum.IntEnum):
 
 For plain source tensors, map `F32` to FP32 and `BF16` to BF16. Set `required_features` if any plan is BF16. For NONE tensors compute logical length as `product(dimensions) * 4` for FP32 and `product(dimensions) * 2` for BF16. The official source format sets both optional fixture bits and preserves physical plan order supplied by its manifest; all earlier source formats retain their current order and feature bits.
 
-- [ ] **Step 4: Add failing C++ Reader tests**
+- [x] **Step 4: Add failing C++ Reader tests**
 
 Generate the minimal BF16 K3X fixture in Python and require the C++ Reader to open it, expose dtype 3, return the exact bytes, and retain required feature bit 0. Mutate the superblock to clear the BF16 bit while repairing its CRC, and mutate it to set bit 63; both must fail before tensor consumption. Add a directory mutation with BF16 plus MXFP4 quantization and require `invalid_directory`.
 
-- [ ] **Step 5: Run C++ RED**
+- [x] **Step 5: Run C++ RED**
 
 Run:
 
@@ -97,13 +97,13 @@ PYTHONPATH=converter:reference K3X_BUILD_DIR=build \
 
 Expected: C++ rejects required feature bit 0 and dtype 3.
 
-- [ ] **Step 6: Implement the C++ Reader contract and run GREEN**
+- [x] **Step 6: Implement the C++ Reader contract and run GREEN**
 
 Define `required_bf16_tensors`, `supported_required_features`, and `optional_official_moe_fixture` in `format.hpp`. In `Reader::open`, reject only bits outside `supported_required_features`; accept dtype 3 only when quantization is zero, auxiliary fields are zero, `data_length == logical_length`, and logical length equals twice the checked dimension product. Require every file containing dtype 3 to set the BF16 feature and every file setting the feature to contain at least one BF16 tensor.
 
 Run the commands from Steps 2 and 5, then the complete CPU CTest suite. Expected: all focused tests and CPU CTests pass.
 
-- [ ] **Step 7: Self-review and commit**
+- [x] **Step 7: Self-review and commit**
 
 Confirm FP32/MXFP4 bytes and prior fixture identities are unchanged, no record size/version changed, and unsupported required bits still fail at the superblock. Commit:
 
@@ -514,4 +514,3 @@ Record only measured sublayer latency, traffic, residency, routes, parity, and s
 - [ ] **Step 8: Final review, semantic commit, and public integration**
 
 Run `git diff --check`, inspect every changed line against the accepted design, verify no real bytes are tracked, and fix only Critical/Important findings in one correction cycle. Commit evidence/docs, push, open a public PR, wait for correctness and CodeQL, rebase-merge only when clean, and verify post-merge correctness and CodeQL before beginning M29.
-
