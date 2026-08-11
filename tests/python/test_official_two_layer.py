@@ -3,17 +3,28 @@ from __future__ import annotations
 
 from dataclasses import replace
 import hashlib
+import json
 import struct
+from pathlib import Path
 
 import pytest
 import torch
 
 from k3x_ref.official_kda import OfficialKdaConfig, zero_official_kda_state
 
-from k3x_converter.format import K3XError
+from k3x_converter.format import (
+    K3XError,
+    OPTIONAL_OFFICIAL_MOE_FIXTURE,
+    OPTIONAL_STORAGE_FIXTURE,
+    fnv1a64,
+)
 from k3x_converter.official_layer import OfficialLayerPlan
 from k3x_converter.official_layer import OfficialLayerInput
-from k3x_converter.official_moe import OfficialMoePlan, OfficialMoeRoute
+from k3x_converter.official_moe import (
+    OfficialMoePlan,
+    OfficialMoeRoute,
+    OfficialMoeSourceTensor,
+)
 from k3x_converter.official_two_layer import (
     OfficialLayerSourceBytes,
     OfficialMxfp4ExpertBytes,
@@ -23,9 +34,11 @@ from k3x_converter.official_two_layer import (
     OfficialTwoLayerStepExecution,
     derive_official_two_layer_trace,
     make_official_source_byte_executor,
+    manufacture_official_two_layer_fixture,
     official_two_layer_state,
     plan_official_two_layer,
 )
+from k3x_converter.reader import K3XReader
 
 
 _SOURCE_BLOB = "b8c41e8bfce768d74d8da3a37e693f5ee43876a0"
@@ -333,3 +346,164 @@ def test_official_source_byte_executor_rejects_truncated_dense_payload() -> None
 
     with pytest.raises(K3XError, match="INVALID_OFFICIAL_TWO_LAYER_SOURCE"):
         execute(_layer_plan(1), item, state)
+
+
+def _tiny_artifact_tensors(
+    tmp_path: Path,
+) -> tuple[tuple[OfficialMoeSourceTensor, ...], list[str]]:
+    tensors: list[OfficialMoeSourceTensor] = []
+    expected_order: list[str] = []
+    for layer_id in (1, 2):
+        dense_name = f"model.layers.{layer_id}.input_layernorm.weight"
+        dense_path = tmp_path / f"layer-{layer_id}-dense.bin"
+        dense_path.write_bytes(struct.pack("<2H", 0x3F80, 0x4000))
+        tensors.append(
+            OfficialMoeSourceTensor(
+                dense_name, "BF16", (2,), dense_path, 0, 4
+            )
+        )
+        expected_order.append(dense_name)
+        for role in ("gate", "up", "down"):
+            base = f"model.layers.{layer_id}.feed_forward.experts.0.{role}"
+            packed_path = tmp_path / f"layer-{layer_id}-{role}-packed.bin"
+            scale_path = tmp_path / f"layer-{layer_id}-{role}-scale.bin"
+            packed_path.write_bytes(bytes([0x11]) * 512)
+            scale_path.write_bytes(bytes([120]) * 32)
+            tensors.extend(
+                (
+                    OfficialMoeSourceTensor(
+                        f"{base}.weight_packed",
+                        "U8",
+                        (512,),
+                        packed_path,
+                        0,
+                        512,
+                        (32, 32),
+                    ),
+                    OfficialMoeSourceTensor(
+                        f"{base}.weight_scale",
+                        "U8",
+                        (32,),
+                        scale_path,
+                        0,
+                        32,
+                    ),
+                )
+            )
+            expected_order.append(base)
+    return tuple(tensors), expected_order
+
+
+def test_official_two_layer_fixture_round_trips_execution_order(
+    synthetic_source: Path,
+    tmp_path: Path,
+) -> None:
+    config = json.loads(
+        (synthetic_source / "source-manifest.json").read_text(encoding="utf-8")
+    )["config"]
+    tensors, expected_order = _tiny_artifact_tensors(tmp_path)
+
+    report = manufacture_official_two_layer_fixture(
+        tmp_path / "manufactured",
+        tensors,
+        config,
+        {
+            "format": "k3x-official-two-layer-v1",
+            "layer_ids": [1, 2],
+            "step_order": ["a:1", "a:2", "b:1", "b:2"],
+        },
+        chunk_bytes=97,
+    )
+    reader = K3XReader.open(report.k3x_path)
+    manifest = json.loads(report.manifest_path.read_text(encoding="utf-8"))
+    by_id = {record.tensor_id: record for record in reader.tensor_records}
+
+    assert report.completed is True
+    assert manifest["tensor_order"] == expected_order
+    assert manifest["official_two_layer"]["layer_ids"] == [1, 2]
+    assert tuple(
+        record.layer_index
+        for record in reader.layer_records
+        if record.tensor_count
+    ) == (1, 2)
+    assert tuple(
+        (record.layer_index, record.expert_id) for record in reader.expert_records
+    ) == ((1, 0), (2, 0))
+    assert [by_id[fnv1a64(name)].data_offset for name in expected_order] == sorted(
+        by_id[fnv1a64(name)].data_offset for name in expected_order
+    )
+    assert reader.superblock.optional_features == (
+        OPTIONAL_STORAGE_FIXTURE | OPTIONAL_OFFICIAL_MOE_FIXTURE
+    )
+
+
+def test_official_two_layer_fixture_resumes_verified_extents(
+    synthetic_source: Path,
+    tmp_path: Path,
+) -> None:
+    config = json.loads(
+        (synthetic_source / "source-manifest.json").read_text(encoding="utf-8")
+    )["config"]
+    tensors, _ = _tiny_artifact_tensors(tmp_path)
+    metadata = {
+        "format": "k3x-official-two-layer-v1",
+        "layer_ids": [1, 2],
+        "step_order": ["a:1", "a:2", "b:1", "b:2"],
+    }
+    output = tmp_path / "resume"
+
+    interrupted = manufacture_official_two_layer_fixture(
+        output,
+        tensors,
+        config,
+        metadata,
+        chunk_bytes=97,
+        stop_after_extents=3,
+    )
+    partial_path = interrupted.k3x_path.with_suffix(".k3x.partial")
+    resume_path = interrupted.k3x_path.with_suffix(".k3x.resume.json")
+
+    assert interrupted.completed is False
+    assert partial_path.is_file()
+    assert resume_path.is_file()
+
+    resumed = manufacture_official_two_layer_fixture(
+        output,
+        tensors,
+        config,
+        metadata,
+        chunk_bytes=97,
+    )
+
+    assert resumed.completed is True
+    assert not partial_path.exists()
+    assert not resume_path.exists()
+    K3XReader.open(resumed.k3x_path)
+
+
+def test_official_two_layer_fixture_rejects_incomplete_expert_before_publication(
+    synthetic_source: Path,
+    tmp_path: Path,
+) -> None:
+    config = json.loads(
+        (synthetic_source / "source-manifest.json").read_text(encoding="utf-8")
+    )["config"]
+    tensors, _ = _tiny_artifact_tensors(tmp_path)
+    output = tmp_path / "incomplete"
+
+    with pytest.raises(
+        K3XError, match="INVALID_OFFICIAL_TWO_LAYER_MATERIALIZATION"
+    ):
+        manufacture_official_two_layer_fixture(
+            output,
+            tensors[:-1],
+            config,
+            {
+                "format": "k3x-official-two-layer-v1",
+                "layer_ids": [1, 2],
+                "step_order": ["a:1", "a:2", "b:1", "b:2"],
+            },
+            chunk_bytes=97,
+        )
+
+    assert not output.exists()
