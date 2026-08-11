@@ -191,7 +191,15 @@ def zero_official_kda_state(
 
 
 def _project(hidden: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
-    return functional.linear(hidden, weight).to(torch.bfloat16)
+    return torch.cat(
+        tuple(
+            functional.linear(hidden[:, index : index + 1], weight).to(
+                torch.bfloat16
+            )
+            for index in range(hidden.shape[1])
+        ),
+        dim=1,
+    )
 
 
 def _short_conv(

@@ -108,6 +108,12 @@ def _manifest(root: str = "0" * 64) -> dict:
         "state_layout": "v-first-fp32",
         "initial_state_sha256": initial,
         "final_state_sha256": final,
+        "oracle": {
+            "format": "k3x-official-layer-oracle-v1",
+            "filename": "official-layer-oracle-v1.bin",
+            "sha256": "d" * 64,
+            "bytes": 6_541_344,
+        },
         "inputs": [
             {
                 "name": "a",
@@ -213,6 +219,8 @@ def test_official_layer_bench_rejects_invalid_arguments(
         (("state_layout",), "head-first-fp32"),
         (("inputs", 0, "hidden_sha256"), "f" * 64),
         (("steps", 1, "consumes_state_sha256"), "f" * 64),
+        (("oracle", "bytes"), 1),
+        (("oracle", "sha256"), "not-a-digest"),
         (("steps", 0, "expert_ids", 1), 0),
         (("selected_experts",), list(reversed(range(16)))),
         (("kda_objects", 0, "name"), "wrong"),

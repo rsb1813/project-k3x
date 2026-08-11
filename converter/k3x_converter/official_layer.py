@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 import struct
 from dataclasses import dataclass
 from pathlib import Path
@@ -116,6 +117,16 @@ class OfficialLayerRoutes:
     selected_experts: tuple[int, ...]
     initial_state_sha256: str
     final_state_sha256: str
+    oracle_payload: bytes = b""
+
+
+@dataclass(frozen=True)
+class OfficialLayerOracle:
+    output: torch.Tensor
+    conv_q: torch.Tensor
+    conv_k: torch.Tensor
+    conv_v: torch.Tensor
+    recurrent_v_first: torch.Tensor
 
 
 @dataclass(frozen=True)
@@ -134,6 +145,9 @@ class OfficialLayerMaterializationReport:
     microshard_sha256: str
     tensor_sha256: dict[str, str]
     k3x_root_sha256: str
+    oracle_path: Path
+    oracle_sha256: str
+    oracle_bytes: int
 
 
 def plan_official_kda_layer(
@@ -266,6 +280,94 @@ def _state_digest(state: OfficialKdaState) -> str:
         digest.update(struct.pack(f"<{tensor.ndim}Q", *tensor.shape))
         digest.update(_tensor_bytes(tensor))
     return digest.hexdigest()
+
+
+_ORACLE_HEADER = struct.Struct("<8sQQQ")
+_ORACLE_MAGIC = b"K3XORC1\0"
+_ORACLE_OUTPUT_VALUES = 2 * 7_168
+_ORACLE_CONV_VALUES = 3 * 12_288
+_ORACLE_RECURRENT_VALUES = 96 * 128 * 128
+
+
+def _official_layer_oracle_payload(result: OfficialKdaResult) -> bytes:
+    state = result.state
+    if (
+        result.output.shape != (1, 2, 7_168)
+        or result.output.dtype != torch.bfloat16
+        or state.conv_q.shape != (1, 3, 12_288)
+        or state.conv_k.shape != (1, 3, 12_288)
+        or state.conv_v.shape != (1, 3, 12_288)
+        or state.recurrent_v_first.shape != (1, 96, 128, 128)
+        or state.conv_q.dtype != torch.bfloat16
+        or state.conv_k.dtype != torch.bfloat16
+        or state.conv_v.dtype != torch.bfloat16
+        or state.recurrent_v_first.dtype != torch.float32
+    ):
+        raise K3XError("INVALID_OFFICIAL_LAYER_ORACLE")
+    return b"".join(
+        (
+            _ORACLE_HEADER.pack(
+                _ORACLE_MAGIC,
+                _ORACLE_OUTPUT_VALUES,
+                _ORACLE_CONV_VALUES,
+                _ORACLE_RECURRENT_VALUES,
+            ),
+            _tensor_bytes(result.output),
+            _tensor_bytes(state.conv_q),
+            _tensor_bytes(state.conv_k),
+            _tensor_bytes(state.conv_v),
+            _tensor_bytes(state.recurrent_v_first),
+        )
+    )
+
+
+def parse_official_layer_oracle(payload: bytes) -> OfficialLayerOracle:
+    expected_bytes = (
+        _ORACLE_HEADER.size
+        + _ORACLE_OUTPUT_VALUES * 2
+        + 3 * _ORACLE_CONV_VALUES * 2
+        + _ORACLE_RECURRENT_VALUES * 4
+    )
+    if len(payload) != expected_bytes:
+        raise K3XError("INVALID_OFFICIAL_LAYER_ORACLE")
+    magic, output_values, conv_values, recurrent_values = _ORACLE_HEADER.unpack_from(
+        payload
+    )
+    if (
+        magic != _ORACLE_MAGIC
+        or output_values != _ORACLE_OUTPUT_VALUES
+        or conv_values != _ORACLE_CONV_VALUES
+        or recurrent_values != _ORACLE_RECURRENT_VALUES
+    ):
+        raise K3XError("INVALID_OFFICIAL_LAYER_ORACLE")
+    storage = bytearray(payload[_ORACLE_HEADER.size :])
+    words = torch.frombuffer(storage, dtype=torch.uint16)
+    output_end = _ORACLE_OUTPUT_VALUES
+    conv_q_end = output_end + _ORACLE_CONV_VALUES
+    conv_k_end = conv_q_end + _ORACLE_CONV_VALUES
+    conv_v_end = conv_k_end + _ORACLE_CONV_VALUES
+    float_words = _ORACLE_RECURRENT_VALUES * 2
+    if words.numel() != conv_v_end + float_words:
+        raise K3XError("INVALID_OFFICIAL_LAYER_ORACLE")
+    return OfficialLayerOracle(
+        words[:output_end].view(torch.bfloat16).reshape(2, 7_168).clone(),
+        words[output_end:conv_q_end]
+        .view(torch.bfloat16)
+        .reshape(1, 3, 12_288)
+        .clone(),
+        words[conv_q_end:conv_k_end]
+        .view(torch.bfloat16)
+        .reshape(1, 3, 12_288)
+        .clone(),
+        words[conv_k_end:conv_v_end]
+        .view(torch.bfloat16)
+        .reshape(1, 3, 12_288)
+        .clone(),
+        words[conv_v_end:]
+        .view(torch.float32)
+        .reshape(1, 96, 128, 128)
+        .clone(),
+    )
 
 
 def _load_object_tensor(
@@ -461,7 +563,13 @@ def derive_official_layer_routes(
     selected = tuple(
         dict.fromkeys((*routes[0].expert_ids, *routes[1].expert_ids))
     )
-    return OfficialLayerRoutes(steps, selected, initial_hash, state_hashes[1])
+    return OfficialLayerRoutes(
+        steps,
+        selected,
+        initial_hash,
+        state_hashes[1],
+        _official_layer_oracle_payload(full),
+    )
 
 
 def _layer_route_manifest(
@@ -474,6 +582,8 @@ def _layer_route_manifest(
     routes: OfficialLayerRoutes,
     kda_objects: dict[str, MaterializedRangeObject],
     always_objects: dict[str, MaterializedRangeObject],
+    oracle_sha256: str,
+    oracle_bytes: int,
 ) -> dict[str, object]:
     return {
         "format": "k3x-official-kda-layer-routes-v1",
@@ -496,6 +606,12 @@ def _layer_route_manifest(
         "state_layout": "v-first-fp32",
         "initial_state_sha256": routes.initial_state_sha256,
         "final_state_sha256": routes.final_state_sha256,
+        "oracle": {
+            "format": "k3x-official-layer-oracle-v1",
+            "filename": "official-layer-oracle-v1.bin",
+            "sha256": oracle_sha256,
+            "bytes": oracle_bytes,
+        },
         "inputs": [
             {
                 "name": item.name,
@@ -642,6 +758,15 @@ def materialize_official_kda_layer(
     inputs = official_layer_inputs()
     route_objects = {**kda_objects, **always_objects}
     routes = derive_official_layer_routes(plan, route_objects, inputs)
+    parse_official_layer_oracle(routes.oracle_payload)
+    oracle_path = output_directory / "official-layer-oracle-v1.bin"
+    oracle_partial = oracle_path.with_suffix(oracle_path.suffix + ".partial")
+    with oracle_partial.open("wb") as stream:
+        stream.write(routes.oracle_payload)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(oracle_partial, oracle_path)
+    oracle_sha256 = _sha256_path(oracle_path, 8 * 1024 * 1024)
     route_manifest = _layer_route_manifest(
         snapshot,
         index,
@@ -652,6 +777,8 @@ def materialize_official_kda_layer(
         routes,
         kda_objects,
         always_objects,
+        oracle_sha256,
+        len(routes.oracle_payload),
     )
     route_manifest_path = output_directory / "route-state-manifest.json"
     _write_json_atomic(route_manifest_path, route_manifest)
@@ -735,4 +862,7 @@ def materialize_official_kda_layer(
         assembled.microshard_sha256,
         assembled.tensor_sha256,
         reader.superblock.root_sha256.hex(),
+        oracle_path,
+        oracle_sha256,
+        len(routes.oracle_payload),
     )

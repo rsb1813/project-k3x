@@ -19,6 +19,7 @@ from k3x_converter.official_layer import (
     derive_official_layer_routes,
     materialize_official_kda_layer,
     official_layer_inputs,
+    parse_official_layer_oracle,
     plan_official_kda_layer,
 )
 from k3x_converter.official_moe import (
@@ -255,8 +256,11 @@ def test_official_layer_route_derivation_links_incremental_state_and_natural_rou
 
     def make_state(count: int) -> OfficialKdaState:
         return OfficialKdaState(
-            *(torch.full((1, 1, 1), count, dtype=torch.bfloat16) for _ in range(3)),
-            torch.full((1, 1, 1, 1), count, dtype=torch.float32),
+            *(
+                torch.full((1, 3, 12_288), count, dtype=torch.bfloat16)
+                for _ in range(3)
+            ),
+            torch.full((1, 96, 128, 128), count, dtype=torch.float32),
         )
 
     monkeypatch.setattr(
@@ -265,7 +269,7 @@ def test_official_layer_route_derivation_links_incremental_state_and_natural_rou
     )
 
     def fake_kda(hidden, weights, state, config):
-        count = int(state.recurrent_v_first.item())
+        count = int(state.recurrent_v_first.reshape(-1)[0].item())
         outputs = []
         for index in range(hidden.shape[1]):
             outputs.append((hidden[:, index].float() * 0.25).to(torch.bfloat16))
@@ -285,6 +289,12 @@ def test_official_layer_route_derivation_links_incremental_state_and_natural_rou
     assert routes.final_state_sha256 == routes.steps[1].state_sha256
     assert len(routes.selected_experts) == 16
     assert routes.selected_experts == tuple(range(895, 879, -1))
+    oracle = parse_official_layer_oracle(routes.oracle_payload)
+    assert oracle.output.shape == (2, 7_168)
+    assert oracle.conv_q.shape == (1, 3, 12_288)
+    assert oracle.conv_k.shape == (1, 3, 12_288)
+    assert oracle.conv_v.shape == (1, 3, 12_288)
+    assert oracle.recurrent_v_first.shape == (1, 96, 128, 128)
 
 
 def _small_expert_plan(expert_id: int, index_sha256: str):
@@ -418,6 +428,9 @@ def test_official_layer_materializer_publishes_state_routes_before_experts(
         (7, 8),
         "0" * 64,
         "3" * 64,
+        struct.pack("<8sQQQ", b"K3XORC1\0", 2 * 7_168, 3 * 12_288,
+                    96 * 128 * 128)
+        + bytes(6_541_344 - struct.calcsize("<8sQQQ")),
     )
     events: list[str] = []
     counter = 0
@@ -499,10 +512,14 @@ def test_official_layer_materializer_publishes_state_routes_before_experts(
     assert report.requested_payload_bytes == plan.base_payload_bytes + 12
     assert report.downloaded_payload_bytes == 28 + 2
     assert report.maximum_response_bytes == 1
+    assert report.oracle_path.is_file()
+    assert report.oracle_bytes == 6_541_344
+    assert hashlib.sha256(report.oracle_path.read_bytes()).hexdigest() == report.oracle_sha256
     final_manifest = json.loads(report.route_manifest_path.read_text(encoding="utf-8"))
     assert final_manifest["steps"][1]["consumes_state_sha256"] == "1" * 64
     assert final_manifest["artifact"]["k3x_root_sha256"] == "7" * 64
     assert final_manifest["artifact"]["k3x_source_fingerprint_sha256"] == "8" * 64
+    assert final_manifest["oracle"]["sha256"] == report.oracle_sha256
 
 
 def test_official_layer_materializer_rejects_plan_drift_before_payload(
