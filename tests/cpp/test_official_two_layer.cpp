@@ -133,7 +133,11 @@ int main() {
             if (observed.position != position ||
                 observed.layer_id != layer + 1 ||
                 !close(observed.result.moe.output,
-                       expected.value().steps[0].moe.output)) return 3;
+                       expected.value().steps[0].moe.output) ||
+                !same_state(observed.kda_state,
+                            expected.value().kda.state) ||
+                !close(observed.kda_output,
+                       expected.value().kda.output)) return 3;
             expected_states[layer] = expected.value().kda.state;
             current.hidden_input = expected.value().steps[0].moe.output;
         }

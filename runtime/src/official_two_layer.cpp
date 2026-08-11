@@ -57,6 +57,8 @@ Result<OfficialTwoLayerResult> official_two_layer_cpu(
                 position,
                 layers[layer_index].layer_id,
                 std::move(result.value().steps[0]),
+                states[layer_index],
+                std::move(result.value().kda.output),
             });
         }
         outputs[position] = std::move(current.hidden_input);
