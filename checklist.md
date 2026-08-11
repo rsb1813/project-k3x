@@ -446,3 +446,16 @@
 - [x] Run B-0031 exactly once and seal the evidence.
 - [x] Run the complete verification matrix and synchronize README/TITAN Ledger.
 - [x] Publish M30 and verify pull-request and post-merge CI.
+
+## Milestone 31 — Official KDA device-state handoff
+
+- [x] Compare state-residency approaches and accept an opaque single-slot backend token.
+- [x] Write the M31 design and implementation plan.
+- [ ] Write and witness CUDA RED tests for state lifetime and transfer semantics.
+- [ ] Implement the dedicated device-state allocation and opaque token contract.
+- [ ] Add exact official-layer wrapper and explicit harness telemetry.
+- [ ] Build and verify the strict B-0032 evidence transaction.
+- [ ] Run actual-artifact correctness and Compute Sanitizer gates.
+- [ ] Run B-0032 exactly once and seal the evidence.
+- [ ] Run the complete verification matrix and synchronize README/TITAN Ledger.
+- [ ] Publish M31 and verify pull-request and post-merge CI.

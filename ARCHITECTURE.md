@@ -464,6 +464,12 @@ The dedicated official-layer harness emits the validation mode and separate cold
 
 Formal B-0031 shows that removing repeated scans lowers the incremental resident median from 175.667985 to 70.584413 ms and the full resident median from 121.067320 to 67.236923 ms. Measured per-call validation consumes 103.874127 and 55.731721 ms per sequence respectively, while paired aggregate kernel totals move by less than 0.4%. The remaining admission incremental/full median gap is 3.347490 ms. This attributes most of B-0030's gap to repeated host validation on the bounded WSL2 fixture; it does not change model semantics, establish token throughput or quality, measure physical traffic, or select a production default.
 
+## Milestone 31 proposed official KDA device-state boundary
+
+M31 is designed but not yet implemented. The accepted bounded design moves the three convolution histories and V-first recurrent state into one dedicated CUDA-backend allocation, separate from sequence-sized operation scratch. An opaque backend-owner/generation token will express state seed, single-use continuation, and explicit final publication without exposing a device pointer. Host round trip remains the source-compatible default and correctness oracle.
+
+Only one device state is proposed per backend for this experiment. Tokens must bind layer and KDA configuration, reject stale or cross-backend use before transfer or launch, and become invalid once a state-mutating operation begins. Multi-session state residency, concurrency policy, eviction, and integration with VAULT remain proposed future work. No device-state implementation or B-0032 result exists yet.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

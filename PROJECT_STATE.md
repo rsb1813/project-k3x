@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 30's official KDA admission-validation attribution is publicly complete through formal B-0031, the full verification matrix, PR #52, and post-merge CI. The backend admits all fourteen immutable official KDA views atomically under exact resident identity while retaining dynamic hidden/state checks and the `per-call` default. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
+Milestone 31 design and planning are in progress after public completion of M30. D-069 is now specified as one backend-owned official KDA device-state slot with an opaque owner/generation token, explicit seed/continue/publish operations, and the existing host round trip retained as the default and oracle. No M31 runtime implementation or B-0032 measurement exists yet. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
 
-State audited last on 2026-08-11 from public M30 head `51182575b32b49afa4b1fb2586f31df058a74155`. Fresh verification passes CPU CTest 19/19 plus Python 558/122, liburing/direct CTest 20/20 plus Python 560/120, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus actual-artifact Python 659/21, B-0031 evidence-tool/B-0030 regressions 26/26, strict B-0031 rehash, and actual admission-mode AB incremental Compute Sanitizer with zero errors. PR #52 branch/PR correctness and CodeQL plus post-merge `main` correctness `31493550970` and CodeQL `31493549669` passed. The ignored bounded fixture is unchanged; no complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-11 from public M30 publication head `cd1cbd0d10d0231b4392d1aaec21dedd016ea3b1`. Fresh M30 verification passes CPU CTest 19/19 plus Python 558/122, liburing/direct CTest 20/20 plus Python 560/120, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus actual-artifact Python 659/21, B-0031 evidence-tool/B-0030 regressions 26/26, strict B-0031 rehash, and actual admission-mode AB incremental Compute Sanitizer with zero errors. PR #52 integrated M30; publication PR #53 and final `main` correctness `31494813241` plus CodeQL `31494813220` passed. The ignored bounded fixture is unchanged; no complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -113,9 +113,10 @@ State audited last on 2026-08-11 from public M30 head `51182575b32b49afa4b1fb258
 
 ## Work in progress
 
-- M30 implementation, formal B-0031, evidence rehash, actual-artifact sanitizer, full local verification, README, and TITAN Ledger synchronization are complete. Public pull-request integration and post-merge CI remain.
+- M30 implementation, formal B-0031, evidence rehash, actual-artifact sanitizer, full verification, public PR #52, publication PR #53, and post-merge CI are complete.
 - Formal B-0031 is committed at `fb33d84`. Incremental per-call/admission medians are 175,667,985/70,584,413 ns; full medians are 121,067,320/67,236,923 ns. All rows preserve exact route/output/state identity, zero warm weight H2D, 1,816,322,048 resident bytes, and `0.00048828125` maximum error.
-- D-068 retains per-call as the default and admission as an exact opt-in. D-069 selects device-resident KDA state handoff as the next bounded non-cloud experiment after M30 publication.
+- M31 design and implementation plan accept a dedicated single device-state allocation plus opaque owner/generation token. Implementation and B-0032 evidence have not started.
+- D-068 retains per-call as the default and admission as an exact opt-in. D-069 selects device-resident KDA state handoff as the current bounded non-cloud experiment.
 
 - M28 Task 2 is complete at `0b0c944`: the route manifest is durable before expert fetching, only the natural A/B first-use union is planned, object reuse is rehashed, response bytes are measured separately from logical source bytes, and production generation remains fail-closed.
 - M28 Task 3 is complete at `8a13cf5`: the dimension-driven CPU oracle preserves explicit BF16 boundaries, validates the natural route before execution, decodes native MXFP4 experts exactly, and matches independent PyTorch intermediate values without production dispatch.
@@ -150,7 +151,7 @@ State audited last on 2026-08-11 from public M30 head `51182575b32b49afa4b1fb258
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Current publication branch: `codex/milestone-thirty-publication` from public M30 head `51182575`.
+- Current implementation branch: `codex/milestone-thirty-one-kda-state` from public M30 publication head `cd1cbd0d`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build`, `build-liburing`, `build-asan`, and `build-cuda`.
 
 ## Known failures and blockers
@@ -175,8 +176,8 @@ State audited last on 2026-08-11 from public M30 head `51182575b32b49afa4b1fb258
 
 ## Next concrete tasks
 
-1. Implement D-069 as a bounded exact device-resident KDA state-handoff experiment with the host-state reference path retained.
-2. Measure a fixed host-state versus device-state ablation before choosing the next wider official graph boundary.
+1. Write and witness CUDA RED tests for opaque KDA device-state lifetime, exact parity, and transfer counters.
+2. Implement the dedicated state allocation and seed/continue/publish contract, then measure fixed B-0032 only after correctness and sanitizer gates pass.
 3. Keep the artifact non-executable; do not download a complete shard/checkpoint or create paid cloud resources.
 
 ## Hardware assumptions
@@ -205,6 +206,7 @@ D-069 selects an exact device-resident KDA state-handoff experiment before anoth
 - Local M30 evidence commit `fb33d84` records B-0031 with aggregate SHA-256 `5d6ba38a0d959902c5ab8e7f7bce4f13254f018644430a18490864c173b30a1f`, summary CSV SHA-256 `ea4bcd6b6f613d4a07bdb4e8aa14cb989f2ef11a3fcdfd473112a846e0883501`, and strict committed-evidence verification.
 - Fresh M30 verification passes CPU CTest 19/19 plus Python 558/122, liburing/direct CTest 20/20 plus Python 560/120, ASan/UBSan CTest 20/20, and CUDA CTest 34/34 plus actual-artifact Python 659/21. Actual admission-mode AB incremental Compute Sanitizer reports `ERROR SUMMARY: 0 errors` with `--launch-timeout 0`.
 - Production `k3x_run` exits 4 with `NON_EXECUTABLE_ARTIFACT`. PR #52 rebase-merged M30 at public head `51182575b32b49afa4b1fb2586f31df058a74155`; branch/PR and post-merge correctness/CodeQL all passed.
+- Publication PR #53 rebase-merged at `cd1cbd0d10d0231b4392d1aaec21dedd016ea3b1`; final public `main` correctness `31494813241` and CodeQL `31494813220` passed. M31 currently has design artifacts only.
 
 - Local M29 evidence commit `bbdccb9` records formal B-0030 with aggregate SHA-256 `86f0007af7da007d6646dec6fa8fba4008c1bf7bedff53971d5d31926c9f6452` and summary CSV SHA-256 `1e5af9bb7d5b9abb16f62962bbce3584b62014873b12ce7642868e919770a635`. Strict committed-evidence verification passes 9/9.
 - Fresh M29 final verification passes CPU CTest 19/19 plus Python 541/119, liburing/direct CTest 20/20 plus Python 543/117, ASan/UBSan CTest 20/20, and CUDA CTest 34/34 plus Python 639/21 against the actual bounded artifact. Actual AB incremental resident Compute Sanitizer reports `ERROR SUMMARY: 0 errors`; `--launch-timeout 0` is required because preflight exceeds the tool's default attach timeout.
