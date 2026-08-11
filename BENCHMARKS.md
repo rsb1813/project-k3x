@@ -1128,3 +1128,13 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Network scope: repository API, 59,764,096-byte index metadata, 818,696-byte safetensors header, 51,506-byte pinned source, and small config metadata only. No tensor payload, complete shard, checkpoint, or paid resource was used.
 - Decode tok/s, prefill tok/s, TTFT, VRAM, system RAM, NVMe GB/token, H2D GB/token, cache hit rate, Top-K average, speculative acceptance, quality, layer latency, utilization, and bandwidth: not measured.
 - Interpretation: this entry establishes the bounded M29 planning envelope and the `A_log[128]` checkpoint contract. It is not B-0030 and supports no performance conclusion.
+
+## Milestone 29 Task 1 verification — official KDA metadata planner
+
+- Date: 2026-08-11.
+- Model/checkpoint: pinned metadata for `moonshotai/Kimi-K3` revision `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`.
+- Verification: official source/MoE/layer/CLI pytest passes 64 tests; Python compile validation and `git diff --check` pass.
+- Live metadata-only result: layer 1, shard `model-00002-of-000096.safetensors`, 17 KDA tensors, 887,843,840 KDA bytes, 1,267,744,256 base bytes, 1,829,256,704 maximum two-token bytes, and source blob `b8c41e8bfce768d74d8da3a37e693f5ee43876a0`.
+- Negative coverage: `A_log[96]`, malformed layer-list schemas, config drift, tensor metadata drift, source blob drift, and shard/range drift fail closed before payload use.
+- All performance, traffic, memory, state-parity, route, quality, and token fields: not measured.
+- Interpretation: this is a planning correctness gate only. It is not official tensor materialization, KDA execution, complete-layer parity, or B-0030.

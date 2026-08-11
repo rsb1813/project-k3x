@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 29's official layer-1 KDA transformer boundary is designed and accepted but not implemented. The accepted boundary supplies deterministic layer-1 hidden/source-bank vectors and explicit KDA state, then executes two tokens through self Attention Residual, KDA, MLP Attention Residual, the measured natural Top-16 MoE FFN, and final prefix accumulation both together and incrementally. It keeps the bounded artifact non-executable until independent whole-layer parity passes. No M29 tensor payload, B-0030 result, token metric, or quality result exists yet.
+Milestone 29's official layer-1 KDA transformer boundary is designed and its fail-closed metadata-planning gate is implemented. The accepted boundary supplies deterministic layer-1 hidden/source-bank vectors and explicit KDA state, then will execute two tokens through self Attention Residual, KDA, MLP Attention Residual, the measured natural Top-16 MoE FFN, and final prefix accumulation both together and incrementally. It keeps the bounded artifact non-executable until independent whole-layer parity passes. No M29 tensor payload, KDA recurrence, B-0030 result, token metric, or quality result exists yet.
 
 State audited last on 2026-08-11 from public head `ab3cf433fc2eac2a6aaf8a55cdb3072997a7ab9c` after PR #49 reconciled M28 publication records. Its post-merge `main` correctness `31466295752` and CodeQL `31466295731` passed. The last full local M28 matrix passes CPU CTest 17/17 plus Python 507/97, liburing CTest 18/18 plus Python 509/95, ASan/UBSan CTest 18/18, CUDA CTest 30/30 plus actual-artifact Python 592/12, and actual alternating resident Compute Sanitizer with zero errors. The ignored bounded fixture contains eleven always-active tensors and a 32-expert union; no complete shard, full checkpoint, or paid cloud resource is in use.
 
@@ -112,7 +112,8 @@ State audited last on 2026-08-11 from public head `ab3cf433fc2eac2a6aaf8a55cdb30
 ## Work in progress
 
 - M29 design research is complete. The pinned source Git blob matches repository metadata; header-only inspection identifies 17 new tensors totaling 887,843,840 bytes; and D-061 selects the explicit layer-1 recurrent-state boundary.
-- M29 has no implementation or measurement yet. The accepted design is commit `5f04768`; the detailed eight-task TDD plan is written. The next unit is fail-closed tensor planning and config/header regression tests.
+- M29 Task 1 is implemented and verified. Strict config/source/header/tensor planning composes the M28 MoE plan and returns exact byte bounds without payload access; 64 official source/MoE/layer/CLI tests pass.
+- The accepted design is commit `5f04768` and the detailed eight-task TDD plan is commit `b7a6c0e`. The next unit is the independent tiny PyTorch full/incremental KDA recurrence.
 
 - M28 Task 2 is complete at `0b0c944`: the route manifest is durable before expert fetching, only the natural A/B first-use union is planned, object reuse is rehashed, response bytes are measured separately from logical source bytes, and production generation remains fail-closed.
 - M28 Task 3 is complete at `8a13cf5`: the dimension-driven CPU oracle preserves explicit BF16 boundaries, validates the natural route before execution, decodes native MXFP4 experts exactly, and matches independent PyTorch intermediate values without production dispatch.
@@ -172,9 +173,9 @@ State audited last on 2026-08-11 from public head `ab3cf433fc2eac2a6aaf8a55cdb30
 
 ## Next concrete tasks
 
-1. Implement fail-closed official KDA tensor planning and config/header regression tests.
-2. Implement tiny independent full/incremental KDA recurrence parity before materializing payload.
-3. Extend bounded content-addressed manufacturing, compose the portable complete layer, then add CUDA and B-0030 only after each prior correctness gate passes.
+1. Implement tiny independent full/incremental KDA recurrence parity before materializing payload.
+2. Extend bounded content-addressed manufacturing and derive state/routes only after the oracle passes.
+3. Compose the portable complete layer, then add CUDA and B-0030 only after each prior correctness gate passes.
 4. Keep the artifact non-executable; do not download a complete shard/checkpoint or create paid cloud resources.
 
 ## Hardware assumptions

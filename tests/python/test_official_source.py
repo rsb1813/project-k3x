@@ -184,6 +184,26 @@ def _released_config() -> dict[str, object]:
             "routed_scaling_factor": 1.0,
             "latent_moe_use_norm": True,
             "rms_norm_eps": 1.0e-5,
+            "attn_res_block_size": 12,
+            "linear_attn_config": {
+                "full_attn_layers": [
+                    4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48,
+                    52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 93,
+                ],
+                "gate_lower_bound": -5.0,
+                "head_dim": 128,
+                "kda_layers": [
+                    1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 18,
+                    19, 21, 22, 23, 25, 26, 27, 29, 30, 31, 33, 34, 35,
+                    37, 38, 39, 41, 42, 43, 45, 46, 47, 49, 50, 51, 53,
+                    54, 55, 57, 58, 59, 61, 62, 63, 65, 66, 67, 69, 70,
+                    71, 73, 74, 75, 77, 78, 79, 81, 82, 83, 85, 86, 87,
+                    89, 90, 91,
+                ],
+                "num_heads": 96,
+                "short_conv_kernel_size": 4,
+                "use_full_rank_gate": True,
+            },
         },
     }
 
@@ -372,6 +392,16 @@ def test_config_binds_git_blob_and_released_text_dimensions() -> None:
     assert config.num_expert_group == 1
     assert config.topk_group == 1
     assert config.routed_scaling_factor == 1.0
+    assert config.num_hidden_layers == 93
+    assert len(config.kda_layers) == 69
+    assert config.kda_layers[:4] == (1, 2, 3, 5)
+    assert config.kda_layers[-4:] == (87, 89, 90, 91)
+    assert config.kda_heads == 96
+    assert config.kda_head_dim == 128
+    assert config.short_conv_kernel_size == 4
+    assert config.kda_gate_lower_bound == -5.0
+    assert config.kda_use_full_rank_gate is True
+    assert config.attn_res_block_size == 12
 
 
 def test_config_rejects_blob_or_dimension_drift_before_any_range() -> None:
@@ -404,6 +434,23 @@ def test_config_rejects_blob_or_dimension_drift_before_any_range() -> None:
     )
     with pytest.raises(K3XError, match="OFFICIAL_CONFIG_BLOB_MISMATCH"):
         load_official_config(bad, _BodyTransport({"config.json": config_body}))
+
+
+@pytest.mark.parametrize("field", ("full_attn_layers", "kda_layers"))
+def test_config_rejects_non_list_linear_layer_sets(field: str) -> None:
+    shards = tuple(
+        f"model-{index:05d}-of-000096.safetensors" for index in range(1, 97)
+    )
+    index_body = json.dumps(_index_record(shards), separators=(",", ":")).encode()
+    record = _released_config()
+    record["text_config"]["linear_attn_config"][field] = 1
+    config_body = json.dumps(record, separators=(",", ":")).encode()
+    snapshot = _snapshot_with_bodies(index_body, config_body)
+
+    with pytest.raises(K3XError, match="OFFICIAL_CONFIG_MISMATCH"):
+        load_official_config(
+            snapshot, _BodyTransport({"config.json": config_body})
+        )
 
 
 _SHARD = "model-00002-of-000096.safetensors"
@@ -641,6 +688,14 @@ def _official_config_record() -> OfficialConfig:
         1,
         1,
         1.0,
+        93,
+        tuple(index for index in range(1, 92) if index % 4 != 0),
+        96,
+        128,
+        4,
+        -5.0,
+        True,
+        12,
     )
 
 

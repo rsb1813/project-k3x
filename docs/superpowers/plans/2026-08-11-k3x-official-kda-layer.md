@@ -38,7 +38,7 @@
 - Produces: `plan_official_kda_layer(index, header, config, *, source_blob_id, layer_id=1) -> OfficialLayerPlan`.
 - Consumes: `OfficialIndex`, `OfficialShardHeader`, `OfficialConfig`, `PlannedTensor`, and `plan_official_moe_slice`.
 
-- [ ] **Step 1: Write config and exact-plan RED tests**
+- [x] **Step 1: Write config and exact-plan RED tests**
 
 Add tests that load the pinned config fixture and require the exact KDA fields. Build a synthetic header with all 17 accepted tensors and require sorted `PlannedTensor` records, 887,843,840 bytes, source blob binding, and maximum 1,829,256,704 bytes. Mutate `A_log` to `[96]`, each dtype/shape, source blob, shard mapping, KDA membership, gate mode, and byte total independently and require `K3XError`.
 
@@ -57,7 +57,7 @@ assert plan.kda_tensors[0].official_name.endswith("self_attention_res_norm.weigh
 assert next(x for x in plan.kda_tensors if x.role == "kda_a_log").shape == (128,)
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
@@ -67,7 +67,7 @@ PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
 
 Expected: import failure for `k3x_converter.official_layer` or missing KDA config fields.
 
-- [ ] **Step 3: Implement strict config parsing and the pure plan**
+- [x] **Step 3: Implement strict config parsing and the pure plan**
 
 Parse the existing pinned `linear_attn_config` without a second network request. In `official_layer.py`, define the exact 17 suffix/dtype/shape/role records from the design, resolve each through the index and inspected header, require one shard, and reuse the already validated M28 `OfficialMoePlan`.
 
@@ -85,7 +85,7 @@ class OfficialLayerPlan:
     maximum_two_token_bytes: int
 ```
 
-- [ ] **Step 4: Run focused GREEN and official-source regressions**
+- [x] **Step 4: Run focused GREEN and official-source regressions**
 
 ```bash
 PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
@@ -96,7 +96,7 @@ PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
 
 Expected: all runnable tests pass without network or payload access.
 
-- [ ] **Step 5: Self-review and commit**
+- [x] **Step 5: Self-review and commit**
 
 ```bash
 git diff --check

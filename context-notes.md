@@ -682,3 +682,10 @@
 - The final natural expert union is derived after KDA and is not required to match M28. Existing content-addressed M28 objects may be reused only after rehashing, and only missing selected experts are fetched.
 - The complete-layer unaligned payload is `1,267,744,256 + 17,547,264 * U` bytes for natural union size `U`, bounded by 1,829,256,704 bytes at `U=32`. B-0030 remains an isolated layer benchmark and must not emit or imply token throughput.
 - Design commit `5f04768` synchronizes the accepted specification, README, architecture, performance model, decisions, benchmark boundary, checklist, notes, and project state. The detailed eight-task TDD plan is `docs/superpowers/plans/2026-08-11-k3x-official-kda-layer.md`.
+
+## 2026-08-11 — Milestone 29 Task 1 metadata planner
+
+- RED failed at import because `official_layer.py` did not exist. GREEN adds strict KDA fields to the pinned config record and validates the exact 17-tensor execution-order plan plus the existing M28 MoE plan before payload access.
+- The first GREEN exposed the official `full_attn_layers` terminal `93` and existing test fixtures that did not mirror the full current config. The real pinned config and complete test fixtures now agree. A separate malformed-list RED proved an integer schema leaked `TypeError`; the parser now returns stable `OFFICIAL_CONFIG_MISMATCH`.
+- Live metadata-only planning returns 17 tensors, 887,843,840 KDA bytes, 1,267,744,256 base bytes, and 1,829,256,704 maximum bytes with the pinned source blob. No tensor payload, complete shard, checkpoint, or paid resource was used.
+- Official source/MoE/layer/CLI pytest passes 64 tests, compile validation passes, and `git diff --check` passes. No KDA recurrence, state parity, route, CUDA, B-0030, token, quality, or performance result exists yet.

@@ -419,7 +419,8 @@
 - [x] Compare the external state boundary, layer-0 closure, and KDA-only alternatives.
 - [x] Write and self-review the accepted complete-layer design.
 - [x] Write the detailed TDD implementation plan.
-- [ ] Implement fail-closed official KDA tensor planning and bounded materialization.
+- [x] Implement fail-closed official KDA config/header tensor planning.
+- [ ] Implement bounded official KDA tensor materialization.
 - [ ] Implement an independent portable KDA recurrence and full/incremental state oracle.
 - [ ] Compose the complete portable layer with the official M28 MoE boundary.
 - [ ] Implement the native CUDA complete-layer boundary and telemetry.

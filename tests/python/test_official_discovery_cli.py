@@ -60,6 +60,18 @@ def _config_body() -> bytes:
             "routed_scaling_factor": 1.0,
             "latent_moe_use_norm": True,
             "rms_norm_eps": 1.0e-5,
+            "attn_res_block_size": 12,
+            "linear_attn_config": {
+                "full_attn_layers": [*range(4, 94, 4), 93],
+                "gate_lower_bound": -5.0,
+                "head_dim": 128,
+                "kda_layers": [
+                    index for index in range(1, 92) if index % 4 != 0
+                ],
+                "num_heads": 96,
+                "short_conv_kernel_size": 4,
+                "use_full_rank_gate": True,
+            },
         },
     }
     return json.dumps(value, separators=(",", ":")).encode()
