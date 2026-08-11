@@ -73,6 +73,20 @@ def _index_body(shards: tuple[str, ...]) -> bytes:
     weight_map.update(
         {f"unused.{index}": path for index, path in enumerate(shards) if path != _SHARD}
     )
+    always_active = (
+        "mlp_res_norm.weight",
+        "mlp_res_proj.weight",
+        "post_attention_layernorm.weight",
+        "block_sparse_moe.gate.weight",
+        "block_sparse_moe.gate.e_score_correction_bias",
+        "block_sparse_moe.routed_expert_down_proj.weight",
+        "block_sparse_moe.routed_expert_norm.weight",
+        "block_sparse_moe.routed_expert_up_proj.weight",
+        "block_sparse_moe.shared_experts.gate_proj.weight",
+        "block_sparse_moe.shared_experts.up_proj.weight",
+        "block_sparse_moe.shared_experts.down_proj.weight",
+    )
+    weight_map.update({f"language_model.model.layers.1.{name}": _SHARD for name in always_active})
     value = {
         "metadata": {"total_size": 1_560_860_324_864},
         "weight_map": weight_map,
@@ -89,11 +103,43 @@ def _header_body() -> bytes:
         ("w3.weight_packed", [3072, 1792], [1_279_442_432, 1_284_947_456]),
         ("w3.weight_scale", [3072, 112], [1_284_947_456, 1_285_291_520]),
     ]
+    always_specifications = (
+        ("mlp_res_norm.weight", "BF16", [7168]),
+        ("mlp_res_proj.weight", "BF16", [1, 7168]),
+        ("post_attention_layernorm.weight", "BF16", [7168]),
+        ("block_sparse_moe.gate.weight", "BF16", [896, 7168]),
+        ("block_sparse_moe.gate.e_score_correction_bias", "F32", [896]),
+        ("block_sparse_moe.routed_expert_down_proj.weight", "BF16", [3584, 7168]),
+        ("block_sparse_moe.routed_expert_norm.weight", "BF16", [3584]),
+        ("block_sparse_moe.routed_expert_up_proj.weight", "BF16", [7168, 3584]),
+        ("block_sparse_moe.shared_experts.gate_proj.weight", "BF16", [6144, 7168]),
+        ("block_sparse_moe.shared_experts.up_proj.weight", "BF16", [6144, 7168]),
+        ("block_sparse_moe.shared_experts.down_proj.weight", "BF16", [7168, 6144]),
+    )
+    cursor = 700_000_000
+    always: dict[str, object] = {}
+    for suffix, dtype, shape in always_specifications:
+        values = 1
+        for dimension in shape:
+            values *= dimension
+        length = values * (4 if dtype == "F32" else 2)
+        always[f"language_model.model.layers.1.{suffix}"] = {
+            "dtype": dtype,
+            "shape": shape,
+            "data_offsets": [cursor, cursor + length],
+        }
+        cursor += length
     value: dict[str, object] = {
         "before": {
             "dtype": "I16",
             "shape": [1],
-            "data_offsets": [0, selected[0][2][0]],
+            "data_offsets": [0, 700_000_000],
+        },
+        **always,
+        "between": {
+            "dtype": "I16",
+            "shape": [1],
+            "data_offsets": [cursor, selected[0][2][0]],
         },
         **{
             f"{_BASE}.{suffix}": {
@@ -226,6 +272,30 @@ def test_cli_dry_run_plans_real_shape_without_payload_access(
     assert summary["traffic"]["header_bytes"] == 818_704
     assert summary["traffic"]["tensor_payload_bytes"] == 0
     assert summary["reader_valid"] is False
+    assert transport.payload_requested is False
+
+
+def test_cli_moe_scope_dry_run_plans_dependency_closed_bytes_without_payload(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    summary_path = tmp_path / "moe-dry-run.json"
+    transport = _DiscoveryTransport()
+
+    assert main(
+        ["--scope", "moe-ffn", "--summary-json", str(summary_path)],
+        transport=transport,
+    ) == 0
+
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert json.loads(capsys.readouterr().out) == summary
+    assert summary["format"] == "k3x-official-moe-discovery-v1"
+    assert summary["scope"] == "moe-ffn"
+    assert summary["mode"] == "dry-run"
+    assert summary["always_active_tensor_count"] == 11
+    assert summary["always_active_bytes"] == 379_900_416
+    assert summary["maximum_two_case_bytes"] == 941_412_864
+    assert summary["selected_experts"] == []
+    assert summary["traffic"]["tensor_payload_bytes"] == 0
     assert transport.payload_requested is False
 
 
