@@ -713,3 +713,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: this is the smallest boundary that exposes recurrent attention, both Attention Residual halves, natural routing, MoE, state movement, and final output without importing a separate layer-0 MLA/dense dependency closure.
 - Rejected claims: no complete-layer execution, B-0030, token rate, quality result, physical traffic, full-shard integrity, or production default exists yet.
 - Revisit: after B-0030, use measured KDA/MoE/kernel/orchestration and residency data to choose whole-layer fusion or bounded multi-layer tracing.
+
+## D-062 — Extend the M28 manufacturing transaction for the KDA layer fixture
+
+- Date: 2026-08-11.
+- Status: accepted and implemented; official M29 payload materialization remains pending.
+- Decision: reuse M28 content-addressed range objects, bounded resume, source assembly, expert planning, and the existing non-executable optional-feature bits. Add an `official_layer` source-manifest record and a separate atomic route-state manifest rather than introducing a second transport ledger or K3X v2 before execution requirements are known.
+- Alternatives considered: define a new complete-layer storage format and optional bit immediately; build a separate KDA downloader/ledger; extend the verified M28 transaction while preserving exact layer execution order.
+- Evidence: RED failed on the missing layer interfaces and unsupported CLI scope. The implementation now fixes 17 KDA objects before route derivation, publishes full/incremental V-first state linkage before selected expert requests, packs KDA then M28 MoE tensors in execution order, revalidates the complete plan before payload, and preserves the production non-executable guard. Converter, recovery, source-integrity, layer, MoE, source, and CLI coverage passes 123 tests.
+- Benchmark result: none. A live pinned metadata dry-run completed in 12.867 seconds, returned 17 tensors and the accepted byte bounds, and requested zero tensor-payload bytes. This is metadata latency, not model execution or B-0030.
+- Reason accepted: one trust and recovery model minimizes new correctness surface, reuses already measured M28 objects after rehashing, and allows the complete-layer execution manifest to mature before committing a new file-format feature bit.
+- Rejected claims: no official M29 payload, natural route union, final artifact root, complete-layer parity, CUDA result, token rate, quality result, full-shard verification, or paid-cloud execution exists yet.
+- Revisit: introduce a dedicated file-format identity only if the portable/native harness requires semantics that cannot be bound by the source and route-state manifests plus existing non-executable feature bits.

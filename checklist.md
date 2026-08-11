@@ -421,7 +421,7 @@
 - [x] Write the detailed TDD implementation plan.
 - [x] Implement fail-closed official KDA config/header tensor planning.
 - [x] Implement an independent portable KDA recurrence and full/incremental state oracle.
-- [ ] Implement bounded official KDA tensor materialization.
+- [x] Implement bounded official KDA tensor materialization.
 - [ ] Compose the complete portable layer with the official M28 MoE boundary.
 - [ ] Implement the native CUDA complete-layer boundary and telemetry.
 - [ ] Materialize the bounded fixture without a complete shard/checkpoint.

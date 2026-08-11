@@ -15,6 +15,11 @@ from k3x_converter.format import (
     OPTIONAL_OFFICIAL_MOE_FIXTURE,
     OPTIONAL_STORAGE_FIXTURE,
 )
+from k3x_converter.official_layer import (
+    OFFICIAL_KDA_SOURCE_BLOB_ID,
+    materialize_official_kda_layer,
+    plan_official_kda_layer,
+)
 from k3x_converter.official_moe import (
     materialize_official_moe_slice,
     plan_official_moe_slice,
@@ -256,13 +261,94 @@ def _build_moe_materialization_record(
     return record
 
 
+def _build_layer_dry_run_record(
+    *, snapshot, index, config, header, plan, transport, wall_seconds: float
+) -> dict[str, object]:
+    requests, maximum_response = _transport_numbers(transport)
+    return {
+        "format": "k3x-official-kda-layer-discovery-v1",
+        "scope": "kda-layer",
+        "mode": "dry-run",
+        "repository": snapshot.repository,
+        "requested_revision": snapshot.requested_revision,
+        "resolved_revision": snapshot.resolved_revision,
+        "observed_at": snapshot.observed_at,
+        "snapshot_sha256": snapshot.canonical_sha256,
+        "index_sha256": index.sha256,
+        "config_sha256": config.sha256,
+        "source_blob_id": plan.source_blob_id,
+        "shard_path": plan.shard_path,
+        "kda_tensor_count": len(plan.kda_tensors),
+        "kda_payload_bytes": plan.kda_payload_bytes,
+        "base_payload_bytes": plan.base_payload_bytes,
+        "maximum_two_token_bytes": plan.maximum_two_token_bytes,
+        "selected_experts": [],
+        "traffic": {
+            "http_requests": requests,
+            "metadata_bytes": (
+                snapshot.api_bytes
+                + snapshot.files["model.safetensors.index.json"].size
+                + snapshot.files["config.json"].size
+            ),
+            "header_bytes": 8 + header.header_length,
+            "tensor_payload_bytes": 0,
+            "maximum_response_bytes": maximum_response,
+        },
+        "provenance": "transport-pinned-ranges",
+        "full_shard_verified": False,
+        "wall_seconds": wall_seconds,
+    }
+
+
+def _build_layer_materialization_record(
+    *, snapshot, index, config, header, plan, transport, materialization,
+    wall_seconds: float,
+) -> dict[str, object]:
+    record = _build_layer_dry_run_record(
+        snapshot=snapshot,
+        index=index,
+        config=config,
+        header=header,
+        plan=plan,
+        transport=transport,
+        wall_seconds=wall_seconds,
+    )
+    record.update(
+        format="k3x-official-kda-layer-materialization-v1",
+        mode="materialize",
+        selected_experts=list(materialization.selected_experts),
+        reader_valid=True,
+        optional_features=(
+            OPTIONAL_STORAGE_FIXTURE | OPTIONAL_OFFICIAL_MOE_FIXTURE
+        ),
+        artifacts={
+            "microshard_sha256": materialization.microshard_sha256,
+            "tensor_sha256": dict(materialization.tensor_sha256),
+            "k3x_root_sha256": materialization.k3x_root_sha256,
+        },
+    )
+    record["traffic"].update(
+        tensor_payload_bytes=materialization.downloaded_payload_bytes,
+        source_object_bytes=materialization.requested_payload_bytes,
+        materialization_requests=materialization.requests,
+        reused_objects=materialization.reused_objects,
+        maximum_response_bytes=max(
+            record["traffic"]["maximum_response_bytes"],
+            materialization.maximum_response_bytes,
+        ),
+    )
+    return record
+
+
 def main(
     argv: list[str] | None = None,
     *,
     transport: Transport | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(allow_abbrev=False)
-    parser.add_argument("--scope", choices=("expert", "moe-ffn"), default="expert")
+    parser.add_argument(
+        "--scope", choices=("expert", "moe-ffn", "kda-layer"), default="expert"
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--materialize-expert", action="store_true")
@@ -276,9 +362,9 @@ def main(
         parser.error("--materialize-expert requires --output-dir")
     if args.materialize and args.output_dir is None:
         parser.error("--materialize requires --output-dir")
-    if args.materialize and args.scope != "moe-ffn":
-        parser.error("--materialize requires --scope moe-ffn")
-    if args.scope == "moe-ffn" and args.materialize_expert:
+    if args.materialize and args.scope not in {"moe-ffn", "kda-layer"}:
+        parser.error("--materialize requires --scope moe-ffn or kda-layer")
+    if args.scope in {"moe-ffn", "kda-layer"} and args.materialize_expert:
         parser.error("--materialize-expert requires --scope expert")
     if args.summary_csv is not None and not args.materialize_expert:
         parser.error("--summary-csv requires --materialize-expert")
@@ -291,16 +377,72 @@ def main(
     snapshot = discover_official_snapshot(transport)
     index = load_official_index(snapshot, transport)
     config = load_official_config(snapshot, transport)
-    selected_name = (
-        "language_model.model.layers.1.block_sparse_moe.gate.weight"
-        if args.scope == "moe-ffn"
-        else "language_model.model.layers.1.block_sparse_moe.experts.0."
-        "w1.weight_packed"
-    )
+    if args.scope == "kda-layer":
+        selected_name = "language_model.model.layers.1.self_attn.q_proj.weight"
+    elif args.scope == "moe-ffn":
+        selected_name = "language_model.model.layers.1.block_sparse_moe.gate.weight"
+    else:
+        selected_name = (
+            "language_model.model.layers.1.block_sparse_moe.experts.0."
+            "w1.weight_packed"
+        )
     shard_path = index.weight_map.get(selected_name)
     if shard_path is None:
         raise K3XError("INVALID_OFFICIAL_EXPERT")
     header = inspect_official_shard_header(snapshot, shard_path, transport)
+    if args.scope == "kda-layer":
+        source_file = snapshot.files.get("modeling_kimi_linear.py")
+        if (
+            source_file is None
+            or source_file.size != 51_506
+            or source_file.blob_id != OFFICIAL_KDA_SOURCE_BLOB_ID
+            or source_file.lfs_sha256 is not None
+        ):
+            raise K3XError("INVALID_OFFICIAL_LAYER_SOURCE")
+        layer_plan = plan_official_kda_layer(
+            index,
+            header,
+            config,
+            source_blob_id=source_file.blob_id,
+            layer_id=1,
+        )
+        if args.materialize:
+            output_dir = _validate_output_dir(args.output_dir)
+            materialization = materialize_official_kda_layer(
+                snapshot,
+                index,
+                config,
+                header,
+                layer_plan,
+                transport,
+                output_dir,
+                chunk_bytes=args.chunk_bytes,
+            )
+            record = _build_layer_materialization_record(
+                snapshot=snapshot,
+                index=index,
+                config=config,
+                header=header,
+                plan=layer_plan,
+                transport=transport,
+                materialization=materialization,
+                wall_seconds=time.perf_counter() - started,
+            )
+        else:
+            record = _build_layer_dry_run_record(
+                snapshot=snapshot,
+                index=index,
+                config=config,
+                header=header,
+                plan=layer_plan,
+                transport=transport,
+                wall_seconds=time.perf_counter() - started,
+            )
+        if args.summary_json is not None:
+            _write_json_atomic(args.summary_json, record)
+        json.dump(record, sys.stdout, sort_keys=True, separators=(",", ":"))
+        sys.stdout.write("\n")
+        return 0
     if args.scope == "moe-ffn":
         moe_plan = plan_official_moe_slice(index, header, config, layer_id=1)
         if args.materialize:

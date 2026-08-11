@@ -1149,3 +1149,15 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Negative coverage: weight dtype/shape, non-finite values, convolution-history width, empty sequence, and recurrent-state layout fail closed.
 - Decode tok/s, prefill tok/s, TTFT, VRAM, system RAM, NVMe GB/token, H2D GB/token, cache hit rate, average Top-K, speculative acceptance, quality, official layer latency, utilization, and bandwidth: not measured.
 - Interpretation: this is a tiny correctness gate. It is not official payload execution, complete-layer parity, CUDA evidence, B-0030, or a performance benchmark.
+
+## Milestone 29 Task 3 verification — bounded complete-layer manufacturing
+
+- Date: 2026-08-11.
+- Model/checkpoint: pinned metadata for `moonshotai/Kimi-K3` revision `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`; no M29 tensor payload.
+- Mode: content-addressed KDA/MoE trunk objects, full/incremental KDA route-state publication before selected experts, exact execution-order source assembly, existing non-executable optional-feature guard, and `kda-layer` CLI dry-run/materialization contracts.
+- Verification: layer, MoE, CLI, official source, converter resume, and source-manifest integrity pytest passes 123 tests in 10.72 seconds. Python compile validation and `git diff --check` pass.
+- Live metadata-only result: 12.867-second wall time, revision `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`, source blob `b8c41e8bfce768d74d8da3a37e693f5ee43876a0`, 17 KDA tensors, 887,843,840 KDA bytes, 1,267,744,256 base bytes, 1,829,256,704 maximum two-token bytes, and zero tensor-payload bytes.
+- Traffic scope: nine metadata/header HTTP requests; 59,799,738 metadata bytes; 818,704 header bytes; maximum response 59,764,096 bytes from the index. The 8 MiB cap applies to future tensor-range responses, not the separately verified index metadata response.
+- Negative/ordering coverage: source blob and complete-plan drift fail before payload; all 28 pre-route objects precede route derivation; the route-state manifest exists before selected expert planning; only the selected union is requested; source order begins with all 17 KDA tensors and ends with the existing M28 shared expert order.
+- Decode tok/s, prefill tok/s, TTFT, VRAM, system RAM, NVMe GB/token, H2D GB/token, cache hit rate, average Top-K, speculative acceptance, quality, official route union, layer latency, utilization, and bandwidth: not measured.
+- Interpretation: this verifies manufacturing code and a live zero-payload planning boundary. It is not official materialization, complete-layer execution, CUDA evidence, B-0030, or a performance result.

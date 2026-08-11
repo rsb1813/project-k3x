@@ -448,7 +448,7 @@ Public PR [#48](https://github.com/rsb1813/project-k3x/pull/48) rebase-merged Mi
 
 ## Milestone 29 — official KDA transformer layer
 
-M29 is designed, its metadata-planning gate is implemented, and its independent scalar KDA oracle passes full/incremental state parity. Complete-layer execution, payload materialization, CUDA, and B-0030 are not implemented. It extends the bounded official fixture from the measured MoE FFN boundary to the complete layer-1 graph: self Attention Residual, input RMSNorm, KDA with incremental convolution/recurrent state, MLP Attention Residual, natural Top-16 Stable LatentMoE, and final prefix accumulation.
+M29 is designed; its metadata planner, independent scalar KDA oracle, and bounded complete-layer manufacturing path are implemented. No M29 tensor payload has been materialized yet, and portable complete-layer execution, CUDA, and B-0030 remain unimplemented. It extends the bounded official fixture from the measured MoE FFN boundary to the complete layer-1 graph: self Attention Residual, input RMSNorm, KDA with incremental convolution/recurrent state, MLP Attention Residual, natural Top-16 Stable LatentMoE, and final prefix accumulation.
 
 Header-only inspection found exactly 17 new tensors and 887,843,840 payload bytes. The complete unaligned fixture will be `1,267,744,256 + 17,547,264 * U` bytes for the naturally derived two-token expert union `U`, bounded by 1,829,256,704 bytes. No tensor payload was downloaded during design.
 
@@ -457,6 +457,8 @@ The checkpoint stores channel-wise F32 `A_log[128]`, while its pinned Python con
 The first Task 1 gate now parses and binds the exact KDA configuration, pinned source blob, 17 tensor dtypes/shapes/ranges, M28 MoE plan, and byte formulas before payload access. The live metadata-only plan returns layer 1, 17 tensors, 887,843,840 KDA bytes, 1,267,744,256 base bytes, and a 1,829,256,704-byte two-route maximum. Official source/MoE/layer/CLI regression coverage passes 64 tests; malformed linear-attention layer sets and `A_log[96]` fail closed.
 
 Task 2 adds an execution-independent PyTorch scalar oracle with explicit BF16 projection/convolution boundaries, F32 channel-wise decay, scalar-per-head beta, FP32 key-by-value recurrence, and V-first published state. A literal two-token fixture matches incremental A-then-B execution exactly at BF16 outputs and convolution histories and within `1e-6` for recurrent state. Focused KDA/model coverage passes 17 tests, including dtype, shape, non-finite, empty-sequence, state-layout, and input-state immutability failures. This is correctness evidence only and contains no official tensor payload or performance result.
+
+Task 3 reuses the M28 content-addressed range objects, verified partial resume, source assembler, expert planner, and non-executable optional-feature guard. It materializes the 17 KDA objects and 11 MoE trunk objects before deriving two full/incremental state-linked natural routes, atomically publishes `route-state-manifest.json` before fetching only the selected expert union, and packs tensors in exact layer execution order. The live `--scope kda-layer --dry-run` matched the pinned revision and source blob with zero tensor-payload bytes. Converter/recovery coverage passes 123 tests; no full shard, checkpoint, paid resource, or M29 payload was used.
 
 ## Quick start
 

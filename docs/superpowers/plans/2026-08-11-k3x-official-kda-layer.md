@@ -184,7 +184,7 @@ git commit -m "feat: add official KDA scalar oracle"
 - Produces: `materialize_official_kda_layer(snapshot, index, config, header, plan, transport, output_dir, *, chunk_bytes) -> OfficialLayerMaterializationReport`.
 - CLI: adds `--scope kda-layer`; default remains dry-run and payload requires the existing explicit `--materialize --output-dir` pair.
 
-- [ ] **Step 1: Write source-order, fail-atomic, and CLI RED tests**
+- [x] **Step 1: Write source-order, fail-atomic, and CLI RED tests**
 
 Require the 17 KDA objects to be materialized before route publication, the route/state manifest before selected experts, and final packing in exact execution order. Verify completed-object rehash/reuse, verified-partial resume, corrupt-partial restart, no unselected expert request, 8 MiB cap, response-byte accounting, final root binding, and `NON_EXECUTABLE_ARTIFACT`.
 
@@ -196,7 +196,7 @@ assert manifest["steps"][0]["name"] == "a"
 assert manifest["steps"][1]["consumes_state_sha256"] == manifest["steps"][0]["state_sha256"]
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
@@ -206,11 +206,11 @@ PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
 
 Expected: missing complete-layer materializer and unsupported `kda-layer` scope.
 
-- [ ] **Step 3: Implement orchestration by reusing verified M28 primitives**
+- [x] **Step 3: Implement orchestration by reusing verified M28 primitives**
 
 Reuse `materialize_official_range_object`, source assembly, expert planning, and conversion rather than duplicating transport or ledger logic. Publish route/state JSON atomically only after both full and incremental PyTorch paths agree. Bind source blob, config/index/header identities, input hashes, initial/final state hashes, routes, tensor digests, source digest, and final K3X root.
 
-- [ ] **Step 4: Run GREEN and converter recovery regressions**
+- [x] **Step 4: Run GREEN and converter recovery regressions**
 
 ```bash
 PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
@@ -222,7 +222,7 @@ PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
   tests/python/test_source_manifest_integrity.py -q
 ```
 
-- [ ] **Step 5: Self-review and commit**
+- [x] **Step 5: Self-review and commit**
 
 ```bash
 git diff --check
