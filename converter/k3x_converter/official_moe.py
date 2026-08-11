@@ -722,7 +722,7 @@ def plan_official_moe_slice(
     layer_id: int,
 ) -> OfficialMoePlan:
     if (
-        layer_id != 1
+        layer_id not in (1, 2)
         or config.hidden_size != 7_168
         or config.num_experts != 896
         or config.top_k != 16

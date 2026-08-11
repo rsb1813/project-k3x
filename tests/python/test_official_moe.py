@@ -118,6 +118,37 @@ def _metadata() -> dict[str, TensorMetadata]:
     return result
 
 
+def _plan_inputs_for_layer(
+    layer_id: int, shard: str
+) -> tuple[OfficialIndex, OfficialShardHeader]:
+    marker = f".layers.{layer_id}."
+    metadata = {
+        item.name.replace(".layers.1.", marker): TensorMetadata(
+            item.name.replace(".layers.1.", marker),
+            item.dtype,
+            item.shape,
+            item.offset,
+            item.length,
+        )
+        for item in _metadata().values()
+    }
+    index = OfficialIndex(
+        sum(item.length for item in metadata.values()),
+        MappingProxyType({name: shard for name in metadata}),
+        (shard,),
+        len(metadata),
+        "8" * 64,
+    )
+    header = OfficialShardHeader(
+        shard,
+        16_990_911_504,
+        818_696,
+        818_704,
+        MappingProxyType(metadata),
+    )
+    return index, header
+
+
 def test_official_moe_inputs_match_charter_formulas_and_little_endian_digests() -> None:
     cases = official_moe_inputs()
 
@@ -185,6 +216,34 @@ def test_official_moe_plan_binds_exact_always_active_tensor_set_and_order() -> N
     assert plan.expert_payload_bytes == 17_547_264
     assert plan.maximum_two_case_bytes == 941_412_864
     assert plan.selected_experts == ()
+
+
+def test_official_moe_plan_accepts_bounded_layer_two_identity() -> None:
+    shard = "model-00003-of-000096.safetensors"
+    index, header = _plan_inputs_for_layer(2, shard)
+
+    plan = plan_official_moe_slice(index, header, _config(), layer_id=2)
+
+    assert plan.layer_id == 2
+    assert plan.shard_path == shard
+    assert tuple(item.official_name for item in plan.always_active) == tuple(
+        f"language_model.model.layers.2.{suffix}"
+        for suffix in _ALWAYS_ACTIVE_ORDER
+    )
+    assert tuple(item.canonical_name for item in plan.always_active) == tuple(
+        f"model.layers.2.{suffix}" for suffix in _ALWAYS_ACTIVE_ORDER
+    )
+    assert plan.always_active_bytes == 379_900_416
+
+
+@pytest.mark.parametrize("layer_id", [0, 3])
+def test_official_moe_plan_rejects_layers_outside_bounded_pair(
+    layer_id: int,
+) -> None:
+    index, header = _plan_inputs_for_layer(layer_id, _SHARD)
+
+    with pytest.raises(K3XError, match="INVALID_OFFICIAL_MOE_CONFIG"):
+        plan_official_moe_slice(index, header, _config(), layer_id=layer_id)
 
 
 def test_official_attention_residual_postnorm_and_router_match_literal_oracle() -> None:

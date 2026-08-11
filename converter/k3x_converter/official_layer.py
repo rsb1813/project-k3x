@@ -159,7 +159,7 @@ def plan_official_kda_layer(
     layer_id: int = 1,
 ) -> OfficialLayerPlan:
     if (
-        layer_id != 1
+        layer_id not in (1, 2)
         or source_blob_id != OFFICIAL_KDA_SOURCE_BLOB_ID
         or config.num_hidden_layers != 93
         or layer_id not in config.kda_layers
