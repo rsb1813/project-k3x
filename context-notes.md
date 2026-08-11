@@ -927,3 +927,10 @@
 - D-071 selects a capacity-two layer-keyed state registry and an opaque ping-pong hidden/block token. Canonical natural Top-16 and dynamic expert resolution stay on the host; device Top-K is not bundled into M33.
 - Replaying layer 1 twice was rejected because it cannot prove layer-2 tensor, state, or transition identity. A monolithic two-layer device-Top-K call was rejected because it hides the cache/rescue scheduling point and expands the correctness surface before the bounded boundary is measured.
 - K3X v1 already stores canonical tensor names and per-layer directories. The proposed two-layer fixture can remain v1 and be assembled in execution order after dependency-ordered route discovery. No full checkpoint or paid resource is authorized or needed.
+
+## 2026-08-12 — Milestone 33 implementation plan
+
+- The plan separates layer-2 metadata authority, dependency-ordered manufacturing, portable interleaved execution, two-slot KDA state, opaque hidden ownership, the CUDA wrapper, evidence tooling, and formal measurement into semantic commits.
+- Existing single-layer manufacture and CLI schemas remain frozen. The new two-layer path gets a dedicated orchestrator and benchmark executable so M29 through M32 evidence identities do not drift.
+- The two-layer source remains `k3-official-moe-slice-v1`; its existing `tensor_order` authority already controls K3X physical order and K3X v1 already emits per-layer directories. A two-layer metadata envelope is additive and the production optional-feature guard remains unchanged.
+- The first implementation task is payload-free planner TDD. New official payload is permitted only after the metadata-only dry-run, portable/tiny gates, and explicit bounded byte checks pass.

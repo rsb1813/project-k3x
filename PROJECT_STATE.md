@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 32 is publicly complete through implementation PR #56 and publication PR #57 at public head `f0a5d2ab46acb35f322a9bbcf8bf576695d32d95`. Exact device route preparation is experimental and host routing remains the default after a mixed one-layer result. Milestone 33 bounded official two-layer device closure is accepted in design under D-071; implementation and B-0034 are pending. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
+Milestone 32 is publicly complete through implementation PR #56 and publication PR #57 at public head `f0a5d2ab46acb35f322a9bbcf8bf576695d32d95`. Exact device route preparation is experimental and host routing remains the default after a mixed one-layer result. Milestone 33 bounded official two-layer device closure is accepted in design under D-071 and has a reviewed TDD implementation plan; implementation and B-0034 are pending. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
 
 State audited last on 2026-08-12 at public M32 publication head `f0a5d2ab46acb35f322a9bbcf8bf576695d32d95`. PR #56 branch/PR correctness and CodeQL passed; post-merge correctness `31510749958` and CodeQL `31510749973` also succeeded. PR #57 and its post-merge correctness `31511564878` and CodeQL `31511564986` succeeded. Local verification passes CPU CTest 19/19 plus Python 597/128, liburing/direct CTest 20/20 plus Python 603/122, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus Python 710/15, evidence regressions 65/65, actual device-route Compute Sanitizer with zero errors, and the production non-executable guard. No complete shard, full checkpoint, or paid cloud resource is in use.
 
@@ -115,7 +115,7 @@ State audited last on 2026-08-12 at public M32 publication head `f0a5d2ab46acb35
 
 ## Work in progress
 
-- D-071 defines the M33 real layer-1-to-layer-2 boundary, capacity-two layer-keyed KDA state registry, opaque inter-layer hidden/block token, host canonical routing point, bounded two-layer K3X v1 fixture, and B-0034 evidence contract. No M33 code or measurement exists yet.
+- D-071 and the M33 implementation plan define the real layer-1-to-layer-2 boundary, dependency-ordered manufacturer, portable interleaved oracle, capacity-two layer-keyed KDA state registry, opaque inter-layer hidden/block token, host canonical routing point, bounded two-layer K3X v1 fixture, and B-0034 evidence contract. No M33 runtime code or measurement exists yet.
 - M31 code, formal B-0032, evidence commit `992e0de`, actual-artifact sanitizer, production guard, full verification, README, TITAN Ledger synchronization, PR #54, and post-merge CI are publicly complete.
 - Formal B-0032 host/device incremental medians are 73,192,169/69,835,612 ns; full host is 68,224,527 ns. Device handoff removes exactly 6,512,640 state bytes in each direction per sequence and lowers the incremental median 4.585951% while aggregate kernel time changes +0.339801%.
 - All B-0032 rows preserve exact route/output/state identity, zero warm weight H2D, 1,816,322,048 resident bytes, and `0.00048828125` maximum error. The device row records 20 seeds, continuations, and publications with zero invalidations.
@@ -181,8 +181,8 @@ State audited last on 2026-08-12 at public M32 publication head `f0a5d2ab46acb35
 
 ## Next concrete tasks
 
-1. Write and self-review the detailed M33 TDD implementation plan from D-071.
-2. Begin with RED tests that generalize bounded planning and the exact interleaved layer-1-to-layer-2 oracle without downloading tensor payload.
+1. Write and witness Task 1 RED tests for exact layer-2 MoE/KDA planning without downloading tensor payload.
+2. Implement only the bounded `{1, 2}` planning generalization and run official-source/resume regressions.
 3. Keep full checkpoint download and paid Cloud Run work deferred until the explicitly authorized later milestone.
 
 ## Hardware assumptions

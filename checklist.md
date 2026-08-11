@@ -481,7 +481,7 @@
 - [x] Re-read the public M32 implementation and measured B-0033 bottleneck.
 - [x] Compare real layers 1 and 2, layer-1 replay, and a monolithic device-Top-K call.
 - [x] Accept D-071 and write the M33 design.
-- [ ] Write and self-review the detailed TDD implementation plan.
+- [x] Write and self-review the detailed TDD implementation plan.
 - [ ] Generalize the bounded planner and oracle to an exact layer-1-to-layer-2 trace.
 - [ ] Build and round-trip one execution-ordered two-layer K3X v1 fixture.
 - [ ] Add the capacity-two layer-keyed KDA state registry with ownership tests.
