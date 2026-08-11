@@ -46,6 +46,7 @@ if(K3X_ENABLE_CUDA)
         runtime/cuda/graph_resources.cu
         runtime/cuda/mxfp4.cu
         runtime/cuda/moe_layer.cu
+        runtime/cuda/official_kda.cu
         runtime/cuda/pinned_memory.cu
         runtime/cuda/resident_weights.cu
         runtime/cuda/situ.cu
@@ -217,6 +218,16 @@ else()
     target_link_libraries(test_cuda_official_moe PRIVATE k3x_runtime)
     set_target_properties(test_cuda_official_moe PROPERTIES CUDA_ARCHITECTURES "120-real")
     add_test(NAME cuda_official_moe COMMAND test_cuda_official_moe)
+
+    add_executable(test_cuda_official_kda tests/cuda/test_cuda_official_kda.cu)
+    target_link_libraries(test_cuda_official_kda PRIVATE k3x_runtime)
+    set_target_properties(test_cuda_official_kda PROPERTIES CUDA_ARCHITECTURES "120-real")
+    add_test(NAME cuda_official_kda COMMAND test_cuda_official_kda)
+
+    add_executable(test_cuda_official_layer tests/cuda/test_cuda_official_layer.cu)
+    target_link_libraries(test_cuda_official_layer PRIVATE k3x_runtime)
+    set_target_properties(test_cuda_official_layer PROPERTIES CUDA_ARCHITECTURES "120-real")
+    add_test(NAME cuda_official_layer COMMAND test_cuda_official_layer)
 
     add_executable(test_cuda_ffn tests/cuda/test_cuda_ffn.cu)
     target_link_libraries(test_cuda_ffn PRIVATE k3x_runtime)

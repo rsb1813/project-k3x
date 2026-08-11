@@ -223,6 +223,10 @@ Natural Top-16 routing gives `16 <= U <= 32`, so `W(U)` is between 1,548,500,480
 
 One sequence's persistent layer-1 KDA state is 6,512,640 bytes: 6,291,456 FP32 recurrent bytes plus 221,184 BF16 convolution-history bytes. Two boundary input vectors and two source-bank vectors add 57,344 BF16 bytes for a two-token fixture. The state is fixed per sequence at this layer; unlike MLA KV state it does not grow with decoded length.
 
+The first native CUDA capability smoke measured the exact resident A+B working set rather than inferring it from artifact bytes. The backend admitted 1,816,322,048 weight bytes, while tracked peak device allocation was 1,824,612,416 bytes including scratch and other allocations. Two incremental KDA calls moved exactly 13,025,280 state bytes H2D and the same amount D2H, plus 57,344 output bytes D2H. Total activation H2D was 13,198,976 bytes and total D2H was 13,139,968 bytes. These are logical CUDA copy counters for one cold WSL2 capability run, not independently observed PCIe traffic or B-0030 warm measurements.
+
+The same smoke recorded 32 KDA kernel launches over two calls, 32.897536 ms of aggregate profiled device time, and 381.907507 ms of cold end-to-end layer-sequence time. The difference includes first admission, allocation, host routing/residual work, synchronization, and harness orchestration; it must not be extrapolated to tokens per second. B-0030 with fixed warmups and samples is required before attributing a warm complete-layer bottleneck.
+
 If every layer tensor and the natural selected union are resident, the lower-bound logical warm weight H2D is zero. This is an engineering invariant to test, not a measured B-0030 result. Transient per-call H2D, activation/state traffic, peak VRAM, and complete-layer latency remain unknown until the formal fixed benchmark runs.
 
 ## Required production measurements
