@@ -701,3 +701,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: one complete layer is the smallest next boundary that can identify whether compute, orchestration, state movement, or weight residency dominates before broader checkpoint manufacturing.
 - Rejected claims: this decision does not authorize a full checkpoint download, Cloud Run execution, end-to-end TPS projection, or production default change.
 - Revisit: after one complete official layer has independent parity and measured traffic, decide whether to optimize/fuse the layer locally or proceed to multi-layer routing and cache traces.
+
+## D-061 — Close layer 1 at an explicit recurrent-state boundary
+
+- Date: 2026-08-11.
+- Status: accepted for M29; not implemented or measured.
+- Decision: supply deterministic layer-1 hidden/source-bank vectors and explicit zero KDA state, then execute two tokens through the complete layer both together and incrementally. Require checkpoint-authoritative F32 `A_log[128]` and explicit V-first recurrent-state storage. Keep the final artifact non-executable through `k3x_run`.
+- Alternatives considered: include embeddings and layer 0; stop at a KDA-only official boundary; close layer 1 around explicit state inputs.
+- Evidence: the pinned source blob matches repository metadata, layer 1 is KDA, the exact 17-tensor header payload is 887,843,840 bytes, and the KDA paper defines channel-wise decay. The checkpoint header exposes `A_log[128]` while the source constructor initializes `[96]`, so silent source imitation would be incorrect.
+- Benchmark result: none. Header and source identity checks are metadata observations, not a performance benchmark.
+- Reason accepted: this is the smallest boundary that exposes recurrent attention, both Attention Residual halves, natural routing, MoE, state movement, and final output without importing a separate layer-0 MLA/dense dependency closure.
+- Rejected claims: no complete-layer execution, B-0030, token rate, quality result, physical traffic, full-shard integrity, or production default exists yet.
+- Revisit: after B-0030, use measured KDA/MoE/kernel/orchestration and residency data to choose whole-layer fusion or bounded multi-layer tracing.

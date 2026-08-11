@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 28 dependency-closed real MoE FFN sublayer is complete and publicly integrated. Native BF16 K3X support, exact official tensor planning, deterministic natural route derivation, content-addressed two-phase selected-union materialization, source assembly, portable BF16/MXFP4 CPU/CUDA execution, final artifact/root binding, the strict pinned harness, the B-0029 runner/verifier, the bounded ignored fixture, formal B-0029 evidence, the full verification matrix, PR #48, and post-merge CI are complete. D-060 selects one dependency-complete official transformer layer as Milestone 29's active design boundary.
+Milestone 29's official layer-1 KDA transformer boundary is designed and accepted but not implemented. The accepted boundary supplies deterministic layer-1 hidden/source-bank vectors and explicit KDA state, then executes two tokens through self Attention Residual, KDA, MLP Attention Residual, the measured natural Top-16 MoE FFN, and final prefix accumulation both together and incrementally. It keeps the bounded artifact non-executable until independent whole-layer parity passes. No M29 tensor payload, B-0030 result, token metric, or quality result exists yet.
 
-State audited last on 2026-08-11 after PR #48 rebase-merged at public head `eb2c20860ee9c7c612b9b74984170bd8b4443ba1`. Fresh local verification passes CPU CTest 17/17 plus Python 507/97, liburing CTest 18/18 plus Python 509/95, ASan/UBSan CTest 18/18, CUDA CTest 30/30 plus actual-artifact Python 592/12, and actual alternating resident Compute Sanitizer with zero errors. Post-merge `main` correctness `31465590414` and CodeQL `31465590416` passed. The bounded fixture contains eleven always-active tensors and a 32-expert union; no complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-11 from public head `ab3cf433fc2eac2a6aaf8a55cdb3072997a7ab9c` after PR #49 reconciled M28 publication records. Its post-merge `main` correctness `31466295752` and CodeQL `31466295731` passed. The last full local M28 matrix passes CPU CTest 17/17 plus Python 507/97, liburing CTest 18/18 plus Python 509/95, ASan/UBSan CTest 18/18, CUDA CTest 30/30 plus actual-artifact Python 592/12, and actual alternating resident Compute Sanitizer with zero errors. The ignored bounded fixture contains eleven always-active tensors and a 32-expert union; no complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -111,6 +111,9 @@ State audited last on 2026-08-11 after PR #48 rebase-merged at public head `eb2c
 
 ## Work in progress
 
+- M29 design research is complete. The pinned source Git blob matches repository metadata; header-only inspection identifies 17 new tensors totaling 887,843,840 bytes; and D-061 selects the explicit layer-1 recurrent-state boundary.
+- M29 has no implementation or measurement yet. The next unit is a detailed TDD plan followed by fail-closed tensor planning and tiny independent KDA recurrence tests.
+
 - M28 Task 2 is complete at `0b0c944`: the route manifest is durable before expert fetching, only the natural A/B first-use union is planned, object reuse is rehashed, response bytes are measured separately from logical source bytes, and production generation remains fail-closed.
 - M28 Task 3 is complete at `8a13cf5`: the dimension-driven CPU oracle preserves explicit BF16 boundaries, validates the natural route before execution, decodes native MXFP4 experts exactly, and matches independent PyTorch intermediate values without production dispatch.
 - M28 Task 4 is complete at `bb634e1`: the opt-in CUDA method executes the routed/shared BF16 and selected native-MXFP4 FFN boundary on one stream, returns one final D2H vector, and reuses byte-native resident weights with zero second-call weight H2D.
@@ -144,7 +147,7 @@ State audited last on 2026-08-11 after PR #48 rebase-merged at public head `eb2c
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Current documentation reconciliation branch: `codex/milestone-twenty-eight-publication` from public Milestone 28 integration head `eb2c208`.
+- Current implementation branch: `codex/milestone-twenty-nine-official-layer` from public head `ab3cf43`.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build`, `build-liburing`, `build-asan`, and `build-cuda`.
 
 ## Known failures and blockers
@@ -169,9 +172,10 @@ State audited last on 2026-08-11 after PR #48 rebase-merged at public head `eb2c
 
 ## Next concrete tasks
 
-1. Publish this documentation reconciliation and verify its public `main` CI.
-2. Begin M29 with a design/spec for the smallest bounded official layer-1 KDA/MLA/Attention Residual closure around the measured FFN.
-3. Keep the new artifact non-executable until independent whole-layer parity passes; do not download a complete shard/checkpoint or run paid cloud resources without a separate milestone.
+1. Write the detailed M29 TDD plan and commit the accepted design ledger.
+2. Implement fail-closed official KDA tensor planning plus tiny independent full/incremental recurrence parity before materializing payload.
+3. Extend bounded content-addressed manufacturing, compose the portable complete layer, then add CUDA and B-0030 only after each prior correctness gate passes.
+4. Keep the artifact non-executable; do not download a complete shard/checkpoint or create paid cloud resources.
 
 ## Hardware assumptions
 
@@ -204,7 +208,7 @@ The immediate measured boundary is approximately 7.40 ms of CUDA kernel work plu
 
 ## Last known-good state
 
-- Public M28 integration head `eb2c20860ee9c7c612b9b74984170bd8b4443ba1` contains the complete implementation, B-0029 evidence, English README, and synchronized TITAN Ledger. Branch/pull-request correctness and pull-request CodeQL passed; post-merge `main` correctness `31465590414` and CodeQL `31465590416` passed.
+- Public head `ab3cf433fc2eac2a6aaf8a55cdb3072997a7ab9c` contains the complete M28 implementation, B-0029 evidence, English README, and publication reconciliation. PR #49 post-merge `main` correctness `31466295752` and CodeQL `31466295731` passed.
 - Local M28 final head `bdfc0b6` plus the current synchronized ledger contains the bounded official artifact harness, B-0029 evidence, and complete source-integrity fixture. Fresh CPU, liburing, ASan/UBSan, and CUDA matrices pass with counts recorded above; actual alternating resident Compute Sanitizer reports `ERROR SUMMARY: 0 errors`.
 - Formal B-0029 evidence commit `bf147fa` records three rows with aggregate SHA-256 `2a1a758493791e5a417fda694dc0ee2a3e9adb2d92f71c39e7589fdc2683be39`, summary CSV SHA-256 `b251aea5cccbe8cba2417e4cc3a97f9127cdd52fc1a07904d32d170fc7f64a95`, and strict committed-evidence verification. No token/TPS or quality claim is present.
 - Local M28 Task 6 head `ba3a0d2` implements the strict fixed-matrix B-0029 tool. Combined runner/harness pytest passes 28 with 3 real-fixture skips; compile validation and `git diff --check` pass. No B-0029 measurement was produced.

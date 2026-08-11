@@ -411,3 +411,18 @@
 - [x] Run correctness, sanitizer, B-0029, full verification, and evidence cross-checks.
 - [x] Synchronize the TITAN Ledger and complete final self-review.
 - [x] Publish through PR #48, rebase-merge, and verify public `main` correctness and CodeQL.
+
+## Milestone 29 — Official layer-1 KDA transformer boundary
+
+- [x] Re-read the TITAN Ledger and public M28 state.
+- [x] Verify the pinned official graph, source Git blob, configuration, index, and layer-1 shard header without tensor payload downloads.
+- [x] Compare the external state boundary, layer-0 closure, and KDA-only alternatives.
+- [x] Write and self-review the accepted complete-layer design.
+- [ ] Write the detailed TDD implementation plan.
+- [ ] Implement fail-closed official KDA tensor planning and bounded materialization.
+- [ ] Implement an independent portable KDA recurrence and full/incremental state oracle.
+- [ ] Compose the complete portable layer with the official M28 MoE boundary.
+- [ ] Implement the native CUDA complete-layer boundary and telemetry.
+- [ ] Materialize the bounded fixture without a complete shard/checkpoint.
+- [ ] Run correctness, sanitizer, B-0030, full verification, and evidence cross-checks.
+- [ ] Synchronize README and the TITAN Ledger, publish, and verify post-merge CI.
