@@ -629,3 +629,11 @@
 - The CLI abbreviation RED exposed that argparse treated `--materialize` as the legacy `--materialize-expert`. `allow_abbrev=False` now keeps both external contracts distinct. `--scope moe-ffn` remains dry-run unless the exact `--materialize` flag and output directory are supplied.
 - A separate telemetry RED added actual response-byte accounting to content objects. Fresh and damaged-partial restart report downloaded bytes, while completed-object reuse and a complete verified partial report zero. CLI traffic now separates actual `tensor_payload_bytes` from logical `source_object_bytes`.
 - Focused materializer/CLI coverage passes 27 tests. The combined official-source, transport, safetensors, converter-resume, and source-manifest regression matrix passes 149 tests in 13.24 seconds. Compile validation and `git diff --check` pass. No official M28 payload, B-0029, CPU/CUDA result, token metric, or quality metric exists yet.
+
+## 2026-08-11 — Milestone 28 portable official MoE oracle
+
+- CMake RED failed because the declared `runtime/src/official_moe.cpp` did not exist. The minimal implementation introduces raw BF16 word views and explicit round-to-nearest-even boundaries without changing `ModelSession` or backend dispatch.
+- The tiny graph fixes literal Attention Residual, router, routed projections, two native-MXFP4 experts, shared BF16 expert, and final residual values. Natural route derivation is separate from execution so later CUDA consumes the same validated IDs and contributions.
+- Python parity RED failed because the C++ test emitted no boundary record. The `--dump` test mode now emits only the already-validated tiny boundaries; PyTorch independently recomputes all values and matches at `1e-6`.
+- Malformed route count, duplicate IDs, non-finite or non-unit contribution mass, duplicate/missing expert payloads, malformed router dimensions, and invalid MXFP4 views fail before `OfficialMoeResult` publication.
+- Commit `8a13cf5` passes CPU CTest 17/17 and full `test_cpp_parity.py` 113 passed/32 skipped. No network, filesystem, CUDA, global state, official payload, B-0029, token, or quality measurement is involved.
