@@ -243,15 +243,15 @@ Require host/device exact route IDs, contribution tolerance, per-layer state/out
 
 Build `test_cuda_official_two_layer` and run `pytest -q tests/python/test_cuda_official_two_layer.py`. Expected result: target/module/executable paths do not exist.
 
-- [ ] **Step 3: Implement the interleaved wrapper and dedicated harness.**
+- [x] **Step 3: Implement the interleaved wrapper and dedicated harness.**
 
 Keep historical one-layer CLI schemas untouched. Execute A1→A2→B1→B2, resolve experts only after each canonical route, publish both final KDA states, and make failure cleanup explicit. Emit no token/TPS fields.
 
-- [ ] **Step 4: Run tiny GREEN and production guard.**
+- [x] **Step 4: Run tiny GREEN and production guard.**
 
 Run the new CUDA/pytest tests, historical official-layer suites, one tiny host/device parity pair, strict warning compilation, and `k3x_run` non-executable rejection.
 
-- [ ] **Step 5: Self-review and commit.**
+- [x] **Step 5: Self-review and commit.**
 
 Commit message: `feat: execute bounded official two-layer closure`.
 
