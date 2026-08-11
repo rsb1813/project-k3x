@@ -607,3 +607,11 @@
 - K3X v1 now accepts dtype 3 only as exact two-byte BF16 with quantization NONE, no auxiliary extent, and required feature bit 0. Python and C++ Readers require the feature bit and observed BF16 tensor set to agree and continue to reject all unknown required bits at the superblock.
 - The official source format sets both `OPTIONAL_STORAGE_FIXTURE` and `OPTIONAL_OFFICIAL_MOE_FIXTURE`, preserving the existing production non-executable guard. Existing source formats, record sizes, and K3X version remain unchanged.
 - Focused Python/reader coverage passed 42 tests with 4 environment skips, CPU CTest passed 16/16, and converter/resume/safetensors/storage regressions passed 82 tests. `git diff --check` passed.
+
+## 2026-08-11 — Milestone 28 Task 2 bounded planner foundation
+
+- Official config binding now includes shared-expert count, latent normalization, RMS epsilon, sigmoid routing, renormalization, single expert group/top-k group, and routed scaling. The bool field required a dedicated comparison branch because Python bools are integer subclasses but the numeric validator intentionally excludes them.
+- The pure planner validates the exact eleven layer-1 always-active tensors and 379,900,416-byte total. Deterministic cases A/B are serialized as little-endian FP32 digests, while Attention Residual, postnorm, sigmoid routing, correction-only selection, canonical ordering, and contribution renormalization have an independent literal tiny oracle.
+- The bounded object store splits every request at no more than 8 MiB, persists a prefix digest after each fsynced chunk, rejects a damaged partial, resumes a valid partial, and reuses a content-addressed completed blob without another request.
+- The source assembler writes a hashed safetensors-compatible shard and official fixture manifest. A RED/GREEN test caught an unreachable physical-order branch; the final K3X extents now follow declared first-use order rather than sorted tensor names.
+- The official-source focused suite currently passes 53 tests. Full expert-union orchestration, CLI integration, and the actual ignored fixture remain in progress and are not claimed implemented.

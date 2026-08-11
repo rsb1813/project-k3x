@@ -373,8 +373,23 @@ def convert(
         optional_features = (
             OPTIONAL_STORAGE_FIXTURE | OPTIONAL_OFFICIAL_MOE_FIXTURE
         )
+    if manifest["format"] == "k3-official-moe-slice-v1":
+        tensor_order = manifest.get("tensor_order")
+        plan_names = {plan.name for plan in plans}
+        if (
+            not isinstance(tensor_order, list)
+            or any(not isinstance(name, str) for name in tensor_order)
+            or len(tensor_order) != len(plan_names)
+            or set(tensor_order) != plan_names
+        ):
+            raise K3XError("INVALID_OFFICIAL_MOE_TENSOR_ORDER")
+        physical_order = {name: index for index, name in enumerate(tensor_order)}
+        plans.sort(key=lambda plan: physical_order[plan.name])
     maximum_read = 0
-    if manifest["format"] == "k3-storage-slice-v1":
+    if manifest["format"] in {
+        "k3-storage-slice-v1",
+        "k3-official-moe-slice-v1",
+    }:
         maximum_read = _validate_storage_fixture_hashes(
             manifest, plans, source, chunk_bytes
         )

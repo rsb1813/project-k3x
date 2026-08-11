@@ -84,6 +84,16 @@ class OfficialConfig:
     top_k: int
     routed_latent_size: int
     expert_intermediate_size: int
+    num_shared_experts: int
+    activation_situ_beta: float
+    activation_situ_linear_beta: float
+    latent_moe_use_norm: bool
+    rms_norm_eps: float
+    moe_renormalize: bool
+    moe_router_activation_func: str
+    num_expert_group: int
+    topk_group: int
+    routed_scaling_factor: float
 
 
 @dataclass(frozen=True)
@@ -414,7 +424,7 @@ def load_official_config(
         raise K3XError("OFFICIAL_CONFIG_BLOB_MISMATCH")
     value = _decode_document(body, "INVALID_OFFICIAL_CONFIG")
     text = value.get("text_config")
-    expected: dict[str, int | float | str] = {
+    expected: dict[str, bool | int | float | str] = {
         "model_type": "kimi_linear",
         "vocab_size": 163_840,
         "num_hidden_layers": 93,
@@ -429,12 +439,20 @@ def load_official_config(
         "activation_situ_beta": 4.0,
         "activation_situ_linear_beta": 25.0,
         "routed_scaling_factor": 1.0,
+        "latent_moe_use_norm": True,
+        "rms_norm_eps": 1.0e-5,
+        "moe_renormalize": True,
+        "moe_router_activation_func": "sigmoid",
+        "num_expert_group": 1,
+        "topk_group": 1,
     }
     if value.get("model_type") != "kimi_k3" or not isinstance(text, dict):
         raise K3XError("OFFICIAL_CONFIG_MISMATCH")
     for key, expected_value in expected.items():
         actual = text.get(key)
-        if isinstance(expected_value, str):
+        if isinstance(expected_value, bool):
+            valid = actual is expected_value
+        elif isinstance(expected_value, str):
             valid = actual == expected_value
         else:
             valid = _matches_number(actual, expected_value)
@@ -448,6 +466,16 @@ def load_official_config(
         text["num_experts_per_token"],
         text["routed_expert_hidden_size"],
         text["moe_intermediate_size"],
+        text["num_shared_experts"],
+        text["activation_situ_beta"],
+        text["activation_situ_linear_beta"],
+        text["latent_moe_use_norm"],
+        text["rms_norm_eps"],
+        text["moe_renormalize"],
+        text["moe_router_activation_func"],
+        text["num_expert_group"],
+        text["topk_group"],
+        text["routed_scaling_factor"],
     )
 
 
