@@ -87,7 +87,7 @@ Use tiny monkeypatched KDA/MoE tensors to require exact interleaving, unchanged 
 
 Run `pytest -q tests/python/test_official_two_layer.py`. Expected result: import fails because `official_two_layer` does not exist.
 
-- [ ] **Step 3: Implement the pure two-layer trace.**
+- [x] **Step 3: Implement the pure two-layer trace.**
 
 Reuse the official KDA reference, Attention Residual/RMSNorm rules, canonical routing helper, and `k3x_ref.mxfp4` primitives. Decode and execute one selected expert at a time so peak temporary memory stays bounded. Persist per-step input, output, route, state-consumption, state-publication, and contribution digests.
 

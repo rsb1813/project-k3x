@@ -948,3 +948,9 @@
 - Self-review found that matching non-official source blobs could pass the first GREEN. A focused RED reproduced the acceptance, and the composite boundary now checks the same pinned `OFFICIAL_KDA_SOURCE_BLOB_ID` as the single-layer planner.
 - A second import RED failed on the missing trace state/execution API. Commit `481309e` adds a pure A1→A2→B1→B2 scheduler that preserves each layer's state chain, propagates the original block source, binds inter-layer activation digests, and records per-layer expert unions.
 - Focused plan/scheduler plus historical official MoE/layer verification passes 33 tests. This is scheduling evidence only: the exact source-byte executor, materializer, artifact, CLI, runtime, and B-0034 do not exist yet, and no payload was read.
+
+## 2026-08-12 — Milestone 33 Task 2 source-byte executor
+
+- A controlled import RED failed on the missing source-byte tensor, MXFP4 expert, state, and executor APIs. The minimum implementation accepts BF16/F32 payload bytes plus native MXFP4 packed/scale bytes and reuses the official KDA, Attention Residual, and natural-routing references.
+- The tiny exact A1→A2→B1→B2 trace keeps independent recurrent states, propagates layer-1 output into layer 2, preserves each position's block source, executes selected experts serially, and records contribution digests. A truncated dense payload fails closed before execution.
+- Commit `0b7dc19` passes 10 focused tests and 45 focused plus historical official KDA/MoE/layer tests. Python compilation and Windows `git diff --check` pass. No official payload, artifact, benchmark, full checkpoint, or paid resource was used.
