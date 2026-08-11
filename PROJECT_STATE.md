@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 32 is publicly complete through implementation PR #56 and publication PR #57 at public head `f0a5d2ab46acb35f322a9bbcf8bf576695d32d95`. Exact device route preparation is experimental and host routing remains the default after a mixed one-layer result. Milestone 33 Task 1 bounded layer-2 metadata planning is implemented and tested through `752972a`; the dependent two-layer oracle/artifact, runtime closure, and B-0034 are pending. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
+Milestone 32 is publicly complete through implementation PR #56 and publication PR #57 at public head `f0a5d2ab46acb35f322a9bbcf8bf576695d32d95`. Exact device route preparation is experimental and host routing remains the default after a mixed one-layer result. Milestone 33 bounded layer-2 planning is complete through `752972a`, and pinned two-layer plan composition plus the pure interleaved trace scheduler are implemented through `481309e`. The exact source-byte executor/artifact, runtime closure, and B-0034 are pending. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
 
 State audited last on 2026-08-12 at public M32 publication head `f0a5d2ab46acb35f322a9bbcf8bf576695d32d95`. PR #56 branch/PR correctness and CodeQL passed; post-merge correctness `31510749958` and CodeQL `31510749973` also succeeded. PR #57 and its post-merge correctness `31511564878` and CodeQL `31511564986` succeeded. Local verification passes CPU CTest 19/19 plus Python 597/128, liburing/direct CTest 20/20 plus Python 603/122, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus Python 710/15, evidence regressions 65/65, actual device-route Compute Sanitizer with zero errors, and the production non-executable guard. No complete shard, full checkpoint, or paid cloud resource is in use.
 
@@ -117,6 +117,7 @@ State audited last on 2026-08-12 at public M32 publication head `f0a5d2ab46acb35
 
 - D-071 and the M33 implementation plan define the real layer-1-to-layer-2 boundary, dependency-ordered manufacturer, portable interleaved oracle, capacity-two layer-keyed KDA state registry, opaque inter-layer hidden/block token, host canonical routing point, bounded two-layer K3X v1 fixture, and B-0034 evidence contract.
 - M33 Task 1 commits `2a938ef`/`752972a` extend only official MoE/KDA metadata planning to exact layer IDs 1 and 2 and bind wrong-shard/missing-KDA failures. Controlled RED failed at the old layer-1 guards; final official MoE/layer/source, source-integrity, and resume verification passes 111 tests. Existing layer-1 materialization and production behavior are unchanged, and no payload or benchmark was produced.
+- M33 Task 2 partial commits `3665182`/`481309e` add pinned composite-plan validation and the pure A1→A2→B1→B2 dependency scheduler. Focused verification passes 33 tests; exact source-byte KDA/MXFP4 execution, materialization, CLI, artifact, runtime dispatch, and measurement remain unimplemented.
 - M31 code, formal B-0032, evidence commit `992e0de`, actual-artifact sanitizer, production guard, full verification, README, TITAN Ledger synchronization, PR #54, and post-merge CI are publicly complete.
 - Formal B-0032 host/device incremental medians are 73,192,169/69,835,612 ns; full host is 68,224,527 ns. Device handoff removes exactly 6,512,640 state bytes in each direction per sequence and lowers the incremental median 4.585951% while aggregate kernel time changes +0.339801%.
 - All B-0032 rows preserve exact route/output/state identity, zero warm weight H2D, 1,816,322,048 resident bytes, and `0.00048828125` maximum error. The device row records 20 seeds, continuations, and publications with zero invalidations.
@@ -182,8 +183,8 @@ State audited last on 2026-08-12 at public M32 publication head `f0a5d2ab46acb35
 
 ## Next concrete tasks
 
-1. Write and witness Task 2 import-level RED tests for the dependency-ordered two-layer trace and materialization transaction.
-2. Implement the tiny pure interleaved trace before adding CLI or any official payload transfer.
+1. Write a focused RED for the exact source-byte single-step executor behind the interleaved scheduler.
+2. Reuse the existing official KDA, residual, routing, and native MXFP4 authorities before adding the materialization transaction or CLI.
 3. Keep full checkpoint download and paid Cloud Run work deferred until the explicitly authorized later milestone.
 
 ## Hardware assumptions
@@ -210,6 +211,7 @@ D-070 retains device route preparation as an explicit experiment but does not se
 ## Last known-good state
 
 - Local M33 Task 1 head `752972a` passes 111 official MoE/layer/source, source-manifest integrity, and converter-resume tests plus Python compilation and `git diff --check`. It changes no materializer, artifact, runtime, benchmark, or production path.
+- Local M33 trace-scheduler head `481309e` passes 33 focused two-layer plan/scheduler and historical official MoE/layer tests plus Python compilation and `git diff --check`. No source-byte executor, payload, artifact, runtime path, or benchmark exists at this head.
 - Public M32 implementation head `ab0ecb19ade01e7989bcba9f6dbcd1c853c43432` contains PR #56. Branch correctness `31510344481`, pull-request correctness `31510368444`, pull-request CodeQL `31510368390`, post-merge correctness `31510749958`, and post-merge CodeQL `31510749973` succeeded.
 - Local M32 evidence commit `3d5d96c` records B-0033 with aggregate SHA-256 `709fe13d67d144d025f32e17d6cafdfeef3d6e52e901d4234b7e54d7c9342d61`, summary JSON `86cb016d1764747233536614137566cfa8098cbfcfb10bdf5d5dc596d37c9ace`, and summary CSV `d83d7cd34bc6601e39af3b55635d1ffb00f4eac79c742152ee669dd29915ee1d`. Strict and independent verification pass.
 - Fresh M32 gates pass CPU CTest 19/19 plus Python 597/128, liburing/direct CTest 20/20 plus Python 603/122, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus Python 710/15, and evidence regressions 65/65. Actual device-route Compute Sanitizer reports zero errors; production `k3x_run` remains fail-closed.

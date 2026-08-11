@@ -83,7 +83,7 @@ Commit message: `feat: plan bounded official layer two`.
 
 Use tiny monkeypatched KDA/MoE tensors to require exact interleaving, unchanged block-source propagation, independent state hashes, layer-1-output-to-layer-2-input digests, per-layer routes/expert unions, and a two-layer oracle payload. Require plan/header drift, duplicate canonical names, missing expert bytes, route mismatch, non-atomic publication, and resume-object corruption to fail before finalization.
 
-- [ ] **Step 2: Witness import-level RED.**
+- [x] **Step 2: Witness import-level RED.**
 
 Run `pytest -q tests/python/test_official_two_layer.py`. Expected result: import fails because `official_two_layer` does not exist.
 
