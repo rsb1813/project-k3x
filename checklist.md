@@ -431,3 +431,18 @@
 - [x] Run correctness, sanitizer, B-0030, full verification, and evidence cross-checks.
 - [x] Synchronize README and the TITAN Ledger locally.
 - [x] Publish Milestone 29 and verify pull-request and post-merge CI.
+
+## Milestone 30 — Official KDA admission validation
+
+- [x] Re-read the TITAN Ledger and public M29 state.
+- [x] Inspect the existing M23 admission registry and official KDA validation boundary.
+- [x] Compare backend-wide admission, KDA-specific caching, and harness-only bypass.
+- [x] Write and self-review the accepted M30 design.
+- [x] Write the detailed TDD implementation plan.
+- [ ] Implement and test atomic admission for fourteen official KDA immutable views.
+- [ ] Expose official-layer validation CLI and cold/measured telemetry.
+- [ ] Implement and verify the strict B-0031 evidence transaction.
+- [ ] Run actual-artifact correctness and Compute Sanitizer gates.
+- [ ] Run B-0031 exactly once and seal the evidence.
+- [ ] Run the complete verification matrix and synchronize README/TITAN Ledger.
+- [ ] Publish M30 and verify pull-request and post-merge CI.
