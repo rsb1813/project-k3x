@@ -1225,3 +1225,41 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Negative coverage: forbidden token/TTFT/quality/physical-traffic metrics, schema drift, route/contribution drift, traffic drift, numerical divergence, non-finite output, resident warm weight H2D, raw/CSV/aggregate mutation, row-order drift, and full/incremental output/state divergence fail before final publication.
 - All performance fields: not recorded as formal evidence. No B-0030 output directory exists at this implementation checkpoint.
 - Interpretation: this verifies the non-ranking evidence pipeline only. It is not B-0030 and supports no performance or default-policy conclusion.
+
+## B-0030 — bounded official KDA complete-layer CUDA
+
+- Date: 2026-08-11.
+- Evidence commit: `bbdccb9` from runner implementation `8ace63d`.
+- Hardware: AMD Ryzen 7 9800X3D, NVIDIA GeForce RTX 5080 16 GB, driver 591.86, CUDA 13.3.1, WSL2 Ubuntu 24.04.4 on Windows 11.
+- Model/checkpoint: bounded official layer-1 fixture from `moonshotai/Kimi-K3` revision `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`; 1,829,256,704 source-object bytes and 1,829,310,720 K3X bytes; no complete shard/checkpoint.
+- Mode: fixed A transient, A-to-B incremental resident, and A+B full resident order; three warmups and twenty measured calls or sequences; exact natural Top-16 routes with a disjoint 32-expert union.
+- Context length: two fixed layer-boundary positions. This benchmark has no token semantics.
+
+| Row | Median | p05 | p95 | Kernel total / per sequence | Orchestration total / per sequence | Warm weight H2D | Peak VRAM | Peak RSS |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| A transient | 262,801,334 ns | 240,377,634 ns | 276,623,171 ns | 315,483,680 / 15,774,184 ns | 4,864,858,937 / 243,242,946.85 ns | 30,711,316,480 B | 896,091,200 B | 2,198,085,632 B |
+| AB incremental resident | 168,577,563 ns | 164,557,269 ns | 172,811,430 ns | 634,547,296 / 31,727,364.8 ns | 2,741,768,725 / 137,088,436.25 ns | 0 B | 1,824,612,416 B | 2,204,311,552 B |
+| AB full resident | 114,804,882 ns | 111,352,514 ns | 117,765,462 ns | 631,906,211 / 31,595,310.55 ns | 1,662,409,908 / 83,120,495.4 ns | 0 B | 1,825,310,016 B | 2,198,372,352 B |
+
+- Resident bytes: 1,816,322,048 for both AB rows; cache hits are 2,720 incremental and 2,440 full with zero misses or bypasses.
+- KDA traffic: incremental records 40 calls, 640 launches, and 260,505,600 state bytes in each direction across twenty sequences. Full records 20 calls, 480 launches, and 130,252,800 state bytes in each direction.
+- Activation H2D / total D2H: 263,979,520 / 262,799,360 bytes incremental; 133,726,720 / 132,546,560 bytes full.
+- Reader scope: each harness process records 440 calls and 3,658,513,408 requested, completed, storage-submitted, and storage-completed bytes. These are logical Reader counters, not physical NVMe traffic.
+- Correctness: all rows are finite with maximum absolute error `0.00048828125`. Full and incremental output SHA-256 are both `3bc173301781ec02502c29a1d8ac2951139ba51cfef593f858bbac65cd748617`; final V-first state SHA-256 are both `5f0ce4680ca343648838ef274cc3f8526c5174eba9922b44b8f37715c2901073`.
+- Derived comparison: full resident wall median is 31.897887% below incremental resident, while per-sequence kernel time is 0.416216% lower. This supports a host/orchestration/validation attribution experiment, not a causal claim about one subcomponent.
+- Evidence SHA-256: artifact `9f0c29fcb18b8cdab5aeeec67d8e5e0113b8dffb7352a2dcdac1ae41ae5198c6`; manifest `cf0dd554d5dfc7db640cb3313f7527e6c354a6fd74f9011cd747348b247168d4`; runner `253af0dfa411b771913997f9685c3bb4c5d5877ae68d7fe263eaff6e67f2b1b9`; aggregate `86f0007af7da007d6646dec6fa8fba4008c1bf7bedff53971d5d31926c9f6452`; summary CSV `1e5af9bb7d5b9abb16f62962bbce3584b62014873b12ce7642868e919770a635`.
+- Raw JSON SHA-256: A transient `2bea4a645ed3c91c7dfe0449b5367fd79a3faee4095d5dce3a89e359a127e4cc`; incremental resident `aee70f024bc6c0f8326b5cb9d46464ec506698e8498888a0be99b8bf54bf21f8`; full resident `31ac8b44329f929bab9f0f83c20d03efee13b1e31222afb3a0246b05c284b632`.
+- Decode tok/s, prefill tok/s, TTFT, physical NVMe GB/token, physical H2D GB/token, GPU utilization, GPU memory bandwidth, coding quality, speculative acceptance, and adaptive Top-K: not measured.
+- Enabled optimizations: exact resident BF16/F32/MXFP4 weights in resident rows only. No proxy, pruning, adaptive Top-K, speculation, CUDA Graph default, or lossy quantization.
+
+## Milestone 29 final local verification matrix
+
+- Date: 2026-08-11.
+- CPU: CTest 19/19; Python 541 passed, 119 skipped.
+- liburing/direct capability: CTest 20/20; Python 543 passed, 117 skipped with `K3X_TEST_IO_URING=1`.
+- ASan/UBSan: CTest 20/20.
+- CUDA with the actual bounded artifact: CTest 34/34; Python 639 passed, 21 skipped.
+- Committed B-0030 verifier: 9/9 passed; strict artifact/manifest/runner/raw/CSV/aggregate rehash passed.
+- Actual AB incremental resident Compute Sanitizer: `ERROR SUMMARY: 0 errors`; launch attach used `--launch-timeout 0` because the checksum/preflight oracle exceeds the tool's 10-second default attach timeout. The valid run reports zero warm weight H2D and maximum absolute error `0.00048828125`.
+- Production guard: `k3x_run` exits 4 with `NON_EXECUTABLE_ARTIFACT` on the bounded layer fixture.
+- Public integration: pending.

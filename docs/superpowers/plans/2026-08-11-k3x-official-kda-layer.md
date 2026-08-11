@@ -457,7 +457,7 @@ git commit -m "test: add strict B-0030 evidence pipeline"
 - [ ] **Step 1: Run zero-payload dry-run and inspect the exact plan**
 
 ```bash
-K3X_TEST_OFFICIAL_DISCOVERY=1 PYTHONPATH=converter:reference \
+K3X_TEST_OFFICIAL_DISCOVERY=1 PYTHONPATH=.:converter:reference \
   /home/jolib/.venvs/k3x-m1/bin/python tools/discover_official_kimi_k3.py \
   --scope kda-layer --dry-run
 ```
@@ -467,7 +467,7 @@ Require exact pinned identities, 17 KDA tensors, 887,843,840 KDA bytes, and 1,82
 - [x] **Step 2: Materialize the bounded layer fixture once**
 
 ```bash
-K3X_TEST_OFFICIAL_DISCOVERY=1 PYTHONPATH=converter:reference \
+K3X_TEST_OFFICIAL_DISCOVERY=1 PYTHONPATH=.:converter:reference \
   /home/jolib/.venvs/k3x-m1/bin/python tools/discover_official_kimi_k3.py \
   --scope kda-layer --materialize \
   --output-dir artifacts/m29-official-layer/live

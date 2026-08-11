@@ -448,7 +448,7 @@ Public PR [#48](https://github.com/rsb1813/project-k3x/pull/48) rebase-merged Mi
 
 ## Milestone 29 — official KDA transformer layer
 
-M29 is in progress; its metadata planner, independent PyTorch and portable C++ KDA oracles, bounded complete-layer manufacturing path, strict pinned preflight, official-weight portable execution gate, and native CUDA complete-layer boundary are implemented. B-0030 remains unmeasured. The milestone extends the bounded official fixture from the measured MoE FFN boundary to the complete layer-1 graph: self Attention Residual, input RMSNorm, KDA with incremental convolution/recurrent state, MLP Attention Residual, natural Top-16 Stable LatentMoE, and final prefix accumulation.
+M29 is locally complete through formal B-0030 and the full verification matrix. It extends the bounded official fixture from the measured MoE FFN boundary to the complete layer-1 graph: self Attention Residual, input RMSNorm, KDA with incremental convolution/recurrent state, MLP Attention Residual, natural Top-16 Stable LatentMoE, and final prefix accumulation. Public integration remains pending.
 
 Header-only inspection found exactly 17 new tensors and 887,843,840 payload bytes. The bounded materialization selected two disjoint natural Top-16 routes, so `U=32` and the exact source-object payload is 1,829,256,704 bytes. It produced a 1,829,310,720-byte ignored K3X artifact without downloading the complete 16.99 GB shard or checkpoint. A verified reuse pass fetched zero tensor-payload bytes.
 
@@ -456,7 +456,17 @@ The checkpoint stores channel-wise F32 `A_log[128]`, while its pinned Python con
 
 Task 6 now runs the official 7,168-wide layer on native `sm_120` CUDA. Host orchestration retains the two Attention Residual calculations and exact natural router, while byte-native BF16/F32 KDA projections, short convolution, V-first recurrence, output projection, and exact native-MXFP4 MoE FFN execute on the GPU. Tiny transient/resident and full/incremental tests pass, both focused binaries report zero Compute Sanitizer errors, and an actual resident A-to-B smoke matches the portable complete-layer output within `0.00048828125`. Its cold one-sequence latency and transfer counters are capability observations, not B-0030, token throughput, quality, physical PCIe/NVMe traffic, or a runtime default.
 
-Task 7 adds the strict non-ranking B-0030 evidence pipeline. It fixes the row order to A transient, A-to-B incremental resident, and A+B full resident; requires exactly three warmups and twenty samples for official verification; validates KDA call/launch/state traffic, BF16/F32/MXFP4 weight traffic, process peak RSS, Reader logical/storage traffic, resident warm-zero weight H2D, exact route/contribution identity, and full/incremental output/state digest parity; writes LF-only raw JSON/CSV plus aggregate digests; and publishes the output directory only after all three rows pass. The pipeline is implemented and tested, but no formal B-0030 result is claimed until the single fixed run is recorded.
+Task 7 adds the strict non-ranking B-0030 evidence pipeline. It fixes the row order to A transient, A-to-B incremental resident, and A+B full resident; requires exactly three warmups and twenty samples for official verification; validates KDA call/launch/state traffic, BF16/F32/MXFP4 weight traffic, process peak RSS, Reader logical/storage traffic, resident warm-zero weight H2D, exact route/contribution identity, and full/incremental output/state digest parity; writes LF-only raw JSON/CSV plus aggregate digests; and publishes the output directory only after all three rows pass.
+
+The sole formal B-0030 transaction is committed at `bbdccb9`. A transient measures a 262.801334 ms median and 30,711,316,480 logical warm weight-H2D bytes over twenty calls. Exact resident A-to-B incremental execution measures 168.577563 ms per two-token layer sequence; full A+B resident execution measures 114.804882 ms, 31.897887% lower. Both resident rows transfer zero warm weight bytes and retain 1,816,322,048 exact weight bytes. Their output and final V-first state SHA-256 values match exactly, and every row has maximum absolute error `0.00048828125`.
+
+| B-0030 row | Median | Kernel / sequence | Orchestration / sequence | Warm weight H2D | Peak tracked VRAM |
+|---|---:|---:|---:|---:|---:|
+| A transient | 262.801334 ms | 15.774184 ms | 243.242947 ms | 30,711,316,480 B / 20 calls | 896,091,200 B |
+| A-to-B incremental resident | 168.577563 ms | 31.727365 ms | 137.088436 ms | 0 B | 1,824,612,416 B |
+| A+B full resident | 114.804882 ms | 31.595311 ms | 83.120495 ms | 0 B | 1,825,310,016 B |
+
+The full and incremental kernel totals differ by only 0.416216%, while wall time differs by 53.772681 ms. This identifies per-call host orchestration and immutable KDA validation as the next attribution target; it does not prove the validation scan alone causes the entire delta. B-0030 has no token semantics and makes no TPS, TTFT, quality, physical PCIe/NVMe, utilization, bandwidth, or native-Linux claim.
 
 The first Task 1 gate now parses and binds the exact KDA configuration, pinned source blob, 17 tensor dtypes/shapes/ranges, M28 MoE plan, and byte formulas before payload access. The live metadata-only plan returns layer 1, 17 tensors, 887,843,840 KDA bytes, 1,267,744,256 base bytes, and a 1,829,256,704-byte two-route maximum. Official source/MoE/layer/CLI regression coverage passes 64 tests; malformed linear-attention layer sets and `A_log[96]` fail closed.
 

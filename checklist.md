@@ -428,5 +428,6 @@
 - [x] Implement the native CUDA complete-layer boundary and telemetry.
 - [x] Implement the strict B-0030 runner and committed-evidence verifier.
 - [x] Materialize the bounded fixture without a complete shard/checkpoint.
-- [ ] Run correctness, sanitizer, B-0030, full verification, and evidence cross-checks.
-- [ ] Synchronize README and the TITAN Ledger, publish, and verify post-merge CI.
+- [x] Run correctness, sanitizer, B-0030, full verification, and evidence cross-checks.
+- [x] Synchronize README and the TITAN Ledger locally.
+- [ ] Publish Milestone 29 and verify pull-request and post-merge CI.
