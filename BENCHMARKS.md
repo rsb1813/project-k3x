@@ -1021,3 +1021,14 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Complete-object or authenticated-chunk source verification before production conversion claims; B-0027/B-0028 retain explicit `transport-pinned-range` provenance.
 - Native-Linux repetition of B-0028 before using its one-expert residency latency ratio in any runtime policy.
 - L2 runtime physical NVMe, utilization, memory-bandwidth, and storage I/O-stall counters.
+
+## Milestone 28 Task 2 verification — bounded official MoE materializer
+
+- Date: 2026-08-11.
+- Commit: `0b0c944`.
+- Hardware/model: controlled local fake-range fixtures under WSL2; no official tensor payload and no GPU execution.
+- Mode: two-phase always-active route derivation followed by exact selected-union planning, content-addressed resume/reuse, physical source assembly, and explicit CLI orchestration.
+- Result: 27 focused materializer/CLI tests passed. The combined official-source, transport, safetensors, converter-resume, and source-manifest regression matrix passed 149 tests in 13.24 seconds. Python compile validation and `git diff --check` also passed.
+- Traffic contract: every response is capped at 8 MiB; fresh, resumed, and reused content objects report actual response bytes independently from logical source-object bytes. No live response-byte total is recorded because no official M28 payload was requested.
+- Decode tok/s, prefill tok/s, TTFT, VRAM, system RAM, physical NVMe GB/token, H2D GB/token, cache hit rate, average Top-K, speculative acceptance, quality, GPU utilization, and GPU bandwidth: not measured and not applicable to this verification-only unit.
+- Interpretation: this entry records a correctness/recovery gate, not B-0029 and not a performance benchmark. The next measurable boundary is the portable official BF16/MXFP4 oracle followed by the native CUDA implementation over the bounded ignored fixture.

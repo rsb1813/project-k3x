@@ -620,7 +620,7 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-054 — Close a real MoE FFN sublayer before a full transformer layer
 
 - Date: 2026-08-11.
-- Status: accepted for Milestone 28; implementation and measurement are pending.
+- Status: accepted; bounded storage planning/materialization is implemented at `0b0c944`, while CPU/CUDA execution and measurement remain pending.
 - Decision: the next real-weight boundary binds the official router, computes all 896 scores, preserves natural Top-16 selection, materializes and executes the exact selected routed experts, executes the real shared expert, and verifies the complete mixing/residual FFN sublayer against an independent reference.
 - Alternatives considered: repeat the single expert with more IDs; benchmark a caller-selected four-expert set; close the real MoE FFN sublayer; download enough attention/KDA/MLA tensors for a complete transformer layer immediately.
 - Evidence: B-0028 proves exact single-expert CUDA execution and shows that warm exact residency removes 350,945,280 measured weight-H2D bytes over twenty calls, but it has no routing, shared-expert, changing-set, or output-mixing semantics. A repeated or caller-selected set would not close those correctness gaps, while a complete transformer layer would widen source and graph dependencies before the MoE boundary is independently proven.
@@ -628,3 +628,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: the real FFN sublayer is the smallest boundary that tests natural routing and exact selected-weight residency without conflating it with attention and recurrent-state integration.
 - Rejected claims: this decision does not authorize a complete shard/full checkpoint download, paid cloud execution, a residency default, or a full-model TPS projection.
 - Revisit: after the real FFN sublayer passes parity and traffic gates, choose between full transformer-layer closure and multi-layer routing/residency traces from measured evidence.
+
+## D-055 — Persist routes before fetching the selected expert union
+
+- Date: 2026-08-11.
+- Status: accepted and implemented at `0b0c944`; no real payload has been materialized yet.
+- Decision: manufacture the M28 fixture in two durable phases. First persist all always-active objects and the exact natural A/B route manifest. Then fetch only the first-use selected expert union, assemble gate/up/down physical order, and convert one non-executable K3X fixture.
+- Alternatives considered: fetch all possible experts before routing; keep routes only in process memory; split trunk and experts into separate K3X artifacts; persist one dependency-closed fixture.
+- Evidence: the official-source and converter recovery matrix passes 149 tests. Focused orchestration and CLI coverage passes 27 tests, including an assertion that the route manifest exists before the first expert plan/fetch. Content-object tests distinguish fresh download, damaged-partial restart, complete-partial finalization, and verified completed-object reuse.
+- Benchmark result: none. These are correctness and recovery tests with controlled local transports, not a performance measurement or B-0029.
+- Reason accepted: a durable route boundary makes restart reuse deterministic and prevents speculative or preferred-expert substitution, while one fixture preserves a single Reader and identity transaction for the later CPU/CUDA oracle.
+- Rejected claims: implemented materialization does not mean the official fixture has been downloaded, executed, measured, or validated for token throughput or coding quality.
+- Revisit: after the one authorized bounded fixture is materialized, compare observed selected-union size and actual downloaded bytes with the 32-expert upper bound before changing packing or concurrency.

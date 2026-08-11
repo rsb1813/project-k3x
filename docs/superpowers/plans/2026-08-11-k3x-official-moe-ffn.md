@@ -175,19 +175,19 @@ canonical = sorted(selected.tolist(), key=lambda e: (-float(adjusted[e]), e))
 
 The selected set must equal the official `topk` set, canonical ordering only controls deterministic accumulation, and cases A/B must have different sets. Never substitute or search for preferred experts.
 
-- [ ] **Step 4: Add failing bounded materialization and recovery tests**
+- [x] **Step 4: Add failing bounded materialization and recovery tests**
 
 Use a fake range transport that rejects any request above 8 MiB and records every request. Simulate interruption after each content object and after source-manifest publication. Require restart to reuse SHA-256-verified objects, discard a corrupt partial object, fetch only missing bytes, and publish no final manifest before all objects are durable.
 
 Require phase 1 to download all always-active tensors, derive both routes, and persist the route manifest. Require phase 2 to fetch exactly the selected expert union and produce one local safetensors-compatible source shard plus `source-manifest.json`. Verify source tensor SHA-256 values and final K3X conversion. No test may contact the network.
 
-- [ ] **Step 5: Implement bounded content-addressed materialization**
+- [x] **Step 5: Implement bounded content-addressed materialization**
 
 Write downloads to `<sha256>.partial`, update the digest while requesting consecutive chunks of at most `8 * 1024 * 1024`, `fsync`, verify length and SHA-256, then atomically replace `<sha256>.blob`. Build the final local shard from verified blobs in physical plan order using the same chunk cap. Publish route and source manifests through temporary files plus atomic replace. Every manifest records converter version, `transport-pinned-ranges`, exact requested ranges, source identities, tensor digests, deterministic input digests, and route union.
 
 The CLI keeps dry-run as its no-payload default. `--materialize` requires an output directory and prints one canonical JSON report; it must not upload, provision, or copy artifacts outside that directory.
 
-- [ ] **Step 6: Run GREEN and regression tests**
+- [x] **Step 6: Run GREEN and regression tests**
 
 Run the Step 2 suite plus:
 
@@ -201,7 +201,7 @@ PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
 
 Expected: all tests pass and fake transport reports no request above 8 MiB.
 
-- [ ] **Step 7: Self-review and commit**
+- [x] **Step 7: Self-review and commit**
 
 Confirm dry-run downloads zero payload bytes, materialization cannot escape its output directory, every resumed object is rehashed, and no full-shard path exists. Commit:
 
