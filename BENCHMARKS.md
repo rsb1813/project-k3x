@@ -1339,3 +1339,13 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Actual device-state AB incremental resident-admission Compute Sanitizer: `ERROR SUMMARY: 0 errors` with `--launch-timeout 0`; measured state H2D/D2H is 6,512,640/6,512,640 bytes, seeds/continuations/publications are 1/1/1, invalidations are zero, warm weight H2D is zero, and maximum error is `0.00048828125`.
 - Production guard: `k3x_run` exits 4 with `NON_EXECUTABLE_ARTIFACT` and creates no output on the unchanged bounded layer fixture.
 - Public integration: PR #54 rebase-merged at `e1233891537f14785373f47e9f736fed43598c46`. Branch correctness `31501537039`, pull-request correctness `31501569778`, pull-request CodeQL `31501569789`, post-merge `main` correctness `31501949124`, and post-merge CodeQL `31501949081` all succeeded. The only workflow annotations were the Node 20 and CodeQL Action v3 deprecation notices plus the existing C++ overlay-base fallback warning; every job conclusion was `success`.
+
+## Milestone 32 Task 3 correctness verification
+
+- Date: 2026-08-12.
+- Hardware: AMD Ryzen 7 9800X3D, NVIDIA GeForce RTX 5080 16 GB, CUDA 13.3.1, WSL2 Ubuntu 24.04.4.
+- Model/checkpoint: tiny synthetic official-layer fixture plus the unchanged bounded official layer-1 artifact; no complete shard/checkpoint.
+- Mode: exact incremental device KDA state, resident admission, explicit device route preparation, natural Top-16, exact MXFP4 FFN.
+- Correctness: tiny CUDA wrapper and cleanup test passed; route, missing-expert, and FFN failures each discarded the prepared token and invalidated the KDA token. Compute Sanitizer reported `ERROR SUMMARY: 0 errors`.
+- Actual-artifact smoke: explicit host and device route paths each passed one bounded two-position execution. The device path preserved exact route IDs, contributions, output, and final state, returned 7,168 logical router-logit D2H bytes, consumed two prepared tokens, recorded zero discards/invalidations on success, and transferred zero warm weight bytes.
+- Performance: not measured. The smoke used zero warmups and one correctness iteration, so no latency, TPS, TTFT, quality, utilization, bandwidth, or physical traffic claim is recorded.

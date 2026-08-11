@@ -758,6 +758,12 @@ The fixed B-0032 transaction compares resident-admission incremental host state,
 
 Device handoff removes exactly one 6,512,640-byte state H2D and D2H per measured sequence and lowers the incremental median by 4.585951%. Its aggregate kernel time is 0.339801% higher, while orchestration falls by 3.207668 ms per sequence; the remaining device-incremental/full median gap is 1.611085 ms. This is a one-layer WSL2 boundary result, not token throughput, quality, physical PCIe/NVMe traffic, native-Linux authority, or support for a default change. The complete local matrix passes CPU CTest 19/19 plus Python 578/125, liburing/direct CTest 20/20 plus Python 584/119, ASan/UBSan CTest 20/20, and CUDA CTest 34/34 plus actual-artifact Python 688/15. Device-state Compute Sanitizer reports zero errors, and production `k3x_run` remains fail-closed.
 
+## Milestone 32 — exact device route preparation in progress
+
+M32 now has an explicit, non-default official-layer path that computes MLP Attention Residual, post RMSNorm, and all 896 raw router logits on CUDA. Natural Top-16 selection remains canonical host code, and an opaque single-use token carries the prepared activation into the exact resident MXFP4 FFN. Omitted control follows the historical host path and preserves the historical JSON schema.
+
+Tiny CUDA parity and route, missing-expert, and FFN failure cleanup pass under Compute Sanitizer with zero errors. A bounded 896-expert host/device smoke pair preserves exact route IDs, contributions, output, and final state; the device row transfers 7,168 logical router-logit bytes and zero warm weight bytes. No M32 timing has been measured yet, and B-0033 remains required before any performance or default-policy conclusion.
+
 ## Quality contract
 
 | Mode | Intended semantics |
@@ -799,6 +805,8 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Bounded official layer-1 KDA transformer execution, full/incremental state parity, and formal B-0030 evidence.
 - [x] Atomic official KDA immutable-weight admission validation and fixed four-row B-0031 attribution.
 - [x] Opaque exact official KDA device-state handoff and fixed three-row B-0032 attribution.
+- [x] Explicit exact device route preparation, canonical host Top-16 selection, and opaque prepared-FFN consumption.
+- [ ] Fixed B-0033 host/device route-preparation attribution.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.

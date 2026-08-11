@@ -888,3 +888,11 @@
 - The new CUDA boundary uses one deterministic single-thread BF16 residual/RMS preparation kernel plus a row-parallel raw-logit kernel. It retains exactly two hidden-width F32 vectors in a grow-only slot and returns no prepared activation or device pointer.
 - Initial CTest exposed that the direct diagnostic command had hidden the program status. The real return code was 39. Narrow return codes and error messages localized the first failure to prepared FFN launch: byte count used the intentionally empty host span instead of token width. After that fix, output parity exposed a second instance where the prefix scratch offset used the empty host span and overwrote prepared hidden. Both source calculations now use the validated token width.
 - Final focused verification passes CUDA official 3/3, CUDA MoE-layer 2/2, non-CUDA unavailable, portable official MoE, and Compute Sanitizer with `ERROR SUMMARY: 0 errors`. Host/default behavior, natural routing policy, and production capability remain unchanged.
+
+## 2026-08-12 — Milestone 32 Task 3 wrapper and harness
+
+- Controlled CUDA RED failed on the missing `OfficialMoeRoutePreparationMode` and extra wrapper argument. Focused Python RED passed 11 historical invalid cases and failed only the two new route-preparation cases because the CLI rejected the option generically.
+- The wrapper keeps the omitted host path intact. Explicit device mode prepares residual/router work on CUDA, applies canonical host routing to raw logits, resolves exact experts, and consumes one opaque prepared token in the resident FFN.
+- Downstream route, missing-expert, and FFN failures all discard the prepared token and invalidate the outstanding KDA token. Tiny CUDA tests and Compute Sanitizer pass with zero errors.
+- The explicit CLI mode is restricted to AB incremental, device KDA state, resident weights, and admission validation. New JSON fields appear only when route preparation is explicit; historical implicit schema remains unchanged.
+- One actual host smoke and one actual device-route smoke pass on the bounded 896-expert fixture. The device row returns exactly 7,168 logical router-logit bytes for two positions and zero warm weight H2D. No timing result or default-policy change is accepted before B-0033.

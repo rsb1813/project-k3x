@@ -48,6 +48,7 @@ constexpr double kContributionAbsoluteTolerance = 2.0e-6;
 enum class CaseMode { a, ab_full, ab_incremental };
 enum class WeightMode { transient, resident };
 enum class StateTransfer { host, device };
+enum class RoutePreparation { host, device };
 
 struct Arguments {
     std::filesystem::path artifact;
@@ -59,6 +60,8 @@ struct Arguments {
     bool validation_explicit{};
     StateTransfer state_transfer{StateTransfer::host};
     bool state_transfer_explicit{};
+    RoutePreparation route_preparation{RoutePreparation::host};
+    bool route_preparation_explicit{};
     std::uint64_t warmups{};
     std::uint64_t iterations{1};
 };
@@ -78,6 +81,7 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
     std::string weight_name{"transient"};
     std::string validation_name{"per-call"};
     std::string state_transfer_name{"host"};
+    std::string route_preparation_name{"host"};
     for (int index = 1; index < argc; index += 2) {
         if (index + 1 >= argc) {
             std::cerr << "missing option value\n";
@@ -97,6 +101,10 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
         else if (key == "--state-transfer") {
             state_transfer_name = value;
             result.state_transfer_explicit = true;
+        }
+        else if (key == "--route-preparation") {
+            route_preparation_name = value;
+            result.route_preparation_explicit = true;
         }
         else if (key == "--warmups" && number) result.warmups = *number;
         else if (key == "--iterations" && number) result.iterations = *number;
@@ -134,6 +142,15 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
         std::cerr << "unknown state transfer: " << state_transfer_name << '\n';
         return std::nullopt;
     }
+    if (route_preparation_name == "host") {
+        result.route_preparation = RoutePreparation::host;
+    } else if (route_preparation_name == "device") {
+        result.route_preparation = RoutePreparation::device;
+    } else {
+        std::cerr << "unknown route preparation: "
+                  << route_preparation_name << '\n';
+        return std::nullopt;
+    }
     if (result.validation == k3x::CudaWeightValidationMode::admission &&
         result.weight_mode != WeightMode::resident) {
         std::cerr << "admission validation requires resident weights\n";
@@ -145,6 +162,15 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
          result.validation != k3x::CudaWeightValidationMode::admission)) {
         std::cerr
             << "device state requires ab-incremental resident admission\n";
+        return std::nullopt;
+    }
+    if (result.route_preparation == RoutePreparation::device &&
+        (result.case_mode != CaseMode::ab_incremental ||
+         result.weight_mode != WeightMode::resident ||
+         result.validation != k3x::CudaWeightValidationMode::admission ||
+         result.state_transfer != StateTransfer::device)) {
+        std::cerr << "device route preparation requires ab-incremental "
+                     "device-state resident admission\n";
         return std::nullopt;
     }
     if (!result.iterations) {
@@ -1335,11 +1361,16 @@ int main(int argc, char** argv) {
         published_state_digest = std::move(state);
         return true;
     };
+    const auto route_preparation =
+        arguments->route_preparation == RoutePreparation::device
+            ? k3x::OfficialMoeRoutePreparationMode::device
+            : k3x::OfficialMoeRoutePreparationMode::host;
     const auto execute = [&]() {
         if (arguments->case_mode == CaseMode::a) {
             auto result = k3x::official_layer_cuda(
                 *backend.value(), std::span(inputs).first(1), weights, zero,
-                config, 16, 4, 25, 1, k3x::ProfilePhase::decode);
+                config, 16, 4, 25, 1, k3x::ProfilePhase::decode, {},
+                route_preparation);
             return result && observe_cuda_result(
                 result.value(), reference.first, maximum_error) &&
                 publish(output_digest(result.value().steps),
@@ -1348,7 +1379,7 @@ int main(int argc, char** argv) {
         if (arguments->case_mode == CaseMode::ab_full) {
             auto result = k3x::official_layer_cuda(
                 *backend.value(), inputs, weights, zero, config, 16, 4, 25,
-                1, k3x::ProfilePhase::decode);
+                1, k3x::ProfilePhase::decode, {}, route_preparation);
             return result && observe_cuda_result(
                 result.value(), reference.full, maximum_error) &&
                 publish(output_digest(result.value().steps),
@@ -1363,7 +1394,8 @@ int main(int argc, char** argv) {
                 : k3x::OfficialKdaStateControl{};
         auto first = k3x::official_layer_cuda(
             *backend.value(), std::span(inputs).first(1), weights, zero,
-            config, 16, 4, 25, 1, k3x::ProfilePhase::decode, first_control);
+            config, 16, 4, 25, 1, k3x::ProfilePhase::decode, first_control,
+            route_preparation);
         if (!first) return false;
         const k3x::OfficialKdaState no_host_state;
         const auto& second_input_state =
@@ -1377,7 +1409,7 @@ int main(int argc, char** argv) {
         auto second = k3x::official_layer_cuda(
             *backend.value(), std::span(inputs).last(1), weights,
             second_input_state, config, 16, 4, 25, 1,
-            k3x::ProfilePhase::decode, second_control);
+            k3x::ProfilePhase::decode, second_control, route_preparation);
         if (!second ||
             !observe_cuda_result(first.value(), reference.first, maximum_error,
                                  !device_state) ||
@@ -1452,6 +1484,7 @@ int main(int argc, char** argv) {
     constexpr std::uint64_t kKdaF32Bytes = 640'000;
     constexpr std::uint64_t kKdaBf16Bytes = 887'160'832;
     constexpr std::uint64_t kMoeBf16Bytes = 367'008'768;
+    constexpr std::uint64_t kRouteBf16Bytes = 12'888'064;
     constexpr std::uint64_t kExpertBytes = 17'547'264;
     const auto cold_experts = arguments->case_mode == CaseMode::a
         ? 16ULL : static_cast<std::uint64_t>(manifest->selected.size());
@@ -1462,7 +1495,10 @@ int main(int argc, char** argv) {
         ? arguments->iterations * kKdaF32Bytes : 0ULL;
     const auto measured_mxfp4 = transient
         ? arguments->iterations * 16ULL * kExpertBytes : 0ULL;
-    const auto cold_bf16 = kKdaBf16Bytes + kMoeBf16Bytes;
+    const auto cold_bf16 = kKdaBf16Bytes + kMoeBf16Bytes +
+        (arguments->route_preparation == RoutePreparation::device
+             ? kRouteBf16Bytes
+             : 0ULL);
     const auto cold_f32 = kKdaF32Bytes;
     const auto cold_mxfp4 = cold_experts * kExpertBytes;
     const auto measured_weight = stats_after.weight_h2d_bytes -
@@ -1507,6 +1543,13 @@ int main(int argc, char** argv) {
     if (arguments->state_transfer_explicit) {
         std::cout << ",\"state_transfer\":\""
                   << (arguments->state_transfer == StateTransfer::device
+                          ? "device"
+                          : "host")
+                  << '"';
+    }
+    if (arguments->route_preparation_explicit) {
+        std::cout << ",\"route_preparation\":\""
+                  << (arguments->route_preparation == RoutePreparation::device
                           ? "device"
                           : "host")
                   << '"';
@@ -1569,6 +1612,30 @@ int main(int argc, char** argv) {
             << cold_stats_after.official_kda_device_state_invalidations -
                    cold_stats_before.official_kda_device_state_invalidations;
     }
+    if (arguments->route_preparation_explicit) {
+        std::cout
+            << ",\"cold_official_moe_route_prepare_calls\":"
+            << cold_stats_after.official_moe_route_prepare_calls -
+                   cold_stats_before.official_moe_route_prepare_calls
+            << ",\"cold_official_moe_route_prepare_kernel_launches\":"
+            << cold_stats_after.official_moe_route_prepare_kernel_launches -
+                   cold_stats_before.official_moe_route_prepare_kernel_launches
+            << ",\"cold_official_moe_router_logit_d2h_bytes\":"
+            << cold_stats_after.official_moe_router_logit_d2h_bytes -
+                   cold_stats_before.official_moe_router_logit_d2h_bytes
+            << ",\"cold_official_moe_prepared_seeds\":"
+            << cold_stats_after.official_moe_prepared_seeds -
+                   cold_stats_before.official_moe_prepared_seeds
+            << ",\"cold_official_moe_prepared_consumes\":"
+            << cold_stats_after.official_moe_prepared_consumes -
+                   cold_stats_before.official_moe_prepared_consumes
+            << ",\"cold_official_moe_prepared_discards\":"
+            << cold_stats_after.official_moe_prepared_discards -
+                   cold_stats_before.official_moe_prepared_discards
+            << ",\"cold_official_moe_prepared_invalidations\":"
+            << cold_stats_after.official_moe_prepared_invalidations -
+                   cold_stats_before.official_moe_prepared_invalidations;
+    }
     std::cout << ",\"latency_nanoseconds_p05\":" << percentile(samples, 5)
         << ",\"latency_nanoseconds_median\":" << median(samples)
         << ",\"latency_nanoseconds_p95\":" << percentile(samples, 95)
@@ -1626,6 +1693,32 @@ int main(int argc, char** argv) {
             << ",\"official_kda_device_state_invalidations\":"
             << stats_after.official_kda_device_state_invalidations -
                    stats_before.official_kda_device_state_invalidations;
+    }
+    if (arguments->route_preparation_explicit) {
+        std::cout
+            << ",\"official_moe_route_prepare_calls\":"
+            << stats_after.official_moe_route_prepare_calls -
+                   stats_before.official_moe_route_prepare_calls
+            << ",\"official_moe_route_prepare_kernel_launches\":"
+            << stats_after.official_moe_route_prepare_kernel_launches -
+                   stats_before.official_moe_route_prepare_kernel_launches
+            << ",\"official_moe_router_logit_d2h_bytes\":"
+            << stats_after.official_moe_router_logit_d2h_bytes -
+                   stats_before.official_moe_router_logit_d2h_bytes
+            << ",\"official_moe_prepared_seeds\":"
+            << stats_after.official_moe_prepared_seeds -
+                   stats_before.official_moe_prepared_seeds
+            << ",\"official_moe_prepared_consumes\":"
+            << stats_after.official_moe_prepared_consumes -
+                   stats_before.official_moe_prepared_consumes
+            << ",\"official_moe_prepared_discards\":"
+            << stats_after.official_moe_prepared_discards -
+                   stats_before.official_moe_prepared_discards
+            << ",\"official_moe_prepared_invalidations\":"
+            << stats_after.official_moe_prepared_invalidations -
+                   stats_before.official_moe_prepared_invalidations
+            << ",\"official_moe_prepared_slot_bytes\":"
+            << stats_after.official_moe_prepared_slot_bytes;
     }
     if (arguments->validation_explicit) {
         std::cout

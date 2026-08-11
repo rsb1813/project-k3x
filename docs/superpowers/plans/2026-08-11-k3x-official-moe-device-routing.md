@@ -121,23 +121,23 @@ Commit message: `feat: retain official MoE routing activations on device`.
 - Preserves: omitted control follows the exact historical host path and emits no new JSON keys.
 - Consumes: Task 1 canonical raw-logit helper and Task 2 prepare/consume/discard operations.
 
-- [ ] **Step 1: Write wrapper and CLI RED tests**
+- [x] **Step 1: Write wrapper and CLI RED tests**
 
 Require exact host/device route IDs, contribution tolerance, final output/state parity, one prepare and consume per step, zero invalidations/discards on success, and cleanup after route, missing-expert, or FFN failure. Add `--route-preparation host|device` parsing, explicit-field schema, implicit historical-schema absence, and invalid-combination exits. Restrict device route preparation to `ab-incremental + state-transfer=device + resident + admission`.
 
-- [ ] **Step 2: Witness CUDA and Python RED**
+- [x] **Step 2: Witness CUDA and Python RED**
 
 Build `test_cuda_official_layer` and run the focused `tests/python/test_cuda_official_layer.py` cases. Expected result: compilation and parsing assertions fail because the control does not exist.
 
-- [ ] **Step 3: Implement the minimum wrapper and harness path**
+- [x] **Step 3: Implement the minimum wrapper and harness path**
 
 In device mode call prepare, run canonical host selection over returned logits, resolve exact expert views, consume the token in prepared FFN, and discard on every failure after preparation. Keep the existing host path byte-for-byte in control flow when the option is absent. Emit new telemetry only when `--route-preparation` is explicit.
 
-- [ ] **Step 4: Run tiny GREEN and one actual-artifact smoke pair**
+- [x] **Step 4: Run tiny GREEN and one actual-artifact smoke pair**
 
 Require matched route/output/state identities, zero warm weight H2D, nonzero prepared telemetry only in the device row, and unchanged production `NON_EXECUTABLE_ARTIFACT` behavior.
 
-- [ ] **Step 5: Self-review and commit**
+- [x] **Step 5: Self-review and commit**
 
 Commit message: `feat: expose official MoE device routing`.
 

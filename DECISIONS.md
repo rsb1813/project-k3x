@@ -813,11 +813,11 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-070 — Measure exact device route preparation before adding another official layer
 
 - Date: 2026-08-11.
-- Status: accepted; canonical routing and the CUDA backend primitive are implemented and tested, while wrapper integration and B-0033 remain incomplete and unmeasured.
+- Status: accepted; canonical routing, CUDA preparation, wrapper integration, and the explicit harness mode are implemented and tested, while B-0033 remains incomplete and unmeasured.
 - Decision: keep host routing as the default and add an explicit two-stage CUDA path that computes exact MLP Attention Residual, post RMSNorm, and 896 raw router logits on device, retains prefix/prepared activation behind a single-use opaque token, runs canonical natural Top-16 selection on the host, and consumes the token in the existing exact resident MXFP4 FFN.
 - Alternatives considered: materialize a second official layer immediately; issue one monolithic whole-layer CUDA call including device Top-K; optimize existing KDA or expert kernels without first closing the remaining host routing boundary.
 - Evidence: B-0032 device incremental/full-host medians differ by only 1.611085 ms, but both retain roughly 35 ms per sequence outside their roughly 34 ms aggregate CUDA kernel totals. The current wrapper performs residual preparation and the 896 by 7,168 router loop on the CPU and re-enters the backend for the FFN.
-- Benchmark result: none yet. B-0033 will compare fixed host-routing and device-routing rows only after parity, actual-artifact, sanitizer, and evidence gates pass.
+- Benchmark result: none yet. Tiny CUDA parity, route/missing-expert/FFN cleanup, zero-error Compute Sanitizer, and one host/device actual-artifact smoke pair pass. B-0033 will provide the first controlled timing comparison.
 - Reason accepted: this is the smallest reversible boundary that directly removes the current CPU router loop without new official payload, preserves the dynamic expert scheduling point needed by cache/rescue work, and keeps the natural routing policy in one canonical host implementation.
 - Rejected claims: no predicted speedup, token rate, quality result, physical PCIe traffic, native-Linux authority, multi-layer behavior, or default-policy change is accepted before measurement.
 - Revisit: after B-0033, proceed to bounded multi-layer closure if route preparation is correct and the remaining orchestration is small; otherwise attribute the surviving synchronization or kernel boundary before widening payload scope.

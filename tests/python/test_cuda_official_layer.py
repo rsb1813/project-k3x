@@ -202,6 +202,7 @@ def _write_manifest(path: Path, value: dict) -> None:
         (("--weight-mode", "other"), "unknown weight mode: other"),
         (("--validation", "other"), "unknown validation mode: other"),
         (("--state-transfer", "other"), "unknown state transfer: other"),
+        (("--route-preparation", "other"), "unknown route preparation: other"),
         (
             ("--state-transfer", "device"),
             "device state requires ab-incremental resident admission",
@@ -209,6 +210,10 @@ def _write_manifest(path: Path, value: dict) -> None:
         (
             ("--validation", "admission"),
             "admission validation requires resident weights",
+        ),
+        (
+            ("--route-preparation", "device"),
+            "device route preparation requires ab-incremental device-state resident admission",
         ),
         (("--iterations", "0"), "iterations must be positive"),
         (("--unknown", "x"), "invalid option: --unknown"),
@@ -343,6 +348,7 @@ def test_official_layer_bench_executes_bounded_fixture_on_cuda() -> None:
     assert payload["weight_mode"] == "transient"
     assert "validation" not in payload
     assert "state_transfer" not in payload
+    assert "route_preparation" not in payload
     assert payload["full_transformer_layer"] is True
     assert payload["token_semantics"] is False
     assert payload["quality_measured"] is False
@@ -415,5 +421,39 @@ def test_official_layer_bench_executes_device_state_handoff_on_cuda() -> None:
     assert payload["official_kda_device_state_invalidations"] == 0
     assert payload["official_kda_state_h2d_bytes"] == 6_512_640
     assert payload["official_kda_state_d2h_bytes"] == 6_512_640
+    assert payload["weight_h2d_bytes"] == 0
+    assert payload["maximum_absolute_error"] <= 2.0e-2
+
+
+def test_official_layer_bench_executes_device_route_preparation_on_cuda() -> None:
+    root = Path(__file__).resolve().parents[2]
+    fixture = root / "artifacts" / "m29-official-layer"
+    artifact = fixture / "official-kda-layer-l1.k3x"
+    manifest = fixture / "route-state-manifest.json"
+    if not artifact.is_file() or not manifest.is_file():
+        pytest.skip("bounded official layer fixture is not materialized")
+
+    result = subprocess.run(
+        [
+            str(_runner()), "--artifact", str(artifact), "--manifest",
+            str(manifest), "--case", "ab-incremental", "--weight-mode",
+            "resident", "--validation", "admission", "--state-transfer",
+            "device", "--route-preparation", "device", "--warmups", "0",
+            "--iterations", "1",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["route_preparation"] == "device"
+    assert payload["official_moe_route_prepare_calls"] == 2
+    assert payload["official_moe_route_prepare_kernel_launches"] == 4
+    assert payload["official_moe_router_logit_d2h_bytes"] == 2 * 896 * 4
+    assert payload["official_moe_prepared_seeds"] == 2
+    assert payload["official_moe_prepared_consumes"] == 2
+    assert payload["official_moe_prepared_discards"] == 0
+    assert payload["official_moe_prepared_invalidations"] == 0
     assert payload["weight_h2d_bytes"] == 0
     assert payload["maximum_absolute_error"] <= 2.0e-2

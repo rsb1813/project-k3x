@@ -135,7 +135,8 @@ struct Fixture {
     }
 
     k3x::OfficialMoeWeights cpu_moe() const {
-        return {{ones4}, {residual_proj, 1, 4}, {ones4}, {router, 2, 4},
+        return {{ones4, 601}, {residual_proj, 1, 4, 602}, {ones4, 603},
+                {router, 2, 4, 604},
                 correction, {routed_down, latent_width, hidden_width},
                 {routed_norm}, {routed_up, hidden_width, latent_width},
                 {{shared_gate, 2, hidden_width}, {shared_up, 2, hidden_width},
@@ -318,11 +319,123 @@ int device_state_failure_cleanup() {
     return 0;
 }
 
+int device_route_preparation() {
+    const Fixture fixture;
+    const auto zero = k3x::zero_official_kda_state(fixture.config);
+    const auto oracle = k3x::official_layer_cpu(
+        fixture.inputs, fixture.cpu_weights(), zero, fixture.config, 2, 4, 25);
+    if (!oracle) return 40;
+    auto backend = k3x::make_cuda_backend(options(
+        k3x::CudaWeightMode::resident,
+        k3x::CudaWeightValidationMode::admission));
+    if (!backend) return 41;
+    const auto first = k3x::official_layer_cuda(
+        *backend.value(), std::span(fixture.inputs).first(1),
+        fixture.cuda_weights(), zero, fixture.config, 2, 4, 25, 1,
+        k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}},
+        k3x::OfficialMoeRoutePreparationMode::device);
+    if (!first || first.value().steps.size() != 1 ||
+        first.value().steps[0].route.expert_ids !=
+            oracle.value().steps[0].route.expert_ids ||
+        !close(first.value().steps[0].route.contributions,
+               oracle.value().steps[0].route.contributions) ||
+        !close(first.value().steps[0].output,
+               oracle.value().steps[0].moe.output))
+        return 42;
+    const k3x::OfficialKdaState no_host_state;
+    const auto second = k3x::official_layer_cuda(
+        *backend.value(), std::span(fixture.inputs).last(1),
+        fixture.cuda_weights(), no_host_state, fixture.config, 2, 4, 25, 1,
+        k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_publish,
+         first.value().kda_device_state},
+        k3x::OfficialMoeRoutePreparationMode::device);
+    if (!second || second.value().steps.size() != 1 ||
+        second.value().steps[0].route.expert_ids !=
+            oracle.value().steps[1].route.expert_ids ||
+        !close(second.value().steps[0].route.contributions,
+               oracle.value().steps[1].route.contributions) ||
+        !close(second.value().steps[0].output,
+               oracle.value().steps[1].moe.output) ||
+        second.value().kda_state.conv_q != oracle.value().kda.state.conv_q ||
+        second.value().kda_state.conv_k != oracle.value().kda.state.conv_k ||
+        second.value().kda_state.conv_v != oracle.value().kda.state.conv_v ||
+        !close(second.value().kda_state.recurrent_v_first,
+               oracle.value().kda.state.recurrent_v_first))
+        return 43;
+    const auto stats = backend.value()->runtime_stats();
+    if (stats.official_moe_route_prepare_calls != 2 ||
+        stats.official_moe_route_prepare_kernel_launches != 4 ||
+        stats.official_moe_router_logit_d2h_bytes !=
+            2 * 2 * sizeof(float) ||
+        stats.official_moe_prepared_seeds != 2 ||
+        stats.official_moe_prepared_consumes != 2 ||
+        stats.official_moe_prepared_discards != 0 ||
+        stats.official_moe_prepared_invalidations != 0)
+        return 44;
+    return 0;
+}
+
+int device_route_failure_cleanup() {
+    const Fixture fixture;
+    const auto zero = k3x::zero_official_kda_state(fixture.config);
+    auto backend = k3x::make_cuda_backend(options(
+        k3x::CudaWeightMode::resident,
+        k3x::CudaWeightValidationMode::admission));
+    if (!backend) return 50;
+    auto broken = fixture.cuda_weights();
+    broken.moe.experts = {};
+    const auto failed = k3x::official_layer_cuda(
+        *backend.value(), std::span(fixture.inputs).first(1), broken, zero,
+        fixture.config, 2, 4, 25, 1, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}},
+        k3x::OfficialMoeRoutePreparationMode::device);
+    const auto stats = backend.value()->runtime_stats();
+    if (failed || failed.error() != k3x::ErrorCode::invalid_extent ||
+        stats.official_moe_prepared_seeds != 1 ||
+        stats.official_moe_prepared_consumes != 0 ||
+        stats.official_moe_prepared_discards != 1 ||
+        stats.official_kda_device_state_invalidations != 1)
+        return 51;
+    broken = fixture.cuda_weights();
+    broken.moe.correction = {};
+    const auto route_failed = k3x::official_layer_cuda(
+        *backend.value(), std::span(fixture.inputs).first(1), broken, zero,
+        fixture.config, 2, 4, 25, 1, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}},
+        k3x::OfficialMoeRoutePreparationMode::device);
+    const auto route_stats = backend.value()->runtime_stats();
+    if (route_failed || route_failed.error() != k3x::ErrorCode::invalid_extent ||
+        route_stats.official_moe_prepared_seeds != 2 ||
+        route_stats.official_moe_prepared_consumes != 0 ||
+        route_stats.official_moe_prepared_discards != 2 ||
+        route_stats.official_kda_device_state_invalidations != 2)
+        return 52;
+    broken = fixture.cuda_weights();
+    broken.moe_ffn.routed_down.tensor_id = 0;
+    const auto ffn_failed = k3x::official_layer_cuda(
+        *backend.value(), std::span(fixture.inputs).first(1), broken, zero,
+        fixture.config, 2, 4, 25, 1, k3x::ProfilePhase::decode,
+        {k3x::OfficialKdaStateMode::device_seed, {}},
+        k3x::OfficialMoeRoutePreparationMode::device);
+    const auto ffn_stats = backend.value()->runtime_stats();
+    if (ffn_failed || ffn_failed.error() != k3x::ErrorCode::invalid_mxfp4 ||
+        ffn_stats.official_moe_prepared_seeds != 3 ||
+        ffn_stats.official_moe_prepared_consumes != 0 ||
+        ffn_stats.official_moe_prepared_discards != 3 ||
+        ffn_stats.official_kda_device_state_invalidations != 3)
+        return 53;
+    return 0;
+}
+
 }  // namespace
 
 int main() {
     if (const auto result = run(k3x::CudaWeightMode::transient)) return result;
     if (const auto result = run(k3x::CudaWeightMode::resident)) return 10 + result;
     if (const auto result = device_state()) return result;
-    return device_state_failure_cleanup();
+    if (const auto result = device_state_failure_cleanup()) return result;
+    if (const auto result = device_route_preparation()) return result;
+    return device_route_failure_cleanup();
 }
