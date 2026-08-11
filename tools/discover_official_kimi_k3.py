@@ -10,8 +10,15 @@ import sys
 import time
 from pathlib import Path
 
-from k3x_converter.format import K3XError
-from k3x_converter.official_moe import plan_official_moe_slice
+from k3x_converter.format import (
+    K3XError,
+    OPTIONAL_OFFICIAL_MOE_FIXTURE,
+    OPTIONAL_STORAGE_FIXTURE,
+)
+from k3x_converter.official_moe import (
+    materialize_official_moe_slice,
+    plan_official_moe_slice,
+)
 from k3x_converter.official_source import (
     Transport,
     discover_official_snapshot,
@@ -202,16 +209,64 @@ def _build_moe_dry_run_record(
     }
 
 
+def _build_moe_materialization_record(
+    *,
+    snapshot,
+    index,
+    config,
+    header,
+    plan,
+    transport,
+    materialization,
+    wall_seconds: float,
+) -> dict[str, object]:
+    record = _build_moe_dry_run_record(
+        snapshot=snapshot,
+        index=index,
+        config=config,
+        header=header,
+        plan=plan,
+        transport=transport,
+        wall_seconds=wall_seconds,
+    )
+    record.update(
+        format="k3x-official-moe-materialization-v1",
+        mode="materialize",
+        selected_experts=list(materialization.selected_experts),
+        reader_valid=True,
+        optional_features=(
+            OPTIONAL_STORAGE_FIXTURE | OPTIONAL_OFFICIAL_MOE_FIXTURE
+        ),
+        artifacts={
+            "microshard_sha256": materialization.microshard_sha256,
+            "tensor_sha256": dict(materialization.tensor_sha256),
+            "k3x_root_sha256": materialization.k3x_root_sha256,
+        },
+    )
+    record["traffic"].update(
+        tensor_payload_bytes=materialization.downloaded_payload_bytes,
+        source_object_bytes=materialization.requested_payload_bytes,
+        materialization_requests=materialization.requests,
+        reused_objects=materialization.reused_objects,
+        maximum_response_bytes=max(
+            record["traffic"]["maximum_response_bytes"],
+            materialization.maximum_response_bytes,
+        ),
+    )
+    return record
+
+
 def main(
     argv: list[str] | None = None,
     *,
     transport: Transport | None = None,
 ) -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument("--scope", choices=("expert", "moe-ffn"), default="expert")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--materialize-expert", action="store_true")
+    mode.add_argument("--materialize", action="store_true")
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--summary-json", type=Path)
     parser.add_argument("--summary-csv", type=Path)
@@ -219,8 +274,12 @@ def main(
     args = parser.parse_args(argv)
     if args.materialize_expert and args.output_dir is None:
         parser.error("--materialize-expert requires --output-dir")
+    if args.materialize and args.output_dir is None:
+        parser.error("--materialize requires --output-dir")
+    if args.materialize and args.scope != "moe-ffn":
+        parser.error("--materialize requires --scope moe-ffn")
     if args.scope == "moe-ffn" and args.materialize_expert:
-        parser.error("--scope moe-ffn is dry-run only")
+        parser.error("--materialize-expert requires --scope expert")
     if args.summary_csv is not None and not args.materialize_expert:
         parser.error("--summary-csv requires --materialize-expert")
     if transport is None:
@@ -244,15 +303,38 @@ def main(
     header = inspect_official_shard_header(snapshot, shard_path, transport)
     if args.scope == "moe-ffn":
         moe_plan = plan_official_moe_slice(index, header, config, layer_id=1)
-        record = _build_moe_dry_run_record(
-            snapshot=snapshot,
-            index=index,
-            config=config,
-            header=header,
-            plan=moe_plan,
-            transport=transport,
-            wall_seconds=time.perf_counter() - started,
-        )
+        if args.materialize:
+            output_dir = _validate_output_dir(args.output_dir)
+            materialization = materialize_official_moe_slice(
+                snapshot,
+                index,
+                config,
+                header,
+                moe_plan,
+                transport,
+                output_dir,
+                chunk_bytes=args.chunk_bytes,
+            )
+            record = _build_moe_materialization_record(
+                snapshot=snapshot,
+                index=index,
+                config=config,
+                header=header,
+                plan=moe_plan,
+                transport=transport,
+                materialization=materialization,
+                wall_seconds=time.perf_counter() - started,
+            )
+        else:
+            record = _build_moe_dry_run_record(
+                snapshot=snapshot,
+                index=index,
+                config=config,
+                header=header,
+                plan=moe_plan,
+                transport=transport,
+                wall_seconds=time.perf_counter() - started,
+            )
         if args.summary_json is not None:
             _write_json_atomic(args.summary_json, record)
         json.dump(record, sys.stdout, sort_keys=True, separators=(",", ":"))
