@@ -867,3 +867,10 @@
 - PR #54 rebase-merged at public implementation head `e1233891537f14785373f47e9f736fed43598c46`. Post-merge `main` correctness `31501949124` and CodeQL `31501949081` also succeeded.
 - Workflow annotations were limited to the Node 20 and CodeQL Action v3 deprecation notices plus the existing C++ overlay-base fallback warning. Every recorded job conclusion was `success`.
 - M31 is publicly complete. M32 will compare a wider device-resident residual/routing boundary with bounded multi-layer closure before code changes; host state and per-call validation remain defaults.
+
+## 2026-08-11 — Milestone 31 publication reconciliation and M32 decision
+
+- Publication PR #55 rebase-merged at `c46d6139673d442a83858e637d268e0d92a7784a`. Post-merge correctness `31503260596` and CodeQL `31503260599` succeeded; annotations remain the known Node 20, CodeQL v3, and C++ overlay-base fallback warnings.
+- M32 compared a second official layer, a monolithic whole-layer call, and a two-stage device route-preparation boundary. D-070 selects the two-stage boundary because it directly targets the remaining CPU residual/router work without new official payload and preserves dynamic expert scheduling.
+- The GPU will return raw router logits, while the existing canonical host rule retains sigmoid, correction, natural Top-16 tie breaking, and contribution normalization. This prevents the attribution experiment from silently changing routing policy.
+- Prepared prefix/hidden vectors remain backend-owned behind one opaque single-use token and are consumed only by exact resident MXFP4 FFN. Host routing, host state, per-call validation, production non-executability, and all historical schemas remain defaults.
