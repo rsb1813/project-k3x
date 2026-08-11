@@ -1263,3 +1263,42 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Actual AB incremental resident Compute Sanitizer: `ERROR SUMMARY: 0 errors`; launch attach used `--launch-timeout 0` because the checksum/preflight oracle exceeds the tool's 10-second default attach timeout. The valid run reports zero warm weight H2D and maximum absolute error `0.00048828125`.
 - Production guard: `k3x_run` exits 4 with `NON_EXECUTABLE_ARTIFACT` on the bounded layer fixture.
 - Public integration: branch correctness `31487723904`, pull-request correctness `31487748354`, and pull-request CodeQL `31487748339` passed. PR #50 rebase-merged at `2a4bfaf40284204ab314938f8112b280915f77df`; post-merge `main` correctness `31488078940` and CodeQL `31488078974` passed.
+
+## B-0031 — official KDA immutable admission validation
+
+- Date: 2026-08-11.
+- Evidence commit: `fb33d84`; implementation commits `192b4da`, `b2a27ed`, `c39b3bb`, and direct-run fix `038b427`.
+- Hardware: AMD Ryzen 7 9800X3D, NVIDIA GeForce RTX 5080 16 GB, driver 591.86, CUDA 13.3.1, WSL2 Ubuntu 24.04.4 on Windows 11.
+- Model/checkpoint: the unchanged bounded official layer-1 fixture from `moonshotai/Kimi-K3` revision `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`; 1,829,256,704 source-object bytes and 1,829,310,720 K3X bytes; no complete shard/checkpoint.
+- Mode: exact resident A-to-B incremental and A+B full execution, each crossed with `per-call` and `admission`; three warmups and twenty measured two-position sequences; natural Top-16 routes and disjoint 32-expert union unchanged.
+- Context length: two fixed layer-boundary positions. This benchmark has no token semantics.
+
+| Row | Median | p05 | p95 | Kernel total / sequence | Orchestration total / sequence | Validation total / sequence | Scan or hit count |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Incremental per-call | 175,667,985 ns | 170,075,440 ns | 181,255,901 ns | 680,383,008 / 34,019,150.4 ns | 2,835,219,248 / 141,760,962.4 ns | 2,077,482,534 / 103,874,126.7 ns | 560 scans |
+| Incremental admission | 70,584,413 ns | 68,989,767 ns | 72,530,729 ns | 677,780,608 / 33,889,030.4 ns | 733,963,129 / 36,698,156.45 ns | 0 / 0 ns | 560 hits |
+| Full per-call | 121,067,320 ns | 116,080,515 ns | 137,283,784 ns | 681,833,504 / 34,091,675.2 ns | 1,808,664,255 / 90,433,212.75 ns | 1,114,634,419 / 55,731,720.95 ns | 280 scans |
+| Full admission | 67,236,923 ns | 66,278,446 ns | 68,450,482 ns | 679,179,681 / 33,958,984.05 ns | 667,805,396 / 33,390,269.8 ns | 0 / 0 ns | 280 hits |
+
+- Validation bytes: incremental per-call scans 35,512,033,280 bytes; full per-call scans 17,756,016,640 bytes. Admission cold execution scans 887,800,832 bytes once, then the measured interval scans zero bytes.
+- Derived paired changes: admission lowers incremental wall median 59.819421% and full wall median 44.463194%. Paired aggregate kernel totals change -0.382490% and -0.389219%. The admission incremental/full median gap is 3,347,490 ns.
+- Correctness and traffic: every row has output SHA-256 `3bc173301781ec02502c29a1d8ac2951139ba51cfef593f858bbac65cd748617`, final V-first state SHA-256 `5f0ce4680ca343648838ef274cc3f8526c5174eba9922b44b8f37715c2901073`, maximum absolute error `0.00048828125`, 1,816,322,048 resident weight bytes, zero measured weight H2D, zero cache misses/bypasses, and finite output.
+- Incremental rows record 40 KDA calls, 640 launches, 260,505,600 state bytes in each direction, 263,979,520 activation-H2D bytes, and 262,799,360 total D2H bytes. Full rows record 20 calls, 480 launches, 130,252,800 state bytes in each direction, 133,726,720 activation-H2D bytes, and 132,546,560 total D2H bytes.
+- Peak tracked VRAM / process RSS: incremental 1,824,612,416 / 2,204,409,856 or 2,204,418,048 bytes; full 1,825,310,016 / 2,198,142,976 or 2,197,835,776 bytes.
+- Reader scope: each process records 440 calls and 3,658,513,408 requested/completed/storage-submitted/storage-completed bytes. These are logical Reader counters, not physical NVMe traffic.
+- Evidence SHA-256: artifact `9f0c29fcb18b8cdab5aeeec67d8e5e0113b8dffb7352a2dcdac1ae41ae5198c6`; manifest `cf0dd554d5dfc7db640cb3313f7527e6c354a6fd74f9011cd747348b247168d4`; runner binary `a710b7189220256189fa682e9be371e412ce4b27bedf63ffa5e2dac81c864685`; aggregate `5d6ba38a0d959902c5ab8e7f7bce4f13254f018644430a18490864c173b30a1f`; summary CSV `ea4bcd6b6f613d4a07bdb4e8aa14cb989f2ef11a3fcdfd473112a846e0883501`; summary JSON `9ddad853b3a99ea84efd189f0294814d736d7418c5264bbcf06865e6f94d4fc4`.
+- Raw JSON SHA-256: incremental per-call `4c3a850f812d3451a05485fe7e728a370d3db3b8ed24515d4ad9ae5f7df588e8`; incremental admission `761123186491dbef38a942189d784d38c4c178944d167c347832efb6b970a6a4`; full per-call `faa2fdfb7ec8a096ff1d694373d68fa1aa01214c0047f03b01964641095bb9d9`; full admission `02581a42977049cf42479b853ba022cb63e0839f1e2e1d1aac2fafcf5ebb1ee3`.
+- Decode tok/s, prefill tok/s, TTFT, physical NVMe GB/token, physical H2D GB/token, GPU utilization, GPU memory bandwidth, coding quality, speculative acceptance, adaptive Top-K, and quality benchmarks: not measured.
+- Enabled optimization: exact resident immutable-weight admission only in admission rows. No proxy, pruning, adaptive Top-K, speculation, graph default, reduced precision, or routing change.
+
+## Milestone 30 final local verification matrix
+
+- Date: 2026-08-11.
+- CPU: CTest 19/19; Python 558 passed, 122 skipped.
+- liburing/direct capability: CTest 20/20; Python 560 passed, 120 skipped with `K3X_TEST_IO_URING=1`.
+- ASan/UBSan: CTest 20/20.
+- CUDA with the actual bounded artifact: CTest 34/34; Python 659 passed, 21 skipped.
+- B-0031 evidence-tool plus B-0030 regression tests: 26/26 passed; strict B-0031 artifact/manifest/runner/raw/CSV/aggregate rehash passed.
+- Actual admission-mode AB incremental resident Compute Sanitizer: `ERROR SUMMARY: 0 errors` with `--launch-timeout 0`; measured interval records 28 hits, zero scans/bytes/time, zero warm weight H2D, and maximum error `0.00048828125`.
+- Production guard: `k3x_run` exits 4 with `NON_EXECUTABLE_ARTIFACT` on the unchanged bounded layer fixture.
+- Public integration: pending.

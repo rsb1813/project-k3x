@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2029-official%20layer%20design-20a46b?style=flat-square)](#milestone-29--official-kda-transformer-layer)
+[![Milestone](https://img.shields.io/badge/milestone%2030-KDA%20admission%20validation-20a46b?style=flat-square)](#milestone-30--official-kda-admission-validation)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -34,7 +34,7 @@ flowchart LR
 ```
 
 > [!IMPORTANT]
-> The executable token graph still uses a tiny synthetic model, but Milestone 27 now executes one exact 17,547,264-byte native-MXFP4 expert from the pinned official Kimi K3 checkpoint on RTX 5080 and matches the portable CPU oracle within `3.0267983675e-9`. This is one FFN expert, not routing, a full layer, token generation, or a full-model throughput claim. No complete shard, full checkpoint, or paid cloud resource was used.
+> The executable token graph still uses a tiny synthetic model, but Milestone 29 now executes one bounded official layer-1 KDA + natural Top-16 MoE sequence on RTX 5080, and Milestone 30 attributes its repeated 887,800,832-byte KDA validation scan. This is a two-position layer-boundary fixture, not token generation or full-model throughput. No complete shard, full checkpoint, or paid cloud resource was used.
 
 | Milestone | GitHub status | Evidence |
 |---|---|---|
@@ -55,8 +55,11 @@ flowchart LR
 | Milestone 25 | [PR #42 merged](https://github.com/rsb1813/project-k3x/pull/42) at `ca8c544e` | B-0026 validates bounded fresh/resume/orphan conversion and strict external-input rejection without real weights |
 | Milestone 26 | [PR #44 merged](https://github.com/rsb1813/project-k3x/pull/44) at `5b6345db` | B-0027 verifies one pinned official 17,547,264-byte expert range, content-addressed conversion, and the non-executable runtime guard |
 | Milestone 27 | [PR #46 merged](https://github.com/rsb1813/project-k3x/pull/46) at `ec08b827` | B-0028 executes the pinned official expert on RTX 5080 and verifies exact transient/resident traffic and CPU-oracle parity |
+| Milestone 28 | [PR #48 merged](https://github.com/rsb1813/project-k3x/pull/48) at `eb2c208` | B-0029 executes a bounded official MoE FFN with two natural Top-16 routes and exact residency |
+| Milestone 29 | [PR #50 merged](https://github.com/rsb1813/project-k3x/pull/50) at `2a4bfaf` | B-0030 executes the bounded official layer-1 KDA transformer boundary and isolates a host-orchestration gap |
+| Milestone 30 | Local evidence complete; publication pending | B-0031 measures exact immutable KDA admission validation without changing the default |
 
-PR #11 and PR #12 are part of the current public `main` history, not pending feature branches. Their branch, pull-request, and post-merge correctness runs are recorded with the corresponding measurements in [`BENCHMARKS.md`](BENCHMARKS.md). The latest audited public implementation baseline is Milestone 27 integration head `ec08b827`; branch correctness `31455570571`, pull-request correctness `31455597581`, and pull-request CodeQL `31455597565` passed before merge. Post-merge `main` correctness `31455776634` and CodeQL `31455776673` also succeeded.
+The latest audited public implementation baseline is Milestone 29 integration head `2a4bfaf`. PR #50 branch correctness `31487723904`, pull-request correctness `31487748354`, and pull-request CodeQL `31487748339` passed before merge; post-merge `main` correctness `31488078940` and CodeQL `31488078974` also succeeded. Milestone 30 is locally complete and awaits the same public integration gate.
 
 ## Why a dedicated engine
 
@@ -723,6 +726,23 @@ K3X v1 trades general tensor-container flexibility for K3 execution order.
 
 The normative binary layout lives in [`K3X_FORMAT.md`](K3X_FORMAT.md).
 
+## Milestone 30 — official KDA admission validation
+
+M30 reuses the exact immutable-weight admission authority introduced in M23 for all eight BF16 and six F32 official KDA views. Dynamic hidden input, BF16 convolution histories, FP32 V-first recurrent state, dimensions, tensor IDs, shapes, and byte lengths remain validated on every call. Admission is resident-only and binds tensor ID, host pointer, bytes, rows, and columns. All new payloads are scanned before any identity is committed, so a non-finite first call cannot partially seed the registry or reach upload, scratch allocation, or CUDA launch.
+
+The fixed B-0031 transaction crosses resident incremental/full execution with `per-call|admission`, using three warmups and twenty measured two-position sequences. All four rows preserve the exact natural routes, contributions, output SHA-256 `3bc173...617`, final V-first state SHA-256 `5f0ce4...073`, 1,816,322,048 resident weight bytes, zero warm weight H2D, and maximum absolute error `0.00048828125`.
+
+| B-0031 row | Median | Validation / sequence | Kernel / sequence | Scans or hits |
+|---|---:|---:|---:|---:|
+| Incremental, per-call | 175.667985 ms | 103.874127 ms | 34.019150 ms | 560 scans / 35,512,033,280 B |
+| Incremental, admission | 70.584413 ms | 0 ms | 33.889030 ms | 560 hits |
+| Full, per-call | 121.067320 ms | 55.731721 ms | 34.091675 ms | 280 scans / 17,756,016,640 B |
+| Full, admission | 67.236923 ms | 0 ms | 33.958984 ms | 280 hits |
+
+Admission lowers the incremental median by 59.819421% and the full median by 44.463194%; paired aggregate kernel totals change by only about -0.38%. The admission incremental/full median gap is 3.347490 ms, so repeated host finiteness scanning explains most of B-0030's gap on this fixture. It does not establish token throughput, quality, physical PCIe/NVMe traffic, utilization, bandwidth, native-Linux behavior, or a full-model default. `per-call` remains the default pending a separate production-policy decision.
+
+The complete local matrix passes CPU CTest 19/19 plus Python 558/122, liburing/direct CTest 20/20 plus Python 560/120, ASan/UBSan CTest 20/20, and CUDA CTest 34/34 plus actual-artifact Python 659/21. Admission-mode actual-artifact Compute Sanitizer reports zero errors, and production `k3x_run` still exits 4 with `NON_EXECUTABLE_ARTIFACT`.
+
 ## Quality contract
 
 | Mode | Intended semantics |
@@ -761,6 +781,8 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Strict pinned official MoE fixture harness with root binding, route recomputation, and fail-closed synthetic coverage.
 - [x] Strict three-row B-0029 runner/verifier with digest-backed JSON/CSV evidence contracts.
 - [x] Bounded 32-expert official MoE fixture, actual parity/sanitizer gates, and formal RTX 5080 B-0029 evidence.
+- [x] Bounded official layer-1 KDA transformer execution, full/incremental state parity, and formal B-0030 evidence.
+- [x] Atomic official KDA immutable-weight admission validation and fixed four-row B-0031 attribution.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.
@@ -811,13 +833,13 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 ## Current limitations
 
 - The executable model is synthetic and text-only.
-- The production runtime remains synthetic and host-driven outside FFN blocks. A dedicated non-default harness executes one bounded official layer-1 MoE FFN sublayer at released dimensions, but KDA/MLA/attention and the token loop are not connected to that artifact.
+- The production runtime remains synthetic. A dedicated non-default harness executes one bounded official layer-1 Attention-Residual/KDA/MoE sequence at released dimensions, but embeddings, the remaining 92 layers, logits, and the token loop are not connected to that artifact.
 - Reusable scratch, bounded static weight residency, and same-input grouping are implemented, but activations and results still cross the host/device boundary and asynchronous overlap is not implemented.
 - Static residency has no eviction and is not the future three-tier expert cache.
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
 - Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0025 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; transient, bounded-resident, resident-grid, resident MoE-layer, admission-validation, and CUDA Graph paths are exact opt-in experiments. B-0025 finds mixed stable/alternating deltas and rotating churn 6.09%–11.57% slower, so no graph default changes. There is no learned DSpark drafter, reduced-precision draft path, eviction-capable draft residency, device-resident whole-token graph, or full-model speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
-- The converter and dedicated CUDA harness have processed and executed a bounded official Kimi K3 layer-1 MoE FFN slice with two natural Top-16 routes and a 32-expert union. No complete transformer layer, complete shard, or full checkpoint has been processed. Provenance remains transport-pinned range identity, not recomputed full-object LFS verification or signed publisher provenance.
+- The converter and dedicated CUDA harness have processed and executed a bounded official Kimi K3 layer-1 KDA transformer boundary with two natural Top-16 routes and a 32-expert union. No complete shard, full checkpoint, multi-layer token graph, or production checkpoint has been processed. Provenance remains transport-pinned range identity, not recomputed full-object LFS verification or signed publisher provenance.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.
 - No open-source license has been selected yet; public visibility does not itself grant reuse rights.
 

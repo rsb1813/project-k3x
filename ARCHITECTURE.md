@@ -454,6 +454,16 @@ The implemented manufacturing path extends the M28 transaction boundary. It obta
 
 The materializer additionally emits `official-layer-oracle-v1.bin`, a 6,541,344-byte crash-safe sidecar containing the two source-byte PyTorch KDA outputs and final Q/K/V convolution plus FP32 V-first recurrent state. Its SHA-256 and length are bound into the route manifest. Exact route IDs and portable full/incremental equality remain strict. Source-byte PyTorch versus portable scalar values use separately recorded absolute gates because oneDNN BF16 GEMM and scalar FP64 accumulation have different reduction order.
 
+## Milestone 30 official KDA admission-validation boundary
+
+Milestone 30 extends the existing backend-wide `CudaWeightValidationMode` rather than introducing a KDA-specific cache. The official KDA boundary continues to validate configuration, derived dimensions, hidden values, three BF16 convolution histories, FP32 V-first recurrent state, unique nonzero tensor IDs, shapes, and byte lengths on every call. Only the eight BF16 and six F32 immutable weight payloads are eligible for admission.
+
+Each admitted view is identified by tensor ID, host pointer, byte length, rows, and columns. A repeated exact tuple is a hit; an absent ID requires a finiteness scan; a known ID with any different identity fails before upload or launch. The call classifies all fourteen views, scans every new payload, and inserts identities only after all scans pass. This makes admission atomic across the complete KDA weight set. Admission plus transient weight execution is rejected; the global and implicit harness default remains `per-call`.
+
+The dedicated official-layer harness emits the validation mode and separate cold/measured scan, hit, byte, and nanosecond deltas only when `--validation` is explicit. Its implicit output preserves the closed B-0030 schema. B-0031 fixes four exact-resident rows: incremental/full crossed with per-call/admission. The publisher reuses B-0030 manifest, traffic, canonical serialization, checksum, fsync, and atomic-directory authorities, then adds closed validation formulas and cross-row output/state/route/residency parity.
+
+Formal B-0031 shows that removing repeated scans lowers the incremental resident median from 175.667985 to 70.584413 ms and the full resident median from 121.067320 to 67.236923 ms. Measured per-call validation consumes 103.874127 and 55.731721 ms per sequence respectively, while paired aggregate kernel totals move by less than 0.4%. The remaining admission incremental/full median gap is 3.347490 ms. This attributes most of B-0030's gap to repeated host validation on the bounded WSL2 fixture; it does not change model semantics, establish token throughput or quality, measure physical traffic, or select a production default.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.
