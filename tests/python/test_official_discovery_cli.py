@@ -402,6 +402,9 @@ def test_cli_kda_layer_materialization_prints_canonical_report(
             microshard_sha256="4" * 64,
             tensor_sha256={"tensor": "5" * 64},
             k3x_root_sha256="6" * 64,
+            oracle_path=output / "official-layer-oracle-v1.bin",
+            oracle_sha256="7" * 64,
+            oracle_bytes=6_541_344,
         )
 
     monkeypatch.setattr(
@@ -426,6 +429,8 @@ def test_cli_kda_layer_materialization_prints_canonical_report(
     assert summary["traffic"]["tensor_payload_bytes"] == 654_321
     assert summary["traffic"]["source_object_bytes"] == 1_267_744_268
     assert summary["artifacts"]["k3x_root_sha256"] == "6" * 64
+    assert summary["artifacts"]["oracle_sha256"] == "7" * 64
+    assert summary["artifacts"]["oracle_bytes"] == 6_541_344
     assert captured == {"output_dir": output.resolve(), "chunk_bytes": 257 * 1024}
 
 

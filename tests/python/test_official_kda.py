@@ -13,6 +13,7 @@ from k3x_ref.official_kda import (
     official_kda,
     zero_official_kda_state,
 )
+from k3x_ref.official_kda import _project
 
 
 def _config() -> OfficialKdaConfig:
@@ -231,3 +232,15 @@ def test_official_kda_rejects_empty_sequence() -> None:
 
     with pytest.raises(ValueError, match="invalid official KDA"):
         official_kda(tokens, _weights(), zero, cfg)
+def test_official_kda_projection_is_sequence_partition_invariant() -> None:
+    torch.manual_seed(20260811)
+    hidden = torch.randn(1, 2, 2_048, dtype=torch.float32).to(torch.bfloat16)
+    weight = torch.randn(1_024, 2_048, dtype=torch.float32).to(torch.bfloat16)
+
+    full = _project(hidden, weight)
+    incremental = torch.cat(
+        tuple(_project(hidden[:, index : index + 1], weight) for index in range(2)),
+        dim=1,
+    )
+
+    assert torch.equal(full, incremental)

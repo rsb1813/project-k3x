@@ -283,7 +283,7 @@ git commit -m "feat: execute portable official KDA"
 
 ### Task 5: Portable complete-layer composition and pinned harness contract
 
-**Progress on 2026-08-11:** the pure portable composition, tiny full/incremental C++ test, independent PyTorch parity gate, dedicated benchmark CLI, and fail-before-backend pinned artifact/manifest preflight are complete through Task 5B. Loading official weights into the portable oracle and executing the CUDA boundary remain open, so the Task 5 checklist below intentionally remains unchecked.
+**Progress on 2026-08-11:** Task 5 is complete. The pure portable composition, tiny full/incremental C++ test, independent PyTorch parity gate, dedicated benchmark CLI, pinned artifact/manifest preflight, bounded official-weight loading, source-byte oracle sidecar, and portable official execution gate pass. The executable reaches intentional `BACKEND_UNAVAILABLE` only at the Task 6 CUDA boundary.
 
 **Files:**
 - Create: `runtime/include/k3x/official_layer.hpp`
@@ -298,11 +298,11 @@ git commit -m "feat: execute portable official KDA"
 - Reuses: `official_kda_cpu`, `prepare_official_moe_input`, `route_official_moe`, and `official_moe_cpu`.
 - Produces benchmark preflight that validates manifest, Reader root, exact tensor order/types/shapes, inputs, state chain, routes, and CPU oracle before any CUDA backend is constructed.
 
-- [ ] **Step 1: Write composition and preflight RED tests**
+- [x] **Step 1: Write composition and preflight RED tests**
 
 Require the exact graph order, token A state feeding token B, full/incremental equality, 16 unique natural IDs per official route, and immutable input/state. Mutate every pinned digest, tensor order, route, contribution, state hash/layout, optional feature, and root binding independently; require failure before backend construction.
 
-- [ ] **Step 2: Build and witness RED**
+- [x] **Step 2: Build and witness RED**
 
 ```bash
 cmake --build build --target test_official_layer -j2
@@ -310,11 +310,11 @@ cmake --build build --target test_official_layer -j2
 
 Expected: missing target/source failure.
 
-- [ ] **Step 3: Implement pure composition and benchmark preflight**
+- [x] **Step 3: Implement pure composition and benchmark preflight**
 
 The portable result owns self-Attention-Residual output, input norm, KDA boundaries/state, post-KDA prefix, MLP Attention Residual output, normalized MoE input, route, MoE boundaries, and final output. The benchmark executable accepts only `--artifact`, `--manifest`, `--case a|ab-full|ab-incremental`, `--weight-mode transient|resident`, `--warmups`, and `--iterations`.
 
-- [ ] **Step 4: Run GREEN and guard regressions**
+- [x] **Step 4: Run GREEN and guard regressions**
 
 ```bash
 cmake --build build --target test_official_layer k3x_cuda_official_layer_bench -j2
@@ -323,7 +323,7 @@ PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
   tests/python/test_cuda_official_layer.py tests/python/test_cpp_reader.py -q
 ```
 
-- [ ] **Step 5: Self-review and commit**
+- [x] **Step 5: Self-review and commit**
 
 ```bash
 git diff --check
@@ -464,7 +464,7 @@ K3X_TEST_OFFICIAL_DISCOVERY=1 PYTHONPATH=converter:reference \
 
 Require exact pinned identities, 17 KDA tensors, 887,843,840 KDA bytes, and 1,829,256,704 maximum unaligned bytes before payload authorization already granted by the user is exercised.
 
-- [ ] **Step 2: Materialize the bounded layer fixture once**
+- [x] **Step 2: Materialize the bounded layer fixture once**
 
 ```bash
 K3X_TEST_OFFICIAL_DISCOVERY=1 PYTHONPATH=converter:reference \

@@ -219,7 +219,7 @@ M29 adds 887,843,840 bytes of official layer-1 self-Attention-Residual, normaliz
 
 `W(U) = 1,267,744,256 + 17,547,264 * U` bytes.
 
-Natural Top-16 routing gives `16 <= U <= 32`, so `W(U)` is between 1,548,500,480 and 1,829,256,704 bytes. This is a storage bound, not measured resident VRAM or transfer traffic. Alignment, directories, manifests, scratch, activations, CUDA libraries, and allocator overhead are additional.
+Natural Top-16 routing gives `16 <= U <= 32`, so `W(U)` is between 1,548,500,480 and 1,829,256,704 bytes. The fixed A/B official materialization observed two disjoint routes and therefore `U=32`, `W=1,829,256,704` source-object bytes, and a 1,829,310,720-byte K3X artifact. The separate 6,541,344-byte correctness sidecar is reference state/output data, not runtime weight traffic. These are storage observations, not measured resident VRAM or transfer traffic. Scratch, activations, CUDA libraries, and allocator overhead are additional.
 
 One sequence's persistent layer-1 KDA state is 6,512,640 bytes: 6,291,456 FP32 recurrent bytes plus 221,184 BF16 convolution-history bytes. Two boundary input vectors and two source-bank vectors add 57,344 BF16 bytes for a two-token fixture. The state is fixed per sequence at this layer; unlike MLA KV state it does not grow with decoded length.
 

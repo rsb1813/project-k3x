@@ -1,19 +1,24 @@
 // 공식 Kimi K3 complete-layer artifact를 CUDA backend 생성 전에 엄격히 검증합니다.
 #include "k3x/checksums.hpp"
 #include "k3x/format.hpp"
+#include "k3x/official_layer.hpp"
 #include "k3x/reader.hpp"
 #include "k3x/status.hpp"
+#include "k3x/storage_slice.hpp"
 #include "k3x/strict_json.hpp"
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <optional>
 #include <set>
@@ -29,6 +34,11 @@ namespace json = k3x::strict_json;
 
 constexpr std::size_t kTopK = 16;
 constexpr std::uint64_t kShardBytes = 16'990'911'504ULL;
+constexpr std::uint64_t kOracleBytes = 6'541'344;
+constexpr double kOutputAbsoluteTolerance = 2.0e-5;
+constexpr double kConvolutionAbsoluteTolerance = 8.0e-3;
+constexpr double kRecurrentAbsoluteTolerance = 5.0e-5;
+constexpr double kContributionAbsoluteTolerance = 2.0e-6;
 
 enum class CaseMode { a, ab_full, ab_incremental };
 enum class WeightMode { transient, resident };
@@ -151,6 +161,11 @@ struct Manifest {
     std::string k3x_source_fingerprint_sha256;
     std::map<std::string, std::string> tensor_sha256;
     std::array<Route, 2> routes;
+    std::array<std::string, 2> state_sha256;
+    std::array<std::string, 2> kda_output_sha256;
+    std::string initial_state_sha256;
+    std::string final_state_sha256;
+    std::string oracle_sha256;
     std::vector<std::uint32_t> selected;
 };
 
@@ -279,6 +294,16 @@ std::optional<Manifest> load_manifest(const std::filesystem::path& path,
     if (!initial || !final || !hex_string(*initial, 64) || !hex_string(*final, 64)) {
         return std::nullopt;
     }
+    const auto* oracle = json::member(*root, "oracle");
+    const auto* oracle_digest = oracle
+        ? json::string(json::member(*oracle, "sha256")) : nullptr;
+    if (!oracle ||
+        !text_is(*oracle, "format", "k3x-official-layer-oracle-v1") ||
+        !text_is(*oracle, "filename", "official-layer-oracle-v1.bin") ||
+        !integer_is(*oracle, "bytes", kOracleBytes) || !oracle_digest ||
+        !hex_string(*oracle_digest, 64)) {
+        return std::nullopt;
+    }
     const auto* inputs = json::array(json::member(*root, "inputs"));
     if (!inputs || inputs->size() != 2 ||
         !text_is((*inputs)[0], "name", "a") ||
@@ -323,6 +348,8 @@ std::optional<Manifest> load_manifest(const std::filesystem::path& path,
             if (union_set.insert(id).second) expected_union.push_back(id);
         }
         result.routes[index].ids = std::move(*ids);
+        result.state_sha256[index] = *state;
+        result.kda_output_sha256[index] = *output;
         expected_consumed = *state;
     }
     if (expected_consumed != *final) return std::nullopt;
@@ -332,6 +359,9 @@ std::optional<Manifest> load_manifest(const std::filesystem::path& path,
         return std::nullopt;
     }
     result.selected = std::move(*selected);
+    result.initial_state_sha256 = *initial;
+    result.final_state_sha256 = *final;
+    result.oracle_sha256 = *oracle_digest;
     if (!valid_object_list(*root, "kda_objects", kKdaSuffixes, kKdaRanges) ||
         !valid_object_list(*root, "always_active_objects", kMoeSuffixes,
                            kMoeRanges)) {
@@ -397,6 +427,60 @@ std::string digest_hex(std::span<const std::byte> digest) {
         const auto value = std::to_integer<unsigned>(digest[index]);
         result[index * 2] = digits[value >> 4];
         result[index * 2 + 1] = digits[value & 15];
+    }
+    return result;
+}
+
+std::uint64_t read_u64(std::span<const std::byte> bytes, std::size_t offset) {
+    std::uint64_t result{};
+    for (std::size_t index = 0; index < 8; ++index) {
+        result |= static_cast<std::uint64_t>(
+            std::to_integer<unsigned>(bytes[offset + index])) << (index * 8);
+    }
+    return result;
+}
+
+struct OfficialOracle {
+    std::vector<std::uint16_t> output;
+    std::array<std::vector<std::uint16_t>, 3> convolution;
+    std::vector<float> recurrent;
+};
+
+std::optional<OfficialOracle> load_oracle(const std::filesystem::path& path,
+                                          std::string_view expected_digest) {
+    std::error_code error;
+    if (std::filesystem::file_size(path, error) != kOracleBytes || error) {
+        return std::nullopt;
+    }
+    std::ifstream stream(path, std::ios::binary);
+    std::vector<std::byte> bytes(kOracleBytes);
+    stream.read(reinterpret_cast<char*>(bytes.data()),
+                static_cast<std::streamsize>(bytes.size()));
+    if (!stream || digest_hex(k3x::sha256(bytes)) != expected_digest ||
+        std::memcmp(bytes.data(), "K3XORC1\0", 8) != 0 ||
+        read_u64(bytes, 8) != 2 * 7'168 ||
+        read_u64(bytes, 16) != 3 * 12'288 ||
+        read_u64(bytes, 24) != 96 * 128 * 128) {
+        return std::nullopt;
+    }
+    OfficialOracle result;
+    std::size_t offset = 32;
+    auto read_words = [&](std::size_t count) {
+        std::vector<std::uint16_t> values(count);
+        std::memcpy(values.data(), bytes.data() + offset, count * 2);
+        offset += count * 2;
+        return values;
+    };
+    result.output = read_words(2 * 7'168);
+    for (auto& values : result.convolution) values = read_words(3 * 12'288);
+    result.recurrent.resize(96 * 128 * 128);
+    std::memcpy(result.recurrent.data(), bytes.data() + offset,
+                result.recurrent.size() * sizeof(float));
+    offset += result.recurrent.size() * sizeof(float);
+    if (offset != bytes.size() ||
+        !std::all_of(result.recurrent.begin(), result.recurrent.end(),
+                     [](float value) { return std::isfinite(value); })) {
+        return std::nullopt;
     }
     return result;
 }
@@ -483,9 +567,11 @@ std::vector<MicroTensorSpec> microshard_tensors(
         }
         if (record.dtype == 2) {
             result.push_back({record.name + ".weight_packed", "U8",
-                              {values / 2, 0}, 1, values / 2});
+                              {record.dimensions[0], record.dimensions[1] / 2,
+                               0, 0}, 2, values / 2});
             result.push_back({record.name + ".weight_scale", "U8",
-                              {values / 32, 0}, 1, values / 32});
+                              {record.dimensions[0], record.dimensions[1] / 32,
+                               0, 0}, 2, values / 32});
         } else {
             result.push_back({record.name, record.dtype == 1 ? "F32" : "BF16",
                               record.dimensions, record.rank,
@@ -580,6 +666,408 @@ bool validate_artifact(k3x::Reader& reader, const Manifest& manifest) {
     return digest_hex(microshard.finish()) == manifest.source_sha256;
 }
 
+const k3x::TensorRecord* find_record(const k3x::Reader& reader,
+                                     const std::string& name) {
+    const auto id = k3x::fnv1a64(name.c_str());
+    const auto found = std::find_if(
+        reader.tensors().begin(), reader.tensors().end(),
+        [id](const auto& record) { return record.tensor_id == id; });
+    return found == reader.tensors().end() ? nullptr : &*found;
+}
+
+struct OwnedBf16 {
+    std::uint64_t id{};
+    std::vector<std::uint16_t> values;
+    std::size_t rows{};
+    std::size_t cols{};
+    k3x::Bf16WeightView matrix() const { return {values, rows, cols, id}; }
+    k3x::Bf16VectorView vector() const { return {values, id}; }
+};
+
+std::optional<OwnedBf16> load_bf16(k3x::Reader& reader,
+                                   const std::string& name,
+                                   std::size_t rows, std::size_t cols) {
+    const auto* record = find_record(reader, name);
+    if (!record || record->dtype != 3 || record->quantization != 0 ||
+        record->data_length != rows * cols * 2 || record->auxiliary_length) {
+        return std::nullopt;
+    }
+    auto bytes = reader.read_tensor(record->tensor_id);
+    if (!bytes || bytes.value().size() != record->data_length) return std::nullopt;
+    OwnedBf16 result{record->tensor_id,
+                     std::vector<std::uint16_t>(rows * cols), rows, cols};
+    std::memcpy(result.values.data(), bytes.value().data(), bytes.value().size());
+    return result;
+}
+
+std::optional<std::vector<float>> load_f32(k3x::Reader& reader,
+                                           const std::string& name,
+                                           std::size_t count) {
+    const auto* record = find_record(reader, name);
+    if (!record || record->dtype != 1 || record->quantization != 0 ||
+        record->data_length != count * sizeof(float) || record->auxiliary_length) {
+        return std::nullopt;
+    }
+    auto bytes = reader.read_tensor(record->tensor_id);
+    if (!bytes || bytes.value().size() != record->data_length) return std::nullopt;
+    std::vector<float> result(count);
+    std::memcpy(result.data(), bytes.value().data(), bytes.value().size());
+    return result;
+}
+
+struct OwnedExpert {
+    std::uint32_t id{};
+    std::array<std::vector<std::byte>, 6> extents;
+    k3x::Mxfp4MlpView view() const {
+        const auto base = "model.layers.1.feed_forward.experts." +
+            std::to_string(id) + ".";
+        return {
+            {k3x::fnv1a64((base + "gate").c_str()), extents[0], extents[1],
+             3'072, 3'584, 32},
+            {k3x::fnv1a64((base + "up").c_str()), extents[2], extents[3],
+             3'072, 3'584, 32},
+            {k3x::fnv1a64((base + "down").c_str()), extents[4], extents[5],
+             3'584, 3'072, 32}};
+    }
+};
+
+struct LoadedLayer {
+    OwnedBf16 self_norm, self_proj, input_norm;
+    OwnedBf16 q_proj, k_proj, v_proj, f_a, f_b, beta, gate, o_proj;
+    std::vector<float> q_conv, k_conv, v_conv, a_log, dt_bias, o_norm;
+    OwnedBf16 mlp_norm, mlp_proj, post_norm, router;
+    std::vector<float> correction;
+    OwnedBf16 routed_down, routed_norm, routed_up;
+    OwnedBf16 shared_gate, shared_up, shared_down;
+    std::vector<OwnedExpert> experts;
+    std::vector<k3x::Mxfp4MlpView> expert_mlp_views;
+    std::vector<k3x::OfficialExpertView> expert_views;
+
+    k3x::OfficialLayerWeights views() const {
+        const k3x::OfficialKdaWeightsView kda{
+            q_proj.matrix(), k_proj.matrix(), v_proj.matrix(),
+            q_conv, k_conv, v_conv, f_a.matrix(), f_b.matrix(), a_log,
+            dt_bias, beta.matrix(), gate.matrix(), o_norm, o_proj.matrix()};
+        const k3x::OfficialMoeWeights moe{
+            mlp_norm.vector(), mlp_proj.matrix(), post_norm.vector(),
+            router.matrix(), correction, routed_down.matrix(),
+            routed_norm.vector(), routed_up.matrix(),
+            {shared_gate.matrix(), shared_up.matrix(), shared_down.matrix()},
+            expert_views};
+        return {self_norm.vector(), self_proj.matrix(), input_norm.vector(),
+                kda, moe};
+    }
+};
+
+std::optional<LoadedLayer> load_layer(k3x::Reader& reader,
+                                      const Manifest& manifest) {
+    const std::string base = "model.layers.1.";
+    auto self_norm = load_bf16(reader, base + "self_attention_res_norm.weight", 1, 7'168);
+    auto self_proj = load_bf16(reader, base + "self_attention_res_proj.weight", 1, 7'168);
+    auto input_norm = load_bf16(reader, base + "input_layernorm.weight", 1, 7'168);
+    auto q_proj = load_bf16(reader, base + "self_attn.q_proj.weight", 12'288, 7'168);
+    auto k_proj = load_bf16(reader, base + "self_attn.k_proj.weight", 12'288, 7'168);
+    auto v_proj = load_bf16(reader, base + "self_attn.v_proj.weight", 12'288, 7'168);
+    auto f_a = load_bf16(reader, base + "self_attn.f_a_proj.weight", 128, 7'168);
+    auto f_b = load_bf16(reader, base + "self_attn.f_b_proj.weight", 12'288, 128);
+    auto beta = load_bf16(reader, base + "self_attn.b_proj.weight", 96, 7'168);
+    auto gate = load_bf16(reader, base + "self_attn.g_proj.weight", 12'288, 7'168);
+    auto o_proj = load_bf16(reader, base + "self_attn.o_proj.weight", 7'168, 12'288);
+    auto q_conv = load_f32(reader, base + "self_attn.q_conv1d.weight", 12'288 * 4);
+    auto k_conv = load_f32(reader, base + "self_attn.k_conv1d.weight", 12'288 * 4);
+    auto v_conv = load_f32(reader, base + "self_attn.v_conv1d.weight", 12'288 * 4);
+    auto a_log = load_f32(reader, base + "self_attn.A_log", 128);
+    auto dt_bias = load_f32(reader, base + "self_attn.dt_bias", 12'288);
+    auto o_norm = load_f32(reader, base + "self_attn.o_norm.weight", 128);
+    auto mlp_norm = load_bf16(reader, base + "mlp_res_norm.weight", 1, 7'168);
+    auto mlp_proj = load_bf16(reader, base + "mlp_res_proj.weight", 1, 7'168);
+    auto post_norm = load_bf16(reader, base + "post_attention_layernorm.weight", 1, 7'168);
+    auto router = load_bf16(reader, base + "block_sparse_moe.gate.weight", 896, 7'168);
+    auto correction = load_f32(reader,
+        base + "block_sparse_moe.gate.e_score_correction_bias", 896);
+    auto routed_down = load_bf16(reader,
+        base + "block_sparse_moe.routed_expert_down_proj.weight", 3'584, 7'168);
+    auto routed_norm = load_bf16(reader,
+        base + "block_sparse_moe.routed_expert_norm.weight", 1, 3'584);
+    auto routed_up = load_bf16(reader,
+        base + "block_sparse_moe.routed_expert_up_proj.weight", 7'168, 3'584);
+    auto shared_gate = load_bf16(reader,
+        base + "block_sparse_moe.shared_experts.gate_proj.weight", 6'144, 7'168);
+    auto shared_up = load_bf16(reader,
+        base + "block_sparse_moe.shared_experts.up_proj.weight", 6'144, 7'168);
+    auto shared_down = load_bf16(reader,
+        base + "block_sparse_moe.shared_experts.down_proj.weight", 7'168, 6'144);
+    if (!self_norm || !self_proj || !input_norm || !q_proj || !k_proj || !v_proj ||
+        !f_a || !f_b || !beta || !gate || !o_proj || !q_conv || !k_conv ||
+        !v_conv || !a_log || !dt_bias || !o_norm || !mlp_norm || !mlp_proj ||
+        !post_norm || !router || !correction || !routed_down || !routed_norm ||
+        !routed_up || !shared_gate || !shared_up || !shared_down) return std::nullopt;
+    LoadedLayer result{
+        std::move(*self_norm), std::move(*self_proj), std::move(*input_norm),
+        std::move(*q_proj), std::move(*k_proj), std::move(*v_proj),
+        std::move(*f_a), std::move(*f_b), std::move(*beta), std::move(*gate),
+        std::move(*o_proj), std::move(*q_conv), std::move(*k_conv),
+        std::move(*v_conv), std::move(*a_log), std::move(*dt_bias),
+        std::move(*o_norm), std::move(*mlp_norm), std::move(*mlp_proj),
+        std::move(*post_norm), std::move(*router), std::move(*correction),
+        std::move(*routed_down), std::move(*routed_norm), std::move(*routed_up),
+        std::move(*shared_gate), std::move(*shared_up), std::move(*shared_down),
+        {}, {}, {}};
+    result.experts.reserve(manifest.selected.size());
+    for (const auto id : manifest.selected) {
+        auto expert = k3x::load_storage_expert(reader, 1, id);
+        if (!expert) return std::nullopt;
+        result.experts.push_back({id, std::move(expert.value().extents)});
+    }
+    result.expert_mlp_views.reserve(result.experts.size());
+    result.expert_views.reserve(result.experts.size());
+    for (const auto& expert : result.experts) {
+        result.expert_mlp_views.push_back(expert.view());
+        result.expert_views.push_back({expert.id, result.expert_mlp_views.back()});
+    }
+    return result;
+}
+
+std::vector<float> input_values(int multiplier, int increment,
+                                int modulus, int offset) {
+    std::vector<float> result(7'168);
+    for (std::size_t index = 0; index < result.size(); ++index) {
+        result[index] = static_cast<float>(
+            ((multiplier * static_cast<int>(index) + increment) % modulus) - offset) /
+            1024.0F;
+    }
+    return result;
+}
+
+std::array<k3x::OfficialLayerInput, 2> layer_inputs() {
+    return {{
+        {input_values(17, 3, 257, 128), input_values(29, 11, 251, 125)},
+        {input_values(31, 7, 263, 131), input_values(43, 19, 269, 134)}}};
+}
+
+bool close(std::span<const float> left, std::span<const float> right,
+           float tolerance = 1.0e-6F) {
+    if (left.size() != right.size()) return false;
+    for (std::size_t index = 0; index < left.size(); ++index) {
+        if (!std::isfinite(left[index]) || !std::isfinite(right[index]) ||
+            std::abs(left[index] - right[index]) > tolerance) return false;
+    }
+    return true;
+}
+
+bool same_step(const k3x::OfficialLayerStepResult& left,
+               const k3x::OfficialLayerStepResult& right) {
+    if (!close(left.self_attention_residual, right.self_attention_residual) ||
+        !close(left.input_normalized, right.input_normalized) ||
+        !close(left.post_kda_prefix, right.post_kda_prefix) ||
+        !close(left.mlp_attention_residual, right.mlp_attention_residual) ||
+        !close(left.normalized_moe_input, right.normalized_moe_input) ||
+        left.route.expert_ids != right.route.expert_ids ||
+        !close(left.route.contributions, right.route.contributions) ||
+        !close(left.moe.hidden, right.moe.hidden) ||
+        !close(left.moe.latent, right.moe.latent) ||
+        !close(left.moe.mixed_latent, right.moe.mixed_latent) ||
+        !close(left.moe.routed, right.moe.routed) ||
+        !close(left.moe.shared, right.moe.shared) ||
+        !close(left.moe.combined, right.moe.combined) ||
+        !close(left.moe.output, right.moe.output) ||
+        left.moe.expert_outputs.size() != right.moe.expert_outputs.size()) return false;
+    for (std::size_t index = 0; index < left.moe.expert_outputs.size(); ++index) {
+        if (!close(left.moe.expert_outputs[index], right.moe.expert_outputs[index])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::uint16_t encode_bf16(float value) {
+    auto bits = std::bit_cast<std::uint32_t>(value);
+    bits += 0x7fffU + ((bits >> 16U) & 1U);
+    return static_cast<std::uint16_t>(bits >> 16U);
+}
+
+void update_u64(k3x::Sha256Hasher& digest, std::uint64_t value) {
+    std::array<std::byte, 8> bytes{};
+    for (std::size_t index = 0; index < bytes.size(); ++index) {
+        bytes[index] = std::byte((value >> (index * 8)) & 0xffU);
+    }
+    digest.update(bytes);
+}
+
+template <typename T>
+void update_state_tensor(k3x::Sha256Hasher& digest, std::string_view name,
+                         std::span<const std::uint64_t> shape,
+                         std::span<const T> values) {
+    digest.update(std::as_bytes(std::span(name.data(), name.size())));
+    const std::byte zero{};
+    digest.update(std::span(&zero, 1));
+    for (const auto dimension : shape) update_u64(digest, dimension);
+    digest.update(std::as_bytes(values));
+}
+
+std::string state_digest(const k3x::OfficialKdaState& state) {
+    static constexpr char identity[] = "k3x-official-kda-state-v1\0v-first-fp32\0";
+    k3x::Sha256Hasher digest;
+    digest.update(std::as_bytes(std::span(identity).first(sizeof(identity) - 1)));
+    const std::array<std::uint64_t, 3> conv_shape{1, 3, 12'288};
+    const std::array<std::uint64_t, 4> recurrent_shape{1, 96, 128, 128};
+    update_state_tensor(digest, "conv_q", conv_shape,
+                        std::span<const std::uint16_t>(state.conv_q));
+    update_state_tensor(digest, "conv_k", conv_shape,
+                        std::span<const std::uint16_t>(state.conv_k));
+    update_state_tensor(digest, "conv_v", conv_shape,
+                        std::span<const std::uint16_t>(state.conv_v));
+    update_state_tensor(digest, "recurrent_v_first", recurrent_shape,
+                        std::span<const float>(state.recurrent_v_first));
+    return digest_hex(digest.finish());
+}
+
+std::string kda_output_digest(std::span<const std::uint16_t> output) {
+    static constexpr char identity[] = "kda-output-bf16\0";
+    k3x::Sha256Hasher digest;
+    digest.update(std::as_bytes(std::span(identity).first(sizeof(identity) - 1)));
+    digest.update(std::as_bytes(output));
+    return digest_hex(digest.finish());
+}
+
+struct ErrorStats {
+    double maximum_absolute{};
+    double maximum_relative{};
+};
+
+void observe(ErrorStats& stats, double actual, double expected) {
+    const auto absolute = std::abs(actual - expected);
+    const auto relative = absolute / std::max(std::abs(expected), 1.0e-12);
+    stats.maximum_absolute = std::max(stats.maximum_absolute, absolute);
+    stats.maximum_relative = std::max(stats.maximum_relative, relative);
+}
+
+ErrorStats bf16_error(std::span<const std::uint16_t> actual,
+                      std::span<const std::uint16_t> expected) {
+    ErrorStats result;
+    if (actual.size() != expected.size()) {
+        return {std::numeric_limits<double>::infinity(),
+                std::numeric_limits<double>::infinity()};
+    }
+    for (std::size_t index = 0; index < actual.size(); ++index) {
+        observe(result, k3x::decode_bf16_word(actual[index]),
+                k3x::decode_bf16_word(expected[index]));
+    }
+    return result;
+}
+
+ErrorStats f32_error(std::span<const float> actual,
+                     std::span<const float> expected) {
+    ErrorStats result;
+    if (actual.size() != expected.size()) {
+        return {std::numeric_limits<double>::infinity(),
+                std::numeric_limits<double>::infinity()};
+    }
+    for (std::size_t index = 0; index < actual.size(); ++index) {
+        observe(result, actual[index], expected[index]);
+    }
+    return result;
+}
+
+bool validate_portable_oracle(const LoadedLayer& loaded,
+                              const Manifest& manifest,
+                              const OfficialOracle& oracle) {
+    bool valid = true;
+    const k3x::OfficialKdaConfig config{7'168, 96, 128, 4, 1.0e-5F, -5.0F};
+    const auto zero = k3x::zero_official_kda_state(config);
+    if (state_digest(zero) != manifest.initial_state_sha256) {
+        std::cerr << "oracle diagnostic: initial-state-hash\n";
+        return false;
+    }
+    const auto inputs = layer_inputs();
+    const k3x::OfficialKdaState reference_state{
+        oracle.convolution[0], oracle.convolution[1], oracle.convolution[2],
+        oracle.recurrent};
+    if (state_digest(reference_state) != manifest.final_state_sha256 ||
+        kda_output_digest(std::span(oracle.output).first(7'168)) !=
+            manifest.kda_output_sha256[0] ||
+        kda_output_digest(std::span(oracle.output).last(7'168)) !=
+            manifest.kda_output_sha256[1]) {
+        std::cerr << "oracle diagnostic: sidecar-manifest-binding\n";
+        return false;
+    }
+    const auto weights = loaded.views();
+    const auto full = k3x::official_layer_cpu(inputs, weights, zero, config, 16, 4, 25);
+    const auto first = k3x::official_layer_cpu(
+        std::span(inputs).first(1), weights, zero, config, 16, 4, 25);
+    if (!full || !first) {
+        std::cerr << "oracle diagnostic: full-or-first-call\n";
+        return false;
+    }
+    const auto second = k3x::official_layer_cpu(
+        std::span(inputs).last(1), weights, first.value().kda.state,
+        config, 16, 4, 25);
+    if (!second || full.value().steps.size() != 2) {
+        std::cerr << "oracle diagnostic: second-call-or-step-count\n";
+        return false;
+    }
+    if (!same_step(full.value().steps[0], first.value().steps[0])) {
+        std::cerr << "oracle diagnostic: incremental-step-a\n";
+        return false;
+    }
+    if (!same_step(full.value().steps[1], second.value().steps[0])) {
+        std::cerr << "oracle diagnostic: incremental-step-b\n";
+        return false;
+    }
+    const auto output_words = [&] {
+        std::vector<std::uint16_t> result(full.value().kda.output.size());
+        std::transform(full.value().kda.output.begin(), full.value().kda.output.end(),
+                       result.begin(), encode_bf16);
+        return result;
+    }();
+    const auto output_error = bf16_error(output_words, oracle.output);
+    const auto conv_q_error = bf16_error(full.value().kda.state.conv_q,
+                                         oracle.convolution[0]);
+    const auto conv_k_error = bf16_error(full.value().kda.state.conv_k,
+                                         oracle.convolution[1]);
+    const auto conv_v_error = bf16_error(full.value().kda.state.conv_v,
+                                         oracle.convolution[2]);
+    const auto recurrent_error = f32_error(
+        full.value().kda.state.recurrent_v_first, oracle.recurrent);
+    if (output_error.maximum_absolute > kOutputAbsoluteTolerance ||
+        conv_q_error.maximum_absolute > kConvolutionAbsoluteTolerance ||
+        conv_k_error.maximum_absolute > kConvolutionAbsoluteTolerance ||
+        conv_v_error.maximum_absolute > kConvolutionAbsoluteTolerance ||
+        recurrent_error.maximum_absolute > kRecurrentAbsoluteTolerance) {
+        std::cerr << "oracle diagnostic: max-error output="
+                  << output_error.maximum_absolute << ','
+                  << output_error.maximum_relative << " conv-q="
+                  << conv_q_error.maximum_absolute << ','
+                  << conv_q_error.maximum_relative << " conv-k="
+                  << conv_k_error.maximum_absolute << ','
+                  << conv_k_error.maximum_relative << " conv-v="
+                  << conv_v_error.maximum_absolute << ','
+                  << conv_v_error.maximum_relative << " recurrent="
+                  << recurrent_error.maximum_absolute << ','
+                  << recurrent_error.maximum_relative << '\n';
+        valid = false;
+    }
+    for (std::size_t index = 0; index < 2; ++index) {
+        const auto output = std::span(full.value().kda.output).subspan(index * 7'168, 7'168);
+        static_cast<void>(output);
+        if (full.value().steps[index].route.expert_ids != manifest.routes[index].ids) {
+            std::cerr << "oracle diagnostic: route-" << index << '\n';
+            valid = false;
+        }
+        const auto contribution_error = f32_error(
+            full.value().steps[index].route.contributions,
+            manifest.routes[index].contributions);
+        if (contribution_error.maximum_absolute >
+            kContributionAbsoluteTolerance) {
+            std::cerr << "oracle diagnostic: contributions-" << index << '='
+                      << contribution_error.maximum_absolute << ','
+                      << contribution_error.maximum_relative << '\n';
+            valid = false;
+        }
+    }
+    return valid;
+}
+
 void write_error(k3x::ErrorCode code, std::string_view message) {
     std::cerr << k3x::error_code_name(code) << ": " << message << '\n';
 }
@@ -611,6 +1099,25 @@ int main(int argc, char** argv) {
     if (!validate_artifact(reader.value(), *manifest)) {
         write_error(k3x::ErrorCode::invalid_extent,
                     "official layer artifact identity mismatch");
+        return 4;
+    }
+    auto loaded = load_layer(reader.value(), *manifest);
+    if (!loaded) {
+        write_error(k3x::ErrorCode::invalid_extent,
+                    "official layer weight load mismatch");
+        return 4;
+    }
+    const auto oracle_path = arguments->manifest.parent_path() /
+        "official-layer-oracle-v1.bin";
+    auto oracle = load_oracle(oracle_path, manifest->oracle_sha256);
+    if (!oracle) {
+        write_error(k3x::ErrorCode::invalid_extent,
+                    "official layer oracle identity mismatch");
+        return 4;
+    }
+    if (!validate_portable_oracle(*loaded, *manifest, *oracle)) {
+        write_error(k3x::ErrorCode::invalid_state,
+                    "official layer portable oracle mismatch");
         return 4;
     }
     write_error(k3x::ErrorCode::backend_unavailable,

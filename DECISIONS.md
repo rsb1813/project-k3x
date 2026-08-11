@@ -737,3 +737,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: distinct names prevent a false comparison while preserving both the manufactured microshard identity and the exact converter input identity used to seal the K3X artifact.
 - Rejected claims: this does not prove the complete upstream 16.99 GB shard digest, signed publisher provenance, official tensor execution, CUDA parity, or performance.
 - Revisit: replace transport-pinned range provenance with authenticated chunk or complete-object verification when full-checkpoint manufacturing begins.
+
+## D-064 — Bind source-byte oracle arrays and compare independent accumulation numerically
+
+- Date: 2026-08-11.
+- Status: accepted and implemented for the M29 official-weight portable execution gate.
+- Decision: make PyTorch projection tokenwise so full and incremental reference calls use the same sequence-one GEMM boundary. Persist the two reference KDA outputs and final convolution/recurrent state in a 6,541,344-byte content-addressed sidecar, bind its SHA-256 into the route manifest, and compare the independent portable scalar implementation with fixed absolute tolerances while keeping route IDs and within-implementation full/incremental parity strict.
+- Alternatives considered: require byte-exact equality with PyTorch oneDNN BF16 GEMM; change C++ from FP64 to FP32 scalar accumulation; accept only manifest hashes without numerical arrays; store the source-byte arrays in a separate ignored oracle sidecar.
+- Evidence: official dimensions exposed sequence-length-dependent PyTorch BF16 projection output before the tokenwise reference fix. After that fix, C++ FP64 projection hashes exactly match an independent FP64 reduction but not PyTorch oneDNN or FP32 reduction. The bounded source-byte comparison measures maximum absolute differences of `1.52588e-05` for KDA output, `0.0078125` for Q/K convolution state, `0.00390625` for V convolution state, `4.39133e-05` for recurrent state, and `1.06171e-06` for route contributions; both natural Top-16 ID lists remain exact.
+- Benchmark result: none. The 155.389-second verified reuse/materialization wall time and roughly 82-second portable scalar execution are manufacturing/debug observations, not B-0030, layer latency, or token throughput.
+- Reason accepted: independent implementations cannot honestly promise byte identity across different GEMM reduction orders. A content-bound numerical oracle preserves source-byte authority, makes divergence measurable, and avoids adding PyTorch or oneDNN as a runtime dependency.
+- Rejected claims: these tolerances do not establish CUDA parity, complete-layer output parity after MoE, B-0030, token rate, quality, physical storage traffic, or a production default.
+- Revisit: native CUDA must report its own source-byte and portable-oracle error. Tighten or separate tolerances only from measured cross-backend evidence, never by hiding a failing value.

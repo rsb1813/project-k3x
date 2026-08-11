@@ -325,6 +325,9 @@ def _build_layer_materialization_record(
             "microshard_sha256": materialization.microshard_sha256,
             "tensor_sha256": dict(materialization.tensor_sha256),
             "k3x_root_sha256": materialization.k3x_root_sha256,
+            "oracle_filename": materialization.oracle_path.name,
+            "oracle_sha256": materialization.oracle_sha256,
+            "oracle_bytes": materialization.oracle_bytes,
         },
     )
     record["traffic"].update(
