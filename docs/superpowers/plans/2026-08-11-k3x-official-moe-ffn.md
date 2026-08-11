@@ -418,13 +418,13 @@ git commit -m "feat: validate pinned official MoE fixture"
 - Consumes: Task 5 canonical JSON.
 - Produces: three raw JSON rows, `summary.json`, LF-only `summary.csv`, `run_ablation(...)`, and `verify_summary(...)`.
 
-- [ ] **Step 1: Add failing controlled-runner tests**
+- [x] **Step 1: Add failing controlled-runner tests**
 
 Use a fake executable that emits schema-complete rows. Require fixed order `a-transient`, `a-resident`, `alternating-resident`, exact forwarding of 3 warmups/20 iterations, compact sorted LF JSON, LF-only CSV, raw/runner/artifact/manifest digests, canonical aggregate, and CSV parity.
 
 Add independent mutations for forbidden tok/s/quality/NVMe keys, wrong identity, route mismatch, contribution drift, resident warm H2D, transient formula, D2H formula, parity above `2e-2`, non-finite value, raw digest, runner digest, aggregate, CSV digest, and case order.
 
-- [ ] **Step 2: Run runner RED**
+- [x] **Step 2: Run runner RED**
 
 Run:
 
@@ -435,7 +435,7 @@ PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python -m pytest \
 
 Expected: import fails because the tool does not exist.
 
-- [ ] **Step 3: Implement the fixed matrix and verifier**
+- [x] **Step 3: Implement the fixed matrix and verifier**
 
 Use exactly:
 
@@ -449,7 +449,7 @@ CASES = (
 
 Parse exactly one JSON object per process. Validate the complete schema and formulas before writing any result. Strict mode rehashes the actual artifact, manifest, and runner, fixes 3/20, and verifies every raw file plus summary/CSV bytes. Test mode may skip only real-file identities and 3/20; it may not skip schema, formulas, parity, or forbidden-field checks.
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 Run the Step 2 suite. Confirm the tool never reruns or ranks timings and never copies source/artifact bytes. Commit:
 

@@ -1065,3 +1065,13 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Verification result: `tests/python/test_cuda_official_moe.py` passes 18 tests with 3 ignored-real-fixture skips. CUDA CTest passes 30/30. Focused Compute Sanitizer reports `ERROR SUMMARY: 0 errors`. The harness source also compiles with `-Wall -Wextra -Wpedantic -Werror`.
 - Decode tok/s, prefill tok/s, TTFT, official latency, VRAM, system RAM, physical NVMe GB/token, physical H2D GB/token, cache hit rate, quality, GPU utilization, and GPU bandwidth: not measured.
 - Interpretation: only the harness and fail-closed gates are verified. The three skipped smoke cases must run on the bounded ignored fixture before B-0029 or any official execution claim.
+
+## Milestone 28 Task 6 verification — B-0029 evidence tooling
+
+- Date: 2026-08-11.
+- Commit: `ba3a0d2`.
+- Hardware/model: controlled fake runner records plus the synthetic harness suite; no official M28 multi-expert payload.
+- Mode: fixed A transient, A resident, and alternating resident orchestration with strict raw/summary/CSV schema, traffic, parity, digest, and case-order verification.
+- Verification result: combined runner/harness pytest passes 28 tests with 3 ignored-real-fixture skips. Python compile validation and `git diff --check` pass.
+- All performance and quality fields: not measured. No B-0029 rows exist yet.
+- Interpretation: this is evidence-pipeline correctness only. The formal run must not be reported until the bounded fixture, three smoke cases, and strict 3/20 execution complete.

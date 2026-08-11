@@ -676,3 +676,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: the same manifest now binds route derivation and exact artifact bytes without weakening restart durability or inventing a root before the real bytes exist.
 - Rejected claims: a self-consistent transport-pinned manifest is not a complete-shard signature, publisher attestation, official full-size execution, or performance result.
 - Revisit: consider a separate signed execution manifest only if production manufacturing needs immutable pre- and post-conversion records with distinct retention policies.
+
+## D-059 — Fix B-0029 to three non-ranking evidence rows
+
+- Date: 2026-08-11.
+- Status: accepted and implemented at `ba3a0d2`; formal evidence is pending.
+- Decision: run exactly A transient, A resident, and alternating resident with one process per row, 3 warmups, and 20 measured iterations. Validate each row before writing and never rerun or rank timings.
+- Alternatives considered: add B transient; search over warmups/iterations; rank repeated runs; keep the smallest matrix that isolates exact residency and changing-route union behavior.
+- Evidence: the controlled runner/verifier suite plus harness suite passes 28 tests with 3 real-fixture skips. It rejects forbidden token/quality/NVMe claims, identity/parity/traffic mutations, resident warm H2D, raw/aggregate/CSV/case-order divergence, and strict iteration drift.
+- Benchmark result: none. B-0029 has not yet run.
+- Reason accepted: the three rows answer the immediate correctness and residency questions without turning the formal run into a timing search.
+- Rejected claims: tool implementation is not measured evidence, official execution, token throughput, quality, or physical traffic.
+- Revisit: add B transient only if the first formal matrix exposes a case-specific transient attribution that A cannot represent.

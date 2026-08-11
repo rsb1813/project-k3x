@@ -651,3 +651,9 @@
 - Harness RED was the absent CMake target. Commit `bdab0da` adds strict duplicate-key/non-finite JSON rejection, pinned source/input identity, exact Reader root/tensor order/shape/dtype checks, both route recomputations, portable CPU oracles, and A/B/alternating CUDA execution with internal traffic formulas.
 - The official CUDA boundary now records kernel-only CUDA-event time; the focused test requires nonzero profiler device time. CUDA CTest remains 30/30 and Compute Sanitizer reports zero errors.
 - Harness pytest passes 18 with 3 skips. Those skips are the actual A transient, B transient, and alternating resident smoke cases; they remain pending because no M28 payload has been materialized.
+
+## 2026-08-11 — Milestone 28 B-0029 evidence tooling
+
+- Runner RED was the missing `tools.ablate_official_moe` module. The fixed matrix is A transient, A resident, and alternating resident; it does not rerun or rank timing samples.
+- Strict verification fixes 3/20, rehashes artifact/manifest/runner/raw/aggregate/CSV, and rejects TPS, quality, physical-NVMe, identity, route, contribution, parity, traffic, finite, digest, order, and CSV mutations.
+- Controlled runner plus harness coverage passes 28 with the same 3 real-fixture skips. Commit `ba3a0d2` contains tooling only; no B-0029 measurement exists yet.
