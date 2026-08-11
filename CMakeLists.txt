@@ -235,6 +235,11 @@ else()
     set_target_properties(test_cuda_official_layer PROPERTIES CUDA_ARCHITECTURES "120-real")
     add_test(NAME cuda_official_layer COMMAND test_cuda_official_layer)
 
+    add_executable(test_cuda_official_two_layer tests/cuda/test_cuda_official_two_layer.cu)
+    target_link_libraries(test_cuda_official_two_layer PRIVATE k3x_runtime)
+    set_target_properties(test_cuda_official_two_layer PROPERTIES CUDA_ARCHITECTURES "120-real")
+    add_test(NAME cuda_official_two_layer COMMAND test_cuda_official_two_layer)
+
     add_executable(test_cuda_ffn tests/cuda/test_cuda_ffn.cu)
     target_link_libraries(test_cuda_ffn PRIVATE k3x_runtime)
     set_target_properties(test_cuda_ffn PROPERTIES CUDA_ARCHITECTURES "120-real")
