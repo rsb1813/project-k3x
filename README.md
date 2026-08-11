@@ -34,7 +34,7 @@ flowchart LR
 ```
 
 > [!IMPORTANT]
-> The executable token graph still uses a tiny synthetic model, but Milestone 29 executes one bounded official layer-1 KDA + natural Top-16 MoE sequence on RTX 5080, Milestone 30 attributes its repeated 887,800,832-byte KDA validation scan, and Milestone 31 measures an exact device-resident KDA state handoff. This is a two-position layer-boundary fixture, not token generation or full-model throughput. No complete shard, full checkpoint, or paid cloud resource was used.
+> The executable token graph still uses a tiny synthetic model, but Milestone 29 executes one bounded official layer-1 KDA + natural Top-16 MoE sequence on RTX 5080, Milestone 30 attributes immutable KDA validation, Milestone 31 measures device-resident KDA state, and Milestone 32 measures exact device route preparation. This is a two-position layer-boundary fixture, not token generation or full-model throughput. No complete shard, full checkpoint, or paid cloud resource was used.
 
 | Milestone | GitHub status | Evidence |
 |---|---|---|
@@ -59,6 +59,7 @@ flowchart LR
 | Milestone 29 | [PR #50 merged](https://github.com/rsb1813/project-k3x/pull/50) at `2a4bfaf` | B-0030 executes the bounded official layer-1 KDA transformer boundary and isolates a host-orchestration gap |
 | Milestone 30 | [PR #52 merged](https://github.com/rsb1813/project-k3x/pull/52) at `51182575` | B-0031 measures exact immutable KDA admission validation without changing the default |
 | Milestone 31 | [PR #54 merged](https://github.com/rsb1813/project-k3x/pull/54) at `e1233891` | B-0032 measures exact single-slot KDA device-state handoff without changing the host default |
+| Milestone 32 | Local implementation and B-0033 complete; publication pending | Exact device residual/router preparation preserves routing and yields a mixed bounded result |
 
 The latest audited public implementation baseline is Milestone 31 integration head `e1233891`. PR #54 branch correctness `31501537039`, pull-request correctness `31501569778`, and pull-request CodeQL `31501569789` passed before merge; post-merge `main` correctness `31501949124` and CodeQL `31501949081` also succeeded.
 
@@ -758,11 +759,18 @@ The fixed B-0032 transaction compares resident-admission incremental host state,
 
 Device handoff removes exactly one 6,512,640-byte state H2D and D2H per measured sequence and lowers the incremental median by 4.585951%. Its aggregate kernel time is 0.339801% higher, while orchestration falls by 3.207668 ms per sequence; the remaining device-incremental/full median gap is 1.611085 ms. This is a one-layer WSL2 boundary result, not token throughput, quality, physical PCIe/NVMe traffic, native-Linux authority, or support for a default change. The complete local matrix passes CPU CTest 19/19 plus Python 578/125, liburing/direct CTest 20/20 plus Python 584/119, ASan/UBSan CTest 20/20, and CUDA CTest 34/34 plus actual-artifact Python 688/15. Device-state Compute Sanitizer reports zero errors, and production `k3x_run` remains fail-closed.
 
-## Milestone 32 — exact device route preparation in progress
+## Milestone 32 — exact device route preparation
 
 M32 now has an explicit, non-default official-layer path that computes MLP Attention Residual, post RMSNorm, and all 896 raw router logits on CUDA. Natural Top-16 selection remains canonical host code, and an opaque single-use token carries the prepared activation into the exact resident MXFP4 FFN. Omitted control follows the historical host path and preserves the historical JSON schema.
 
-Tiny CUDA parity and route, missing-expert, and FFN failure cleanup pass under Compute Sanitizer with zero errors. A bounded 896-expert host/device smoke pair preserves exact route IDs, contributions, output, and final state; the device row transfers 7,168 logical router-logit bytes and zero warm weight bytes. No M32 timing has been measured yet, and B-0033 remains required before any performance or default-policy conclusion.
+Tiny CUDA parity and route, missing-expert, and FFN failure cleanup pass under Compute Sanitizer with zero errors. The fixed B-0033 transaction compares host and device route preparation with device KDA state, resident admission, three warmups, and twenty measured two-position sequences. Both rows preserve exact route IDs, contributions, output/state digests, zero warm weight H2D, and maximum error `0.00048828125`.
+
+| B-0033 row | Median | Kernel / sequence | Orchestration / sequence | Resident weights |
+|---|---:|---:|---:|---:|
+| Host route | 64.210407 ms | 31.551662 ms | 32.877229 ms | 1,816,322,048 B |
+| Device route | 63.767134 ms | 40.163418 ms | 23.597272 ms | 1,829,210,112 B |
+
+Device route preparation lowers the median by 0.690344%, or 0.443273 ms, while aggregate kernel time rises 27.294141% and orchestration falls 9.279958 ms per sequence. It adds 12,888,064 resident BF16 bytes and 7,168 logical logit D2H bytes per sequence. This mixed one-layer WSL2 result does not support changing the host default or claiming token throughput, quality, physical PCIe traffic, or full-model speed. The next evidence boundary is bounded multi-layer execution, where retained activations and route work can amortize API synchronization.
 
 ## Quality contract
 
@@ -806,7 +814,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Atomic official KDA immutable-weight admission validation and fixed four-row B-0031 attribution.
 - [x] Opaque exact official KDA device-state handoff and fixed three-row B-0032 attribution.
 - [x] Explicit exact device route preparation, canonical host Top-16 selection, and opaque prepared-FFN consumption.
-- [ ] Fixed B-0033 host/device route-preparation attribution.
+- [x] Fixed B-0033 host/device route-preparation attribution.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.

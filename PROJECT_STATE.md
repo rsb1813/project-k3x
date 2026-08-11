@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 31 is publicly complete through implementation PR #54 and publication PR #55. Milestone 32 Tasks 1 through 4 implement canonical raw-logit routing, exact CUDA residual/router preparation, opaque single-use prepared-activation consumption, official-layer integration, an explicit harness mode, and strict B-0033 evidence tooling. Tiny and bounded actual-artifact host/device correctness smoke gates pass; formal B-0033 has not run. Host routing remains the default. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
+Milestone 31 is publicly complete through implementation PR #54 and publication PR #55. Milestone 32 implementation, formal B-0033, strict evidence verification, sanitizer, production guard, and the complete local matrix are finished; public PR integration remains. Exact device route preparation is experimental and host routing remains the default after a mixed one-layer result. The bounded M29 artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, or paid cloud resource exists.
 
-State audited last on 2026-08-12 on `codex/milestone-thirty-two-device-routing`; the public baseline remains M31 publication head `c46d6139673d442a83858e637d268e0d92a7784a`. M32 Task 4 passes 65 B-0030 through B-0033 evidence tests and one actual 0/1 two-row smoke with strict non-official verification. The formal 3/20 B-0033 transaction remains unrun. The ignored bounded fixture is unchanged; no complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-12 on `codex/milestone-thirty-two-device-routing`; the public baseline remains M31 publication head `c46d6139673d442a83858e637d268e0d92a7784a`. Local B-0033 evidence commit `3d5d96c` is sealed. Fresh verification passes CPU CTest 19/19 plus Python 597/128, liburing/direct CTest 20/20 plus Python 603/122, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus Python 710/15, evidence regressions 65/65, actual device-route Compute Sanitizer with zero errors, and the production non-executable guard. No complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -118,8 +118,8 @@ State audited last on 2026-08-12 on `codex/milestone-thirty-two-device-routing`;
 - Formal B-0032 host/device incremental medians are 73,192,169/69,835,612 ns; full host is 68,224,527 ns. Device handoff removes exactly 6,512,640 state bytes in each direction per sequence and lowers the incremental median 4.585951% while aggregate kernel time changes +0.339801%.
 - All B-0032 rows preserve exact route/output/state identity, zero warm weight H2D, 1,816,322,048 resident bytes, and `0.00048828125` maximum error. The device row records 20 seeds, continuations, and publications with zero invalidations.
 - Publicly integrated D-068 retains per-call as the default and admission as opt-in. D-069 retains host round trip as the default and device state as an exact single-slot experiment; multi-session policy, VAULT persistence, and a production state registry remain unimplemented.
-- D-070 and the M32 design are accepted. The backend route-preparation interface, deterministic CUDA kernels, opaque lifetime, exact prepared FFN consumption, wrapper, explicit harness schema, cleanup telemetry, and strict B-0033 evidence tooling exist; formal B-0033 remains unrun.
-- M32 Task 1 provides one canonical raw-logit routing authority. Task 2 implements the CUDA primitive. Task 3 preserves the omitted host path, requires device-state resident admission for explicit device routing, and passes tiny plus bounded actual-artifact parity with zero warm weight H2D.
+- D-070 and M32 are locally complete. The backend route-preparation interface, deterministic CUDA kernels, opaque lifetime, exact prepared FFN consumption, wrapper, explicit harness schema, cleanup telemetry, strict B-0033 evidence, and full gates pass.
+- Formal B-0033 host/device medians are 64,210,407/63,767,134 ns. Device route is 0.690344% lower in wall median but 27.294141% higher in aggregate kernel time; orchestration falls 9.279958 ms per sequence. Host routing remains default pending bounded multi-layer evidence.
 
 - M28 Task 2 is complete at `0b0c944`: the route manifest is durable before expert fetching, only the natural A/B first-use union is planned, object reuse is rehashed, response bytes are measured separately from logical source bytes, and production generation remains fail-closed.
 - M28 Task 3 is complete at `8a13cf5`: the dimension-driven CPU oracle preserves explicit BF16 boundaries, validates the natural route before execution, decodes native MXFP4 experts exactly, and matches independent PyTorch intermediate values without production dispatch.
@@ -179,9 +179,9 @@ State audited last on 2026-08-12 on `codex/milestone-thirty-two-device-routing`;
 
 ## Next concrete tasks
 
-1. Run the actual bounded device-route Compute Sanitizer and production non-executable guard.
-2. Run the sole formal fixed 3-warmup/20-sequence B-0033 transaction, strict rehash, and independent formula checks.
-3. Run the complete CPU/liburing/ASan/CUDA verification matrix, synchronize final M32 documentation, and publish. Do not download a complete shard/checkpoint or create paid cloud resources.
+1. Commit the synchronized M32 documentation and perform a final diff/status review.
+2. Push a public ready PR, require correctness and CodeQL, rebase-merge, and verify post-merge `main` checks.
+3. Begin M33 bounded multi-layer closure after public integration. Do not download a complete shard/checkpoint or create paid cloud resources.
 
 ## Hardware assumptions
 
@@ -198,14 +198,16 @@ State audited last on 2026-08-12 on `codex/milestone-thirty-two-device-routing`;
 
 ## Latest measured bottleneck
 
-B-0032 is the latest formal performance measurement. Host/device incremental medians are 73,192,169/69,835,612 ns and full host is 68,224,527 ns per two-position complete-layer sequence. All rows keep 1,816,322,048 weight bytes resident, transfer zero warm weight bytes, and preserve exact output/final-state digests with maximum error `0.00048828125`.
+B-0033 is the latest formal performance measurement. Host/device route-preparation medians are 64,210,407/63,767,134 ns per two-position sequence. Both preserve exact route/output/final-state identity, zero warm weight H2D, and `0.00048828125` maximum error.
 
-Device handoff removes one 6,512,640-byte state H2D plus D2H round trip per sequence and lowers the incremental median by 4.585951%, or 3.356557 ms. Aggregate kernel time changes +0.339801%, orchestration falls 3.207668 ms per sequence, and the remaining device-incremental/full-host median gap is 1.611085 ms. The larger remaining cost is roughly 35 ms per sequence of host/API orchestration around a 34 ms CUDA-kernel total.
+Device route preparation lowers the median by only 443,273 ns or 0.690344%. Its kernel time rises from 31.551662 to 40.163418 ms per sequence, while orchestration falls from 32.877229 to 23.597272 ms. It adds 12,888,064 resident bytes and 7,168 logical D2H bytes per sequence. The remaining bottleneck is a split boundary where four extra kernels and two logit synchronizations offset most host-routing removal.
 
-D-069 retains the exact device-resident KDA handoff as an experiment but does not select it as default. The next decision must compare a wider device-resident residual/routing boundary against multi-layer correctness/lifetime closure. Per-call validation and host state remain defaults. Native-Linux physical NVMe/PCIe traffic, full-model cache pressure, token throughput, GPU utilization/bandwidth, and coding quality remain unmeasured.
+D-070 retains device route preparation as an explicit experiment but does not select it as default. The next decision must close a bounded multi-layer device-resident boundary so activation residency and fewer API transitions can amortize route kernels and synchronization. Per-call validation, host KDA state, and host routing remain defaults. Native-Linux physical NVMe/PCIe traffic, full-model cache pressure, token throughput, GPU utilization/bandwidth, and coding quality remain unmeasured.
 
 ## Last known-good state
 
+- Local M32 evidence commit `3d5d96c` records B-0033 with aggregate SHA-256 `709fe13d67d144d025f32e17d6cafdfeef3d6e52e901d4234b7e54d7c9342d61`, summary JSON `86cb016d1764747233536614137566cfa8098cbfcfb10bdf5d5dc596d37c9ace`, and summary CSV `d83d7cd34bc6601e39af3b55635d1ffb00f4eac79c742152ee669dd29915ee1d`. Strict and independent verification pass.
+- Fresh M32 gates pass CPU CTest 19/19 plus Python 597/128, liburing/direct CTest 20/20 plus Python 603/122, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus Python 710/15, and evidence regressions 65/65. Actual device-route Compute Sanitizer reports zero errors; production `k3x_run` remains fail-closed.
 - Public M31 publication head `c46d6139673d442a83858e637d268e0d92a7784a` contains PR #55. Post-merge correctness `31503260596` and CodeQL `31503260599` succeeded.
 - Public M31 implementation head `e1233891537f14785373f47e9f736fed43598c46` contains PR #54. Branch correctness `31501537039`, pull-request correctness `31501569778`, pull-request CodeQL `31501569789`, post-merge `main` correctness `31501949124`, and post-merge CodeQL `31501949081` all succeeded.
 - Local M31 evidence commit `992e0de` records B-0032 with aggregate SHA-256 `88db7c3e8210035204a3e6679c482782f8223de1b49edd39f5d407ad3edab339`, summary JSON `42cb8809b6e7b0b0a23f152f8377cdaffa1d5a6d0efd31d7182322d146963d5f`, and summary CSV `9abfb06e0bc936211e258b39f2aa2cc0bf88e1c3ec553dd68e9427291fc79c11`. Strict artifact/manifest/runner/raw/CSV/aggregate verification passes.
