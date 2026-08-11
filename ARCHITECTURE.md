@@ -406,6 +406,10 @@ Every HTTP response and local copy is capped at 8 MiB. A valid completed object 
 
 The CLI default for `--scope moe-ffn` remains zero-payload dry-run. Actual bounded manufacturing requires the explicit `--materialize` flag and an output directory. Its report separates logical source-object bytes from actual downloaded payload bytes, so a resumed or fully reused run cannot be misreported as new network traffic. Commit `0b0c944` passes 27 focused orchestration/CLI tests and 149 official-source/converter recovery regressions. No official M28 tensor payload, B-0029 result, CPU/CUDA oracle result, token rate, or quality result exists yet.
 
+The portable CPU execution half is implemented at `8a13cf5`. It owns explicit native-BF16 word views, round-to-nearest-even BF16 boundaries, dimension-driven BF16 matvec/RMSNorm/Attention Residual logic, all-score sigmoid routing with correction-only Top-K selection, exact native-MXFP4 expert decode, FP32 contribution accumulation, routed latent normalization/up-projection, the shared SiTU-GLU expert, routed/shared combination, and final prefix addition. Natural routing and execution are separate pure calls so the later CUDA path consumes the same validated route without changing selection semantics.
+
+The tiny oracle validates every named intermediate boundary against an independently calculated PyTorch graph. Route count, duplicate expert IDs, missing selected experts, non-finite or non-normalized contributions, malformed BF16 dimensions, and invalid MXFP4 views fail before a result is published. The helper owns no filesystem, network, CUDA, global state, or production `ModelSession` dispatch. CPU CTest passes 17/17 and the complete C++ parity file passes 113 tests with 32 capability skips. The native BF16 CUDA boundary and real bounded fixture remain pending.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

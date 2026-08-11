@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 28 dependency-closed real MoE FFN sublayer is the active engineering boundary. Native BF16 K3X support, exact official tensor planning, deterministic natural route derivation, content-addressed two-phase selected-union materialization, source assembly, and explicit CLI orchestration are implemented. The portable complete-sublayer oracle, native CUDA boundary, ignored real fixture, and B-0029 remain pending.
+Milestone 28 dependency-closed real MoE FFN sublayer is the active engineering boundary. Native BF16 K3X support, exact official tensor planning, deterministic natural route derivation, content-addressed two-phase selected-union materialization, source assembly, explicit CLI orchestration, and the pure portable BF16/MXFP4 complete-sublayer oracle are implemented. The native CUDA boundary, ignored real fixture, and B-0029 remain pending.
 
-State audited last on 2026-08-11 after M28 Task 2 implementation commit `0b0c944` passed its focused and combined recovery gates. One bounded official expert from M27 is present only under ignored `artifacts/`; the M28 multi-expert fixture has not been downloaded. No complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-11 after M28 Task 3 implementation commit `8a13cf5` passed CPU CTest 17/17 and the full C++ parity file 113 passed/32 skipped. One bounded official expert from M27 is present only under ignored `artifacts/`; the M28 multi-expert fixture has not been downloaded. No complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -111,6 +111,7 @@ State audited last on 2026-08-11 after M28 Task 2 implementation commit `0b0c944
 ## Work in progress
 
 - M28 Task 2 is complete at `0b0c944`: the route manifest is durable before expert fetching, only the natural A/B first-use union is planned, object reuse is rehashed, response bytes are measured separately from logical source bytes, and production generation remains fail-closed.
+- M28 Task 3 is complete at `8a13cf5`: the dimension-driven CPU oracle preserves explicit BF16 boundaries, validates the natural route before execution, decodes native MXFP4 experts exactly, and matches independent PyTorch intermediate values without production dispatch.
 - Milestone 27 implementation, B-0028, full local verification, README/TITAN Ledger synchronization, D-054 M28 selection, final Critical/Important review, PR #46 merge, and post-merge correctness/CodeQL are complete.
 - Milestone 26 implementation, live dry-run, one exact official expert conversion, B-0027 verifier, full local verification, final Critical/Important review, README/TITAN Ledger synchronization, PR #44 merge, and post-merge CI are complete.
 - The actual official K3X storage fixture still exits 4 with `NON_EXECUTABLE_ARTIFACT` through `k3x_run`; the separate M27 benchmark-only path executes only the pinned expert FFN and does not weaken that production guard.
@@ -164,9 +165,9 @@ State audited last on 2026-08-11 after M28 Task 2 implementation commit `0b0c944
 
 ## Next concrete tasks
 
-1. Implement the portable official BF16/MXFP4 MoE oracle through witnessed RED/GREEN tests, consuming the persisted route/source manifest without CUDA.
-2. Implement native BF16 CUDA residency and the dependency-closed routed/shared MoE boundary, then add the pinned fixture harness and strict B-0029 tooling.
-3. Materialize only the bounded ignored M28 fixture after the oracle/harness identities are ready, then run parity, traffic, sanitizer, evidence, and full verification gates before any performance claim.
+1. Implement native BF16 CUDA residency and the dependency-closed routed/shared MoE boundary against the Task 3 portable oracle.
+2. Add the pinned official fixture harness and strict B-0029 runner/verifier without changing the production `k3x_run` guard.
+3. Materialize only the bounded ignored M28 fixture after the CUDA/harness identities are ready, then run parity, traffic, sanitizer, evidence, and full verification gates before any performance claim.
 
 ## Hardware assumptions
 
@@ -197,6 +198,7 @@ B-0028 closes the fixed single-expert CUDA correctness gate. Twenty transient ca
 
 ## Last known-good state
 
+- Local M28 Task 3 head `8a13cf5` implements the pure official MoE CPU oracle. CPU CTest passes 17/17 and `test_cpp_parity.py` passes 113/113 runnable cases with 32 capability skips; the tiny C++ dump and independent PyTorch graph agree at every recorded boundary within `1e-6`. No official M28 payload or performance result was produced.
 - Local M28 Task 2 head `0b0c944` implements the bounded two-phase materializer and explicit CLI. Focused materializer/CLI tests pass 27/27; the official-source, transport, safetensors, converter-resume, and source-manifest regression matrix passes 149/149 in 13.24 seconds; Python compile validation and `git diff --check` pass. No M28 official payload or performance result was produced.
 - Local Milestone 26 review head `fb7fb49` plus B-0027 evidence verifies official commit `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`, index SHA-256 `a1c521…febd`, payload SHA-256 `1d925f…c36c`, microshard SHA-256 `ed3f07…4a34`, and K3X root `d585d2…58be`. Summary JSON/CSV SHA-256 are `57ebd9…982a` / `7c6238…bdd6`. Raw repeated/dot path segments fail before normalization, and nine consistently rehashed official-identity mutations fail strict verification.
 - Fresh Milestone 26 final-review verification passes CPU CTest 15/15 with pytest 462 passed/70 skipped, liburing/direct CTest 16/16 with pytest 464 passed/68 skipped, ASan/UBSan CTest 16/16, and CUDA CTest 27/27 with pytest 516 passed/16 skipped. The unchanged released MoE-layer Compute Sanitizer reports `ERROR SUMMARY: 0 errors`, and the actual real-weight storage artifact returns exit 4 with `NON_EXECUTABLE_ARTIFACT`.

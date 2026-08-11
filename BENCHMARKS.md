@@ -1032,3 +1032,14 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Traffic contract: every response is capped at 8 MiB; fresh, resumed, and reused content objects report actual response bytes independently from logical source-object bytes. No live response-byte total is recorded because no official M28 payload was requested.
 - Decode tok/s, prefill tok/s, TTFT, VRAM, system RAM, physical NVMe GB/token, H2D GB/token, cache hit rate, average Top-K, speculative acceptance, quality, GPU utilization, and GPU bandwidth: not measured and not applicable to this verification-only unit.
 - Interpretation: this entry records a correctness/recovery gate, not B-0029 and not a performance benchmark. The next measurable boundary is the portable official BF16/MXFP4 oracle followed by the native CUDA implementation over the bounded ignored fixture.
+
+## Milestone 28 Task 3 verification — portable official MoE oracle
+
+- Date: 2026-08-11.
+- Commit: `8a13cf5`.
+- Hardware/model: tiny dimension-driven literal BF16/MXFP4 fixture on the AMD Ryzen 7 9800X3D host under WSL2; no official tensor payload and no CUDA execution.
+- Mode: pure Attention Residual, post-RMSNorm, all-score sigmoid routing, correction-only Top-K selection, exact MXFP4 experts, FP32 weighted accumulation, routed normalization/up-projection, shared SiTU-GLU, combination, and prefix addition.
+- Correctness result: every named C++ intermediate boundary matches independently computed PyTorch values at `1e-6` absolute tolerance. Scalar BF16 decoding covers positive/signed zero, a finite normal, infinity, and NaN. Malformed dimensions, route cardinality, duplicate IDs, missing experts, non-finite contributions, and non-unit contribution mass fail closed.
+- Verification result: CPU CTest 17/17 passed. The complete `tests/python/test_cpp_parity.py` run passed 113 tests with 32 capability skips in 21.75 seconds. `git diff --check` passed.
+- Decode tok/s, prefill tok/s, TTFT, VRAM, system RAM, physical NVMe GB/token, H2D GB/token, cache hit rate, average Top-K, speculative acceptance, quality, GPU utilization, and GPU bandwidth: not measured and not applicable to this tiny correctness oracle.
+- Interpretation: this is the independent CPU authority for Task 4 CUDA parity. It is not B-0029 and cannot support a full-size latency, traffic, cache, token, or quality claim.

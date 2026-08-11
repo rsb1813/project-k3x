@@ -227,13 +227,13 @@ git commit -m "feat: materialize bounded official MoE slice"
 - Produces: `Bf16WeightView`, `Bf16VectorView`, `OfficialMoeWeights`, `OfficialRoute`, `official_moe_inputs()`, `prepare_official_moe_input(...)`, `route_official_moe(...)`, and `official_moe_cpu(...)`.
 - Consumes: exact K3 SiTU, MXFP4 decode, Reader tensor bytes, and Task 2 route manifest.
 
-- [ ] **Step 1: Add failing scalar BF16 and official-boundary tests**
+- [x] **Step 1: Add failing scalar BF16 and official-boundary tests**
 
 Test exact BF16 word-to-FP32 decoding for zero, signed zero, finite normals, infinity, and NaN bit patterns. With tiny literal matrices, require Attention Residual, RMSNorm, router sigmoid/correction selection, contribution renormalization, latent down, two MXFP4 experts, routed norm/up, shared SiTU-GLU/down, routed/shared add, and final prefix add to match independent Python/PyTorch values at every named boundary.
 
 Mutate dimensions, route count, duplicate expert IDs, non-finite contribution, contribution sum, missing tensor, and BF16 byte alignment independently; require failure before any output is published.
 
-- [ ] **Step 2: Run portable RED**
+- [x] **Step 2: Run portable RED**
 
 Run:
 
@@ -244,13 +244,13 @@ cmake --build build --target test_official_moe
 
 Expected: CMake or compilation fails because the official MoE files and target do not exist.
 
-- [ ] **Step 3: Implement minimal portable graph**
+- [x] **Step 3: Implement minimal portable graph**
 
 Represent BF16 weights as `std::span<const std::uint16_t>` plus rows/columns and decode explicitly with a 16-bit left shift into the FP32 bit pattern. Apply the accepted output boundaries exactly: BF16-round Attention Residual and normalization outputs, BF16-round each BF16 Linear output, BF16-round each expert output, accumulate contributions in FP32 then BF16-round the mixed latent, and BF16-round routed/shared and final prefix additions.
 
 Use exact official dimensions only in the pinned identity validator; keep the pure tiny oracle dimension-driven so tests remain bounded. Return `Result<T>` and leave production `ModelSession` untouched.
 
-- [ ] **Step 4: Run GREEN and Python parity**
+- [x] **Step 4: Run GREEN and Python parity**
 
 Run:
 
@@ -264,7 +264,7 @@ PYTHONPATH=converter:reference K3X_BUILD_DIR=build \
 
 Expected: every intermediate boundary and final vector passes; malformed inputs fail closed.
 
-- [ ] **Step 5: Run CPU regression and commit**
+- [x] **Step 5: Run CPU regression and commit**
 
 Run complete CPU CTest. Confirm the helper has no network, filesystem, CUDA, global state, or production dispatch. Commit:
 

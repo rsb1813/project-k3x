@@ -640,3 +640,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: a durable route boundary makes restart reuse deterministic and prevents speculative or preferred-expert substitution, while one fixture preserves a single Reader and identity transaction for the later CPU/CUDA oracle.
 - Rejected claims: implemented materialization does not mean the official fixture has been downloaded, executed, measured, or validated for token throughput or coding quality.
 - Revisit: after the one authorized bounded fixture is materialized, compare observed selected-union size and actual downloaded bytes with the 32-expert upper bound before changing packing or concurrency.
+
+## D-056 — Separate natural route derivation from pure portable MoE execution
+
+- Date: 2026-08-11.
+- Status: accepted and implemented at `8a13cf5`; CUDA integration is pending.
+- Decision: expose one pure function that derives the canonical natural route from BF16 hidden/router weights and correction bias, and a separate pure CPU oracle that consumes the validated route plus BF16/MXFP4 views. Both remain dimension-driven; official released dimensions belong to the later pinned fixture validator.
+- Alternatives considered: embed routing inside the CPU oracle; reuse the production synthetic `ModelSession`; call the existing backend interface at every operation; keep a small standalone pure oracle.
+- Evidence: the C++ test fixes BF16 decode patterns and every tiny graph boundary, while Python/PyTorch independently recomputes the same hidden state, route, contributions, two expert outputs, mixed latent, routed/shared outputs, and final vector. CPU CTest passes 17/17 and `test_cpp_parity.py` passes 113 with 32 capability skips.
+- Benchmark result: none. The tiny portable graph is a correctness oracle and has no token semantics or performance authority.
+- Reason accepted: separating route identity from execution lets CPU and CUDA consume exactly the same selected IDs/contributions and makes malformed route data fail before output without coupling the oracle to production session state.
+- Rejected claims: this does not prove CUDA parity, official full-size execution, B-0029, token throughput, cache behavior, or quality.
+- Revisit: keep the split unless the pinned harness reveals a route-manifest identity that cannot be validated before execution.
