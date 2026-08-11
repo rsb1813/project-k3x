@@ -474,4 +474,4 @@
 - [x] Run actual-artifact correctness, sanitizer, and production-guard gates.
 - [x] Run B-0033 exactly once and seal the evidence.
 - [x] Run the complete verification matrix and synchronize README/TITAN Ledger.
-- [ ] Publish M32 and verify pull-request and post-merge CI.
+- [x] Publish M32 and verify pull-request and post-merge CI.

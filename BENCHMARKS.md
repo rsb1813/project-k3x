@@ -1383,3 +1383,4 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - B-0033/B-0032/B-0031/B-0030 evidence tests: 65/65 passed; strict B-0033 rehash and independent aggregate/formula/LF checks passed.
 - Actual device-route Compute Sanitizer: `ERROR SUMMARY: 0 errors`; exact routes/output/state, 7,168 logit D2H bytes, two seeds/consumes, zero discard/invalidation, and zero warm weight H2D.
 - Production guard: actual bounded artifact returns `NON_EXECUTABLE_ARTIFACT` and creates no output.
+- Public integration: PR #56 rebase-merged at `ab0ecb19ade01e7989bcba9f6dbcd1c853c43432`. Branch correctness `31510344481`, pull-request correctness `31510368444`, pull-request CodeQL `31510368390`, post-merge `main` correctness `31510749958`, and post-merge CodeQL `31510749973` all succeeded. Workflow annotations are limited to the known Node 20 and CodeQL Action v3 deprecation notices.

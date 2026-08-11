@@ -912,3 +912,9 @@
 - Strict verification, raw/summary hashes, aggregate recomputation, formulas, row order, forbidden fields, and LF CSV all pass. Host routing remains the default because the one-layer WSL2 wall change is small and mixed.
 - Fresh final gates pass CPU CTest 19/19 plus Python 597/128, liburing/direct CTest 20/20 plus Python 603/122, ASan/UBSan CTest 20/20, CUDA CTest 34/34 plus Python 710/15, and evidence regressions 65/65.
 - M33 should close a bounded multi-layer device-resident boundary before any full checkpoint or paid Cloud Run work. This is still not token throughput, quality, physical PCIe/NVMe traffic, native-Linux authority, or a production default.
+
+## 2026-08-12 — Milestone 32 public integration
+
+- Public ready PR #56 passed branch correctness `31510344481`, pull-request correctness `31510368444`, and pull-request CodeQL `31510368390`, then rebase-merged at `ab0ecb19ade01e7989bcba9f6dbcd1c853c43432`.
+- Post-merge `main` correctness `31510749958` and CodeQL `31510749973` succeeded. Annotations remain the known Node 20 and CodeQL Action v3 deprecation notices; no new failure or security finding appeared.
+- M32 is publicly integrated. Host routing remains default, and M33 bounded multi-layer closure is next before any full checkpoint or paid Cloud Run milestone.
