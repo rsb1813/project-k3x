@@ -437,7 +437,19 @@ def assemble_official_moe_source(
         or not tensors
         or not isinstance(config, dict)
         or (official_metadata is not None and not isinstance(official_metadata, dict))
-        or official_metadata_key not in {"official_moe", "official_layer"}
+        or official_metadata_key not in {
+            "official_moe",
+            "official_layer",
+            "official_two_layer",
+        }
+    ):
+        raise K3XError("INVALID_OFFICIAL_MOE_SOURCE")
+    if official_metadata_key == "official_two_layer" and (
+        official_metadata is None
+        or official_metadata.get("format") != "k3x-official-two-layer-v1"
+        or official_metadata.get("layer_ids") != [1, 2]
+        or official_metadata.get("step_order")
+        != ["a:1", "a:2", "b:1", "b:2"]
     ):
         raise K3XError("INVALID_OFFICIAL_MOE_SOURCE")
     names = tuple(item.name for item in tensors)

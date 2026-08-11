@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import math
+from pathlib import Path
+import re
 import struct
 from typing import Callable
 
@@ -28,10 +30,14 @@ from .official_layer import (
     _tensor_digest,
 )
 from .official_moe import (
+    OfficialMoeSourceTensor,
     OfficialMoeRoute,
+    assemble_official_moe_source,
     prepare_official_moe_hidden,
     route_official_hidden,
 )
+from .reader import K3XReader
+from .writer import convert
 
 
 _LAYER_IDS = (1, 2)
@@ -40,6 +46,11 @@ _ALWAYS_ACTIVE_BYTES = 379_900_416
 _BASE_PAYLOAD_BYTES = 1_267_744_256
 _EXPERT_PAYLOAD_BYTES = 17_547_264
 _MAXIMUM_TWO_POSITION_BYTES = 1_829_256_704
+_LAYER_NAME = re.compile(r"^model\.layers\.(1|2)\.")
+_EXPERT_SOURCE_NAME = re.compile(
+    r"^model\.layers\.(1|2)\.feed_forward\.experts\.(\d+)\."
+    r"(gate|up|down)\.weight_(packed|scale)$"
+)
 
 
 @dataclass(frozen=True)
@@ -91,6 +102,16 @@ class OfficialLayerSourceBytes:
     rms_norm_epsilon: float
     situ_beta: float
     situ_linear_beta: float | None
+
+
+@dataclass(frozen=True)
+class OfficialTwoLayerMaterializationReport:
+    source_directory: Path
+    manifest_path: Path
+    microshard_path: Path
+    k3x_path: Path
+    completed: bool
+    maximum_source_read_bytes: int
 
 
 @dataclass(frozen=True)
@@ -419,6 +440,88 @@ def make_official_source_byte_executor(
         return _execute_official_source_bytes(layer, item, state, source)
 
     return execute
+
+
+def manufacture_official_two_layer_fixture(
+    output_directory: Path,
+    tensors: tuple[OfficialMoeSourceTensor, ...],
+    config: dict[str, object],
+    metadata: dict[str, object],
+    *,
+    chunk_bytes: int = 8 * 1024 * 1024,
+    stop_after_extents: int | None = None,
+) -> OfficialTwoLayerMaterializationReport:
+    if (
+        not tensors
+        or not isinstance(config, dict)
+        or not isinstance(metadata, dict)
+        or chunk_bytes <= 0
+        or metadata.get("format") != "k3x-official-two-layer-v1"
+        or metadata.get("layer_ids") != [1, 2]
+        or metadata.get("step_order") != ["a:1", "a:2", "b:1", "b:2"]
+    ):
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_MATERIALIZATION")
+    layer_order: list[int] = []
+    expert_parts: dict[tuple[int, int], set[tuple[str, str]]] = {}
+    for tensor in tensors:
+        match = _LAYER_NAME.match(tensor.name)
+        if match is None:
+            raise K3XError("INVALID_OFFICIAL_TWO_LAYER_MATERIALIZATION")
+        layer_id = int(match.group(1))
+        if not layer_order or layer_order[-1] != layer_id:
+            layer_order.append(layer_id)
+        expert_match = _EXPERT_SOURCE_NAME.match(tensor.name)
+        if expert_match is not None:
+            identity = (int(expert_match.group(1)), int(expert_match.group(2)))
+            expert_parts.setdefault(identity, set()).add(
+                (expert_match.group(3), expert_match.group(4))
+            )
+    complete_expert = {
+        (role, kind)
+        for role in ("gate", "up", "down")
+        for kind in ("packed", "scale")
+    }
+    if (
+        layer_order != [1, 2]
+        or {layer_id for layer_id, _ in expert_parts} != {1, 2}
+        or any(parts != complete_expert for parts in expert_parts.values())
+    ):
+        raise K3XError("INVALID_OFFICIAL_TWO_LAYER_MATERIALIZATION")
+
+    output_directory = Path(output_directory)
+    assembled = assemble_official_moe_source(
+        output_directory,
+        tensors,
+        config,
+        chunk_bytes=chunk_bytes,
+        official_metadata=metadata,
+        official_metadata_key="official_two_layer",
+    )
+    k3x_path = output_directory / "official-two-layer.k3x"
+    converted = convert(
+        assembled.source_directory,
+        k3x_path,
+        chunk_bytes=chunk_bytes,
+        stop_after_extents=stop_after_extents,
+    )
+    if converted.completed:
+        reader = K3XReader.open(k3x_path)
+        active_layers = {
+            record.layer_index
+            for record in reader.layer_records
+            if record.tensor_count
+        }
+        expert_layers = {record.layer_index for record in reader.expert_records}
+        if active_layers != {1, 2} or expert_layers != {1, 2}:
+            raise K3XError("INVALID_OFFICIAL_TWO_LAYER_ARTIFACT")
+    return OfficialTwoLayerMaterializationReport(
+        assembled.source_directory,
+        assembled.manifest_path,
+        assembled.microshard_path,
+        k3x_path,
+        converted.completed,
+        converted.maximum_source_read_bytes,
+    )
 
 
 def plan_official_two_layer(
