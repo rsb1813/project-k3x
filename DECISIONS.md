@@ -765,11 +765,23 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-066 — Publish B-0030 as one fixed atomic three-row transaction
 
 - Date: 2026-08-11.
-- Status: accepted and implemented; formal measurement remains pending.
+- Status: accepted, implemented, and measured.
 - Decision: fix B-0030 to A transient, A-to-B incremental resident, and A+B full resident in that order, with exactly three warmups and twenty measured samples. Require full/incremental BF16 output and final V-first state digests to match, and atomically publish raw JSON, LF-only CSV, summary, and all hashes only after every invariant passes.
 - Alternatives considered: allow arbitrary rows and sample counts; rerun or select favorable samples; adapt the strict M28 evidence transaction with complete-layer state/launch formulas and cross-row parity.
 - Evidence: the runner tests pass 8/8 and focused CUDA CTest passes 3/3. Actual one-sample probes independently confirm A transient traffic, resident incremental traffic, full KDA's 24-launch topology, and byte-identical full/incremental output/state digests. The final schema additionally binds BF16/F32/MXFP4 copy categories, process peak RSS, and Reader logical/storage counters.
-- Benchmark result: none. The one-sample probes are capability checks and are not retained as B-0030 evidence.
+- Benchmark result: formal evidence commit `bbdccb9` records medians of 262,801,334 ns for A transient, 168,577,563 ns for resident A-to-B incremental, and 114,804,882 ns for resident A+B full. Both resident rows have zero warm weight H2D, identical full/incremental output and final-state digests, and maximum absolute error `0.00048828125`.
 - Reason accepted: a closed non-ranking transaction prevents post-hoc row/sample selection and turns routing, state traffic, residency, numerical parity, and evidence identity into executable acceptance gates.
 - Rejected claims: implementation and smoke success do not constitute B-0030, token throughput, quality, physical PCIe/NVMe traffic, utilization, bandwidth, native-Linux evidence, or a default policy.
 - Revisit: schema expansion requires a new version if a later process-level observer supplies physical counters or token semantics; do not silently add them to v1.
+
+## D-067 — Attribute immutable KDA validation before adding a wider official graph
+
+- Date: 2026-08-11.
+- Status: accepted as the next bounded experiment.
+- Decision: keep the current exact validation default, then isolate per-call immutable KDA validation behind the already established admission-identity contract and benchmark it independently before materializing another official layer.
+- Alternatives considered: immediately add a second KDA/MLA layer; tune CUDA kernels first; infer validation cost from the B-0030 wall/kernel gap without another measurement.
+- Evidence: resident incremental and full B-0030 kernel totals differ by only 0.416216% per sequence, while the full-call median is 31.897887% lower and orchestration drops by 53.967941 ms per sequence. The current implementation scans immutable KDA weights on every official KDA call, but B-0030 does not time that scan separately.
+- Benchmark result: B-0030 identifies a 53.772681 ms wall delta between two incremental calls and one full call; it does not yet attribute that delta to one component.
+- Reason accepted: the experiment is smaller, reversible, and evidence-driven. It can remove or retain a validation boundary before wider official materialization multiplies the same cost.
+- Rejected claims: no default change, token-rate projection, or claim that validation alone explains the entire wall delta is accepted without the next ablation.
+- Revisit: after isolated validation and orchestration counters exist, choose between admission validation, larger device-resident state, or a wider official multi-layer boundary from measured results.
