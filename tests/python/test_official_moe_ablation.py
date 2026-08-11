@@ -268,3 +268,40 @@ def test_verify_rejects_csv_parity_even_after_digest_rehash(
     with pytest.raises(RuntimeError, match="CSV parity"):
         verify_summary(output / "summary.json", csv_path, artifact=artifact,
                        manifest=manifest, runner=runner, strict_official=False)
+
+
+def test_committed_b0029_evidence_is_self_consistent() -> None:
+    root = Path(__file__).resolve().parents[2]
+    output = root / "results" / "b0029-official-moe-wsl"
+    summary = verify_summary(
+        output / "summary.json", output / "summary.csv", strict_official=False
+    )
+    assert summary["warmup"] == 3
+    assert summary["iterations"] == 20
+    assert summary["artifact_sha256"] == (
+        "96b2919cce9a0c8bc835cb6707753a550dc3728528eda80cbc2d57c52d85c4d5"
+    )
+    assert summary["manifest_sha256"] == (
+        "7116a03b79fb14d25c8b7d71de0bb4333aa869ff7d4b1a8a5eb2ec01e119ee27"
+    )
+    assert summary["runner_sha256"] == (
+        "59b90d6b2da4498f2b8cb0c5057462e802729b0149fe957efd1f3c0711c86f9e"
+    )
+    assert summary["aggregate_sha256"] == (
+        "2a1a758493791e5a417fda694dc0ee2a3e9adb2d92f71c39e7589fdc2683be39"
+    )
+    assert summary["summary_csv_sha256"] == (
+        "b251aea5cccbe8cba2417e4cc3a97f9127cdd52fc1a07904d32d170fc7f64a95"
+    )
+    assert [record["raw_json_sha256"] for record in summary["records"]] == [
+        "c0d197bc366772e06f792dc8829002246c82e5590d8bd955d187392a70ac6994",
+        "1c349fdef629cf286734a3cf6e3ebdb665e914859313733f78e7b17a7591d588",
+        "e6de5bfa0b6f2a7567c8736b5e8fa5c1287dee191073bfc7f99c7f6a685bb059",
+    ]
+    records = {record["name"]: record for record in summary["records"]}
+    assert records["a-transient"]["latency_nanoseconds_median"] == 97_095_781
+    assert records["a-resident"]["latency_nanoseconds_median"] == 10_153_939
+    assert records["alternating-resident"]["latency_nanoseconds_median"] == 20_201_466
+    assert records["a-resident"]["weight_h2d_bytes"] == 0
+    assert records["alternating-resident"]["weight_h2d_bytes"] == 0
+    assert records["alternating-resident"]["maximum_absolute_error"] == 0.00048828125
