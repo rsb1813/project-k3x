@@ -705,7 +705,7 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-061 — Close layer 1 at an explicit recurrent-state boundary
 
 - Date: 2026-08-11.
-- Status: accepted and partially implemented through bounded manufacturing, independent Python/C++ KDA oracles, and tiny portable complete-layer composition; pinned artifact execution and measurement remain pending.
+- Status: accepted and partially implemented through bounded manufacturing, independent Python/C++ KDA oracles, tiny portable complete-layer composition, and pinned fail-before-backend preflight; official execution and measurement remain pending.
 - Decision: supply deterministic layer-1 hidden/source-bank vectors and explicit zero KDA state, then execute two tokens through the complete layer both together and incrementally. Require checkpoint-authoritative F32 `A_log[128]` and explicit V-first recurrent-state storage. Keep the final artifact non-executable through `k3x_run`.
 - Alternatives considered: include embeddings and layer 0; stop at a KDA-only official boundary; close layer 1 around explicit state inputs.
 - Evidence: the pinned source blob matches repository metadata, layer 1 is KDA, the exact 17-tensor header payload is 887,843,840 bytes, and the KDA paper defines channel-wise decay. The checkpoint header exposes `A_log[128]` while the source constructor initializes `[96]`, so silent source imitation would be incorrect.
@@ -725,3 +725,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: one trust and recovery model minimizes new correctness surface, reuses already measured M28 objects after rehashing, and allows the complete-layer execution manifest to mature before committing a new file-format feature bit.
 - Rejected claims: no official M29 payload, natural route union, final artifact root, complete-layer parity, CUDA result, token rate, quality result, full-shard verification, or paid-cloud execution exists yet.
 - Revisit: introduce a dedicated file-format identity only if the portable/native harness requires semantics that cannot be bound by the source and route-state manifests plus existing non-executable feature bits.
+
+## D-063 — Bind microshard and K3X converter source identities separately
+
+- Date: 2026-08-11.
+- Status: accepted and implemented for the M29 route-state manifest and C++ Reader.
+- Decision: retain `artifact.source_sha256` as the assembled safetensors microshard SHA-256 and add `artifact.k3x_source_fingerprint_sha256` for the K3X superblock source fingerprint. Expose the latter through the portable Reader, require exact manifest/superblock parity, and reconstruct the deterministic safetensors header plus payload stream to verify the former before backend construction.
+- Alternatives considered: compare the two differently defined hashes; drop source identity from C++ preflight; name and validate both identities independently.
+- Evidence: converter inspection shows the superblock fingerprint hashes the source-manifest filename/content plus shard filename/content, while the route manifest previously stored the raw microshard file SHA-256. They are intentionally different values. Focused converter/Reader/preflight coverage passes 36 tests with 4 capability skips.
+- Benchmark result: none. This is a correctness and provenance boundary.
+- Reason accepted: distinct names prevent a false comparison while preserving both the manufactured microshard identity and the exact converter input identity used to seal the K3X artifact.
+- Rejected claims: this does not prove the complete upstream 16.99 GB shard digest, signed publisher provenance, official tensor execution, CUDA parity, or performance.
+- Revisit: replace transport-pinned range provenance with authenticated chunk or complete-object verification when full-checkpoint manufacturing begins.

@@ -424,7 +424,7 @@
 - [x] Implement bounded official KDA tensor materialization.
 - [x] Implement portable C++ KDA recurrence and full/incremental boundary parity.
 - [x] Compose the tiny complete portable layer with the official M28 MoE boundary.
-- [ ] Implement pinned artifact/manifest preflight before backend construction.
+- [x] Implement pinned artifact/manifest preflight before backend construction.
 - [ ] Implement the native CUDA complete-layer boundary and telemetry.
 - [ ] Materialize the bounded fixture without a complete shard/checkpoint.
 - [ ] Run correctness, sanitizer, B-0030, full verification, and evidence cross-checks.

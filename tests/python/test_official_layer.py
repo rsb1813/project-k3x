@@ -469,6 +469,7 @@ def test_official_layer_materializer_publishes_state_routes_before_experts(
     class _Reader:
         class _Superblock:
             root_sha256 = bytes.fromhex("7" * 64)
+            source_sha256 = bytes.fromhex("8" * 64)
             optional_features = 3
 
         superblock = _Superblock()
@@ -501,6 +502,7 @@ def test_official_layer_materializer_publishes_state_routes_before_experts(
     final_manifest = json.loads(report.route_manifest_path.read_text(encoding="utf-8"))
     assert final_manifest["steps"][1]["consumes_state_sha256"] == "1" * 64
     assert final_manifest["artifact"]["k3x_root_sha256"] == "7" * 64
+    assert final_manifest["artifact"]["k3x_source_fingerprint_sha256"] == "8" * 64
 
 
 def test_official_layer_materializer_rejects_plan_drift_before_payload(

@@ -116,6 +116,23 @@ def test_cpp_reader_exposes_storage_fixture_optional_identity(
     assert result.returncode == 0, result.stderr
 
 
+def test_cpp_reader_exposes_source_sha256(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    artifact = tmp_path / "source-identity.k3x"
+    convert(synthetic_source, artifact, chunk_bytes=257)
+    expected = K3XReader.open(artifact).superblock.source_sha256.hex()
+
+    result = subprocess.run(
+        [str(cpp_binary("test_reader")), str(artifact), "source-sha"],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == expected
+
+
 def test_cpp_reader_accepts_exact_bf16_tensor(
     synthetic_source: Path, tmp_path: Path
 ) -> None:

@@ -283,7 +283,7 @@ git commit -m "feat: execute portable official KDA"
 
 ### Task 5: Portable complete-layer composition and pinned harness contract
 
-**Progress on 2026-08-11:** the pure portable composition, tiny full/incremental C++ test, and independent PyTorch parity gate are complete in the Task 5A semantic unit. Pinned artifact/manifest preflight and the dedicated benchmark executable remain open, so the Task 5 checklist below intentionally remains unchecked.
+**Progress on 2026-08-11:** the pure portable composition, tiny full/incremental C++ test, independent PyTorch parity gate, dedicated benchmark CLI, and fail-before-backend pinned artifact/manifest preflight are complete through Task 5B. Loading official weights into the portable oracle and executing the CUDA boundary remain open, so the Task 5 checklist below intentionally remains unchecked.
 
 **Files:**
 - Create: `runtime/include/k3x/official_layer.hpp`

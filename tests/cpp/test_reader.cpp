@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <string_view>
 
@@ -111,6 +112,14 @@ int main(int argc, char** argv) {
                     k3x::optional_storage_fixture
                 ? 0
                 : 14;
+        }
+        if (std::string_view(argv[2]) == "source-sha") {
+            for (const auto value : reader.value().superblock().source_sha256) {
+                std::cout << std::hex << std::setfill('0') << std::setw(2)
+                          << std::to_integer<unsigned>(value);
+            }
+            std::cout << '\n';
+            return 0;
         }
         if (std::string_view(argv[2]) != "persistent") return 10;
 #ifdef __linux__
