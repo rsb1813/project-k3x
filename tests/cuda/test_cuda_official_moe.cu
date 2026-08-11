@@ -155,6 +155,7 @@ int run(k3x::CudaWeightMode mode) {
         1.0e-5F, 4.0F, 25.0F, 1, k3x::ProfilePhase::decode);
     if (!second || !close(second.value().output, oracle.value().output)) return 4;
     const auto second_stats = backend.value()->runtime_stats();
+    if (profiler.summary().device_nanoseconds == 0) return 7;
     if (second_stats.device_to_host_bytes - first_stats.device_to_host_bytes !=
         hidden_width * sizeof(float)) return 5;
     if (mode == k3x::CudaWeightMode::resident &&
