@@ -125,12 +125,14 @@ git commit -m "feat: bind official expert identity"
 - Create: `runtime/src/cuda_official_expert_bench.cpp`
 - Create: `tests/python/test_cuda_official_expert.py`
 - Modify: `CMakeLists.txt`
+- Modify: `runtime/cuda/backend_cuda.cu`
+- Modify: `tests/cuda/test_cuda_ffn.cu`
 
 **Interfaces:**
 - Consumes: Task 1 identity API, `Reader`, `load_storage_expert`, `make_cpu_backend`, `make_cuda_backend`, and `mxfp4_situ_mlp_group`.
 - Produces: executable `k3x_cuda_official_expert_bench` and one canonical JSON object on stdout.
 
-- [ ] **Step 1: Add failing CLI and pre-CUDA identity tests**
+- [x] **Step 1: Add failing CLI and pre-CUDA identity tests**
 
 Add the CUDA executable target before its source exists. In Python, require `K3X_BUILD_DIR=build-cuda` and test these exact failures.
 
@@ -151,7 +153,7 @@ def test_official_expert_bench_rejects_invalid_arguments(arguments, message):
 
 Create a normal synthetic storage fixture with the existing writer, invoke the bench with it, and require exit 4 plus `INVALID_MXFP4: official Kimi K3 expert identity mismatch`. This proves rejection occurs before the CUDA backend is needed.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -163,7 +165,7 @@ PYTHONPATH=converter:reference K3X_BUILD_DIR=build-cuda /home/jolib/.venvs/k3x-m
 
 Expected: build fails because `cuda_official_expert_bench.cpp` does not exist.
 
-- [ ] **Step 3: Implement parsing and fail-before-backend validation**
+- [x] **Step 3: Implement parsing and fail-before-backend validation**
 
 Support only paired options `--model`, `--weight-mode`, `--warmup`, and `--iterations`. Open with `VerifyMode::checksums`, load layer 1 expert 0, construct `OfficialExpertObservation` from the Reader superblock and loaded digest, validate it, and only then construct backends.
 
@@ -177,13 +179,13 @@ const k3x::Mxfp4MlpView expert{
 };
 ```
 
-- [ ] **Step 4: Implement CPU oracle and CUDA correctness flow**
+- [x] **Step 4: Implement CPU oracle and CUDA correctness flow**
 
 Build the deterministic 3,584-element input, time one CPU `mxfp4_situ_mlp_group` call, and retain its only output. Construct CUDA options with reused allocation, FFN block, synchronous transfer, no fusion, and the selected weight mode. Resident capacity is exactly 17,547,264; transient capacity is zero.
 
 Record runtime/profiler snapshots around the cold call and around measured calls separately. After every CUDA call, require output length 3,584, all finite values, and maximum absolute error at most `1.0e-6F`.
 
-- [ ] **Step 5: Emit the exact JSON schema**
+- [x] **Step 5: Emit the exact JSON schema**
 
 Include these keys and no token/quality fields.
 
@@ -204,7 +206,7 @@ peak_vram_bytes, maximum_absolute_error, all_finite
 
 Transient measured weight H2D must equal `iterations * 17_547_264`. Resident cold H2D must equal 17,547,264, measured H2D must be zero, resident bytes must equal 17,547,264, and bypasses must be zero; otherwise exit 4.
 
-- [ ] **Step 6: Run GREEN against synthetic rejection and the ignored official artifact**
+- [x] **Step 6: Run GREEN against synthetic rejection and the ignored official artifact**
 
 Run:
 
@@ -217,7 +219,7 @@ PYTHONPATH=converter:reference K3X_BUILD_DIR=build-cuda /home/jolib/.venvs/k3x-m
 
 Expected: tests pass; both real runs return zero, report `maximum_absolute_error <= 1e-6`, and satisfy their traffic invariants.
 
-- [ ] **Step 7: Run CUDA regression and sanitizer gates**
+- [x] **Step 7: Run CUDA regression and sanitizer gates**
 
 Run:
 
@@ -228,7 +230,7 @@ compute-sanitizer --tool memcheck --error-exitcode=99 ./build-cuda/k3x_cuda_offi
 
 Expected: all CUDA CTests pass and Compute Sanitizer reports `ERROR SUMMARY: 0 errors`.
 
-- [ ] **Step 8: Self-review and commit**
+- [x] **Step 8: Self-review and commit**
 
 Confirm `k3x_run`, `model.cpp`, format files, and production defaults are untouched. Then commit:
 

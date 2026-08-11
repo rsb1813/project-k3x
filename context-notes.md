@@ -562,3 +562,10 @@
 - M27 proves only the exact layer-1 expert-0 FFN. Real routed/shared/trunk dependency closure remains M28, preventing a synthetic-dense plus real-expert mixture from being described as a real full layer.
 - The implementation plan fixes four reviewable units: pure pinned identity, dedicated CUDA harness, strict two-row B-0028 evidence, and measured/public integration. It binds the ignored K3X file SHA-256 `e08293cd854ed11913bd8f1bc3a51d1eb577202fd5fd9b5b7e3c96ef1bccecc7` in addition to the root and ordered payload digests.
 - Task 1 witnessed RED at CMake generation because the declared `official_expert.cpp` did not exist. The minimal pure identity implementation then passed the new field-mutation contract and the complete CPU CTest suite 16/16 without adding I/O, allocation, environment, or CUDA behavior.
+
+## 2026-08-11 — Milestone 27 dedicated official expert CUDA harness
+
+- Task 2 witnessed RED at the missing dedicated source, then added a benchmark-only executable that verifies the pinned K3X root, ordered expert digest, optional features, layer/expert IDs, payload bytes, and shapes before constructing any backend.
+- The first real-artifact GREEN attempt passed identity, CUDA execution, CPU-oracle parity, and weight-H2D invariants but reported zero runtime D2H bytes. Root-cause tracing showed that `mxfp4_situ_mlp_group_impl` recorded D2H in the profiler while omitting the corresponding `BackendRuntimeStats` increment used by the new canonical schema.
+- A CUDA FFN runtime-counter regression witnessed exit 58 before the one-line backend correction. After the correction, the focused CUDA test and all six official-harness Python cases passed. Direct transient/resident calls both reported `3.0267983675e-9` maximum absolute error; transient measured 17,547,264 weight-H2D bytes and resident measured zero after cold admission.
+- The complete CUDA CTest suite passes 28/28. The actual resident official-expert invocation under CUDA 13.3 Compute Sanitizer reports `ERROR SUMMARY: 0 errors`. These direct timings remain Task 2 validation, not formal B-0028 evidence.

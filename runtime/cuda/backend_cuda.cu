@@ -3029,6 +3029,7 @@ public:
         ++runtime_stats_.stream_synchronization_count;
         runtime_stats_.activation_h2d_bytes += input_bytes;
         runtime_stats_.weight_h2d_bytes += total_weight_transfer;
+        runtime_stats_.device_to_host_bytes += total_output_bytes;
         ++runtime_stats_.ffn_block_calls;
         runtime_stats_.ffn_block_experts += experts.size();
         if (fuse_outputs) {
