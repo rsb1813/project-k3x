@@ -151,23 +151,23 @@ Commit message: `feat: expose official MoE device routing`.
 - Produces: fixed two-row B-0033 raw JSON/CSV, summary JSON/CSV, manifest, hashes, and aggregate digest.
 - Consumes: explicit host/device route-preparation harness schemas from Task 3 and immutable B-0032 artifact/manifest identities.
 
-- [ ] **Step 1: Write controlled RED verifier tests**
+- [x] **Step 1: Write controlled RED verifier tests**
 
 Fix row order to host then device routing, three warmups, twenty measured sequences, resident admission, and device KDA state. Require exact artifact/manifest/runner identity, route/output/final-state parity, zero warm weight H2D, prepared counter formulas, forbidden metric absence, LF CSV, fsync, atomic publication, and rejection of every one-field mutation.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `pytest -q tests/python/test_official_moe_device_routing_ablation.py`. Expected result: import fails because the tool does not exist.
 
-- [ ] **Step 3: Implement the minimum non-ranking publisher and verifier**
+- [x] **Step 3: Implement the minimum non-ranking publisher and verifier**
 
 Reuse B-0032 canonical JSON, checksum, staging-blob, and atomic-directory authorities without modifying historical tools or schemas. Add no timing interpretation to the verifier.
 
-- [ ] **Step 4: Run GREEN and historical evidence regressions**
+- [x] **Step 4: Run GREEN and historical evidence regressions**
 
 Run the B-0033 test plus B-0032/B-0031/B-0030 evidence tests and Python compile validation.
 
-- [ ] **Step 5: Self-review and commit**
+- [x] **Step 5: Self-review and commit**
 
 Commit message: `test: add strict B-0033 device-routing evidence`.
 

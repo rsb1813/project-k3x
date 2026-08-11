@@ -470,7 +470,7 @@
 - [x] Implement exact device residual preparation and raw router logits.
 - [x] Implement opaque prepared-activation consumption and wrapper cleanup.
 - [x] Add explicit host/device route-preparation harness mode.
-- [ ] Add strict B-0033 evidence tooling.
+- [x] Add strict B-0033 evidence tooling.
 - [ ] Run actual-artifact correctness, sanitizer, and production-guard gates.
 - [ ] Run B-0033 exactly once and seal the evidence.
 - [ ] Run the complete verification matrix and synchronize README/TITAN Ledger.

@@ -896,3 +896,10 @@
 - Downstream route, missing-expert, and FFN failures all discard the prepared token and invalidate the outstanding KDA token. Tiny CUDA tests and Compute Sanitizer pass with zero errors.
 - The explicit CLI mode is restricted to AB incremental, device KDA state, resident weights, and admission validation. New JSON fields appear only when route preparation is explicit; historical implicit schema remains unchanged.
 - One actual host smoke and one actual device-route smoke pass on the bounded 896-expert fixture. The device row returns exactly 7,168 logical router-logit bytes for two positions and zero warm weight H2D. No timing result or default-policy change is accepted before B-0033.
+
+## 2026-08-12 — Milestone 32 Task 4 strict B-0033 evidence tool
+
+- Controlled RED failed at import because `tools.ablate_official_moe_device_routing` did not exist. GREEN adds a fixed host-then-device two-row transaction with device KDA state, resident admission, canonical JSON, LF CSV, fsync, staged directory replacement, and strict hash binding.
+- The verifier normalizes only the exact device-route deltas before delegating to the complete B-0032 contract: 12,888,064 resident/cold BF16 bytes, 7,168 logit D2H bytes per two-position sequence, two synchronizations, eight validation/cache hits, and the fixed prepare/consume counters.
+- New and historical B-0030 through B-0033 evidence tests pass 65/65. Python compilation passes.
+- An actual 0/1 smoke generated both rows and passed non-official strict verification. The host/device rows retained zero warm weight H2D and resident bytes 1,816,322,048/1,829,210,112; the device row recorded 7,168 logit bytes, two seeds/consumes, and zero discards/invalidations. The CLI then correctly rejected 0/1 as formal evidence through the 3/20 iteration gate.
