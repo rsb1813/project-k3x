@@ -453,7 +453,7 @@
 - [x] Write the M31 design and implementation plan.
 - [x] Write and witness CUDA RED tests for state lifetime and transfer semantics.
 - [x] Implement the dedicated device-state allocation and opaque token contract.
-- [ ] Add exact official-layer wrapper and explicit harness telemetry.
+- [x] Add exact official-layer wrapper and explicit harness telemetry.
 - [ ] Build and verify the strict B-0032 evidence transaction.
 - [ ] Run actual-artifact correctness and Compute Sanitizer gates.
 - [ ] Run B-0032 exactly once and seal the evidence.

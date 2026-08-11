@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -252,7 +253,8 @@ Result<OfficialLayerCudaResult> official_layer_cuda(
     float situ_beta,
     std::optional<float> situ_linear_beta,
     std::uint32_t layer,
-    ProfilePhase phase) {
+    ProfilePhase phase,
+    OfficialKdaStateControl state_control) {
     if (inputs.empty() || !config.hidden_size || !top_k ||
         !std::isfinite(situ_beta) || situ_beta <= 0.0F ||
         (situ_linear_beta &&
@@ -302,7 +304,8 @@ Result<OfficialLayerCudaResult> official_layer_cuda(
         config.hidden_size, config.heads, config.head_dim, config.conv_width,
         config.rms_norm_epsilon, config.gate_lower_bound};
     auto kda = backend.official_kda(
-        flattened, weights.kda, state_view, cuda_config, layer, phase);
+        flattened, weights.kda, state_view, cuda_config, layer, phase,
+        state_control);
     if (!kda) {
         return Result<OfficialLayerCudaResult>::failure(
             kda.error(), kda.message());
@@ -310,6 +313,31 @@ Result<OfficialLayerCudaResult> official_layer_cuda(
     if (!kda.value().executed || kda.value().output.size() != flattened.size()) {
         return Result<OfficialLayerCudaResult>::failure(
             ErrorCode::invalid_state);
+    }
+
+    const auto kda_token = kda.value().device_state;
+    const auto fail_after_kda = [&](ErrorCode code,
+                                    const std::string& message = {}) {
+        if (kda_token.owner || kda_token.generation) {
+            const auto discarded =
+                backend.discard_official_kda_device_state(kda_token);
+            if (!discarded) {
+                return Result<OfficialLayerCudaResult>::failure(
+                    ErrorCode::invalid_state);
+            }
+        }
+        return Result<OfficialLayerCudaResult>::failure(code, message);
+    };
+    const bool expected_publication =
+        state_control.mode == OfficialKdaStateMode::host_roundtrip ||
+        state_control.mode == OfficialKdaStateMode::device_publish;
+    const bool expected_token =
+        state_control.mode == OfficialKdaStateMode::device_seed ||
+        state_control.mode == OfficialKdaStateMode::device_continue;
+    if (kda.value().state_published != expected_publication ||
+        ((kda_token.owner != 0 && kda_token.generation != 0) !=
+         expected_token)) {
+        return fail_after_kda(ErrorCode::invalid_state);
     }
 
     OfficialKdaState final_state{
@@ -329,21 +357,19 @@ Result<OfficialLayerCudaResult> official_layer_cuda(
             prefix, inputs[index].block_source, weights.moe.residual_norm,
             weights.moe.residual_proj, config.rms_norm_epsilon);
         if (!mlp_residual) {
-            return Result<OfficialLayerCudaResult>::failure(
+            return fail_after_kda(
                 mlp_residual.error(), mlp_residual.message());
         }
         const OfficialMoeInput moe_input{prefix, inputs[index].block_source};
         auto prepared = prepare_official_moe_input(
             moe_input, weights.moe, config.rms_norm_epsilon);
         if (!prepared) {
-            return Result<OfficialLayerCudaResult>::failure(
-                prepared.error(), prepared.message());
+            return fail_after_kda(prepared.error(), prepared.message());
         }
         auto route = route_official_moe(
             prepared.value(), weights.moe.router, weights.moe.correction, top_k);
         if (!route) {
-            return Result<OfficialLayerCudaResult>::failure(
-                route.error(), route.message());
+            return fail_after_kda(route.error(), route.message());
         }
         std::vector<Mxfp4MlpView> selected;
         selected.reserve(route.value().expert_ids.size());
@@ -354,8 +380,7 @@ Result<OfficialLayerCudaResult> official_layer_cuda(
                     return expert.expert_id == expert_id;
                 });
             if (match == weights.moe.experts.end()) {
-                return Result<OfficialLayerCudaResult>::failure(
-                    ErrorCode::invalid_extent);
+                return fail_after_kda(ErrorCode::invalid_extent);
             }
             selected.push_back(match->weights);
         }
@@ -365,14 +390,12 @@ Result<OfficialLayerCudaResult> official_layer_cuda(
             config.rms_norm_epsilon, situ_beta, situ_linear_beta,
             layer, phase);
         if (!moe) {
-            return Result<OfficialLayerCudaResult>::failure(
-                moe.error(), moe.message());
+            return fail_after_kda(moe.error(), moe.message());
         }
         if (!moe.value().executed ||
             moe.value().selected_expert_ids != route.value().expert_ids ||
             moe.value().output.size() != config.hidden_size) {
-            return Result<OfficialLayerCudaResult>::failure(
-                ErrorCode::invalid_state);
+            return fail_after_kda(ErrorCode::invalid_state);
         }
         steps.push_back({
             std::move(self_residuals[index]),
@@ -384,8 +407,13 @@ Result<OfficialLayerCudaResult> official_layer_cuda(
             std::move(moe.value().output),
         });
     }
-    return Result<OfficialLayerCudaResult>::success(
-        {true, std::move(final_state), std::move(steps)});
+    OfficialLayerCudaResult result;
+    result.executed = true;
+    result.kda_state_published = kda.value().state_published;
+    result.kda_device_state = kda_token;
+    result.kda_state = std::move(final_state);
+    result.steps = std::move(steps);
+    return Result<OfficialLayerCudaResult>::success(std::move(result));
 }
 
 }  // namespace k3x

@@ -329,6 +329,10 @@ public:
         return Result<OfficialKdaCudaResult>::failure(
             ErrorCode::backend_unavailable);
     }
+    virtual Result<bool> discard_official_kda_device_state(
+        OfficialKdaDeviceStateToken) {
+        return Result<bool>::failure(ErrorCode::backend_unavailable);
+    }
     virtual Result<Mxfp4PrefetchToken> prefetch_mxfp4_situ_mlp_group(
         std::span<const Mxfp4MlpView> experts, std::uint64_t use_sequence,
         std::uint32_t layer, ProfilePhase phase) = 0;

@@ -47,6 +47,7 @@ constexpr double kContributionAbsoluteTolerance = 2.0e-6;
 
 enum class CaseMode { a, ab_full, ab_incremental };
 enum class WeightMode { transient, resident };
+enum class StateTransfer { host, device };
 
 struct Arguments {
     std::filesystem::path artifact;
@@ -56,6 +57,8 @@ struct Arguments {
     k3x::CudaWeightValidationMode validation{
         k3x::CudaWeightValidationMode::per_call};
     bool validation_explicit{};
+    StateTransfer state_transfer{StateTransfer::host};
+    bool state_transfer_explicit{};
     std::uint64_t warmups{};
     std::uint64_t iterations{1};
 };
@@ -74,6 +77,7 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
     std::string case_name{"a"};
     std::string weight_name{"transient"};
     std::string validation_name{"per-call"};
+    std::string state_transfer_name{"host"};
     for (int index = 1; index < argc; index += 2) {
         if (index + 1 >= argc) {
             std::cerr << "missing option value\n";
@@ -89,6 +93,10 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
         else if (key == "--validation") {
             validation_name = value;
             result.validation_explicit = true;
+        }
+        else if (key == "--state-transfer") {
+            state_transfer_name = value;
+            result.state_transfer_explicit = true;
         }
         else if (key == "--warmups" && number) result.warmups = *number;
         else if (key == "--iterations" && number) result.iterations = *number;
@@ -118,9 +126,25 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
         std::cerr << "unknown validation mode: " << validation_name << '\n';
         return std::nullopt;
     }
+    if (state_transfer_name == "host") {
+        result.state_transfer = StateTransfer::host;
+    } else if (state_transfer_name == "device") {
+        result.state_transfer = StateTransfer::device;
+    } else {
+        std::cerr << "unknown state transfer: " << state_transfer_name << '\n';
+        return std::nullopt;
+    }
     if (result.validation == k3x::CudaWeightValidationMode::admission &&
         result.weight_mode != WeightMode::resident) {
         std::cerr << "admission validation requires resident weights\n";
+        return std::nullopt;
+    }
+    if (result.state_transfer == StateTransfer::device &&
+        (result.case_mode != CaseMode::ab_incremental ||
+         result.weight_mode != WeightMode::resident ||
+         result.validation != k3x::CudaWeightValidationMode::admission)) {
+        std::cerr
+            << "device state requires ab-incremental resident admission\n";
         return std::nullopt;
     }
     if (!result.iterations) {
@@ -1200,7 +1224,8 @@ std::string output_digest(
 
 bool observe_cuda_result(const k3x::OfficialLayerCudaResult& actual,
                          const k3x::OfficialLayerResult& expected,
-                         float& maximum_error) {
+                         float& maximum_error,
+                         bool require_state = true) {
     if (!actual.executed || actual.steps.size() != expected.steps.size()) return false;
     for (std::size_t step = 0; step < actual.steps.size(); ++step) {
         if (actual.steps[step].route.expert_ids !=
@@ -1222,12 +1247,13 @@ bool observe_cuda_result(const k3x::OfficialLayerCudaResult& actual,
             maximum_error = std::max(maximum_error, error);
         }
     }
-    return actual.kda_state.conv_q == expected.kda.state.conv_q &&
+    return !require_state ||
+           (actual.kda_state.conv_q == expected.kda.state.conv_q &&
            actual.kda_state.conv_k == expected.kda.state.conv_k &&
            actual.kda_state.conv_v == expected.kda.state.conv_v &&
            f32_error(actual.kda_state.recurrent_v_first,
                      expected.kda.state.recurrent_v_first).maximum_absolute <=
-               kRecurrentAbsoluteTolerance;
+               kRecurrentAbsoluteTolerance);
 }
 
 void write_error(k3x::ErrorCode code, std::string_view message) {
@@ -1328,17 +1354,33 @@ int main(int argc, char** argv) {
                 publish(output_digest(result.value().steps),
                         state_digest(result.value().kda_state));
         }
+        const bool device_state =
+            arguments->state_transfer == StateTransfer::device;
+        const k3x::OfficialKdaStateControl first_control =
+            device_state
+                ? k3x::OfficialKdaStateControl{
+                      k3x::OfficialKdaStateMode::device_seed, {}}
+                : k3x::OfficialKdaStateControl{};
         auto first = k3x::official_layer_cuda(
             *backend.value(), std::span(inputs).first(1), weights, zero,
-            config, 16, 4, 25, 1, k3x::ProfilePhase::decode);
-        auto second = first ? k3x::official_layer_cuda(
+            config, 16, 4, 25, 1, k3x::ProfilePhase::decode, first_control);
+        if (!first) return false;
+        const k3x::OfficialKdaState no_host_state;
+        const auto& second_input_state =
+            device_state ? no_host_state : first.value().kda_state;
+        const k3x::OfficialKdaStateControl second_control =
+            device_state
+                ? k3x::OfficialKdaStateControl{
+                      k3x::OfficialKdaStateMode::device_publish,
+                      first.value().kda_device_state}
+                : k3x::OfficialKdaStateControl{};
+        auto second = k3x::official_layer_cuda(
             *backend.value(), std::span(inputs).last(1), weights,
-            first.value().kda_state, config, 16, 4, 25, 1,
-            k3x::ProfilePhase::decode)
-                            : k3x::Result<k3x::OfficialLayerCudaResult>::failure(
-                                  first.error(), first.message());
-        if (!first || !second ||
-            !observe_cuda_result(first.value(), reference.first, maximum_error) ||
+            second_input_state, config, 16, 4, 25, 1,
+            k3x::ProfilePhase::decode, second_control);
+        if (!second ||
+            !observe_cuda_result(first.value(), reference.first, maximum_error,
+                                 !device_state) ||
             second.value().steps.size() != 1) return false;
         const auto& actual_step = second.value().steps[0];
         const auto& expected_step = reference.full.steps[1];
@@ -1462,6 +1504,13 @@ int main(int argc, char** argv) {
                           : "per-call")
                   << '"';
     }
+    if (arguments->state_transfer_explicit) {
+        std::cout << ",\"state_transfer\":\""
+                  << (arguments->state_transfer == StateTransfer::device
+                          ? "device"
+                          : "host")
+                  << '"';
+    }
     std::cout << ",\"token_semantics\":false,\"routing_semantics\":true"
         << ",\"full_transformer_layer\":true,\"quality_measured\":false"
         << ",\"k3x_root_sha256\":\"" << manifest->root_sha256 << "\""
@@ -1504,6 +1553,21 @@ int main(int argc, char** argv) {
             << ",\"cold_immutable_validation_nanoseconds\":"
             << cold_stats_after.immutable_validation_nanoseconds -
                    cold_stats_before.immutable_validation_nanoseconds;
+    }
+    if (arguments->state_transfer_explicit) {
+        std::cout
+            << ",\"cold_official_kda_device_state_seeds\":"
+            << cold_stats_after.official_kda_device_state_seeds -
+                   cold_stats_before.official_kda_device_state_seeds
+            << ",\"cold_official_kda_device_state_continuations\":"
+            << cold_stats_after.official_kda_device_state_continuations -
+                   cold_stats_before.official_kda_device_state_continuations
+            << ",\"cold_official_kda_device_state_publications\":"
+            << cold_stats_after.official_kda_device_state_publications -
+                   cold_stats_before.official_kda_device_state_publications
+            << ",\"cold_official_kda_device_state_invalidations\":"
+            << cold_stats_after.official_kda_device_state_invalidations -
+                   cold_stats_before.official_kda_device_state_invalidations;
     }
     std::cout << ",\"latency_nanoseconds_p05\":" << percentile(samples, 5)
         << ",\"latency_nanoseconds_median\":" << median(samples)
@@ -1548,6 +1612,21 @@ int main(int argc, char** argv) {
         << ",\"stream_synchronization_count\":"
         << stats_after.stream_synchronization_count -
                stats_before.stream_synchronization_count;
+    if (arguments->state_transfer_explicit) {
+        std::cout
+            << ",\"official_kda_device_state_seeds\":"
+            << stats_after.official_kda_device_state_seeds -
+                   stats_before.official_kda_device_state_seeds
+            << ",\"official_kda_device_state_continuations\":"
+            << stats_after.official_kda_device_state_continuations -
+                   stats_before.official_kda_device_state_continuations
+            << ",\"official_kda_device_state_publications\":"
+            << stats_after.official_kda_device_state_publications -
+                   stats_before.official_kda_device_state_publications
+            << ",\"official_kda_device_state_invalidations\":"
+            << stats_after.official_kda_device_state_invalidations -
+                   stats_before.official_kda_device_state_invalidations;
+    }
     if (arguments->validation_explicit) {
         std::cout
             << ",\"immutable_validation_scans\":"
