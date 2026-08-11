@@ -520,6 +520,13 @@ def prepare_official_source_step(
         raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE")
     tensors = {role: _decode_source_tensor(value) for role, value in roles.items()}
     config = source.kda_config
+    projection = config.heads * config.head_dim
+    for role in ("kda_q_conv", "kda_k_conv", "kda_v_conv"):
+        convolution = tensors[role]
+        if tuple(convolution.shape) == (projection, 1, config.conv_width):
+            tensors[role] = convolution.reshape(projection, config.conv_width)
+        elif tuple(convolution.shape) != (projection, config.conv_width):
+            raise K3XError("INVALID_OFFICIAL_TWO_LAYER_SOURCE")
     hidden = torch.tensor(item.hidden_input, dtype=torch.bfloat16)
     block = torch.tensor(item.block_source, dtype=torch.bfloat16)
     residual = _attention_residual(

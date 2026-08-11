@@ -370,6 +370,32 @@ def test_official_source_prepare_routes_before_expert_bytes_arrive() -> None:
         finish_official_source_step(prepared, source)
 
 
+def test_official_source_prepare_normalizes_released_conv_storage_shape() -> None:
+    source = _tiny_source(1)
+    tensors = dict(source.tensors)
+    for role in ("kda_q_conv", "kda_k_conv", "kda_v_conv"):
+        value = torch.full((2, 1, 2), 0.5, dtype=torch.float32)
+        tensors[role] = _source_tensor(value)
+    released = replace(source, tensors=tuple(tensors.items()))
+    state = official_two_layer_state(
+        zero_official_kda_state(source.kda_config, 1, torch.device("cpu"))
+    )
+    item = OfficialLayerInput(
+        "a",
+        (0.5, -0.25),
+        (0.125, 0.375),
+        _float_digest((0.5, -0.25)),
+        _float_digest((0.125, 0.375)),
+    )
+
+    expected = prepare_official_source_step(_layer_plan(1), item, state, source)
+    actual = prepare_official_source_step(_layer_plan(1), item, state, released)
+
+    assert actual.route == expected.route
+    assert actual.state.sha256 == expected.state.sha256
+    assert actual.kda_output_sha256 == expected.kda_output_sha256
+
+
 def _tiny_artifact_tensors(
     tmp_path: Path,
 ) -> tuple[tuple[OfficialMoeSourceTensor, ...], list[str]]:
