@@ -31,7 +31,8 @@ def _write_bf16_source(source: Path, config_source: Path) -> None:
         separators=(",", ":"),
     ).encode("utf-8")
     shard_name = "bf16.safetensors"
-    (source / shard_name).write_bytes(struct.pack("<Q", len(header)) + header + payload)
+    shard = struct.pack("<Q", len(header)) + header + payload
+    (source / shard_name).write_bytes(shard)
     config = json.loads(
         (config_source / "source-manifest.json").read_text(encoding="utf-8")
     )["config"]
@@ -42,6 +43,9 @@ def _write_bf16_source(source: Path, config_source: Path) -> None:
                 "artifact_kind": "official_moe_fixture",
                 "config": config,
                 "packed_shapes": {},
+                "source_sha256": hashlib.sha256(shard).hexdigest(),
+                "tensor_sha256": {name: hashlib.sha256(payload).hexdigest()},
+                "tensor_order": [name],
                 "weight_map": {name: shard_name},
             },
             sort_keys=True,
