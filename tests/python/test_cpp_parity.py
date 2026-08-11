@@ -13,6 +13,12 @@ from k3x_converter.writer import convert
 from k3x_ref.config import SyntheticK3Config
 from k3x_ref.fixtures import build_synthetic_model
 from k3x_ref.fixtures import write_source_checkpoint
+from k3x_ref.official_kda import (
+    OfficialKdaConfig,
+    OfficialKdaWeights,
+    official_kda,
+    zero_official_kda_state,
+)
 from k3x_ref.storage_fixture import write_bounded_expert_source
 
 
@@ -105,6 +111,96 @@ def test_official_moe_portable_boundaries_match_independent_torch() -> None:
         actual["expert_outputs"], expert_outputs
     ):
         assert actual_output == pytest.approx(expected_output.tolist(), abs=1e-6)
+
+
+def test_official_kda_portable_boundaries_match_independent_torch() -> None:
+    completed = subprocess.run(
+        [str(cpp_binary("test_official_kda")), "--dump"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    actual = json.loads(completed.stdout)
+    config = OfficialKdaConfig(4, 2, 2, 3, 1.0e-5, -5.0)
+    identity = torch.eye(4, dtype=torch.bfloat16)
+    conv = torch.tensor(
+        [
+            [0.25, -0.5, 1.0],
+            [-0.25, 0.5, 0.75],
+            [0.5, 0.25, -0.5],
+            [-0.5, 0.25, 1.25],
+        ],
+        dtype=torch.float32,
+    )
+    weights = OfficialKdaWeights(
+        q_proj=identity,
+        k_proj=torch.tensor(
+            [
+                [0.5, 0.0, 0.25, 0.0],
+                [0.0, 0.75, 0.0, -0.25],
+                [0.25, 0.0, 1.0, 0.0],
+                [0.0, -0.5, 0.0, 0.5],
+            ],
+            dtype=torch.bfloat16,
+        ),
+        v_proj=identity,
+        q_conv=conv,
+        k_conv=conv * 0.75,
+        v_conv=conv * -0.5,
+        f_a_proj=torch.tensor(
+            [[0.5, -0.25, 0.0, 0.25], [0.0, 0.5, -0.5, 0.25]],
+            dtype=torch.bfloat16,
+        ),
+        f_b_proj=torch.tensor(
+            [[1.0, 0.0], [0.5, -0.5], [0.0, 1.0], [-0.25, 0.75]],
+            dtype=torch.bfloat16,
+        ),
+        a_log=torch.tensor([0.0, 0.5], dtype=torch.float32),
+        dt_bias=torch.tensor([0.25, -0.5, 0.75, -0.25], dtype=torch.float32),
+        b_proj=torch.tensor(
+            [[0.5, -0.25, 0.25, 0.0], [0.0, 0.5, -0.5, 0.25]],
+            dtype=torch.bfloat16,
+        ),
+        g_proj=torch.tensor(
+            [
+                [0.5, 0.0, 0.0, -0.25],
+                [0.0, 0.5, 0.25, 0.0],
+                [-0.25, 0.0, 0.5, 0.0],
+                [0.0, 0.25, 0.0, 0.75],
+            ],
+            dtype=torch.bfloat16,
+        ),
+        o_norm=torch.tensor([1.0, 1.5], dtype=torch.float32),
+        o_proj=identity,
+    )
+    hidden = torch.tensor(
+        [[[0.5, -1.0, 0.25, 0.75], [-0.25, 0.5, 1.0, -0.5]]],
+        dtype=torch.bfloat16,
+    )
+    expected = official_kda(
+        hidden,
+        weights,
+        zero_official_kda_state(config, 1, hidden.device),
+        config,
+    )
+
+    for name in (
+        "projected_q", "projected_k", "projected_v",
+        "convolved_q", "convolved_k", "convolved_v",
+        "q", "k", "v", "log_decay", "beta",
+        "recurrent_output", "gated",
+    ):
+        values = getattr(expected.boundaries, name).reshape(-1).float().tolist()
+        assert actual[name] == pytest.approx(values, abs=1.0e-6)
+    assert actual["output"] == pytest.approx(
+        expected.output.reshape(-1).float().tolist(), abs=1.0e-6
+    )
+    for name in ("conv_q", "conv_k", "conv_v"):
+        words = getattr(expected.state, name).contiguous().view(torch.uint16)
+        assert actual[name] == words.reshape(-1).tolist()
+    assert actual["recurrent_v_first"] == pytest.approx(
+        expected.state.recurrent_v_first.reshape(-1).tolist(), abs=1.0e-6
+    )
 
 
 def test_cpp_runner_rejects_storage_fixture_before_graph_execution(
