@@ -21,6 +21,7 @@ struct Superblock {
     std::uint32_t state{};
     std::uint64_t required_features{};
     std::uint64_t optional_features{};
+    std::array<std::byte, 32> source_sha256{};
     std::uint64_t tensor_directory_offset{};
     std::uint64_t tensor_directory_length{};
     std::uint64_t layer_directory_offset{};

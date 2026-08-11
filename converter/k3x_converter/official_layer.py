@@ -715,6 +715,7 @@ def materialize_official_kda_layer(
     route_manifest["artifact"] = {
         "filename": k3x_path.name,
         "k3x_root_sha256": reader.superblock.root_sha256.hex(),
+        "k3x_source_fingerprint_sha256": reader.superblock.source_sha256.hex(),
         "source_sha256": assembled.microshard_sha256,
         "tensor_sha256": assembled.tensor_sha256,
     }

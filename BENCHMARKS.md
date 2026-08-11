@@ -1182,3 +1182,14 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Parity: full two-token and incremental A-then-B execution match at both Attention Residual outputs, both normalized inputs, all KDA boundaries and final V-first state, natural routes `[0,1]` then `[1,0]`, route contributions, every MoE intermediate, and final outputs. An independent PyTorch graph matches all exposed values within `1e-6`; BF16 boundaries are exact.
 - Decode tok/s, prefill tok/s, TTFT, VRAM, system RAM, NVMe GB/token, H2D GB/token, cache hit rate, average official Top-K, speculative acceptance, quality, official layer latency, utilization, and bandwidth: not measured.
 - Interpretation: this is a tiny pure-composition correctness gate. It does not read a K3X artifact, validate a pinned manifest, construct a CUDA backend, execute official payload bytes, or constitute B-0030.
+
+## Milestone 29 Task 5B verification — pinned fail-before-backend preflight
+
+- Date: 2026-08-11.
+- Hardware/model: CPU and RTX 5080 build-capability validation with synthetic manifests/artifacts plus a live metadata/header-only official range cross-check; no official tensor payload.
+- Mode: strict JSON and fixed manifest identity, explicit V-first state chain, fixed input hashes, natural route-union ordering, exact header-derived source ranges, K3X checksum/root/source-fingerprint verification, exact tensor order/dtype/shape, per-data/per-auxiliary SHA-256 verification, and reconstructed microshard SHA-256 before backend construction.
+- Verification: focused preflight/Reader/converter pytest passes 36 tests with 4 capability skips in 7.52 seconds; the wider official layer/MoE/discovery/source/converter-resume/source-integrity regression passes 123 tests in 11.13 seconds; full CPU build and CTest pass 19/19; full CUDA build and CTest pass 32/32; strict source/test warning compilation and `git diff --check` pass.
+- Live metadata-only result: the pinned header reproduces all 17 KDA and 11 MoE trunk source ranges used by the preflight constants. Network scope is repository/index/config/header metadata only; no tensor range was requested.
+- Fail-closed boundary: duplicate keys, non-finite JSON numbers, fixed identity drift, state-chain drift, duplicate or reordered route unions, object-name/range drift, generic artifact identity, root/source-fingerprint drift, tensor metadata drift, and tensor payload digest drift are rejected before any backend factory can be called. A fully valid preflight currently terminates with explicit `BACKEND_UNAVAILABLE` because official CPU/CUDA execution is not implemented yet.
+- Decode tok/s, prefill tok/s, TTFT, VRAM, system RAM, NVMe GB/token, H2D GB/token, cache hit rate, average Top-K, speculative acceptance, quality, layer latency, utilization, and bandwidth: not measured.
+- Interpretation: this is a correctness/provenance gate, not official payload execution, CUDA parity, B-0030, or a performance benchmark.

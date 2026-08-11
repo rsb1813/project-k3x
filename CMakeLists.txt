@@ -296,6 +296,12 @@ if(K3X_ENABLE_CUDA)
         runtime/src/cuda_official_moe_bench.cpp
     )
     target_link_libraries(k3x_cuda_official_moe_bench PRIVATE k3x_runtime)
+
+    add_executable(
+        k3x_cuda_official_layer_bench
+        runtime/src/cuda_official_layer_bench.cpp
+    )
+    target_link_libraries(k3x_cuda_official_layer_bench PRIVATE k3x_runtime)
 endif()
 
 add_executable(test_model_session tests/cpp/test_model_session.cpp)
