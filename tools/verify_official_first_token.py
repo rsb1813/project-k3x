@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 
 from k3x_converter.format import K3XError
@@ -86,7 +87,13 @@ def main() -> int:
     if (
         state.get("format") != "k3x-official-prefix-state-v1"
         or state.get("completed_layer") != 92
-        or state.get("resolved_revision") != source[0]
+        or (
+            state.get("resolved_revision"),
+            state.get("index_sha256"),
+            state.get("config_sha256"),
+            state.get("topology_record_sha256"),
+        )
+        != source
     ):
         raise K3XError("OFFICIAL_FINAL_STATE")
     state_bytes = 0
@@ -105,6 +112,11 @@ def main() -> int:
         or head.get("token_generated") is not True
         or head.get("throughput_measured") is not False
         or head.get("completed_layers") != list(range(93))
+        or head.get("input_token_id") != state.get("token_id")
+        or not isinstance(head.get("generated_token_id"), int)
+        or not 0 <= head["generated_token_id"] < 163_840
+        or not isinstance(head.get("generated_logit_fp32"), (int, float))
+        or not math.isfinite(head["generated_logit_fp32"])
         or (
             head["resolved_revision"],
             head["index_sha256"],
@@ -114,6 +126,13 @@ def main() -> int:
         != source
     ):
         raise K3XError("OFFICIAL_HEAD_CHAIN")
+    normalized_path = state_path.parent / "final_normalized_hidden.bin"
+    if (
+        normalized_path.stat().st_size != 7_168 * 2
+        or hashlib.sha256(normalized_path.read_bytes()).hexdigest()
+        != head.get("final_normalized_hidden_sha256")
+    ):
+        raise K3XError("OFFICIAL_HEAD_HIDDEN")
     requested_bytes += head["requested_payload_bytes"]
     downloaded_bytes += head["downloaded_payload_bytes"]
     peak_allocated = max(peak_allocated, head["peak_cuda_allocated_bytes"])

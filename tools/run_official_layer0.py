@@ -270,6 +270,9 @@ def main() -> int:
     state_manifest = {
         "format": "k3x-official-prefix-state-v1",
         "resolved_revision": snapshot.resolved_revision,
+        "index_sha256": index.sha256,
+        "config_sha256": config.sha256,
+        "topology_record_sha256": topology["record_sha256"],
         "token_id": args.token_id,
         "completed_layer": 0,
         "tensors": state_records,
