@@ -68,7 +68,7 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
 
     $sourceLinux = "/mnt/d/K3X-staging/slot-$((($index - 1) % 2))/$($shard.filename)"
     $command = @(
-        "cd /mnt/c/Users/jolib/Documents/project-k3x/.worktrees/milestone-twenty-four-cuda-graph-cache",
+        "cd /mnt/c/Users/jolib/Documents/project-k3x/.worktrees/milestone-twenty-four-cuda-graph-cache &&",
         "PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python tools/convert_local_shard.py",
         "--manifest artifacts/m37-local-foundry/source-manifest.json",
         "--config-manifest artifacts/m26-official/live/source-manifest.json",
