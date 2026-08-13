@@ -145,7 +145,10 @@ def _runner_record(mode: str, warmups: int, iterations: int) -> dict[str, object
         "route_expert_ids": [
             list(range(offset, offset + 16)) for offset in (0, 16, 32, 48)
         ],
-        "route_contribution_sha256": [f"{value:x}" * 64 for value in (8, 9, 10, 11)],
+        "route_contribution_sha256": [
+            f"{value + (0 if host else 4):x}" * 64
+            for value in (8, 9, 10, 11)
+        ],
         "final_output_sha256": [
             ("1" if host else "2") * 64,
             ("3" if host else "4") * 64,
@@ -284,6 +287,10 @@ def test_run_preserves_measured_output_and_state_digest_divergence(
     host, device = summary["records"]
     assert host["final_output_sha256"] != device["final_output_sha256"]
     assert host["final_state_sha256"] != device["final_state_sha256"]
+    assert (
+        host["route_contribution_sha256"]
+        != device["route_contribution_sha256"]
+    )
     assert device["resident_weight_bytes"] - host["resident_weight_bytes"] == (
         DEVICE_FRONT_BYTES
     )

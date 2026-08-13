@@ -453,7 +453,6 @@ def _write_csv(path: Path, records: list[dict[str, object]]) -> None:
 def _cross_row_parity(records: list[dict[str, object]]) -> None:
     for field in (
         "route_expert_ids",
-        "route_contribution_sha256",
         "weight_h2d_bytes",
     ):
         if records[1][field] != records[0][field]:
