@@ -190,11 +190,13 @@ int run_mode(k3x::OfficialTwoLayerCudaMode mode) {
     const auto oracle = k3x::official_two_layer_cpu(
         fixture.inputs, cpu_layers, states, fixture.config, 2, 4, 25);
     if (!oracle) return 1;
-    auto backend = k3x::make_cuda_backend(options());
+    k3x::Profiler profiler;
+    auto backend = k3x::make_cuda_backend(options(), &profiler);
     if (!backend) return 2;
+    k3x::OfficialTwoLayerAttribution attribution;
     const auto actual = k3x::official_two_layer_cuda(
         *backend.value(), fixture.inputs, cuda_layers, states, fixture.config,
-        2, 4, 25, k3x::ProfilePhase::decode, mode);
+        2, 4, 25, k3x::ProfilePhase::decode, mode, &profiler, &attribution);
     if (!actual || !actual.value().executed ||
         actual.value().steps.size() != 4) return 3;
     for (std::size_t index = 0; index < 4; ++index) {
@@ -250,6 +252,33 @@ int run_mode(k3x::OfficialTwoLayerCudaMode mode) {
             4 * 2 * sizeof(float) ||
         actual.value().telemetry.final_hidden_d2h_bytes !=
             2 * Fixture::hidden_width * sizeof(float)) return 10;
+    if (mode == k3x::OfficialTwoLayerCudaMode::device_closure) {
+        if (attribution.front_wall_nanoseconds == 0 ||
+            attribution.front_device_nanoseconds == 0 ||
+            attribution.route_wall_nanoseconds == 0 ||
+            attribution.tail_wall_nanoseconds == 0 ||
+            attribution.tail_device_nanoseconds == 0 ||
+            attribution.total_wall_nanoseconds <
+                attribution.front_wall_nanoseconds +
+                    attribution.route_wall_nanoseconds +
+                    attribution.tail_wall_nanoseconds ||
+            attribution.unattributed_wall_nanoseconds !=
+                attribution.total_wall_nanoseconds -
+                    attribution.front_wall_nanoseconds -
+                    attribution.route_wall_nanoseconds -
+                    attribution.tail_wall_nanoseconds) {
+            return 11;
+        }
+    } else if (attribution.front_wall_nanoseconds != 0 ||
+               attribution.front_device_nanoseconds != 0 ||
+               attribution.route_wall_nanoseconds != 0 ||
+               attribution.tail_wall_nanoseconds != 0 ||
+               attribution.tail_device_nanoseconds != 0 ||
+               attribution.total_wall_nanoseconds == 0 ||
+               attribution.unattributed_wall_nanoseconds !=
+                   attribution.total_wall_nanoseconds) {
+        return 12;
+    }
     return 0;
 }
 
