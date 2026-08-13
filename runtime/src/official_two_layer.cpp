@@ -3,7 +3,9 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
+#include <limits>
 #include <span>
 #include <string>
 #include <utility>
@@ -107,15 +109,43 @@ Result<OfficialTwoLayerCudaResult> official_two_layer_cuda(
     float situ_beta,
     std::optional<float> situ_linear_beta,
     ProfilePhase phase,
-    OfficialTwoLayerCudaMode mode) {
+    OfficialTwoLayerCudaMode mode,
+    Profiler* attribution_profiler,
+    OfficialTwoLayerAttribution* attribution) {
     if (inputs.size() != 2 || layers.size() != 2 ||
         initial_states.size() != 2 || layers[0].layer_id != 1 ||
         layers[1].layer_id != 2 || !config.hidden_size || !top_k ||
         (mode != OfficialTwoLayerCudaMode::host_round_trip &&
-         mode != OfficialTwoLayerCudaMode::device_closure)) {
+         mode != OfficialTwoLayerCudaMode::device_closure) ||
+        ((attribution_profiler == nullptr) != (attribution == nullptr))) {
         return Result<OfficialTwoLayerCudaResult>::failure(
             ErrorCode::invalid_state);
     }
+
+    OfficialTwoLayerAttribution measured_attribution;
+    const auto wrapper_start = std::chrono::steady_clock::now();
+    const auto elapsed = [](std::chrono::steady_clock::time_point start) {
+        return static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - start)
+                .count());
+    };
+    const auto device_delta = [&](std::size_t first)
+        -> std::optional<std::uint64_t> {
+        if (!attribution_profiler) return std::uint64_t{};
+        const auto& events = attribution_profiler->events();
+        if (events.size() < first) return std::nullopt;
+        std::uint64_t total{};
+        for (std::size_t index = first; index < events.size(); ++index) {
+            if (!events[index].success) continue;
+            if (events[index].device_nanoseconds >
+                std::numeric_limits<std::uint64_t>::max() - total) {
+                return std::nullopt;
+            }
+            total += events[index].device_nanoseconds;
+        }
+        return total;
+    };
 
     std::array<OfficialKdaDeviceStateToken, 2> state_tokens{};
     OfficialLayerHiddenToken hidden_token{};
@@ -224,6 +254,9 @@ Result<OfficialTwoLayerCudaResult> official_two_layer_cuda(
                 config.hidden_size, config.heads, config.head_dim,
                 config.conv_width, config.rms_norm_epsilon,
                 config.gate_lower_bound};
+            const auto front_event = attribution_profiler
+                ? attribution_profiler->events().size() : 0;
+            const auto front_start = std::chrono::steady_clock::now();
             auto front = backend.official_layer_front(
                 layer_index == 0 ? std::span<const float>(current.hidden_input)
                                  : std::span<const float>{},
@@ -232,6 +265,15 @@ Result<OfficialTwoLayerCudaResult> official_two_layer_cuda(
                 layer_index == 0 ? OfficialLayerHiddenToken{} : hidden_token,
                 front_weights, state_view, cuda_config, layer, phase,
                 state_control);
+            measured_attribution.front_wall_nanoseconds +=
+                elapsed(front_start);
+            const auto front_device = device_delta(front_event);
+            if (!front_device ||
+                *front_device > std::numeric_limits<std::uint64_t>::max() -
+                    measured_attribution.front_device_nanoseconds) {
+                return fail(ErrorCode::invalid_state);
+            }
+            measured_attribution.front_device_nanoseconds += *front_device;
             if (!front) {
                 return fail(front.error(),
                             "device front layer " + std::to_string(layer) +
@@ -263,6 +305,7 @@ Result<OfficialTwoLayerCudaResult> official_two_layer_cuda(
                     published_state(front.value().kda);
             }
 
+            const auto route_start = std::chrono::steady_clock::now();
             auto route = route_official_moe_logits(
                 front.value().route.router_logits,
                 cuda_weights.moe.correction, top_k);
@@ -274,6 +317,8 @@ Result<OfficialTwoLayerCudaResult> official_two_layer_cuda(
             }
             auto selected = selected_experts(
                 cuda_weights.moe, route.value().expert_ids);
+            measured_attribution.route_wall_nanoseconds +=
+                elapsed(route_start);
             if (!selected) {
                 const auto discarded = backend.discard_official_moe_prepared(
                     front.value().route.prepared);
@@ -281,11 +326,22 @@ Result<OfficialTwoLayerCudaResult> official_two_layer_cuda(
                 return fail(selected.error(), selected.message());
             }
             const bool retain = layer_index == 0;
+            const auto tail_event = attribution_profiler
+                ? attribution_profiler->events().size() : 0;
+            const auto tail_start = std::chrono::steady_clock::now();
             auto tail = backend.official_layer_tail(
                 front.value().route.prepared, cuda_weights.moe_ffn,
                 selected.value(), route.value().expert_ids,
                 route.value().contributions, config.rms_norm_epsilon,
                 situ_beta, situ_linear_beta, layer, phase, retain);
+            measured_attribution.tail_wall_nanoseconds += elapsed(tail_start);
+            const auto tail_device = device_delta(tail_event);
+            if (!tail_device ||
+                *tail_device > std::numeric_limits<std::uint64_t>::max() -
+                    measured_attribution.tail_device_nanoseconds) {
+                return fail(ErrorCode::invalid_state);
+            }
+            measured_attribution.tail_device_nanoseconds += *tail_device;
             if (!tail) {
                 return fail(tail.error(),
                             "device tail layer " + std::to_string(layer) +
@@ -342,6 +398,18 @@ Result<OfficialTwoLayerCudaResult> official_two_layer_cuda(
         mode == OfficialTwoLayerCudaMode::device_closure ? 4U : 0U,
         mode == OfficialTwoLayerCudaMode::device_closure ? 4U : 0U,
     };
+    measured_attribution.total_wall_nanoseconds = elapsed(wrapper_start);
+    const auto attributed_wall =
+        measured_attribution.front_wall_nanoseconds +
+        measured_attribution.route_wall_nanoseconds +
+        measured_attribution.tail_wall_nanoseconds;
+    if (attributed_wall > measured_attribution.total_wall_nanoseconds) {
+        return Result<OfficialTwoLayerCudaResult>::failure(
+            ErrorCode::invalid_state);
+    }
+    measured_attribution.unattributed_wall_nanoseconds =
+        measured_attribution.total_wall_nanoseconds - attributed_wall;
+    if (attribution) *attribution = measured_attribution;
     result.executed = true;
     return Result<OfficialTwoLayerCudaResult>::success(std::move(result));
 }

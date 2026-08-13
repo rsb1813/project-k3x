@@ -60,6 +60,16 @@ struct OfficialTwoLayerCudaTelemetry {
     std::uint64_t layer_tail_calls{};
 };
 
+struct OfficialTwoLayerAttribution {
+    std::uint64_t total_wall_nanoseconds{};
+    std::uint64_t front_wall_nanoseconds{};
+    std::uint64_t front_device_nanoseconds{};
+    std::uint64_t route_wall_nanoseconds{};
+    std::uint64_t tail_wall_nanoseconds{};
+    std::uint64_t tail_device_nanoseconds{};
+    std::uint64_t unattributed_wall_nanoseconds{};
+};
+
 struct OfficialTwoLayerCudaResult {
     bool executed{};
     std::array<OfficialKdaState, 2> final_states;
@@ -87,6 +97,8 @@ Result<OfficialTwoLayerCudaResult> official_two_layer_cuda(
     float situ_beta,
     std::optional<float> situ_linear_beta,
     ProfilePhase phase,
-    OfficialTwoLayerCudaMode mode);
+    OfficialTwoLayerCudaMode mode,
+    Profiler* attribution_profiler = nullptr,
+    OfficialTwoLayerAttribution* attribution = nullptr);
 
 }  // namespace k3x
