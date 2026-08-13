@@ -23,4 +23,9 @@ Result<std::vector<float>> mxfp4_matmul(std::span<const float> input,
                                        std::span<const std::byte> scales,
                                        std::size_t rows, std::size_t cols,
                                        std::size_t group_size);
+Result<std::vector<float>> decode_groupwise_3bit(
+    std::span<const std::byte> packed,
+    std::span<const std::byte> scales_bf16,
+    std::size_t values,
+    std::size_t group_size = 32);
 }

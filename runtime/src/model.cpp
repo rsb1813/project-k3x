@@ -545,6 +545,7 @@ private:
                 const auto projection = [&](std::size_t index) {
                     return ExpertProjection{
                         ids[index],
+                        records[index]->quantization,
                         std::move(payloads.value()[index * 2]),
                         std::move(payloads.value()[index * 2 + 1]),
                         records[index]->dimensions[0],
@@ -846,6 +847,49 @@ private:
     Vector expert_payload(const Vector& input, std::size_t layer,
                           const ExpertPayloadHandle& payload,
                           ProfilePhase phase) {
+        if (payload->gate.quantization == 2 &&
+            payload->up.quantization == 2 &&
+            payload->down.quantization == 2) {
+            auto gate_weight = decode_groupwise_3bit(
+                payload->gate.packed, payload->gate.scales,
+                payload->gate.rows * payload->gate.cols,
+                config_.group_size);
+            auto up_weight = decode_groupwise_3bit(
+                payload->up.packed, payload->up.scales,
+                payload->up.rows * payload->up.cols,
+                config_.group_size);
+            auto down_weight = decode_groupwise_3bit(
+                payload->down.packed, payload->down.scales,
+                payload->down.rows * payload->down.cols,
+                config_.group_size);
+            if (!gate_weight || !up_weight || !down_weight) {
+                throw std::runtime_error("invalid 3-bit expert");
+            }
+            const std::array<DenseWeightView, 2> gate_up_views{{
+                {payload->gate.id, gate_weight.value(), payload->gate.rows,
+                 payload->gate.cols},
+                {payload->up.id, up_weight.value(), payload->up.rows,
+                 payload->up.cols},
+            }};
+            auto gate_up = backend_.dense_matvec_group(
+                input, gate_up_views, static_cast<std::uint32_t>(layer), phase);
+            if (!gate_up) throw std::runtime_error("invalid 3-bit expert");
+            Vector activated(config_.expert_intermediate);
+            situ_glu(activated, gate_up.value()[0], gate_up.value()[1],
+                     config_.situ_beta, config_.situ_linear);
+            auto output = backend_.dense_matvec(
+                activated,
+                {payload->down.id, down_weight.value(), payload->down.rows,
+                 payload->down.cols},
+                static_cast<std::uint32_t>(layer), phase);
+            if (!output) throw std::runtime_error("invalid 3-bit expert");
+            return std::move(output.value());
+        }
+        if (payload->gate.quantization != 1 ||
+            payload->up.quantization != 1 ||
+            payload->down.quantization != 1) {
+            throw std::runtime_error("mixed expert quantization");
+        }
         const std::array<Mxfp4WeightView, 2> gate_up_views{{
             payload->gate.view(config_.group_size),
             payload->up.view(config_.group_size),

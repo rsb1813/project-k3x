@@ -20,5 +20,19 @@ int main() {
     std::array<std::byte, 1> scales{std::byte{127}};
     const auto decoded = k3x::decode_mxfp4(packed, scales, 1, 32, 32);
     if (!decoded || decoded.value()[0] != 0.0F || decoded.value()[1] != 0.5F) return 3;
+    std::array<std::byte, 12> quant3_packed{};
+    quant3_packed[0] = std::byte{0x88};
+    quant3_packed[1] = std::byte{0xc6};
+    quant3_packed[2] = std::byte{0x7a};
+    std::array<std::byte, 2> quant3_scales{
+        std::byte{0x80}, std::byte{0x3f}};
+    const auto quant3 = k3x::decode_groupwise_3bit(
+        quant3_packed, quant3_scales, 8, 32);
+    if (!quant3 || quant3.value().size() != 8 ||
+        quant3.value()[0] != -3.0F || quant3.value()[1] != -2.0F ||
+        quant3.value()[6] != 3.0F || quant3.value()[7] != 0.0F) return 4;
+    quant3_packed[0] = std::byte{0x8f};
+    if (k3x::decode_groupwise_3bit(
+            quant3_packed, quant3_scales, 8, 32)) return 5;
     return 0;
 }

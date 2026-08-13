@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 
@@ -71,6 +72,52 @@ Result<std::vector<float>> mxfp4_matmul(std::span<const float> input,
             sum += static_cast<double>(input[column]) * decoded.value()[row * cols + column];
         }
         output[row] = static_cast<float>(sum);
+    }
+    return Result<std::vector<float>>::success(std::move(output));
+}
+
+Result<std::vector<float>> decode_groupwise_3bit(
+    std::span<const std::byte> packed,
+    std::span<const std::byte> scales_bf16,
+    std::size_t values,
+    std::size_t group_size) {
+    if (!values || group_size != 32) {
+        return Result<std::vector<float>>::failure(ErrorCode::invalid_quant3);
+    }
+    const auto groups = values / group_size + (values % group_size != 0);
+    if (groups > static_cast<std::size_t>(-1) / 12 ||
+        packed.size() != groups * 12 || scales_bf16.size() != groups * 2) {
+        return Result<std::vector<float>>::failure(ErrorCode::invalid_quant3);
+    }
+    std::vector<float> output(values);
+    for (std::size_t group = 0; group < groups; ++group) {
+        const auto low = std::to_integer<std::uint16_t>(scales_bf16[group * 2]);
+        const auto high = std::to_integer<std::uint16_t>(scales_bf16[group * 2 + 1]);
+        const auto scale_bits = static_cast<std::uint16_t>(low | (high << 8U));
+        const auto scale = std::bit_cast<float>(
+            static_cast<std::uint32_t>(scale_bits) << 16U);
+        if (!std::isfinite(scale) || scale <= 0.0F) {
+            return Result<std::vector<float>>::failure(ErrorCode::invalid_quant3);
+        }
+        for (std::size_t block = 0; block < 4; ++block) {
+            const auto offset = group * 12 + block * 3;
+            const auto word =
+                std::to_integer<std::uint32_t>(packed[offset]) |
+                (std::to_integer<std::uint32_t>(packed[offset + 1]) << 8U) |
+                (std::to_integer<std::uint32_t>(packed[offset + 2]) << 16U);
+            for (std::size_t index = 0; index < 8; ++index) {
+                const auto code = (word >> (index * 3U)) & 7U;
+                if (code == 7U) {
+                    return Result<std::vector<float>>::failure(
+                        ErrorCode::invalid_quant3);
+                }
+                const auto logical = group * group_size + block * 8 + index;
+                if (logical < values) {
+                    output[logical] =
+                        static_cast<float>(static_cast<int>(code) - 3) * scale;
+                }
+            }
+        }
     }
     return Result<std::vector<float>>::success(std::move(output));
 }

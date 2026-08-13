@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TypeAlias
 
 import torch
 import torch.nn.functional as functional
 
 from k3x_ref.config import SyntheticK3Config
 from k3x_ref.mxfp4 import mxfp4_matmul
+from k3x_ref.quant3 import Quant3Tensor, decode_groupwise_3bit
 from k3x_ref.ops import rms_norm, situ_glu
 from k3x_ref.routing_policy import (
     RoutingMode,
@@ -36,10 +38,30 @@ class PackedMatrix:
 
 
 @dataclass(frozen=True)
+class Quant3Matrix:
+    packed: bytes
+    scales: bytes
+    rows: int
+    cols: int
+
+    def matmul(self, x: torch.Tensor) -> torch.Tensor:
+        weight = decode_groupwise_3bit(
+            Quant3Tensor(
+                (self.rows, self.cols), self.rows * self.cols, 32,
+                self.packed, self.scales,
+            )
+        )
+        return x.to(torch.float32) @ weight.transpose(0, 1)
+
+
+ExpertMatrix: TypeAlias = PackedMatrix | Quant3Matrix
+
+
+@dataclass(frozen=True)
 class ExpertWeights:
-    gate: PackedMatrix
-    up: PackedMatrix
-    down: PackedMatrix
+    gate: ExpertMatrix
+    up: ExpertMatrix
+    down: ExpertMatrix
 
 
 @dataclass(frozen=True)

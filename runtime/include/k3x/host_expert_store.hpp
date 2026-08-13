@@ -45,6 +45,7 @@ struct ExpertKey {
 
 struct ExpertProjection {
     std::uint64_t id{};
+    std::uint16_t quantization{1};
     std::vector<std::byte> packed;
     std::vector<std::byte> scales;
     std::size_t rows{};

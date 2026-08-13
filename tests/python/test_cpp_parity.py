@@ -1025,6 +1025,57 @@ def test_cpp_generation_matches_python_golden(
     assert result["immutable_validation_nanoseconds"] == 0
 
 
+def test_groupwise_3bit_synthetic_artifact_matches_python_layers_and_tokens(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "quant3-source"
+    artifact = tmp_path / "quant3.k3x"
+    output = tmp_path / "quant3-result.json"
+    write_source_checkpoint(source, expert_quantization="groupwise-3bit")
+    convert(source, artifact, chunk_bytes=257)
+
+    reader = K3XReader.open(artifact)
+    quantized = [record for record in reader.tensor_records if record.quantization == 2]
+    assert quantized
+    assert reader.superblock.required_features & 2
+    for record in quantized:
+        values = int(np.prod(record.dimensions))
+        groups = (values + 31) // 32
+        assert record.data_length == groups * 12
+        assert record.auxiliary_length == groups * 2
+
+    subprocess.run(
+        [
+            str(cpp_binary("k3x_run")),
+            "--model", str(artifact),
+            "--prompt-ids", "1,7,3,9",
+            "--generate", "6",
+            "--mode", "incremental",
+            "--diagnostics", "true",
+            "--json", str(output),
+        ],
+        check=True,
+    )
+    result = json.loads(output.read_text(encoding="utf-8"))
+    model = build_synthetic_model(expert_quantization="groupwise-3bit")
+    expected_tokens = model.generate_greedy([1, 7, 3, 9], 6, True)
+    expected_logits, _, expected_layers = model.prefill_with_trace(
+        torch.tensor([[1, 7, 3, 9]], dtype=torch.long)
+    )
+
+    assert result["token_ids"] == expected_tokens
+    np.testing.assert_allclose(
+        result["prefill_logits"], expected_logits.numpy().reshape(-1),
+        atol=1e-6, rtol=1e-6,
+    )
+    for actual, expected in zip(
+        result["prefill_layer_outputs"], expected_layers, strict=True
+    ):
+        np.testing.assert_allclose(
+            actual, expected.numpy().reshape(-1), atol=1e-6, rtol=1e-6
+        )
+
+
 def test_cpp_scripted_speculation_preserves_greedy_execution(
     synthetic_source: Path, tmp_path: Path
 ) -> None:

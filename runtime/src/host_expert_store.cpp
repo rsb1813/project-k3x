@@ -12,19 +12,26 @@ constexpr std::size_t native_mxfp4_group_size = 32;
 
 bool valid_projection(const ExpertProjection& projection) {
     if (projection.rows == 0 || projection.cols == 0 ||
-        projection.cols % 2 != 0 ||
         projection.cols % native_mxfp4_group_size != 0 ||
         projection.rows >
             std::numeric_limits<std::size_t>::max() / projection.cols) {
         return false;
     }
     const auto elements = projection.rows * projection.cols;
-    return projection.packed.size() == elements / 2 &&
-           projection.scales.size() ==
-               elements / native_mxfp4_group_size &&
-           std::none_of(
-               projection.scales.begin(), projection.scales.end(),
-               [](std::byte scale) { return scale == std::byte{0xff}; });
+    if (projection.quantization == 1) {
+        return projection.cols % 2 == 0 &&
+               projection.packed.size() == elements / 2 &&
+               projection.scales.size() ==
+                   elements / native_mxfp4_group_size &&
+               std::none_of(
+                   projection.scales.begin(), projection.scales.end(),
+                   [](std::byte scale) { return scale == std::byte{0xff}; });
+    }
+    const auto groups = elements / native_mxfp4_group_size +
+                        (elements % native_mxfp4_group_size != 0);
+    return projection.quantization == 2 &&
+           projection.packed.size() == groups * 12 &&
+           projection.scales.size() == groups * 2;
 }
 
 Result<std::size_t> charged_bytes(const ExpertMlpPayload& payload) {

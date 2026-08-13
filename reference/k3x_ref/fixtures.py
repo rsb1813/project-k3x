@@ -21,9 +21,10 @@ from k3x_ref.model import (
     ModelWeights,
     SyntheticK3Model,
 )
-from k3x_ref.moe import ExpertWeights, LatentMoEWeights, PackedMatrix
+from k3x_ref.moe import ExpertWeights, LatentMoEWeights, PackedMatrix, Quant3Matrix
 from k3x_ref.mxfp4 import decode_mxfp4
 from k3x_ref.ops import situ_glu
+from k3x_ref.quant3 import quantize_groupwise_3bit
 
 
 def _packed_random(
@@ -39,11 +40,23 @@ def _packed_zero(rows: int, cols: int) -> PackedMatrix:
     return PackedMatrix(bytes(rows * cols // 2), bytes([127]) * (rows * cols // 32), rows, cols)
 
 
+def _as_quant3(value: PackedMatrix) -> Quant3Matrix:
+    encoded = quantize_groupwise_3bit(
+        decode_mxfp4(value.packed, value.scales, value.rows, value.cols)
+    )
+    return Quant3Matrix(
+        encoded.packed, encoded.scales_bf16, value.rows, value.cols
+    )
+
+
 def _build_weights(
     cfg: SyntheticK3Config,
     seed: int,
     controlled: bool,
+    expert_quantization: str,
 ) -> ModelWeights:
+    if expert_quantization not in {"mxfp4", "groupwise-3bit"}:
+        raise ValueError("unsupported expert_quantization")
     generator = torch.Generator().manual_seed(seed)
 
     def rand(*shape: int, scale: float = 0.03) -> torch.Tensor:
@@ -110,8 +123,11 @@ def _build_weights(
             )
         else:
             experts = tuple(
-                ExpertWeights(
-                    gate=(
+                ExpertWeights(*(
+                    _as_quant3(value)
+                    if expert_quantization == "groupwise-3bit"
+                    else value
+                    for value in (
                         _packed_zero(cfg.expert_intermediate_size, cfg.routed_latent_size)
                         if controlled
                         else _packed_random(
@@ -119,8 +135,7 @@ def _build_weights(
                             cfg.routed_latent_size,
                             generator,
                         )
-                    ),
-                    up=(
+                    ,
                         _packed_zero(cfg.expert_intermediate_size, cfg.routed_latent_size)
                         if controlled
                         else _packed_random(
@@ -128,8 +143,7 @@ def _build_weights(
                             cfg.routed_latent_size,
                             generator,
                         )
-                    ),
-                    down=(
+                    ,
                         _packed_zero(cfg.routed_latent_size, cfg.expert_intermediate_size)
                         if controlled
                         else _packed_random(
@@ -137,8 +151,8 @@ def _build_weights(
                             cfg.expert_intermediate_size,
                             generator,
                         )
-                    ),
-                )
+                    )
+                ))
                 for _ in range(cfg.num_experts)
             )
             feed_forward = LatentMoEWeights(
@@ -188,9 +202,12 @@ def build_synthetic_model(
     seed: int = 20260808,
     controlled: bool = False,
     config: SyntheticK3Config | None = None,
+    expert_quantization: str = "mxfp4",
 ) -> SyntheticK3Model:
     cfg = config or SyntheticK3Config.default()
-    return SyntheticK3Model(cfg, _build_weights(cfg, seed, controlled))
+    return SyntheticK3Model(
+        cfg, _build_weights(cfg, seed, controlled, expert_quantization)
+    )
 
 
 def _collect_tensors(
@@ -198,6 +215,7 @@ def _collect_tensors(
     prefix: str,
     output: dict[str, torch.Tensor],
     packed_shapes: dict[str, list[int]],
+    quant3_shapes: dict[str, list[int]],
 ) -> None:
     if isinstance(value, torch.Tensor):
         output[prefix] = value.detach().cpu().contiguous()
@@ -205,26 +223,43 @@ def _collect_tensors(
         output[f"{prefix}.weight_packed"] = torch.tensor(list(value.packed), dtype=torch.uint8)
         output[f"{prefix}.weight_scale"] = torch.tensor(list(value.scales), dtype=torch.uint8)
         packed_shapes[prefix] = [value.rows, value.cols]
+    elif isinstance(value, Quant3Matrix):
+        output[f"{prefix}.weight_q3_packed"] = torch.tensor(
+            list(value.packed), dtype=torch.uint8
+        )
+        output[f"{prefix}.weight_q3_scale"] = torch.tensor(
+            list(value.scales), dtype=torch.uint8
+        )
+        quant3_shapes[prefix] = [value.rows, value.cols]
     elif is_dataclass(value):
         for field in fields(value):
             _collect_tensors(
-                getattr(value, field.name), f"{prefix}.{field.name}", output, packed_shapes
+                getattr(value, field.name), f"{prefix}.{field.name}", output,
+                packed_shapes, quant3_shapes
             )
     elif isinstance(value, tuple):
         for index, item in enumerate(value):
-            _collect_tensors(item, f"{prefix}.{index}", output, packed_shapes)
+            _collect_tensors(
+                item, f"{prefix}.{index}", output, packed_shapes, quant3_shapes
+            )
 
 
 def write_source_checkpoint(
     path: Path,
     seed: int = 20260808,
     config: SyntheticK3Config | None = None,
+    expert_quantization: str = "mxfp4",
 ) -> dict[str, Any]:
     path.mkdir(parents=True, exist_ok=True)
-    model = build_synthetic_model(seed, config=config)
+    model = build_synthetic_model(
+        seed, config=config, expert_quantization=expert_quantization
+    )
     tensors: dict[str, torch.Tensor] = {}
     packed_shapes: dict[str, list[int]] = {}
-    _collect_tensors(model.weights, "model", tensors, packed_shapes)
+    quant3_shapes: dict[str, list[int]] = {}
+    _collect_tensors(
+        model.weights, "model", tensors, packed_shapes, quant3_shapes
+    )
     names = sorted(tensors)
     midpoint = (len(names) + 1) // 2
     shard_names = ("model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors")
@@ -239,6 +274,7 @@ def write_source_checkpoint(
         "config": model.cfg.__dict__,
         "weight_map": weight_map,
         "packed_shapes": packed_shapes,
+        "quant3_shapes": quant3_shapes,
     }
     manifest_path = path / "source-manifest.json"
     manifest_path.write_text(

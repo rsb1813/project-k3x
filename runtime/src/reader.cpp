@@ -532,12 +532,13 @@ Result<Reader> Reader::open(const std::filesystem::path& path,
     };
     std::unordered_set<std::uint64_t> tensor_ids;
     bool has_bf16 = false;
+    bool has_quant3 = false;
     for (std::size_t index = 0; index < *tensor_count; ++index) {
         const auto raw_record = directory.subspan(16 + index * tensor_record_bytes, tensor_record_bytes);
         auto record = decode_tensor(raw_record);
         if (record.rank > 4 ||
             (record.dtype != 1 && record.dtype != 2 && record.dtype != 3) ||
-            record.quantization > 1 || little<std::uint32_t>(raw_record, 8) != 0 ||
+            record.quantization > 2 || little<std::uint32_t>(raw_record, 8) != 0 ||
             little<std::uint8_t>(raw_record, 17) != 0 ||
             little<std::uint16_t>(raw_record, 18) != 0 ||
             little<std::uint32_t>(raw_record, 28) != 0 ||
@@ -554,6 +555,32 @@ Result<Reader> Reader::open(const std::filesystem::path& path,
                            record.auxiliary_crc32c == 0;
         const bool mxfp4 = record.dtype == 2 && record.quantization == 1 &&
                            record.auxiliary_length != 0;
+        bool quant3 = record.dtype == 2 && record.quantization == 2 &&
+                      record.auxiliary_length != 0;
+        if (quant3) {
+            std::uint64_t values = 1;
+            for (std::size_t dimension = 0; dimension < record.rank;
+                 ++dimension) {
+                const auto size = record.dimensions[dimension];
+                if (size == 0 ||
+                    values > std::numeric_limits<std::uint64_t>::max() / size) {
+                    quant3 = false;
+                    break;
+                }
+                values *= size;
+            }
+            const auto groups = quant3
+                ? values / 32U + (values % 32U != 0)
+                : 0U;
+            if (quant3 &&
+                (values > std::numeric_limits<std::uint64_t>::max() / 4U ||
+                 groups > std::numeric_limits<std::uint64_t>::max() / 12U ||
+                 record.data_length != groups * 12U ||
+                 record.auxiliary_length != groups * 2U ||
+                 record.logical_length != values * 4U)) {
+                quant3 = false;
+            }
+        }
         bool bf16 = record.dtype == 3 && record.quantization == 0 &&
                     record.auxiliary_length == 0 &&
                     record.auxiliary_offset == 0 &&
@@ -578,10 +605,11 @@ Result<Reader> Reader::open(const std::filesystem::path& path,
             }
         }
         if (!record.data_length || !record.logical_length ||
-            (!plain && !mxfp4 && !bf16)) {
+            (!plain && !mxfp4 && !quant3 && !bf16)) {
             return Result<Reader>::failure(ErrorCode::invalid_directory);
         }
         has_bf16 = has_bf16 || bf16;
+        has_quant3 = has_quant3 || quant3;
         for (const auto [offset, length] : {std::pair{record.data_offset, record.data_length},
                                            std::pair{record.auxiliary_offset, record.auxiliary_length}}) {
             if (!length) {
@@ -598,6 +626,11 @@ Result<Reader> Reader::open(const std::filesystem::path& path,
     const bool bf16_feature =
         (reader.superblock_.required_features & required_bf16_tensors) != 0;
     if (has_bf16 != bf16_feature) {
+        return Result<Reader>::failure(ErrorCode::invalid_directory);
+    }
+    const bool quant3_feature =
+        (reader.superblock_.required_features & required_quant3_tensors) != 0;
+    if (has_quant3 != quant3_feature) {
         return Result<Reader>::failure(ErrorCode::invalid_directory);
     }
     const auto configured_experts = little<std::uint32_t>(config.value(), 48);
@@ -647,7 +680,8 @@ Result<Reader> Reader::open(const std::filesystem::path& path,
             const auto tensor = std::find_if(reader.tensors_.begin(), reader.tensors_.end(),
                                              [id](const auto& item) { return item.tensor_id == id; });
             if (tensor == reader.tensors_.end() || tensor->layer_id != static_cast<std::int32_t>(layer) ||
-                tensor->expert_id != static_cast<std::int32_t>(expert) || tensor->quantization != 1) {
+                tensor->expert_id != static_cast<std::int32_t>(expert) ||
+                (tensor->quantization != 1 && tensor->quantization != 2)) {
                 return Result<Reader>::failure(ErrorCode::invalid_directory);
             }
         }
