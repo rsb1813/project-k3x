@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import torch
@@ -13,7 +14,6 @@ import torch
 from k3x_converter.format import K3XError
 from k3x_converter.official_layer import (
     OFFICIAL_KDA_SOURCE_BLOB_ID,
-    _attention_residual,
     _rms_norm,
     _state_digest,
     _tensor_digest,
@@ -21,7 +21,6 @@ from k3x_converter.official_layer import (
 )
 from k3x_converter.official_moe import (
     materialize_official_range_object,
-    prepare_official_moe_hidden,
     route_official_hidden,
 )
 from k3x_converter.official_source import (
@@ -39,6 +38,8 @@ from k3x_ref.official_kda import (
     official_kda,
     zero_official_kda_state,
 )
+from k3x_ref.attn_res import apply_attn_res
+from k3x_ref.ops import rms_norm
 from tools.run_official_layer0 import (
     _load_tensor,
     _load_topology,
@@ -79,7 +80,62 @@ def _load_state(path: Path, device: torch.device, layer_id: int):
             device,
         )
 
-    return record, load(f"hidden_after_layer_{layer_id - 1}"), load("block_source_0")
+    blocks = tuple(
+        load(name)
+        for name in sorted(
+            (
+                name
+                for name in record["tensors"]
+                if name.startswith("block_source_")
+            ),
+            key=lambda name: int(name.rsplit("_", 1)[1]),
+        )
+    )
+    if not blocks:
+        raise K3XError("OFFICIAL_PREFIX_STATE_BLOCKS")
+    return record, load(f"hidden_after_layer_{layer_id - 1}"), blocks
+
+
+def _residual_input(
+    prefix: torch.Tensor,
+    blocks: tuple[torch.Tensor, ...],
+    norm: torch.Tensor,
+    projection: torch.Tensor,
+    epsilon: float,
+) -> torch.Tensor:
+    bank = torch.stack(blocks)
+    return apply_attn_res(
+        prefix,
+        bank,
+        norm,
+        projection.reshape(-1),
+        epsilon,
+    ).to(torch.bfloat16)
+
+
+def _prepare_ffn_hidden(
+    prefix: torch.Tensor,
+    blocks: tuple[torch.Tensor, ...],
+    residual_norm: torch.Tensor,
+    residual_proj: torch.Tensor,
+    post_norm: torch.Tensor,
+    epsilon: float,
+) -> torch.Tensor:
+    mixed = _residual_input(
+        prefix, blocks, residual_norm, residual_proj, epsilon
+    )
+    return rms_norm(mixed, post_norm, epsilon).to(torch.bfloat16)
+
+
+def _fetch(snapshot, shard: str, item, object_dir: Path):
+    return item, materialize_official_range_object(
+        snapshot,
+        shard,
+        item.offset,
+        item.length,
+        UrllibTransport(),
+        object_dir,
+    )
 
 
 def _expert_matrix(
@@ -122,8 +178,6 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--layer-id", type=int, required=True)
     args = parser.parse_args()
-    if args.layer_id not in (1, 2):
-        raise K3XError("OFFICIAL_KDA_LAYER_SEQUENCE")
     if not torch.cuda.is_available():
         raise K3XError("CUDA_UNAVAILABLE")
 
@@ -139,6 +193,11 @@ def main() -> int:
     ):
         raise K3XError("OFFICIAL_TOPOLOGY_SOURCE_DRIFT")
     layer_id = args.layer_id
+    if (
+        not 1 <= layer_id < topology["layer_count"]
+        or topology["layers"][layer_id]["attention"] != "kda"
+    ):
+        raise K3XError("OFFICIAL_KDA_LAYER_SEQUENCE")
     prefix = f"language_model.model.layers.{layer_id}."
     shard = topology["layers"][layer_id]["shards"][0]
     header = inspect_official_shard_header(snapshot, shard, UrllibTransport())
@@ -157,29 +216,27 @@ def main() -> int:
     downloaded_bytes = 0
     reused_objects = 0
     planned = (*plan.kda_tensors, *plan.moe_plan.always_active)
-    for position, item in enumerate(planned, 1):
-        result = materialize_official_range_object(
-            snapshot,
-            shard,
-            item.offset,
-            item.length,
-            UrllibTransport(),
-            object_dir,
-        )
-        objects[item.official_name] = result
-        requests += result.requests
-        downloaded_bytes += result.response_bytes
-        reused_objects += int(result.reused)
-        print(
-            f"layer{layer_id}_trunk={position}/{len(planned)} "
-            f"downloaded_bytes={downloaded_bytes}",
-            flush=True,
-        )
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {
+            executor.submit(_fetch, snapshot, shard, item, object_dir): item
+            for item in planned
+        }
+        for position, future in enumerate(as_completed(futures), 1):
+            item, result = future.result()
+            objects[item.official_name] = result
+            requests += result.requests
+            downloaded_bytes += result.response_bytes
+            reused_objects += int(result.reused)
+            print(
+                f"layer{layer_id}_trunk={position}/{len(planned)} "
+                f"downloaded_bytes={downloaded_bytes}",
+                flush=True,
+            )
 
     device = torch.device("cuda")
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats(device)
-    prior_state, hidden, block_source = _load_state(
+    prior_state, hidden, block_sources = _load_state(
         args.state_dir.resolve() / "state.json", device, layer_id
     )
     roles = {
@@ -191,11 +248,12 @@ def main() -> int:
         )
         for item in planned
     }
-    residual = _attention_residual(
+    residual = _residual_input(
         hidden,
-        block_source,
+        block_sources,
         roles["self_res_norm"],
         roles["self_res_proj"],
+        config.rms_norm_eps,
     )
     kda_input = _rms_norm(residual, roles["input_norm"])
     kda_config = OfficialKdaConfig(7_168, 96, 128, 4, 1.0e-5, -5.0)
@@ -211,13 +269,15 @@ def main() -> int:
     zero = zero_official_kda_state(kda_config, 1, device)
     kda = official_kda(kda_input.reshape(1, 1, 7_168), kda_weights, zero, kda_config)
     prefix_sum = (hidden.float() + kda.output.reshape(-1).float()).to(torch.bfloat16)
-    ffn_hidden = prepare_official_moe_hidden(
+    if layer_id % config.attn_res_block_size == 0:
+        block_sources = (*block_sources, hidden)
+    ffn_hidden = _prepare_ffn_hidden(
         prefix_sum,
-        block_source,
+        block_sources,
         roles["mlp_res_norm"],
         roles["mlp_res_proj"].reshape(-1),
         roles["post_attention_norm"],
-        rms_norm_eps=config.rms_norm_eps,
+        config.rms_norm_eps,
     )
     route = route_official_hidden(
         ffn_hidden,
@@ -231,29 +291,37 @@ def main() -> int:
     )
 
     expert_objects = {}
-    expert_plans = {}
-    for position, expert_id in enumerate(route.expert_ids, 1):
-        expert_plan = plan_official_expert(
+    expert_plans = {
+        expert_id: plan_official_expert(
             index, header, layer_id=layer_id, expert_id=expert_id
         )
-        result = materialize_official_range_object(
-            snapshot,
-            shard,
-            expert_plan.payload_start,
-            expert_plan.payload_bytes,
-            UrllibTransport(),
-            object_dir,
-        )
-        expert_plans[expert_id] = expert_plan
-        expert_objects[expert_id] = result
-        requests += result.requests
-        downloaded_bytes += result.response_bytes
-        reused_objects += int(result.reused)
-        print(
-            f"layer{layer_id}_experts={position}/{len(route.expert_ids)} "
-            f"downloaded_bytes={downloaded_bytes}",
-            flush=True,
-        )
+        for expert_id in route.expert_ids
+    }
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {
+            executor.submit(
+                materialize_official_range_object,
+                snapshot,
+                shard,
+                expert_plan.payload_start,
+                expert_plan.payload_bytes,
+                UrllibTransport(),
+                object_dir,
+            ): expert_id
+            for expert_id, expert_plan in expert_plans.items()
+        }
+        for position, future in enumerate(as_completed(futures), 1):
+            expert_id = futures[future]
+            result = future.result()
+            expert_objects[expert_id] = result
+            requests += result.requests
+            downloaded_bytes += result.response_bytes
+            reused_objects += int(result.reused)
+            print(
+                f"layer{layer_id}_experts={position}/{len(route.expert_ids)} "
+                f"downloaded_bytes={downloaded_bytes}",
+                flush=True,
+            )
     download_seconds = time.perf_counter() - download_start
 
     torch.cuda.synchronize(device)
@@ -299,6 +367,8 @@ def main() -> int:
         f"kda_{layer_id}_conv_v": kda.state.conv_v,
         f"kda_{layer_id}_recurrent_v_first": kda.state.recurrent_v_first,
     }
+    if layer_id % config.attn_res_block_size == 0:
+        new_tensors[f"block_source_{layer_id}"] = hidden
     for name, tensor in new_tensors.items():
         path = state_dir / f"{name}.bin"
         payload = _tensor_payload(tensor)

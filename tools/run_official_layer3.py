@@ -11,10 +11,9 @@ from pathlib import Path
 import torch
 
 from k3x_converter.format import K3XError
-from k3x_converter.official_layer import _attention_residual, _rms_norm, _tensor_digest
+from k3x_converter.official_layer import _rms_norm, _tensor_digest
 from k3x_converter.official_moe import (
     materialize_official_range_object,
-    prepare_official_moe_hidden,
     route_official_hidden,
 )
 from k3x_converter.official_source import (
@@ -35,10 +34,14 @@ from tools.run_official_layer0 import (
     _write_bytes_atomic,
     _write_json_atomic,
 )
-from tools.run_official_layer1 import _expert_matrix, _load_state
+from tools.run_official_layer1 import (
+    _expert_matrix,
+    _load_state,
+    _prepare_ffn_hidden,
+    _residual_input,
+)
 
 
-_PREFIX = "language_model.model.layers.3."
 _ROLE_BY_SUFFIX = {
     "self_attention_res_norm.weight": "self_res_norm",
     "self_attention_res_proj.weight": "self_res_proj",
@@ -82,6 +85,7 @@ def main() -> int:
     parser.add_argument("--object-dir", type=Path, required=True)
     parser.add_argument("--state-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--layer-id", type=int, required=True)
     args = parser.parse_args()
     if not torch.cuda.is_available():
         raise K3XError("CUDA_UNAVAILABLE")
@@ -98,12 +102,32 @@ def main() -> int:
     ):
         raise K3XError("OFFICIAL_TOPOLOGY_SOURCE_DRIFT")
 
-    contract = topology["execution_contracts"]["mla_moe_layer_3"]
-    trunk = [item for item in contract if ".experts.0." not in item["name"]]
-    if {item["name"][len(_PREFIX) :] for item in trunk} != set(_ROLE_BY_SUFFIX):
-        raise K3XError("OFFICIAL_MLA_CONTRACT")
-    shard = topology["layers"][3]["shards"][0]
+    layer_id = args.layer_id
+    if (
+        not 1 <= layer_id < topology["layer_count"]
+        or topology["layers"][layer_id]["attention"] != "mla"
+    ):
+        raise K3XError("OFFICIAL_MLA_LAYER_SEQUENCE")
+    prefix = f"language_model.model.layers.{layer_id}."
+    shard = topology["layers"][layer_id]["shards"][0]
     header = inspect_official_shard_header(snapshot, shard, UrllibTransport())
+    trunk = []
+    for name in sorted(header.tensors):
+        if not name.startswith(prefix) or ".experts." in name:
+            continue
+        tensor = header.tensors[name]
+        trunk.append(
+            {
+                "name": name,
+                "dtype": tensor.dtype,
+                "shape": list(tensor.shape),
+                "shard": shard,
+                "offset": tensor.offset,
+                "length": tensor.length,
+            }
+        )
+    if {item["name"][len(prefix) :] for item in trunk} != set(_ROLE_BY_SUFFIX):
+        raise K3XError("OFFICIAL_MLA_CONTRACT")
     object_dir = args.object_dir.resolve()
     download_start = time.perf_counter()
     objects = {}
@@ -120,7 +144,7 @@ def main() -> int:
             downloaded_bytes += result.response_bytes
             reused_objects += int(result.reused)
             print(
-                f"layer3_trunk={position}/{len(trunk)} "
+                f"layer{layer_id}_trunk={position}/{len(trunk)} "
                 f"downloaded_bytes={downloaded_bytes}",
                 flush=True,
             )
@@ -128,11 +152,11 @@ def main() -> int:
     device = torch.device("cuda")
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats(device)
-    prior_state, hidden, block_source = _load_state(
-        args.state_dir.resolve() / "state.json", device, 3
+    prior_state, hidden, block_sources = _load_state(
+        args.state_dir.resolve() / "state.json", device, layer_id
     )
     roles = {
-        _ROLE_BY_SUFFIX[item["name"][len(_PREFIX) :]]: _load_tensor(
+        _ROLE_BY_SUFFIX[item["name"][len(prefix) :]]: _load_tensor(
             objects[item["name"]].path,
             item["dtype"],
             item["shape"],
@@ -140,11 +164,12 @@ def main() -> int:
         )
         for item in trunk
     }
-    residual = _attention_residual(
+    residual = _residual_input(
         hidden,
-        block_source,
+        block_sources,
         roles["self_res_norm"],
         roles["self_res_proj"],
+        config.rms_norm_eps,
     )
     attention_input = _rms_norm(residual, roles["input_norm"])
     mla_config = SyntheticK3Config(
@@ -174,13 +199,15 @@ def main() -> int:
     prefix_sum = (hidden.float() + attention_output.reshape(-1).float()).to(
         torch.bfloat16
     )
-    ffn_hidden = prepare_official_moe_hidden(
+    if layer_id % config.attn_res_block_size == 0:
+        block_sources = (*block_sources, hidden)
+    ffn_hidden = _prepare_ffn_hidden(
         prefix_sum,
-        block_source,
+        block_sources,
         roles["mlp_res_norm"],
         roles["mlp_res_proj"].reshape(-1),
         roles["post_attention_norm"],
-        rms_norm_eps=config.rms_norm_eps,
+        config.rms_norm_eps,
     )
     route = route_official_hidden(
         ffn_hidden,
@@ -188,11 +215,14 @@ def main() -> int:
         roles["router_correction"],
         top_k=config.top_k,
     )
-    print(f"layer3_route={','.join(map(str, route.expert_ids))}", flush=True)
+    print(
+        f"layer{layer_id}_route={','.join(map(str, route.expert_ids))}",
+        flush=True,
+    )
 
     expert_plans = {
         expert_id: plan_official_expert(
-            index, header, layer_id=3, expert_id=expert_id
+            index, header, layer_id=layer_id, expert_id=expert_id
         )
         for expert_id in route.expert_ids
     }
@@ -218,7 +248,7 @@ def main() -> int:
             downloaded_bytes += result.response_bytes
             reused_objects += int(result.reused)
             print(
-                f"layer3_experts={position}/{len(route.expert_ids)} "
+                f"layer{layer_id}_experts={position}/{len(route.expert_ids)} "
                 f"downloaded_bytes={downloaded_bytes}",
                 flush=True,
             )
@@ -262,11 +292,13 @@ def main() -> int:
     state_dir = args.state_dir.resolve()
     state_records = dict(prior_state["tensors"])
     new_tensors = {
-        "hidden_after_layer_3": output,
-        "mla_3_keys": mla_state.keys,
-        "mla_3_values": mla_state.values,
-        "mla_3_shared_keys": mla_state.shared_keys,
+        f"hidden_after_layer_{layer_id}": output,
+        f"mla_{layer_id}_keys": mla_state.keys,
+        f"mla_{layer_id}_values": mla_state.values,
+        f"mla_{layer_id}_shared_keys": mla_state.shared_keys,
     }
+    if layer_id % config.attn_res_block_size == 0:
+        new_tensors[f"block_source_{layer_id}"] = hidden
     for name, tensor in new_tensors.items():
         path = state_dir / f"{name}.bin"
         payload = _tensor_payload(tensor)
@@ -281,7 +313,7 @@ def main() -> int:
         "format": "k3x-official-prefix-state-v1",
         "resolved_revision": snapshot.resolved_revision,
         "token_id": prior_state["token_id"],
-        "completed_layer": 3,
+        "completed_layer": layer_id,
         "tensors": state_records,
     }
     state_encoded = json.dumps(
@@ -299,16 +331,16 @@ def main() -> int:
         "config_sha256": config.sha256,
         "topology_record_sha256": topology["record_sha256"],
         "token_id": prior_state["token_id"],
-        "layer_id": 3,
-        "completed_layers": [0, 1, 2, 3],
+        "layer_id": layer_id,
+        "completed_layers": list(range(layer_id + 1)),
         "route_expert_ids": list(route.expert_ids),
         "route_contributions": list(route.contributions),
         "layer_output_sha256": _tensor_digest(
-            output, b"k3x-official-layer3-output-bf16\0"
+            output, f"k3x-official-layer{layer_id}-output-bf16\0".encode()
         ),
         "state_manifest_sha256": state_manifest["record_sha256"],
         "downloaded_payload_bytes": downloaded_bytes,
-        "requested_payload_bytes": topology["layers"][3][
+        "requested_payload_bytes": topology["layers"][layer_id][
             "single_token_source_bytes"
         ],
         "range_requests": requests,
