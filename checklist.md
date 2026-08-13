@@ -542,6 +542,16 @@
 - [x] Pass the portable CPU/reference synthetic local manufacturing integration gate.
 - [ ] Launch the resumable 96-shard official manufacture.
 
+## Milestone 38 — Quality Local Foundry
+
+- [x] Supersede the 3-bit download lock with explicit user authorization and D-076.
+- [x] Implement group-128 8-bit codec, K3X ABI, portable Reader support, and shard converter.
+- [x] Download, verify, manufacture, ledger, and source-clean official shards 1 and 2.
+- [x] Start the resumable two-slot conductor for shards 3 through 96.
+- [ ] Complete and verify all 96 K3X fragments.
+- [ ] Assemble the final executable checkpoint and generate the first token.
+- [ ] Measure and optimize the actual end-to-end bottleneck.
+
 ### 3-bit runtime correctness slice
 
 - [x] Re-read the accepted Local Foundry design and implementation plan.

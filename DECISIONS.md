@@ -881,3 +881,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: byte closure alone cannot override correctness and quality priorities. Starting a five-hour source transfer before choosing a defensible precision recipe would create a large artifact whose quality is not established.
 - Rejected claims: the proxy does not prove that full-model 3-bit quality is unusable, and the roughly 1.51 TB alternative is not accepted or runnable until its 8-bit trunk codec and quality gates exist.
 - Revisit: compare a broader expert sample and an exact native-expert plus 8-bit-trunk candidate, or explicitly accept the 1.28 TB quality risk after end-to-end token/coding evaluation.
+
+## D-076 — Start the local quality manufacture with native MXFP4 experts
+
+- Date: 2026-08-13.
+- Status: accepted by explicit user instruction and in progress; supersedes D-075's download lock without accepting the lossy 1.28 TB recipe.
+- Decision: download the pinned 96 official shards through authenticated HF Xet, preserve every routed expert in native MXFP4, preserve norms, routers, embeddings, LM head, one-dimensional tensors, and F32 control tensors, and quantize only the remaining BF16 trunk matrices to group-128 signed 8-bit. Manufacture independent checksum-bound K3X fragments with a 1,510,500,000,000-byte ceiling and 200 GiB final-volume reserve.
+- Alternatives considered: keep waiting for broader 3-bit calibration; manufacture the 1.28 TB all-expert 3-bit candidate; keep every tensor at source precision near 1.56 TB.
+- Evidence: the released expert proxy showed 0.325174 relative L2 divergence for 3-bit, while native MXFP4 expert passthrough is byte-identical. Shards 1 and 2 were authenticated, matched their official SHA-256, converted to Reader-valid K3X fragments, and recorded in the new quality ledger before source deletion.
+- Benchmark result: shard 1 converted 2,341,216,112 source bytes to 1,189,290,240 output bytes in 75.091 seconds. Shard 2 converted 16,990,911,504 source bytes to 16,373,248,256 output bytes in 978.222 seconds while preserving 5,376 native expert tensors. These are manufacturing timings, not inference throughput.
+- Reason accepted: this route directly serves the user's request to begin local manufacture while avoiding the measured 3-bit expert divergence. Two-slot staging and source deletion after durable ledger publication keep the full source checkpoint off disk.
+- Rejected claims: the fragment set is not yet a merged executable checkpoint, group-128 8-bit trunk quality is not yet an end-to-end score, and no first-token or tok/s result exists.
+- Revisit: after the first actual token and quality comparison, use sensitivity evidence to raise selected trunk tensors to BF16 or lower safe tensors only if capacity requires it.

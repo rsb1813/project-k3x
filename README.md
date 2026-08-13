@@ -895,6 +895,8 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Scalar direct-packed 3-bit CUDA matvec with synthetic layer/logit/token parity and sanitizer coverage.
 - [x] Exact pinned-header byte accounting for a sub-1.28 TB mixed recipe and one Reader-valid released-expert 3-bit conversion.
 - [ ] Acceptable released/full-model 3-bit quality. The first bounded expert proxy measured 0.325 relative L2 and therefore did not unlock manufacture.
+- [x] Authenticated two-slot local manufacture started with native MXFP4 experts and group-128 8-bit selected trunk matrices; verified shards 1 and 2 are complete and their source files were ledger-gated before deletion.
+- [ ] Complete all 96 quality fragments, assemble the final executable K3X checkpoint, and generate the first released-model token.
 - [ ] Grouped/resident/fused 3-bit CUDA FFN and complete official manufacturing.
 - [ ] SKYFORGE shard compiler for explicitly provisioned cloud jobs.
 - [ ] Full ablation and coding-quality suite.

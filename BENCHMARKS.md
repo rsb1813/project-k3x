@@ -1530,3 +1530,20 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Matrix relative L2 is 0.207333/0.207401/0.208238 for gate/up/down. Scale fitting improves complete-expert relative L2 from the initial max-scale codec's 0.369519 to 0.325174, but does not establish acceptable model quality.
 - Quality scope: deterministic random-normal single-expert proxy only. Token agreement, perplexity, coding quality, routing changes, decode tok/s, TTFT, VRAM, RAM, physical NVMe/H2D traffic, and GPU utilization were not measured.
 - Decision: fail the loss-minimization launch gate and keep the full 96-shard manufacture disabled pending a less lossy recipe or end-to-end evidence.
+
+## Milestone 38 local quality manufacture start
+
+- Date: 2026-08-13.
+- Implementation commits: `abf52c6`, `35ec442`, and `84bdc9b`.
+- Hardware: AMD Ryzen 7 9800X3D host, C-drive P44 Pro destination, D-drive two-slot staging, WSL2 converter. RTX 5080 was not used by these first two fragment conversions.
+- Source: pinned `moonshotai/Kimi-K3` revision `9f62e4e9fffbd0a83ddd60e1c209d828994b3569` through authenticated HF Xet.
+- Mode: native MXFP4 routed experts, group-128 signed 8-bit selected trunk matrices, sensitive BF16/F32 passthrough, 8 MiB bounded chunks, per-extent fsync/CRC, final root SHA-256, strict Reader reopen, and deletion only after ledger publication.
+
+| Shard | Source bytes | K3X bytes | Quant8 matrices | Native expert tensors | Conversion seconds | Output SHA-256 |
+|---|---:|---:|---:|---:|---:|---|
+| 1 | 2,341,216,112 | 1,189,290,240 | 13 | 0 | 75.091 | `48ba2a106782c539e5b23d6412bbc797a5e779129aa4c4edd3cabf0923ec35aa` |
+| 2 | 16,990,911,504 | 16,373,248,256 | 15 | 5,376 | 978.222 | `70ca52402d1583e93ebaeba25c00ac63c9ade6477e29a2700aa9947eb88d2fea` |
+
+- Both source objects matched their official SHA-256. Both source files were deleted only after the quality IMMORTAL ledger recorded their output identity; they remain recoverable by checksum-bound redownload.
+- Shards 3 through 96 are being processed by the resumable background conductor. This table does not claim their completion.
+- Decode tok/s, prefill tok/s, TTFT, VRAM, GPU utilization, coding quality, token agreement, and physical inference traffic are not measured.
