@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from math import prod
 from dataclasses import dataclass
 from typing import Mapping
 
@@ -10,6 +11,15 @@ from .official_source import OfficialConfig, OfficialIndex, OfficialShardHeader
 
 
 _LAYER = re.compile(r"language_model\.model\.layers\.(\d+)\.")
+_EXPERT = re.compile(
+    r"language_model\.model\.layers\.\d+\.block_sparse_moe\.experts\.\d+\."
+)
+_PRESERVE_NAMES = {
+    "language_model.lm_head.weight",
+    "language_model.model.embed_tokens.weight",
+}
+_K3X_ALIGNMENT = 4096
+_K3X_RECORD_BYTES = 256
 
 
 @dataclass(frozen=True)
@@ -45,6 +55,13 @@ class OfficialTopology:
     text_tensor_bytes: int
     non_text_tensor_count: int
     non_text_tensor_bytes: int
+    expert_tensor_bytes: int
+    nonexpert_text_tensor_bytes: int
+    nonexpert_text_int8_bytes: int
+    nonexpert_text_preserved_bytes: int
+    foundry_expert_3bit_bytes: int
+    foundry_payload_bytes: int
+    foundry_upper_bound_bytes: int
 
     def to_record(self) -> dict[str, object]:
         return {
@@ -63,7 +80,23 @@ class OfficialTopology:
             "text_tensor_bytes": self.text_tensor_bytes,
             "non_text_tensor_count": self.non_text_tensor_count,
             "non_text_tensor_bytes": self.non_text_tensor_bytes,
+            "expert_tensor_bytes": self.expert_tensor_bytes,
+            "nonexpert_text_tensor_bytes": self.nonexpert_text_tensor_bytes,
+            "nonexpert_text_int8_bytes": self.nonexpert_text_int8_bytes,
+            "nonexpert_text_preserved_bytes": self.nonexpert_text_preserved_bytes,
+            "foundry_expert_3bit_bytes": self.foundry_expert_3bit_bytes,
+            "foundry_payload_bytes": self.foundry_payload_bytes,
+            "foundry_upper_bound_bytes": self.foundry_upper_bound_bytes,
         }
+
+
+def _preserve_nonexpert(name: str, shape: tuple[int, ...]) -> bool:
+    return (
+        name in _PRESERVE_NAMES
+        or len(shape) <= 1
+        or "norm" in name
+        or ".block_sparse_moe.gate." in name
+    )
 
 
 def build_official_topology(
@@ -114,6 +147,11 @@ def build_official_topology(
     global_text: list[str] = []
     text_bytes = 0
     text_count = 0
+    expert_bytes = 0
+    expert_3bit_bytes = 0
+    nonexpert_int8_bytes = 0
+    nonexpert_preserved_bytes = 0
+    output_extent_count = 0
     for name in sorted(header_names):
         shard_path = index.weight_map[name]
         tensor = headers[shard_path].tensors[name]
@@ -121,6 +159,28 @@ def build_official_topology(
             continue
         text_count += 1
         text_bytes += tensor.length
+        if _EXPERT.match(name):
+            expert_bytes += tensor.length
+            if name.endswith(".weight_packed"):
+                if tensor.dtype != "U8" or tensor.length % 4:
+                    raise K3XError("OFFICIAL_TOPOLOGY_EXPERT_PACKING", name)
+                expert_3bit_bytes += tensor.length * 3 // 4
+            elif name.endswith(".weight_scale"):
+                if tensor.dtype != "U8":
+                    raise K3XError("OFFICIAL_TOPOLOGY_EXPERT_PACKING", name)
+                expert_3bit_bytes += tensor.length * 2
+                output_extent_count += 2
+            else:
+                raise K3XError("OFFICIAL_TOPOLOGY_EXPERT_TENSOR", name)
+        elif tensor.dtype == "BF16" and not _preserve_nonexpert(name, tensor.shape):
+            values = prod(tensor.shape)
+            if tensor.length != values * 2:
+                raise K3XError("OFFICIAL_TOPOLOGY_BF16_LENGTH", name)
+            nonexpert_int8_bytes += values + ((values + 127) // 128) * 2
+            output_extent_count += 2
+        else:
+            nonexpert_preserved_bytes += tensor.length
+            output_extent_count += 1
         match = _LAYER.match(name)
         if match is None:
             global_text.append(name)
@@ -147,6 +207,21 @@ def build_official_topology(
         for layer, names in enumerate(layer_names)
     )
 
+    foundry_payload_bytes = (
+        expert_3bit_bytes
+        + nonexpert_int8_bytes
+        + nonexpert_preserved_bytes
+        + tensor_bytes
+        - text_bytes
+    )
+    output_extent_count += len(header_names) - text_count
+    output_record_count = output_extent_count
+    foundry_upper_bound_bytes = foundry_payload_bytes + (
+        output_extent_count * (_K3X_ALIGNMENT - 1)
+        + output_record_count * _K3X_RECORD_BYTES
+        + _K3X_ALIGNMENT
+    )
+
     return OfficialTopology(
         config.num_hidden_layers,
         kda_layers,
@@ -159,4 +234,11 @@ def build_official_topology(
         text_bytes,
         len(header_names) - text_count,
         tensor_bytes - text_bytes,
+        expert_bytes,
+        text_bytes - expert_bytes,
+        nonexpert_int8_bytes,
+        nonexpert_preserved_bytes,
+        expert_3bit_bytes,
+        foundry_payload_bytes,
+        foundry_upper_bound_bytes,
     )

@@ -58,7 +58,13 @@ def test_build_official_topology_classifies_complete_text_graph() -> None:
         for layer in range(93)
     )
     tensors = {
-        name: TensorMetadata(name, "BF16", (1,), 1_024 + 2 * offset, 2)
+        name: TensorMetadata(
+            name,
+            "BF16",
+            (1, 1) if ".sentinel." in name else (1,),
+            1_024 + 2 * offset,
+            2,
+        )
         for offset, name in enumerate(names)
     }
     index = OfficialIndex(
@@ -101,3 +107,10 @@ def test_build_official_topology_classifies_complete_text_graph() -> None:
     assert record["text_tensor_bytes"] == 196
     assert record["non_text_tensor_count"] == 1
     assert record["non_text_tensor_bytes"] == 2
+    assert record["expert_tensor_bytes"] == 0
+    assert record["nonexpert_text_tensor_bytes"] == 196
+    assert record["nonexpert_text_int8_bytes"] == 93 * 3
+    assert record["nonexpert_text_preserved_bytes"] == 5 * 2
+    assert record["foundry_expert_3bit_bytes"] == 0
+    assert record["foundry_payload_bytes"] == 93 * 3 + 5 * 2 + 2
+    assert record["foundry_upper_bound_bytes"] >= record["foundry_payload_bytes"]
