@@ -506,6 +506,6 @@
 - [x] Add the caller-owned attribution accumulator with CUDA ownership/parity tests.
 - [x] Add an opt-in harness schema while preserving default B-0034 output.
 - [x] Add strict B-0035 evidence tooling.
-- [ ] Run actual-artifact correctness, sanitizer, production-guard, and regression gates.
-- [ ] Run B-0035 once successfully and seal the evidence.
+- [x] Run final actual-artifact correctness, production-guard, and complete regression gates.
+- [x] Run B-0035 once successfully, strictly reverify it, and seal the evidence.
 - [ ] Synchronize the TITAN Ledger, publish M34, and verify CI.

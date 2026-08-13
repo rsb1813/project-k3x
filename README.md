@@ -788,6 +788,19 @@ B-0034 compares three warmups and twenty measured two-position sequences per mod
 
 Device closure removes 57,344 logical inter-layer H2D bytes and 57,344 logical inter-layer D2H bytes per measured sequence, but its median is 13.285083 ms, or 13.823803%, slower. It also adds 86,016 resident bytes and 258,048 tracked peak-device bytes. The host-round-trip path therefore remains the default. The next measured boundary is attribution and fusion of the extra front/tail kernel and synchronization overhead, not a wider closure. These figures are bounded WSL2 layer timings; decode/prefill TPS, TTFT, quality, utilization, bandwidth, and physical PCIe/NVMe traffic were not measured.
 
+## Milestone 34 — two-layer closure attribution
+
+M34 adds an opt-in, caller-owned attribution accumulator around the unchanged exact two-layer CUDA wrapper. It snapshots the backend's existing profiler events, so the measurement adds no CUDA events or synchronization. With attribution disabled, the historical B-0034 schema and execution path remain unchanged. The separate B-0035 schema closes front wall time, canonical host routing, tail wall time, and checked wrapper remainder back to total wall time.
+
+B-0035 uses the same bounded 3,641,057,536-byte artifact, natural Top-16 routes, 4 GiB admission limit, three warmups, and twenty measured two-position sequences per mode. Exact routes and output/state identities match the B-0034 contract, zero warm weight bytes are transferred, and Compute Sanitizer reports zero errors.
+
+| B-0035 row | Median | p05 | p95 | Front wall | Route wall | Tail wall | Remainder |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Host round trip | 99.316205 ms | 95.310862 ms | 103.227516 ms | 0 | 0 | 0 | 99.341079 ms |
+| Device closure | 110.701472 ms | 106.969304 ms | 114.098378 ms | 69.822990 ms | 0.039036 ms | 41.060877 ms | 0.023582 ms |
+
+For device closure, front and tail account for 62.934% and 37.010% of attributed wall time; routing is only 0.035%. Existing CUDA event time averages 52.571374 ms in front and 30.057734 ms in tail. The next evidence boundary is therefore operation-level attribution inside the front and tail regions before selecting a fusion target. Host round trip remains the default. These are bounded WSL2 layer timings, not token throughput or physical PCIe/NVMe measurements.
+
 ## Quality contract
 
 | Mode | Intended semantics |
@@ -831,6 +844,8 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Opaque exact official KDA device-state handoff and fixed three-row B-0032 attribution.
 - [x] Explicit exact device route preparation, canonical host Top-16 selection, and opaque prepared-FFN consumption.
 - [x] Fixed B-0033 host/device route-preparation attribution.
+- [x] Exact bounded official two-layer execution, device closure, and fixed B-0034 evidence.
+- [x] Opt-in front/route/tail/remainder attribution with fixed B-0035 evidence.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.
