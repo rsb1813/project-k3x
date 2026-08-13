@@ -844,6 +844,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 
 - [x] Exact synthetic reference graph and correctness suite.
 - [x] K3X v1 streaming format and crash-safe converter.
+- [x] Portable group-32 signed 3-bit K3X ABI with strict Python/C++ readers and synthetic layer/logit/token parity.
 - [x] Independent exact C++20 synthetic runtime.
 - [x] Synthetic profiler and reproducible JSON/CSV output.
 - [x] Strict converter source, safetensors, resume-ledger, and orphan-suffix trust boundaries with B-0026 evidence.
@@ -891,6 +892,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Admission-time immutable validation with B-0024 attribution and bounded ordered-set CUDA Graph update/cache experiments with B-0025 evidence.
 - [ ] Learned drafting, acceptance-aware block sizing, and cost-aware verification experiments.
 - [ ] Sensitivity-calibrated mixed trunk quantization.
+- [ ] Direct packed 3-bit CUDA decode/GEMM and bounded official MXFP4-to-3-bit manufacturing.
 - [ ] SKYFORGE shard compiler for explicitly provisioned cloud jobs.
 - [ ] Full ablation and coding-quality suite.
 

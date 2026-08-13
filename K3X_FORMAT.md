@@ -59,8 +59,8 @@ Tensor records are 128 bytes.
 |---:|---|---|
 | 0 | `u64` | tensor ID |
 | 8 | `u32` | role, version 1 uses 0 for hash-addressed generic tensors |
-| 12 | `u16` | dtype, 1 FP32 or 2 UINT8 |
-| 14 | `u16` | quantization, 0 none or 1 native MXFP4 |
+| 12 | `u16` | dtype, 1 FP32, 2 UINT8, or 3 BF16 |
+| 14 | `u16` | quantization, 0 none, 1 native MXFP4, or 2 group-wise signed 3-bit |
 | 16 | `u8` | rank, 0 through 4 |
 | 17 | `u8` | flags |
 | 18 | `u16` | reserved |
@@ -79,11 +79,11 @@ Tensor records are 128 bytes.
 
 For native MXFP4, data contains low-nibble-first E2M1 codes and the auxiliary extent contains E8M0 group scales. Group size is stored in model config.
 
-### Proposed quantization value 2 — group-wise signed 3-bit
+### Quantization value 2 — group-wise signed 3-bit
 
-Milestone 37 reserves quantization value `2` for a proposed group-32 signed 3-bit routed-expert representation. Eight codes are packed little-endian into three bytes. Codes `0..6` represent integers `-3..3`; code `7` is reserved and must be rejected. One BF16 scale is stored per 32 values in the auxiliary extent, yielding 3.5 bits per weight before alignment and directory overhead.
+Milestone 37 assigns quantization value `2` to a group-32 signed 3-bit routed-expert representation. Eight codes are packed little-endian into three bytes. Codes `0..6` represent integers `-3..3`; code `7` is reserved and rejected. One positive finite BF16 scale is stored per 32 values in the auxiliary extent, yielding 3.5 bits per weight before alignment and directory overhead. The final partial group is zero-padded; logical length records the unpadded FP32 decode length.
 
-This value is not yet a supported K3X v1 runtime record. Writers must not publish it in a production artifact until the C++ reader, CPU reference decode, CUDA decode/GEMM boundary, required-feature negotiation, and synthetic token-parity gate are implemented. Native MXFP4 remains the exact expert representation.
+Required feature bit 1 declares that at least one tensor uses this representation. Python and C++ readers reject missing or spurious feature declaration and invalid extent lengths. Python and C++ decoders additionally reject non-positive or non-finite scales and reserved codes. The streaming writer, Python oracle, and portable C++ runtime support the synthetic CPU/reference path. Direct packed CUDA decode/GEMM and the production calibration recipe remain unimplemented, so this format is not yet authorized for full official manufacture. Native MXFP4 remains the exact expert representation and reference mode.
 
 ## Layer record
 

@@ -1487,3 +1487,14 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Evidence: B-0030 through B-0036 focused suite 105/105; strict committed B-0036 artifact/manifest/oracle/runner/raw/CSV/aggregate rehash passed.
 - Actual operation-attribution Compute Sanitizer: `ERROR SUMMARY: 0 errors`; exact routes/output/state, regional device closure, and zero unclassified device time.
 - Production guard: the actual bounded two-layer artifact emits `NON_EXECUTABLE_ARTIFACT` and creates no output. The portable Python regression asserts child exit 4.
+
+## Milestone 37 portable 3-bit correctness gate
+
+- Date: 2026-08-13.
+- Commit: `0b8a1e5`.
+- Hardware: local 9800X3D development host; portable CPU execution under WSL2. The CUDA-enabled binary was also built, but the test selected the CPU backend.
+- Model: deterministic synthetic K3-compatible checkpoint.
+- Mode: group-32 signed 3-bit routed experts, incremental greedy generation, exact FP32 trunk.
+- Correctness: prefill layer outputs and logits match the independently constructed quantized Python model at `1e-6` absolute and relative tolerance; six greedy tokens match exactly.
+- Verification: C++ `ops` 1/1; focused Python/converter/reader/runtime regression 28/28; CUDA-enabled `k3x_run` build plus the same 3-bit CPU execution gate 1/1.
+- Performance and traffic fields: not measured. No decode tok/s, prefill tok/s, TTFT, VRAM, RAM, NVMe, H2D, cache, Top-K, speculation, or quality result is claimed.

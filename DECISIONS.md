@@ -857,3 +857,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: existing-event classification adds no CUDA synchronization or execution change, retains unknown operations through checked remainder buckets, and creates a reproducible decision boundary before finer instrumentation.
 - Rejected claims: this decision does not establish a kernel bottleneck, speedup, token rate, physical traffic result, or production-default change.
 - Revisit: KDA is the largest single operation but not a majority. Add synchronization-neutral KDA-internal attribution before selecting a fusion; retain device closure as experimental and host round trip as default.
+
+## D-074 — Gate local manufacture on a portable 3-bit ABI before official downloads
+
+- Date: 2026-08-13.
+- Status: portable correctness boundary implemented; production launch remains gated.
+- Decision: assign K3X quantization value 2 and required feature bit 1 to a deterministic group-32 signed 3-bit routed-expert representation. Implement streaming records, strict Python/C++ validation, a PyTorch oracle, and portable C++ execution before downloading the complete checkpoint.
+- Alternatives considered: start the 1.56 TB source download before runtime support; retain native MXFP4 and miss the 1.28 TB output budget; publish 3-bit records without required-feature negotiation.
+- Evidence: commit `0b8a1e5` passes the C++ literal decode test and a synthetic K3X integration test comparing every prefill layer, logits, and six incremental greedy tokens between Python and C++. The existing native-MXFP4 synthetic path remains green in the focused 28-test regression.
+- Benchmark result: no performance benchmark was run. This is correctness evidence only.
+- Reason accepted: it fails closed on unsupported readers and prevents manufacturing an artifact that the local runtime cannot interpret at all.
+- Rejected claims: CPU expansion to FP32 is not an efficient production codec, a direct CUDA 3-bit kernel, quality evidence, or authorization to launch all 96 official shards.
+- Revisit: implement bounded official MXFP4-to-3-bit conversion, direct packed CUDA execution, recipe size closure, and quality calibration before enabling the official manifest.

@@ -2,12 +2,15 @@
 
 ## Current milestone
 
+Milestone 37 local Foundry is now in the portable 3-bit runtime phase. Commit `0b8a1e5` implements K3X quantization value 2 with required-feature negotiation, strict Python/C++ metadata validation, a deterministic PyTorch oracle, and portable C++ execution. A synthetic checkpoint passes prefill layer, logits, and six-token incremental greedy parity. This is not the production codec gate: direct packed CUDA execution, bounded official MXFP4-to-3-bit conversion, byte-budget recipe closure, and quality calibration remain incomplete, so the authenticated 96-shard launch is still disabled.
+
 Milestone 35 implementation and formal B-0036 evidence are locally complete and awaiting publication. Existing successful profiler events are classified into KDA, device route preparation, MoE FFN, and checked unclassified buckets without new CUDA synchronization or execution changes. KDA is largest at 41.719% of classified device time, but no fusion or default change is accepted. The bounded artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, full shard, or paid cloud resource exists.
 
 State audited last on 2026-08-13 at local M35 evidence commit `4a41223` over public M34 publication head `acc14d0dad1796305161249001bfd24598086601`. CPU CTest 20/20, liburing CTest 21/21, ASan/UBSan CTest 21/21, CUDA CTest 36/36, portable Python 664/139, actual schema compatibility 3/3, fast parser/contracts 10/10, evidence regressions 105/105, strict B-0036 rehash, actual Compute Sanitizer with zero errors, and the production non-executable guard pass. No complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
+- Milestone 37 portable group-32 signed 3-bit K3X writer/reader ABI, strict required-feature negotiation, PyTorch reference decode, C++ portable decode, and synthetic layer/logit/token parity. Focused verification passes 28 tests plus a CUDA-enabled build/CPU execution gate; no performance result is claimed.
 - Milestone 0 deterministic synthetic K3-compatible PyTorch graph, K3X v1 streaming converter, strict Python/C++ readers, and independent portable C++20 runtime.
 - Milestone 28 bounded official layer-1 MoE FFN manufacturing, exact natural Top-16 A/B routing, 32-expert union, portable/CUDA parity, exact residency, B-0029 evidence, and full local verification without a complete shard or checkpoint.
 - Milestone 29 bounded official layer-1 Attention-Residual/KDA/MoE execution, exact full/incremental state parity, B-0030 evidence, public PR #50, and post-merge CI without a complete shard or checkpoint.
@@ -173,6 +176,7 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 ## Known failures and blockers
 
+- The 3-bit runtime currently expands each selected projection to FP32 before backend matvec. This is a correctness oracle, not a viable full-model execution path. Direct packed CUDA decode/GEMM and bounded conversion from native MXFP4 are required before official local manufacture starts.
 - Windows Smart App Control still blocks unsigned `k3x_run.exe`; WSL2 is the verified local CUDA path and native Linux remains the final performance authority.
 - The production-executable checkpoint is synthetic and tiny. The bounded official M29–M31 artifact executes only through the dedicated benchmark harness and remains rejected by `k3x_run`; no complete shard or full checkpoint has been downloaded. B-0032 is one complete layer-boundary sequence attribution, not token throughput or full-model evidence.
 - M26 binds transport, snapshot, index, config, shard header, range, tensor, microshard, and K3X identities, but does not recompute the complete shard LFS digest or provide signed publisher provenance. Production conversion needs stronger complete-object or authenticated-chunk verification.
@@ -194,9 +198,9 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 ## Next concrete tasks
 
-1. Publish M35, verify pull-request and post-merge correctness/CodeQL, then synchronize the public ledger.
-2. Begin the next bounded milestone with synchronization-neutral KDA-internal attribution; do not select a fusion before that evidence.
-3. Keep wider closure, complete checkpoint, full-shard downloads, paid Cloud Run, and billable SKYFORGE execution deferred until evidence or explicit user execution authorizes them.
+1. Implement a direct packed 3-bit CUDA matvec/FFN boundary and prove it against the portable decoder on synthetic expert shapes.
+2. Add bounded official native-MXFP4-to-3-bit conversion and close the exact 1.28 TB recipe accounting without downloading all shards.
+3. Run sensitivity and token/quality gates, then enable the authenticated two-slot 96-shard local manufacture only if all correctness and disk-budget gates pass.
 
 ## Hardware assumptions
 

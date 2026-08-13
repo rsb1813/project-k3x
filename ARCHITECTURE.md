@@ -512,6 +512,14 @@ D-073's synchronization-free classification is implemented over the profiler eve
 
 The default and M34 schemas remain unchanged. The explicit M35 schema owns B-0036 and reuses the exact B-0035 artifact, correctness, traffic, residency, and 3/20 contracts. B-0036 measures 36.345792 ms KDA, 19.075499 ms device route preparation, and 31.698525 ms MoE FFN existing-event CUDA time per sequence, with zero unclassified time. Their shares are 41.719%, 21.896%, and 36.385%. KDA is the largest single operation but not a majority, so the next boundary is KDA-internal attribution rather than an accepted fusion. No default change exists. The design is in [`docs/superpowers/specs/2026-08-13-k3x-two-layer-operation-attribution-design.md`](docs/superpowers/specs/2026-08-13-k3x-two-layer-operation-attribution-design.md).
 
+## Milestone 37 implemented portable 3-bit correctness boundary
+
+The local Foundry path now has a deterministic group-32 signed 3-bit routed-expert representation for synthetic manufacture. K3X quantization value `2` is negotiated by required feature bit 1. The streaming writer stores twelve packed bytes and one two-byte BF16 scale per group. Python and C++ readers validate record lengths, feature presence, and checksums; the decoders validate scale values and reserved codes before computation.
+
+The PyTorch oracle and portable C++ runtime decode the same packed representation and execute the complete synthetic K3 graph. The focused integration gate converts a synthetic checkpoint, checks every quantized extent, and compares prefill layer outputs, logits, and incremental greedy tokens. Existing native-MXFP4 synthetic execution remains the reference path.
+
+This is a portable correctness boundary, not the production codec completion gate. The current C++ path expands a selected 3-bit expert projection to FP32 before backend matvec. It therefore cannot manufacture or efficiently execute the 1.28 TB official target. Direct packed CUDA decode/GEMM, bounded conversion from official native MXFP4, sensitivity calibration, mixed-precision recipe closure, and quality evaluation remain unimplemented. The authenticated 96-shard launch remains disabled until those gates pass.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

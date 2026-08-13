@@ -539,5 +539,14 @@
 - [x] Freeze the local Foundry design and inline implementation plan.
 - [x] Implement the disk-safe manifest and IMMORTAL ledger.
 - [x] Implement and verify the deterministic 3-bit expert codec.
-- [ ] Pass the synthetic local manufacturing integration gate.
+- [x] Pass the portable CPU/reference synthetic local manufacturing integration gate.
 - [ ] Launch the resumable 96-shard official manufacture.
+
+### 3-bit runtime correctness slice
+
+- [x] Re-read the accepted Local Foundry design and implementation plan.
+- [x] Add witnessed RED coverage for K3X quantization 2 metadata and CPU decode.
+- [x] Implement the minimum Python writer/reader and C++ reader/runtime boundary.
+- [x] Convert the synthetic K3-compatible model and prove layer/token parity.
+- [x] Update the TITAN Ledger documents and commit the verified boundary.
+- [ ] Implement direct packed CUDA execution and close the official conversion recipe gate.
