@@ -6,7 +6,9 @@ Milestone 38 quality Local Foundry is actively manufacturing the pinned official
 
 The exact Python first-token compatibility graph is now bound to sealed K3X fragments through layer 0, KDA-MoE, MLA-MoE, resumed execution, and the chunked LM head. The optimized C++ production graph remains incomplete, and the Python path cannot run end to end until all 96 fragments and `model.k3xset` exist. No official token, tok/s, quality result, complete checkpoint, or paid cloud resource exists.
 
-State synchronized on 2026-08-13 at implementation commit `e7bcaca`. Focused K3X strict/default and sealed set/store coverage passes 4/4, all six modified Python modules compile, and all five graph CLIs expose `--k3x-set`. A real official shard-1 strict open found 23 records in 11.401 seconds and loaded finite BF16 norm and Q8 q-projection tensors; sealed directory-open exposed the same records in 0.004774 seconds. This is graph-binding and storage evidence only, not an official token or throughput result.
+An independent original-precision reference oracle is also active from the preserved, digest-bound layer-24 prefix state. It resumes layers 25 through 92 and the LM head in the background, stores new range objects on D, and will provide the comparison token for the later K3X run. It has started layer 25 but has not generated a token yet.
+
+State synchronized on 2026-08-13 at implementation commit `4b0f4ce`. Focused K3X strict/default and sealed set/store coverage passes 4/4, all six modified Python modules compile, and all five graph CLIs expose `--k3x-set`. A real official shard-1 strict open found 23 records in 11.401 seconds and loaded finite BF16 norm and Q8 q-projection tensors; sealed directory-open exposed the same records in 0.004774 seconds. This is graph-binding and storage evidence only, not an official token or throughput result.
 
 ## Completed work
 
@@ -175,7 +177,7 @@ The task bullets below describe the gate reached at each named commit; later M33
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Current implementation branch: `codex/official-end-to-end-token`; latest implementation commit `e7bcaca` contains the sealed official graph path and D-081 open policy.
+- Current implementation branch: `codex/official-end-to-end-token`; latest implementation commit `4b0f4ce` contains the sealed official graph path, D-081 open policy, and resumed reference-token launcher.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build`, `build-liburing`, `build-asan`, and `build-cuda`.
 
 ## Known failures and blockers
@@ -207,7 +209,7 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 1. Keep the two-slot conductor running through all 96 pinned shards, verify every fragment and ledger entry, and delete each source only after durable completion.
 2. Keep the sealed Python compatibility graph launch-ready and validate each newly available storage boundary without competing materially with manufacture.
-3. Publish and checksum-open the official `model.k3xset`, generate and independently verify the first released-model greedy token, then profile and optimize the measured I/O, host, and CUDA bottlenecks.
+3. Finish the resumed original-precision reference token, then publish and checksum-open the official `model.k3xset`, generate the K3X greedy token, compare them under the documented mixed-precision contract, and optimize measured bottlenecks.
 
 ## Hardware assumptions
 
