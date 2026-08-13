@@ -833,3 +833,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: this is the smallest real cross-layer graph that requires independent recurrent state and can remove the inter-layer activation round trip while preserving the exact routing-to-residency scheduling point required by cache and cold-rescue work. K3X v1 already supports the necessary tensor and layer identities.
 - Rejected claims: B-0034 does not prove arbitrary-layer or concurrent-session state management, remove router-logit synchronizations, authorize a device-closure default, establish token throughput or quality, measure physical PCIe/NVMe traffic, download a complete checkpoint, or provision paid cloud resources.
 - Revisit: attribute and, if justified, fuse the extra device front/tail kernels and synchronization before considering wider layer closure. Generalize beyond the capacity-two registry only with a separately tested ownership and memory policy.
+
+## D-072 — Attribute existing front and tail regions before adding CUDA events or fusion
+
+- Date: 2026-08-13.
+- Status: accepted design; implementation and measurement pending.
+- Decision: add opt-in M34 attribution by snapshotting the existing CUDA backend `Profiler` around the exact two-layer front and tail calls, separately timing canonical host route plus expert resolution, and computing a checked wrapper remainder. Preserve the historical B-0034 path and schema when attribution is disabled.
+- Alternatives considered: add new CUDA events around each front/tail sub-kernel; duplicate the two-layer orchestration inside the benchmark harness; reuse existing profiler events at the wrapper boundary.
+- Evidence: sealed B-0034 shows device closure is 13.823803% slower while removing only 114,688 total logical inter-layer bytes per sequence. The backend already records synchronized device time for its KDA, route, and FFN operations, while the exact wrapper centrally owns tokens, state, recovery, and canonical routing.
+- Benchmark result: none. B-0035 has not run, and no region is yet claimed to cause the regression.
+- Reason accepted: profiler snapshots add no new CUDA event or synchronization, do not duplicate execution, and are sufficient to decide whether finer per-kernel instrumentation is warranted.
+- Rejected claims: the design does not implement fusion, establish a speedup, measure token throughput or physical traffic, or authorize a default change.
+- Revisit: after sealed B-0035, instrument individual kernels only if front or tail device time materially explains the regression; otherwise retain the exact path unchanged or investigate wrapper/host synchronization.
