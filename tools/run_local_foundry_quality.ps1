@@ -28,7 +28,7 @@ if ((hf auth whoami --format json | ConvertFrom-Json).user -ne "rsb1813") {
 
 $env:HF_XET_HIGH_PERFORMANCE = "1"
 $env:HF_HUB_DISABLE_XET = "0"
-$env:HF_XET_CACHE = "D:\K3X-staging\.xet-cache"
+$env:HF_XET_CACHE = Join-Path $stagingRoot ".xet-cache"
 Remove-Item Env:HF_HOME -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $destination,(Join-Path $stagingRoot "logs") | Out-Null
 
