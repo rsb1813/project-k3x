@@ -64,9 +64,14 @@ struct OfficialTwoLayerAttribution {
     std::uint64_t total_wall_nanoseconds{};
     std::uint64_t front_wall_nanoseconds{};
     std::uint64_t front_device_nanoseconds{};
+    std::uint64_t front_kda_device_nanoseconds{};
+    std::uint64_t front_route_device_nanoseconds{};
+    std::uint64_t front_unclassified_device_nanoseconds{};
     std::uint64_t route_wall_nanoseconds{};
     std::uint64_t tail_wall_nanoseconds{};
     std::uint64_t tail_device_nanoseconds{};
+    std::uint64_t tail_ffn_device_nanoseconds{};
+    std::uint64_t tail_unclassified_device_nanoseconds{};
     std::uint64_t unattributed_wall_nanoseconds{};
 };
 
