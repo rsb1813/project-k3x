@@ -32,12 +32,12 @@ for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
         }
         continue
     }
-    $exitCode = $process.ExitCode
+    $process.WaitForExit()
     $process.Dispose()
-    if ($exitCode -eq 0) {
+    if (Test-Path -LiteralPath (Join-Path $SlotPath $Filename)) {
         return
     }
     if ($attempt -eq $MaxAttempts) {
-        throw "download failed for $Filename after $MaxAttempts attempts"
+        throw "download failed for $Filename after $MaxAttempts attempts without a completed target"
     }
 }
