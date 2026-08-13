@@ -1001,3 +1001,47 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: one sequential D-to-RAM copy replaces repeated random/replayed source reads without changing tensor bytes, quantization, K3X output, ledger identity, or deletion authorization.
 - Rejected claims: tmpfs is not persistent and is not a source checkpoint. Worker termination may discard only uncommitted temporary work; the authenticated D source remains available for restart.
 - Revisit: compare worker A shard elapsed against B/C and shard 5. Increase WSL memory or change worker placement only if measured aggregate completion time improves without violating the 200 GiB C reserve.
+
+## D-086 — Combine final root and artifact digest verification
+
+- Date: 2026-08-13.
+- Status: implemented and focused-tested for newly launched workers.
+- Decision: compute the final K3X root check and whole-file SHA-256 in one sequential output pass after conversion. Retain the writer's per-extent CRC and root construction while writing.
+- Alternatives considered: retain separate complete output scans; remove the final root comparison; trust only the writer's in-process result.
+- Evidence: both checks consumed the same immutable finalized file, and the root authenticates every extent payload and directory record while the file digest binds the complete artifact bytes.
+- Benchmark result: focused conversion coverage passes; no isolated official speedup is claimed.
+- Reason accepted: it removes one checkpoint-sized C-drive read while preserving two independently compared digest values.
+- Revisit: fold the file digest into the writer only if crash-resume semantics retain an independent finalized-file audit.
+
+## D-087 — Reuse a verified immutable source identity at deletion
+
+- Date: 2026-08-13.
+- Status: implemented and focused-tested.
+- Decision: after hashing the staged RAM copy against the official digest, record the original source device, inode, size, and nanosecond modification time. After durable ledger publication, permit deletion without another full HDD hash only when all four identity fields are unchanged and the verified digest matches the plan.
+- Alternatives considered: reread the full D source after every completed fragment; delete from an earlier unchecked digest; retain every source indefinitely.
+- Evidence: the deletion gate fails closed on any identity mutation and still requires matching plan, ledger unit, source digest, output identity, and completed artifact.
+- Benchmark result: focused deletion and mutation coverage passes 1/1. Official isolated elapsed impact is not measured.
+- Reason accepted: it removes a post-conversion HDD pass while retaining a concrete TOCTOU guard and checksum-bound deletion authority.
+- Revisit: use a platform file lease if Windows/WSL identity semantics prove insufficient under measured concurrent mutation.
+
+## D-088 — Credit only valid resumable partial artifacts in disk admission
+
+- Date: 2026-08-13.
+- Status: implemented and focused-tested.
+- Decision: count planned bytes already present in a `.partial` artifact toward the final output budget only when its resume manifest is structurally valid, belongs to an incomplete planned unit, and its file length covers the recorded durable extents.
+- Alternatives considered: ignore all partial bytes and falsely reject valid resumes; credit every `.partial` filename by size; lower the 200 GiB reserve.
+- Evidence: simultaneous shard 37 and 67 partials contained 22,899,900,416 durable bytes, while the admission deficit was 22,696,393,216 bytes. Ignoring them rejected a restart that required no additional copy of those bytes.
+- Benchmark result: disk-budget and malformed-partial regressions pass 3/3.
+- Reason accepted: valid resume bytes are already allocated destination capacity, whereas arbitrary or malformed partials remain untrusted.
+- Revisit: expose a separate orphan-partial cleanup command if abandoned artifacts accumulate.
+
+## D-089 — Stage before prefetch and run two bounded RAM workers
+
+- Date: 2026-08-14.
+- Status: implemented, focused-tested, and active for shards 39 and 69 onward.
+- Decision: cap WSL at 72 GiB with 16 GiB swap, mount `/dev/shm` at 60 GiB, and allow two bounded RAM work roots. In RAM mode publish an atomic marker only after the source copy matches its official SHA-256; launch the next HF Xet prefetch from a watcher after that marker instead of before the D-to-RAM copy.
+- Alternatives considered: retain 45 GiB WSL defaults and one RAM worker; run three 17 GiB RAM work roots; overlap HDD copy with HF assembly on the same D drive.
+- Evidence: one uncontended D-to-RAM copy sustained roughly 87–97 MB/s, while concurrent converters and prefetch reduced observed D reads to 7.8–20.2 MB/s. The new marker focused test passes and the PowerShell conductor parses.
+- Benchmark result: shard 68 completed in 694.020 seconds and shard 38 in 697.560 seconds on the preceding two-worker RAM setup. These are complete fresh-shard timings but include the prior scheduling path, so the marker's isolated effect remains unmeasured.
+- Reason accepted: two work roots fit the bounded memory envelope; three do not leave enough safe headroom for quantized intermediates and reference execution. Serializing only the HDD copy preserves network/conversion overlap afterward.
+- Revisit: compare shards 39 and 69 plus their successors before adding a third worker or changing the WSL cap.

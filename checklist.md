@@ -562,6 +562,10 @@
 - [x] Arm an idempotent 96-fragment finalizer and K3X first-token runner.
 - [x] Bind every K3X prefix state and result to the sealed set digest.
 - [x] Move one worker's repeated source reads into bounded RAM staging.
+- [x] Combine the final output audit and remove an unchanged source's duplicate deletion hash.
+- [x] Credit only plan-bound resumable partial bytes in the destination budget.
+- [x] Expand the bounded WSL memory envelope for two RAM workers.
+- [x] Delay next-shard Xet prefetch until RAM staging and official SHA verification complete.
 - [ ] Complete and verify all 96 K3X fragments.
 - [ ] Complete the resumed original-precision layer-24 reference oracle and record its greedy token.
 - [ ] Assemble the final executable checkpoint and generate the first token.

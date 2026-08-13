@@ -895,11 +895,11 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Scalar direct-packed 3-bit CUDA matvec with synthetic layer/logit/token parity and sanitizer coverage.
 - [x] Exact pinned-header byte accounting for a sub-1.28 TB mixed recipe and one Reader-valid released-expert 3-bit conversion.
 - [ ] Acceptable released/full-model 3-bit quality. The first bounded expert proxy measured 0.325 relative L2 and therefore did not unlock manufacture.
-- [x] Authenticated local manufacture is active across three disjoint two-slot workers with native MXFP4 experts and group-128 8-bit selected trunk matrices; verified shards 1 through 6 are complete and their source files were ledger-gated before deletion.
+- [x] Authenticated local manufacture is active with native MXFP4 experts and group-128 8-bit selected trunk matrices; 11 verified fragments are complete and every source file was ledger-gated before deletion.
 - [x] Implement a checksum-bound `K3XSET1` fragment index and C++ multi-fragment Reader without a second model-sized payload copy.
 - [x] Bind the exact Python layer-0, KDA-MoE, MLA-MoE, resume, and LM-head compatibility runners to sealed K3X fragments.
 - [x] Separate strict manufacture verification from millisecond sealed-set directory opening without changing the Reader default.
-- [x] Add one bounded RAM-staging Foundry worker while retaining D-drive source and deletion authority.
+- [x] Add two bounded RAM-staging Foundry workers, combined output audits, immutable source-deletion identities, resume-byte accounting, and staging-before-prefetch scheduling.
 - [x] Make the IMMORTAL ledger safe for disjoint multi-worker Local Foundry publication.
 - [ ] Complete all 96 quality fragments, publish the official set manifest, and generate the first released-model token.
 - [ ] Grouped/resident/fused 3-bit CUDA FFN and complete official manufacturing.
@@ -931,7 +931,7 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
 - Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0025 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; transient, bounded-resident, resident-grid, resident MoE-layer, admission-validation, and CUDA Graph paths are exact opt-in experiments. B-0025 finds mixed stable/alternating deltas and rotating churn 6.09%–11.57% slower, so no graph default changes. There is no learned DSpark drafter, reduced-precision draft path, eviction-capable draft residency, device-resident whole-token graph, or full-model speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
-- The quality Local Foundry has produced Reader-valid official fragments 1 through 6 while three disjoint conductors cover the remaining ranges. The checksum-bound fragment-set format, Reader, and compatibility graph binding are implemented, but the official set and first token do not exist yet. Provenance is pinned official shard SHA-256 plus K3X roots and the local ledger, not signed publisher provenance.
+- The quality Local Foundry has produced 11 Reader-valid official fragments. Two bounded RAM conductors currently cover shards 39–66 and 69–96; shards 8–36 follow when a RAM slot becomes available. The checksum-bound fragment-set format, Reader, and compatibility graph binding are implemented, but the official set and first token do not exist yet. Provenance is pinned official shard SHA-256 plus K3X roots and the local ledger, not signed publisher provenance.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.
 - No open-source license has been selected yet; public visibility does not itself grant reuse rights.
 
