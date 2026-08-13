@@ -50,6 +50,7 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
     sha256 = local_shard._sha256
     staging_ready = tmp_path / "source.ram-ready"
     staging_lock = tmp_path / "ram-stage.lock"
+    output_audit_lock = tmp_path / "output-audit.lock"
     copyfile = local_shard.shutil.copyfile
 
     def capture(path, outputs, *, chunk_bytes):
@@ -70,6 +71,20 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
         return sha256(path)
 
     monkeypatch.setattr(local_shard, "_sha256", capture_sha256)
+
+    root_and_file_sha256 = local_shard.root_and_file_sha256
+
+    def capture_output_audit(stream, length):
+        with output_audit_lock.open("a+b") as contender:
+            try:
+                fcntl.flock(contender.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                pass
+            else:
+                raise AssertionError("output audit was not serialized")
+        return root_and_file_sha256(stream, length)
+
+    monkeypatch.setattr(local_shard, "root_and_file_sha256", capture_output_audit)
 
     def reject_cross_device_link(source_path, destination_path):
         raise OSError(errno.EXDEV, "cross-device link")
@@ -97,6 +112,7 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
         temporary_directory=tmp_path / "staging-work",
         staging_ready_path=staging_ready,
         staging_lock_path=staging_lock,
+        output_audit_lock_path=output_audit_lock,
     )
 
     assert report.source_sha256 == source_sha256

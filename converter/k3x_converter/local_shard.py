@@ -247,6 +247,7 @@ def convert_local_official_shard(
     temporary_directory: Path | None = None,
     staging_ready_path: Path | None = None,
     staging_lock_path: Path | None = None,
+    output_audit_lock_path: Path | None = None,
 ) -> LocalShardReport:
     source_path = Path(source_path).resolve(strict=True)
     verified_source_identity = source_identity(source_path)
@@ -320,10 +321,11 @@ def convert_local_official_shard(
     reader = K3XReader.open(
         output_path, verify_root=False, verify_payload=False
     )
-    with output_path.open("rb") as stream:
-        observed_root, output_sha256 = root_and_file_sha256(
-            stream, output_path.stat().st_size
-        )
+    with _staging_lock(output_audit_lock_path):
+        with output_path.open("rb") as stream:
+            observed_root, output_sha256 = root_and_file_sha256(
+                stream, output_path.stat().st_size
+            )
     if observed_root != reader.superblock.root_sha256:
         raise K3XError("ROOT_SHA256_MISMATCH")
     expected_records = len(outputs) - quant8_count - native_expert_count // 2

@@ -7,6 +7,7 @@ param(
     [string]$Progress = "C:\K3X\foundry-progress.jsonl",
     [string]$TemporaryDirectory = "",
     [string]$StagingLock = "C:\K3X\foundry-ram-stage.lock",
+    [string]$OutputAuditLock = "C:\K3X\foundry-output-audit.lock",
     [switch]$Finalize
 )
 
@@ -112,6 +113,7 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
     $temporaryArgument = ""
     $stagingReadyArgument = ""
     $stagingLockArgument = ""
+    $outputAuditLockArgument = ""
     if ($TemporaryDirectory) {
         $temporaryArgument = "--temporary-directory $TemporaryDirectory"
         $stagingReady = $target + ".ram-ready"
@@ -120,6 +122,8 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
         $stagingReadyArgument = "--staging-ready-file $stagingReadyLinux"
         $stagingLockLinux = (& wsl -e wslpath -a -u $StagingLock).Trim()
         $stagingLockArgument = "--staging-lock-file $stagingLockLinux"
+        $outputAuditLockLinux = (& wsl -e wslpath -a -u $OutputAuditLock).Trim()
+        $outputAuditLockArgument = "--output-audit-lock-file $outputAuditLockLinux"
         $prefetchJob = Start-NextDownloadAfterMarker ($index + 1) $stagingReady
     }
     else {
@@ -136,6 +140,7 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
         $temporaryArgument,
         $stagingReadyArgument,
         $stagingLockArgument,
+        $outputAuditLockArgument,
         "--output-budget-bytes 1510500000000",
         "--delete-source"
     ) -join " "
