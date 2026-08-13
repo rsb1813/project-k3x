@@ -1388,7 +1388,7 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 ## B-0034 — official two-layer device closure
 
 - Date: 2026-08-13.
-- Evidence commit: `fa735fb`; implementation/correctness head before evidence: `77381ae`.
+- Public evidence commit: `ead4371`; implementation/correctness head before evidence: `c86225b`.
 - Hardware: AMD Ryzen 7 9800X3D, NVIDIA GeForce RTX 5080 16 GB, driver 591.86, CUDA 13.3.1, WSL2 Ubuntu 24.04.4 on Windows 11.
 - Model/checkpoint: 3,641,057,536-byte bounded official layers 1 and 2 fixture from `moonshotai/Kimi-K3` revision `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`; 119 verified range objects from two pinned shards; no complete shard/checkpoint.
 - Mode: exact A1→A2→B1→B2 KDA plus natural Top-16 Stable LatentMoE, host round trip versus experimental device closure, 4 GiB resident admission, three warmups, and twenty measured two-position sequences.
@@ -1418,3 +1418,4 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Actual device-closure Compute Sanitizer: `ERROR SUMMARY: 0 errors`; maximum error `0.00195312`, zero inter-layer hidden H2D/D2H, closed state/prepared lifetimes, and exact B-0034 route/output/state identities.
 - Production guard: the actual bounded two-layer artifact emits `NON_EXECUTABLE_ARTIFACT` and creates no output. The direct shell wrapper does not preserve the child exit code, while the existing production regression asserts child exit 4.
 - The complete CUDA-enabled Python matrix exceeded the 10-minute command limit and is not claimed as passed. Its affected actual path is covered independently by CUDA CTest 36/36, harness 6/6, evidence 93/93, and Compute Sanitizer zero errors.
+- Public integration: PR #58 rebase-merged at `9ce513f9d79b6cee88b7bb2de176e6fbbb79f43b`. Branch correctness `31673610347`, pull-request correctness `31673636564`, pull-request CodeQL `31673636680`, post-merge `main` correctness `31673888294`, and post-merge CodeQL `31673888289` all succeeded. Remaining annotations are the known Node 20 and CodeQL Action v3 deprecation notices plus the existing C++ overlay-base fallback warning.

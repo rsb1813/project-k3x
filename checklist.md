@@ -495,4 +495,4 @@
 - [x] Run actual-artifact correctness, sanitizer, production-guard, and full portable regression gates; record the complete CUDA Python timeout without overstating it.
 - [x] Run B-0034 exactly once successfully and seal the evidence after two fail-closed unpublished attempts.
 - [x] Synchronize README and TITAN Ledger for the measured local milestone.
-- [ ] Publish M33 and verify pull-request and post-merge CI.
+- [x] Publish M33 through PR #58 and verify pull-request and post-merge correctness and CodeQL.
