@@ -268,9 +268,14 @@ def main() -> int:
     )
     zero = zero_official_kda_state(kda_config, 1, device)
     kda = official_kda(kda_input.reshape(1, 1, 7_168), kda_weights, zero, kda_config)
-    prefix_sum = (hidden.float() + kda.output.reshape(-1).float()).to(torch.bfloat16)
-    if layer_id % config.attn_res_block_size == 0:
+    block_write = layer_id % config.attn_res_block_size == 0
+    if block_write:
+        prefix_sum = kda.output.reshape(-1)
         block_sources = (*block_sources, hidden)
+    else:
+        prefix_sum = (hidden.float() + kda.output.reshape(-1).float()).to(
+            torch.bfloat16
+        )
     ffn_hidden = _prepare_ffn_hidden(
         prefix_sum,
         block_sources,
@@ -367,7 +372,7 @@ def main() -> int:
         f"kda_{layer_id}_conv_v": kda.state.conv_v,
         f"kda_{layer_id}_recurrent_v_first": kda.state.recurrent_v_first,
     }
-    if layer_id % config.attn_res_block_size == 0:
+    if block_write:
         new_tensors[f"block_source_{layer_id}"] = hidden
     for name, tensor in new_tensors.items():
         path = state_dir / f"{name}.bin"
