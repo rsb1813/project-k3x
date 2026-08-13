@@ -1041,3 +1041,10 @@
 - B-0036 tooling RED failed import before the separate module existed. GREEN passes 6 new tests and 105 B-0030 through B-0036 evidence regressions. Actual operation-attribution Compute Sanitizer reports zero errors and exact regional closure.
 - Formal B-0036 completed once and strict rehash passed. Host/device medians are 102.157295/116.049550 ms. Device existing-event time averages 36.345792 ms KDA, 19.075499 ms route preparation, and 31.698525 ms MoE FFN; both unclassified buckets are zero. KDA is largest at 41.719%, but no fusion/default change is accepted.
 - Final M35 gates pass CPU CTest 20/20, liburing CTest 21/21, ASan/UBSan CTest 21/21, CUDA CTest 36/36, portable Python 664/139, evidence 105/105, strict B-0036 rehash, actual Compute Sanitizer zero errors, and the production non-executable guard.
+
+## 2026-08-13 — Milestone 36 first-token pivot
+
+- The user prioritized reaching an actual Kimi K3 execution quickly and explicitly requested no subagents, fewer repeated tests, and batched work.
+- The shortest honest K3X path is selected-range execution, not a 1.56 TB full-checkpoint download and not a temporary third-party engine. One embedding row, always-active layer tensors, natural Top-16 experts, and LM-head chunks are sufficient for one exact text token.
+- Development validation is limited to one focused test after the connected change and one final integration gate. Correctness failures remain visible and fail closed.
+- Public M35 post-merge correctness run `31681318225` and CodeQL run `31681318273` both succeeded at `046a27f195ebf02cf0ce58c7da22d11f43a1b19f`.

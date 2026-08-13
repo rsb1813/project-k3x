@@ -521,3 +521,12 @@
 - [x] Run actual-artifact correctness, sanitizer, production-guard, and full regression gates.
 - [x] Run B-0036 once successfully, strictly reverify it, and seal the evidence.
 - [ ] Synchronize the TITAN Ledger, publish M35, and verify CI.
+
+## Milestone 36 — Official first token
+
+- [x] Freeze the bounded streaming design and inline execution plan.
+- [ ] Generate and validate the pinned 93-layer topology manifest without payload download.
+- [ ] Implement the verified selected-range cache.
+- [ ] Connect the missing dense, MLA, embedding, output residual, norm, and LM-head nodes.
+- [ ] Execute and seal one actual released-checkpoint greedy token.
+- [ ] Run one focused gate and one integration gate, then publish.
