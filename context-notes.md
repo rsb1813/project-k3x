@@ -1056,3 +1056,10 @@
 - The existing M33 layer-1/layer-2 trunk objects were hard-linked into the M36 content-addressed cache and reverified before use. Actual layers 1 and 2 each downloaded only 280,756,224 routed-expert bytes and executed in 1.545/1.618 seconds.
 - The first actual Gated MLA layer exposed a BF16 output-projection dtype omission in the synthetic reference. A focused BF16 regression failed at the projection, the gated activation is now rounded to the projection dtype, and the full MLA test file passes 5/5.
 - Actual layer 3 then completed with natural route `[515,727,65,477,48,193,703,296,21,196,810,354,287,154,262,885]`, 280,756,224 new expert bytes, 1.593 seconds compute, 1,101,418,496 peak allocated CUDA bytes, and output digest `6d35fd9c01db90b2cb2473ccc1d1057f7143a4616c97e6b971005610995f1539`. No final token has been generated yet.
+
+## 2026-08-13 — Milestone 37 local Foundry pivot
+
+- The user selected local-only 1.28 TB manufacturing to avoid Cloud Storage internet egress. The interrupted first-token traversal was stopped after durable layer 24 state; its verified objects remain reusable.
+- Windows HF CLI is authenticated as `rsb1813`; WSL and the existing urllib transport were anonymous and bypassed Xet. Authenticated `hf_xet 1.6.0` with `HF_XET_HIGH_PERFORMANCE=1` downloaded and assembled official shard 94, 4,697,664,072 bytes, in 56.02 seconds at 79.97 MiB/s and matched official SHA-256 `ad66e1cb96b86963e63d6a0a466b6a407b13c9815cb480fe612480cc6bb3b6e1`. The temporary payload was deleted.
+- Live capacity is 1,607.88 GiB free on the P44 Pro and 829.24 GiB free on the HDD. A 1,280,000,000,000-byte output leaves 415.79 GiB on the NVMe; after a separate 200 GiB reserve, 215.79 GiB remains. The largest of 96 official shards is 15.82 GiB, so two-slot HDD staging fits.
+- The 1.28 TB target requires a new 3-bit routed-expert representation; it cannot be published as runnable before the reference codec, metadata, runtime decode, and synthetic integration gate pass. Full source download is therefore gated rather than started prematurely.

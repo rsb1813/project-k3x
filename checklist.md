@@ -531,3 +531,13 @@
 - [x] Execute actual released layers 0 through 3, including the first KDA/KDA/KDA/MLA hybrid block.
 - [ ] Execute and seal one actual released-checkpoint greedy token.
 - [ ] Run one focused gate and one integration gate, then publish.
+
+## Milestone 37 — Local Foundry
+
+- [x] Measure authenticated HF Xet throughput on one official 4.7 GB shard.
+- [x] Verify the 1.28 TB output, 200 GiB NVMe reserve, and two-slot HDD staging budget.
+- [x] Freeze the local Foundry design and inline implementation plan.
+- [ ] Implement the disk-safe manifest and IMMORTAL ledger.
+- [ ] Implement and verify the deterministic 3-bit expert codec.
+- [ ] Pass the synthetic local manufacturing integration gate.
+- [ ] Launch the resumable 96-shard official manufacture.
