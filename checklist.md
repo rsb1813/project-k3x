@@ -504,7 +504,7 @@
 - [x] Accept an opt-in profiler-snapshot attribution design with no new CUDA synchronization.
 - [x] Write and self-review the M34 implementation plan.
 - [x] Add the caller-owned attribution accumulator with CUDA ownership/parity tests.
-- [ ] Add an opt-in harness schema while preserving default B-0034 output.
+- [x] Add an opt-in harness schema while preserving default B-0034 output.
 - [ ] Add strict B-0035 evidence tooling.
 - [ ] Run actual-artifact correctness, sanitizer, production-guard, and regression gates.
 - [ ] Run B-0035 once successfully and seal the evidence.
