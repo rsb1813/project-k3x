@@ -50,6 +50,7 @@ struct Arguments {
     std::uint64_t warmup{};
     std::uint64_t iterations{};
     bool attribution{};
+    bool operation_attribution{};
 };
 
 std::optional<std::uint64_t> parse_u64(std::string_view text) {
@@ -115,10 +116,23 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
                 std::cerr << "invalid attribution\n";
                 return std::nullopt;
             }
+        } else if (key == "--operation-attribution") {
+            if (value == "true") {
+                result.operation_attribution = true;
+            } else if (value == "false") {
+                result.operation_attribution = false;
+            } else {
+                std::cerr << "invalid operation attribution\n";
+                return std::nullopt;
+            }
         } else {
             std::cerr << "unknown argument\n";
             return std::nullopt;
         }
+    }
+    if (result.attribution && result.operation_attribution) {
+        std::cerr << "conflicting attribution modes\n";
+        return std::nullopt;
     }
     if (!mode_seen || result.artifact.empty() || result.manifest.empty() ||
         result.oracle.empty() || !result.resident_bytes ||
@@ -1038,8 +1052,10 @@ int main(int argc, char** argv) {
         return 4;
     }
 
+    const bool attribution_enabled =
+        arguments->attribution || arguments->operation_attribution;
     std::optional<k3x::Profiler> attribution_profiler;
-    if (arguments->attribution) attribution_profiler.emplace();
+    if (attribution_enabled) attribution_profiler.emplace();
     auto backend = k3x::make_cuda_backend(
         backend_options(arguments->resident_bytes),
         attribution_profiler ? &*attribution_profiler : nullptr);
@@ -1075,7 +1091,7 @@ int main(int argc, char** argv) {
             *backend.value(), inputs, cuda_layers, states, config, 16, 4, 25,
             k3x::ProfilePhase::decode, mode,
             attribution_profiler ? &*attribution_profiler : nullptr,
-            arguments->attribution ? &measured_attribution : nullptr);
+            attribution_enabled ? &measured_attribution : nullptr);
         const auto elapsed = static_cast<std::uint64_t>(
             std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - start).count());
@@ -1125,19 +1141,29 @@ int main(int argc, char** argv) {
             return 5;
         }
         maximum_error = std::max(maximum_error, error);
-        if (arguments->attribution) {
+        if (attribution_enabled) {
             attribution.total_wall_nanoseconds +=
                 measured_attribution.total_wall_nanoseconds;
             attribution.front_wall_nanoseconds +=
                 measured_attribution.front_wall_nanoseconds;
             attribution.front_device_nanoseconds +=
                 measured_attribution.front_device_nanoseconds;
+            attribution.front_kda_device_nanoseconds +=
+                measured_attribution.front_kda_device_nanoseconds;
+            attribution.front_route_device_nanoseconds +=
+                measured_attribution.front_route_device_nanoseconds;
+            attribution.front_unclassified_device_nanoseconds +=
+                measured_attribution.front_unclassified_device_nanoseconds;
             attribution.route_wall_nanoseconds +=
                 measured_attribution.route_wall_nanoseconds;
             attribution.tail_wall_nanoseconds +=
                 measured_attribution.tail_wall_nanoseconds;
             attribution.tail_device_nanoseconds +=
                 measured_attribution.tail_device_nanoseconds;
+            attribution.tail_ffn_device_nanoseconds +=
+                measured_attribution.tail_ffn_device_nanoseconds;
+            attribution.tail_unclassified_device_nanoseconds +=
+                measured_attribution.tail_unclassified_device_nanoseconds;
             attribution.unattributed_wall_nanoseconds +=
                 measured_attribution.unattributed_wall_nanoseconds;
         }
@@ -1157,7 +1183,9 @@ int main(int argc, char** argv) {
         state_digest(last.final_states[0]),
         state_digest(last.final_states[1])};
     std::cout << "{\"schema\":\""
-              << (arguments->attribution
+              << (arguments->operation_attribution
+                      ? "k3x-official-two-layer-operation-attribution-v1"
+                  : arguments->attribution
                       ? "k3x-official-two-layer-attribution-v1"
                       : "k3x-official-two-layer-bench-v1") << "\""
               << ",\"mode\":\""
@@ -1190,39 +1218,68 @@ int main(int argc, char** argv) {
               << last.telemetry.layer_front_calls
               << ",\"layer_tail_calls\":"
               << last.telemetry.layer_tail_calls
-              << (arguments->attribution
+              << (attribution_enabled
                       ? ",\"total_wall_nanoseconds\":" : "")
-              << (arguments->attribution
+              << (attribution_enabled
                       ? std::to_string(attribution.total_wall_nanoseconds)
                       : "")
-              << (arguments->attribution
+              << (attribution_enabled
                       ? ",\"front_wall_nanoseconds\":" : "")
-              << (arguments->attribution
+              << (attribution_enabled
                       ? std::to_string(attribution.front_wall_nanoseconds)
                       : "")
-              << (arguments->attribution
+              << (attribution_enabled
                       ? ",\"front_device_nanoseconds\":" : "")
-              << (arguments->attribution
+              << (attribution_enabled
                       ? std::to_string(attribution.front_device_nanoseconds)
                       : "")
-              << (arguments->attribution
+              << (arguments->operation_attribution
+                      ? ",\"front_kda_device_nanoseconds\":" : "")
+              << (arguments->operation_attribution
+                      ? std::to_string(
+                            attribution.front_kda_device_nanoseconds)
+                      : "")
+              << (arguments->operation_attribution
+                      ? ",\"front_route_device_nanoseconds\":" : "")
+              << (arguments->operation_attribution
+                      ? std::to_string(
+                            attribution.front_route_device_nanoseconds)
+                      : "")
+              << (arguments->operation_attribution
+                      ? ",\"front_unclassified_device_nanoseconds\":" : "")
+              << (arguments->operation_attribution
+                      ? std::to_string(
+                            attribution.front_unclassified_device_nanoseconds)
+                      : "")
+              << (attribution_enabled
                       ? ",\"route_wall_nanoseconds\":" : "")
-              << (arguments->attribution
+              << (attribution_enabled
                       ? std::to_string(attribution.route_wall_nanoseconds)
                       : "")
-              << (arguments->attribution
+              << (attribution_enabled
                       ? ",\"tail_wall_nanoseconds\":" : "")
-              << (arguments->attribution
+              << (attribution_enabled
                       ? std::to_string(attribution.tail_wall_nanoseconds)
                       : "")
-              << (arguments->attribution
+              << (attribution_enabled
                       ? ",\"tail_device_nanoseconds\":" : "")
-              << (arguments->attribution
+              << (attribution_enabled
                       ? std::to_string(attribution.tail_device_nanoseconds)
                       : "")
-              << (arguments->attribution
+              << (arguments->operation_attribution
+                      ? ",\"tail_ffn_device_nanoseconds\":" : "")
+              << (arguments->operation_attribution
+                      ? std::to_string(attribution.tail_ffn_device_nanoseconds)
+                      : "")
+              << (arguments->operation_attribution
+                      ? ",\"tail_unclassified_device_nanoseconds\":" : "")
+              << (arguments->operation_attribution
+                      ? std::to_string(
+                            attribution.tail_unclassified_device_nanoseconds)
+                      : "")
+              << (attribution_enabled
                       ? ",\"unattributed_wall_nanoseconds\":" : "")
-              << (arguments->attribution
+              << (attribution_enabled
                       ? std::to_string(
                             attribution.unattributed_wall_nanoseconds)
                       : "")

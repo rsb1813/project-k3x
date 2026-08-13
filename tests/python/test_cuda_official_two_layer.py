@@ -24,6 +24,7 @@ def _command(
     *,
     mode: str = "device-closure",
     attribution: str | None = None,
+    operation_attribution: str | None = None,
 ) -> list[str]:
     command = [
         str(_runner()),
@@ -44,6 +45,8 @@ def _command(
     ]
     if attribution is not None:
         command.extend(["--attribution", attribution])
+    if operation_attribution is not None:
+        command.extend(["--operation-attribution", operation_attribution])
     return command
 
 
@@ -124,6 +127,32 @@ def test_two_layer_harness_rejects_invalid_attribution_before_files(
 
     assert completed.returncode == 2
     assert "invalid attribution" in completed.stderr
+
+
+def test_two_layer_harness_rejects_invalid_operation_attribution_before_files(
+    tmp_path: Path,
+) -> None:
+    completed = subprocess.run(
+        _command(tmp_path, operation_attribution="sometimes"),
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert "invalid operation attribution" in completed.stderr
+
+
+def test_two_layer_harness_rejects_conflicting_attribution_modes(
+    tmp_path: Path,
+) -> None:
+    completed = subprocess.run(
+        _command(tmp_path, attribution="true", operation_attribution="true"),
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert "conflicting attribution modes" in completed.stderr
 
 
 def test_two_layer_harness_rejects_duplicate_manifest_keys(tmp_path: Path) -> None:
@@ -286,3 +315,55 @@ def test_two_layer_harness_emits_opt_in_attribution() -> None:
         + payload["tail_wall_nanoseconds"]
         + payload["unattributed_wall_nanoseconds"]
     )
+    assert "front_kda_device_nanoseconds" not in payload
+
+
+def test_two_layer_harness_emits_opt_in_operation_attribution() -> None:
+    root = Path(__file__).resolve().parents[2]
+    fixture = root / "artifacts" / "m33-official-two-layer"
+    artifact = fixture / "official-two-layer.k3x"
+    manifest = fixture / "two-layer-route-state-manifest.json"
+    oracle = fixture / "official-two-layer-oracle-v1.bin"
+    if not artifact.is_file() or not manifest.is_file() or not oracle.is_file():
+        pytest.skip("bounded official two-layer fixture is not materialized")
+
+    completed = subprocess.run(
+        [
+            str(_runner()),
+            "--artifact",
+            str(artifact),
+            "--manifest",
+            str(manifest),
+            "--oracle",
+            str(oracle),
+            "--mode",
+            "device-closure",
+            "--resident-bytes",
+            "4294967296",
+            "--warmup",
+            "0",
+            "--iterations",
+            "1",
+            "--operation-attribution",
+            "true",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout)
+    assert payload["schema"] == "k3x-official-two-layer-operation-attribution-v1"
+    assert payload["front_device_nanoseconds"] == (
+        payload["front_kda_device_nanoseconds"]
+        + payload["front_route_device_nanoseconds"]
+        + payload["front_unclassified_device_nanoseconds"]
+    )
+    assert payload["tail_device_nanoseconds"] == (
+        payload["tail_ffn_device_nanoseconds"]
+        + payload["tail_unclassified_device_nanoseconds"]
+    )
+    assert payload["front_kda_device_nanoseconds"] > 0
+    assert payload["front_route_device_nanoseconds"] > 0
+    assert payload["tail_ffn_device_nanoseconds"] > 0
