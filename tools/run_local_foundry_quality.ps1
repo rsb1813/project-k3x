@@ -58,6 +58,7 @@ function Start-NextDownload([int]$index) {
 for ($index = $StartIndex; $index -le $EndIndex; $index++) {
     $shard = $manifest.shards[$index - 1]
     $slotPath = Get-SlotPath $index
+    $target = Join-Path $slotPath $shard.filename
     New-Item -ItemType Directory -Force -Path $slotPath | Out-Null
 
     & $hf download $manifest.repository $shard.filename `
