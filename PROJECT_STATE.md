@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 34 is publicly complete through implementation PR #60 and publication PR #61 at `acc14d0dad1796305161249001bfd24598086601`. Milestone 35 operation-level attribution is the current local design milestone. D-073 accepts classifying existing successful profiler events inside the front/tail snapshots without new CUDA synchronization or execution changes. No M35 implementation or B-0036 measurement exists. The bounded artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, full shard, or paid cloud resource exists.
+Milestone 35 implementation and formal B-0036 evidence are locally complete and awaiting publication. Existing successful profiler events are classified into KDA, device route preparation, MoE FFN, and checked unclassified buckets without new CUDA synchronization or execution changes. KDA is largest at 41.719% of classified device time, but no fusion or default change is accepted. The bounded artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, full shard, or paid cloud resource exists.
 
-State audited last on 2026-08-13 at public M34 publication head `acc14d0dad1796305161249001bfd24598086601`. PR #61 push correctness `31677995234`, pull-request correctness `31678009269`, and CodeQL `31678009301` passed; post-merge correctness `31678280229` and CodeQL `31678280137` passed. M34 local gates remain CPU CTest 20/20, liburing CTest 21/21, ASan/UBSan CTest 21/21, CUDA CTest 36/36, portable Python 658/136, focused actual CUDA/attribution Python 14/14, evidence regressions 99/99, strict B-0035 rehash, actual attribution Compute Sanitizer with zero errors, and the production non-executable guard. No complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-13 at local M35 evidence commit `4a41223` over public M34 publication head `acc14d0dad1796305161249001bfd24598086601`. CPU CTest 20/20, liburing CTest 21/21, ASan/UBSan CTest 21/21, CUDA CTest 36/36, portable Python 664/139, actual schema compatibility 3/3, fast parser/contracts 10/10, evidence regressions 105/105, strict B-0036 rehash, actual Compute Sanitizer with zero errors, and the production non-executable guard pass. No complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -16,6 +16,7 @@ State audited last on 2026-08-13 at public M34 publication head `acc14d0dad17963
 - Milestone 32 exact official MoE device route preparation, canonical host natural Top-16, opaque prepared-activation lifetime, fixed B-0033 evidence, public PR #56/#57 integration, and post-merge CI.
 - Milestone 33 exact official two-layer execution, bounded device closure, fixed B-0034 evidence, public PR #58/#59 integration, and post-merge CI.
 - Milestone 34 opt-in caller-owned two-layer closure attribution, default-schema compatibility, fail-closed B-0035 evidence, and one sealed formal RTX 5080 measurement.
+- Milestone 35 opt-in existing-event operation attribution, unchanged historical schemas, fail-closed B-0036 evidence, and one sealed formal RTX 5080 measurement.
 - Milestone 25 strict generic source containment and ownership, bounded canonical safetensors metadata, exact resume-ledger schema, committed-prefix validation, and fail-atomic orphan-suffix recovery without changing K3X v1.
 - Milestone 26 fixed-authority HTTPS discovery, content-addressed snapshot/index/config/header identity, exact official expert planning, atomic real-byte materialization, K3X round-trip, and strict B-0027 JSON/CSV verification.
 - B-0027 official layer-1 expert-0 conversion with 59,799,719 metadata bytes, 818,704 header bytes, 17,547,264 tensor-payload bytes, Reader validity, and explicit `transport-pinned-range` provenance.
@@ -193,10 +194,9 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 ## Next concrete tasks
 
-1. Add RED tests for M35 profiler-event ownership, recognized operation buckets, checked remainders, and unchanged caller state on failure.
-2. Implement the minimal opt-in operation-attribution schema and fail-closed B-0036 evidence transaction.
-3. Seal one fixed operation-level attribution ablation over the same bounded official fixture and retain the default unless correctness plus timing justify a change.
-4. Keep wider closure, complete checkpoint, full-shard downloads, paid Cloud Run, and billable SKYFORGE execution deferred until evidence or explicit user execution authorizes them.
+1. Publish M35, verify pull-request and post-merge correctness/CodeQL, then synchronize the public ledger.
+2. Begin the next bounded milestone with synchronization-neutral KDA-internal attribution; do not select a fusion before that evidence.
+3. Keep wider closure, complete checkpoint, full-shard downloads, paid Cloud Run, and billable SKYFORGE execution deferred until evidence or explicit user execution authorizes them.
 
 ## Hardware assumptions
 
@@ -213,14 +213,15 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 ## Latest measured bottleneck
 
-B-0035 is the latest formal performance measurement. Host-round-trip/device-closure medians are 99,316,205/110,701,472 ns per exact two-layer, two-position sequence. Both preserve identical natural Top-16 expert IDs and measured output/state/contribution identities, pass independent numerical gates, and transfer zero warm weight bytes.
+B-0036 is the latest formal performance measurement. Host-round-trip/device-closure medians are 102,157,295/116,049,550 ns per exact two-layer, two-position sequence. Both preserve identical natural Top-16 expert IDs and measured output/state/contribution identities, pass independent numerical gates, and transfer zero warm weight bytes.
 
-Device closure averages 69,822,990 ns front wall, 39,036 ns canonical host route wall, 41,060,877 ns tail wall, and 23,582 ns checked remainder. Front and tail account for 62.934% and 37.010% of attributed wall time, while route is only 0.035%. Existing-event CUDA time averages 52,571,374/30,057,734 ns for front/tail, leaving wall-minus-device gaps of 17,251,616/11,003,143 ns.
+Device closure's classified existing-event CUDA time averages 36,345,792 ns KDA, 19,075,499 ns device route preparation, and 31,698,525 ns MoE FFN, with zero unclassified time. Their shares are 41.719%, 21.896%, and 36.385%. KDA is the largest single operation but not a majority.
 
-D-071 retains device closure as an explicit exact experiment but does not select it as default. D-072 now directs the next bounded milestone to operation-level attribution inside front and tail before any fusion decision. Host round trip, per-call validation, and host canonical routing remain defaults. Native-Linux physical NVMe/PCIe traffic, full-model cache pressure, token throughput, GPU utilization/bandwidth, and coding quality remain unmeasured.
+D-071 retains device closure as an explicit exact experiment but does not select it as default. D-073 directs the next bounded milestone to KDA-internal attribution before any fusion decision. Host round trip, per-call validation, and host canonical routing remain defaults. Native-Linux physical NVMe/PCIe traffic, full-model cache pressure, token throughput, GPU utilization/bandwidth, and coding quality remain unmeasured.
 
 ## Last known-good state
 
+- Local M35 evidence commit `4a41223` seals B-0036 with aggregate SHA-256 `373e8cd33a56dd9b35100b0a679c4e0594e3802ded3f4022c6ff673f5b4dd9af`, summary JSON `aa51f7def3cca5cc6223d6d76adb36a76a1ea0a93a85c92547182559362a3899`, and summary CSV `83148fa62b35552608e46350b2a72788689aebab72b380d6dc568bdc7f6d176f`. All final local gates and strict rehash pass.
 - Public M34 head `a7ba52044e4d0ccbb23371cac54b5db87d4002f1` contains PR #60 and sealed B-0035. Aggregate SHA-256 is `db3ef6e688fbe5d064cce555ba9fe1ceae0c9f8f939da44245402dd62a58c32a`, summary JSON is `a0f4cb9da16692794850dd9fd53deeffa471eda54b825f4418fd59ce4d1828c5`, and summary CSV is `da17f480255221d961ee4c016c30a24bb38f59afd851fec55bda5b4df904d2a0`. Local gates and strict rehash pass; PR and post-merge correctness/CodeQL all succeeded.
 - Public M33 implementation head `9ce513f9d79b6cee88b7bb2de176e6fbbb79f43b` and evidence commit `ead4371` seal B-0034 with aggregate SHA-256 `016df479907678a76cac22d4f178ab271c5ce5e074639971d22a2b8fa03cc258`, summary JSON `37e02f52a56995a820517f4419565613f649003816da11175b049fa8afce522b`, and summary CSV `b151d5065af784b2805eedcea53010802c4bf34944f02e8921f24ab2301bc7d7`. Fresh gates pass portable CTest 20/20 plus Python 652/134, liburing/direct CTest 17/17, ASan/UBSan CTest 17/17, CUDA CTest 36/36, actual harness 6/6, evidence regressions 93/93, strict evidence rehash, and actual device-closure Compute Sanitizer with zero errors. The complete CUDA Python suite timed out after ten minutes and is not claimed as passed. PR #58 and post-merge correctness/CodeQL all succeeded.
 - Local M33 Task 1 head `752972a` passes 111 official MoE/layer/source, source-manifest integrity, and converter-resume tests plus Python compilation and `git diff --check`. It changes no materializer, artifact, runtime, benchmark, or production path.
