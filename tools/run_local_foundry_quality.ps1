@@ -42,14 +42,31 @@ function Get-SlotPath([int]$index) {
     return Join-Path $stagingRoot "slot-$slot"
 }
 
+function Enter-DownloadSlot {
+    while ($true) {
+        for ($slot = 0; $slot -lt $DownloadSlots; $slot++) {
+            $mutex = [System.Threading.Mutex]::new(
+                $false, "K3XFoundryDownloadSlot$slot"
+            )
+            try {
+                if ($mutex.WaitOne(0)) {
+                    return $mutex
+                }
+            }
+            catch [System.Threading.AbandonedMutexException] {
+                return $mutex
+            }
+            $mutex.Dispose()
+        }
+        Start-Sleep -Milliseconds 250
+    }
+}
+
 function Invoke-BoundedDownload(
     [string]$filename,
     [string]$slotPath
 ) {
-    $semaphore = [System.Threading.Semaphore]::new(
-        $DownloadSlots, $DownloadSlots, "K3XFoundryDownloads"
-    )
-    $null = $semaphore.WaitOne()
+    $slotMutex = Enter-DownloadSlot
     try {
         & $hf download $manifest.repository $filename `
             --revision $revision --local-dir $slotPath --quiet
@@ -58,8 +75,8 @@ function Invoke-BoundedDownload(
         }
     }
     finally {
-        $null = $semaphore.Release()
-        $semaphore.Dispose()
+        $slotMutex.ReleaseMutex()
+        $slotMutex.Dispose()
     }
 }
 
@@ -100,10 +117,28 @@ function Start-NextDownloadAfterMarker([int]$index, [string]$markerPath) {
         while (-not (Test-Path -LiteralPath $MarkerPath)) {
             Start-Sleep -Milliseconds 250
         }
-        $semaphore = [System.Threading.Semaphore]::new(
-            $DownloadSlots, $DownloadSlots, "K3XFoundryDownloads"
-        )
-        $null = $semaphore.WaitOne()
+        $slotMutex = $null
+        while ($null -eq $slotMutex) {
+            for ($slot = 0; $slot -lt $DownloadSlots; $slot++) {
+                $candidate = [System.Threading.Mutex]::new(
+                    $false, "K3XFoundryDownloadSlot$slot"
+                )
+                try {
+                    if ($candidate.WaitOne(0)) {
+                        $slotMutex = $candidate
+                        break
+                    }
+                }
+                catch [System.Threading.AbandonedMutexException] {
+                    $slotMutex = $candidate
+                    break
+                }
+                $candidate.Dispose()
+            }
+            if ($null -eq $slotMutex) {
+                Start-Sleep -Milliseconds 250
+            }
+        }
         try {
             $process = Start-Process -FilePath $HfPath -ArgumentList @(
                 "download", $Repository, $Filename,
@@ -116,8 +151,8 @@ function Start-NextDownloadAfterMarker([int]$index, [string]$markerPath) {
             }
         }
         finally {
-            $null = $semaphore.Release()
-            $semaphore.Dispose()
+            $slotMutex.ReleaseMutex()
+            $slotMutex.Dispose()
         }
     } -ArgumentList @(
         $markerPath, $hf, $manifest.repository, $shard.filename,
