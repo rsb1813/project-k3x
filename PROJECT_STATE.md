@@ -2,18 +2,18 @@
 
 ## Current milestone
 
-Milestone 38 quality Local Foundry is actively manufacturing the pinned official checkpoint. Explicit user instruction superseded D-075's launch lock through D-076 without accepting the lossy 3-bit expert recipe. The active path preserves every routed expert in native MXFP4, preserves sensitive BF16/F32 tensors, and applies group-128 signed 8-bit only to selected trunk matrices. Shards 1 through 3 are Reader-valid, ledger-complete, and source-cleaned; the resumable two-slot conductor is processing shard 4 onward in the background with bounded 128-extent durability checkpoints. Shard 5 onward also streams passthrough tensors from a checksum-bound same-volume source hardlink instead of creating a model-sized temporary copy.
+Milestone 38 quality Local Foundry is actively manufacturing the pinned official checkpoint. Explicit user instruction superseded D-075's launch lock through D-076 without accepting the lossy 3-bit expert recipe. The active path preserves every routed expert in native MXFP4, preserves sensitive BF16/F32 tensors, and applies group-128 signed 8-bit only to selected trunk matrices. Shards 1 through 5 are Reader-valid, ledger-complete, and source-cleaned; the resumable two-slot conductor is processing shard 6 onward in the background with bounded 128-extent durability checkpoints. Shard 5 onward also streams passthrough tensors from a checksum-bound same-volume source hardlink instead of creating a model-sized temporary copy.
 
-Milestone 35 implementation and formal B-0036 evidence are locally complete and awaiting publication. Existing successful profiler events are classified into KDA, device route preparation, MoE FFN, and checked unclassified buckets without new CUDA synchronization or execution changes. KDA is largest at 41.719% of classified device time, but no fusion or default change is accepted. The bounded artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, full shard, or paid cloud resource exists.
+The exact Python first-token compatibility graph is now bound to sealed K3X fragments through layer 0, KDA-MoE, MLA-MoE, resumed execution, and the chunked LM head. The optimized C++ production graph remains incomplete, and the Python path cannot run end to end until all 96 fragments and `model.k3xset` exist. No official token, tok/s, quality result, complete checkpoint, or paid cloud resource exists.
 
-State audited last on 2026-08-13 at local M35 evidence commit `4a41223` over public M34 publication head `acc14d0dad1796305161249001bfd24598086601`. CPU CTest 20/20, liburing CTest 21/21, ASan/UBSan CTest 21/21, CUDA CTest 36/36, portable Python 664/139, actual schema compatibility 3/3, fast parser/contracts 10/10, evidence regressions 105/105, strict B-0036 rehash, actual Compute Sanitizer with zero errors, and the production non-executable guard pass. No complete shard, full checkpoint, or paid cloud resource is in use.
+State synchronized on 2026-08-13 at implementation commit `d04794a`. Focused K3X set/store coverage passes 3/3, all six modified Python modules compile, and all five graph CLIs expose `--k3x-set`. A real official shard-1 strict open found 23 records in 11.401 seconds and loaded finite BF16 norm and Q8 q-projection tensors. This is graph-binding and storage evidence only, not an official token or throughput result.
 
 ## Completed work
 
 - Milestone 37 group-32 signed 3-bit K3X writer/reader ABI, strict required-feature negotiation, PyTorch and portable C++ decode, scalar direct-packed RTX 5080 matvec, synthetic CPU/CUDA layer/logit/token parity, packed-byte transfer assertions, and sanitizer coverage. No performance result is claimed.
 - Milestone 37 exact pinned-header accounting for 82,432 routed experts and the proposed selective trunk policy, plus a Reader-valid 14,471,424-byte K3X conversion of released layer-1 expert 0 and a deterministic native-MXFP4 divergence proxy.
-- Milestone 38 group-128 8-bit Python/C++ K3X ABI, portable BF16/Q8 model decode, bounded official-shard converter, 1,510,500,000,000-byte quality plan, authenticated two-slot conductor, completed shards 1 through 3 with durable output identities and verified source deletion, batched crash-safe checkpoints, source-alias streaming without a model-sized temporary copy, and synthetic-tested `K3XSET1` multi-fragment publication without a second payload copy.
-- Python fragment tensor store for canonical BF16/F32/Q8 dense loads, bounded BF16 row reads, and native-MXFP4 expert matvecs. Focused dense decode and MXFP4 oracle parity pass 2/2; the complete official graph binding remains pending.
+- Milestone 38 group-128 8-bit Python/C++ K3X ABI, portable BF16/Q8 model decode, bounded official-shard converter, 1,510,500,000,000-byte quality plan, authenticated two-slot conductor, completed shards 1 through 5 with durable output identities and verified source deletion, batched crash-safe checkpoints, source-alias streaming without a model-sized temporary copy, and synthetic-tested `K3XSET1` multi-fragment publication without a second payload copy.
+- Python fragment tensor store and sealed-set compatibility graph for canonical BF16/F32/Q8 dense loads, bounded BF16 row reads, native-MXFP4 expert matvecs, all 93 official layers, persisted prefix state, chunked logits, and greedy selection. Focused set/store coverage passes 3/3; end-to-end execution awaits the complete set.
 - Milestone 0 deterministic synthetic K3-compatible PyTorch graph, K3X v1 streaming converter, strict Python/C++ readers, and independent portable C++20 runtime.
 - Milestone 28 bounded official layer-1 MoE FFN manufacturing, exact natural Top-16 A/B routing, 32-expert union, portable/CUDA parity, exact residency, B-0029 evidence, and full local verification without a complete shard or checkpoint.
 - Milestone 29 bounded official layer-1 Attention-Residual/KDA/MoE execution, exact full/incremental state parity, B-0030 evidence, public PR #50, and post-merge CI without a complete shard or checkpoint.
@@ -174,15 +174,15 @@ The task bullets below describe the gate reached at each named commit; later M33
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Current implementation branch: `codex/official-end-to-end-token`; latest implementation commit `50d066e` over the active Milestone 38 lineage.
+- Current implementation branch: `codex/official-end-to-end-token`; latest implementation commit `d04794a` over the active Milestone 38 lineage.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build`, `build-liburing`, `build-asan`, and `build-cuda`.
 
 ## Known failures and blockers
 
 - The CPU 3-bit path intentionally expands a selected projection to FP32 as a correctness oracle. CUDA reads scalar projection payloads directly, but grouped gate/up, resident payloads, and fused SiTU/down remain unimplemented.
 - The 1.28 TB byte recipe is closed but not quality-approved. One released expert's deterministic random-normal output proxy has 0.325174 relative L2 divergence after optimized scaling; this is neither an end-to-end rejection nor sufficient evidence to launch all 96 shards.
-- Group-128 8-bit packing, strict Python/C++ Reader validation, portable model decode, and the no-copy fragment-set Reader now exist, but the CUDA Q8 kernel and complete official graph binding are not yet implemented.
-- Only shards 1 through 3 are currently complete. Background conductor liveness and the quality ledger are authoritative for later shards; no full-checkpoint or first-token claim exists yet.
+- Group-128 8-bit packing, strict Python/C++ Reader validation, portable model decode, no-copy fragment-set Reader, and exact Python official graph binding now exist, but the CUDA Q8 kernel and optimized C++ 93-layer scheduler are not yet implemented.
+- Only shards 1 through 5 are currently complete. Background conductor liveness and the quality ledger are authoritative for later shards; no full-checkpoint or first-token claim exists yet.
 - Windows Smart App Control still blocks unsigned `k3x_run.exe`; WSL2 is the verified local CUDA path and native Linux remains the final performance authority.
 - The production-executable checkpoint is synthetic and tiny. Complete official source shards have now been downloaded one at a time, manufactured into K3X fragments, and source-cleaned, but the incomplete set still cannot execute a full token. The bounded official M29–M31 artifact executes only through the dedicated benchmark harness; B-0032 is one complete layer-boundary sequence attribution, not token throughput or full-model evidence.
 - M26 binds transport, snapshot, index, config, shard header, range, tensor, microshard, and K3X identities, but does not recompute the complete shard LFS digest or provide signed publisher provenance. Production conversion needs stronger complete-object or authenticated-chunk verification.
@@ -205,8 +205,8 @@ The task bullets below describe the gate reached at each named commit; later M33
 ## Next concrete tasks
 
 1. Keep the two-slot conductor running through all 96 pinned shards, verify every fragment and ledger entry, and delete each source only after durable completion.
-2. Bind the complete official tensor names and 93-layer graph to the implemented fragment-set Reader while manufacture runs.
-3. Publish and checksum-open the official `model.k3xset`, generate and verify the first released-model greedy token, then profile and optimize the measured I/O, host, and CUDA bottlenecks.
+2. Keep the sealed Python compatibility graph launch-ready and validate each newly available storage boundary without competing materially with manufacture.
+3. Publish and checksum-open the official `model.k3xset`, generate and independently verify the first released-model greedy token, then profile and optimize the measured I/O, host, and CUDA bottlenecks.
 
 ## Hardware assumptions
 
@@ -225,7 +225,7 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 B-0036 is the latest formal performance measurement. Host-round-trip/device-closure medians are 102,157,295/116,049,550 ns per exact two-layer, two-position sequence. Both preserve identical natural Top-16 expert IDs and measured output/state/contribution identities, pass independent numerical gates, and transfer zero warm weight bytes.
 
-The latest sealed manufacturing measurement is shard 2 at 978.222 seconds for 16,990,911,504 source bytes and 16,373,248,256 K3X bytes. Static attribution found thousands of per-extent `fsync`, readback, and growing-ledger rewrites. D-077 batches durability publication every 128 extents while preserving resume validation, final root hashing, strict Reader checks, and source-deletion gates. Shard 4 is the first active official run with that change. D-079 additionally removes the model-sized temporary passthrough copy for shard 5 onward. No speedup is claimed until those shards complete and their timing is recorded.
+The latest sealed manufacturing measurement is shard 5 at 735.660 seconds for 16,990,911,504 source bytes and 16,373,248,256 K3X bytes. Shard 2 had identical source/output sizes and tensor composition and took 978.222 seconds, so the D-077 plus D-079 path is 242.562 seconds or 24.796% lower elapsed, a 1.3297x ratio. This combined result does not isolate either optimization. Shards 3 and 4 are sealed but did not emit timing. Separately, one strict official shard-1 Python open measured 11.401 seconds; it is a WSL2 diagnostic, not token startup authority.
 
 Device closure's classified existing-event CUDA time averages 36,345,792 ns KDA, 19,075,499 ns device route preparation, and 31,698,525 ns MoE FFN, with zero unclassified time. Their shares are 41.719%, 21.896%, and 36.385%. KDA is the largest single operation but not a majority.
 

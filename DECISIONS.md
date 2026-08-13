@@ -897,11 +897,11 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-077 — Batch durable converter checkpoints without weakening final verification
 
 - Date: 2026-08-13.
-- Status: implemented for shard 4 onward; official before/after timing is pending.
+- Status: implemented for shard 4 onward; the first comparable combined-path timing is recorded on shard 5.
 - Decision: compute CRC32C per extent while writing, but group `fsync` and atomic resume-ledger publication into bounded batches of 128 extents. A requested test interruption forces an immediate checkpoint. Resume still rehashes current source extents and rereads every committed output extent before reuse; final root SHA-256 and strict Reader CRC verification remain mandatory before source deletion.
 - Alternatives considered: retain one `fsync`, readback, and growing JSON rewrite per extent; remove resumability; checkpoint only once per shard; use a database-backed journal.
 - Evidence: official shard 2 contains 5,376 native expert source tensors and took 978.222 seconds. Static inspection found one `fsync`, one extent readback, and one complete growing resume-manifest rewrite for each output extent. The synthetic conversion issued 251 resume writes before the change and three after batching 250 extents.
-- Benchmark result: the focused batching, interruption/resume, and committed-corruption tests pass 3/3. No official speedup is claimed until shard 4 completes under the new code and is compared with shard 3 under the previous code.
+- Benchmark result: the focused batching, interruption/resume, and committed-corruption tests pass 3/3. Shard 5 completed in 735.660 seconds versus shard 2's 978.222 seconds for the same source/output byte counts and tensor composition, 24.796% lower elapsed time. This combined result includes D-077 and D-079 and does not isolate batching alone.
 - Reason accepted: a crash can lose at most the uncommitted 127-extent suffix, which is truncated and recomputed. This removes thousands of durability barriers and O(N²) JSON bytes while preserving the completed artifact's checksum boundary.
 - Rejected claims: the focused synthetic timing is not an official manufacturing benchmark, and batching does not reduce source, output, or final verification bytes.
 - Revisit: tune the batch size only from measured shard timing and interruption-recovery cost; consider a compact append-only binary journal if ledger serialization remains material.
@@ -921,11 +921,11 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-079 — Stream passthrough tensors from the authenticated source shard
 
 - Date: 2026-08-13.
-- Status: implemented and focused-tested for shard 5 onward; official timing is pending.
+- Status: implemented and focused-tested for shard 5 onward; first official combined-path timing recorded.
 - Decision: hardlink the authenticated official safetensors shard into the bounded staging directory, map canonical K3X tensor names to their declared physical source names, and write only derived group-128 Q8 codes and scales to a temporary safetensors file. Fail closed if the same-volume hardlink cannot be created.
 - Alternatives considered: continue copying every native MXFP4 and sensitive tensor into a model-sized temporary microshard; teach the K3X writer to parse the official index directly; silently fall back to a full copy across volumes.
 - Evidence: shard 2 wrote and reread a model-sized temporary microshard before producing its 16,373,248,256-byte K3X fragment. The alias-manifest test exposes only the declared physical tensor under its canonical name, and the local-shard test confirms that no passthrough tensor reaches the temporary writer.
-- Benchmark result: focused alias and local-shard coverage passes 2/2. No official speedup is claimed until a shard launched after this change completes and records `conversion_seconds`.
+- Benchmark result: focused alias and local-shard coverage passes 2/2. Shard 5 completed in 735.660 seconds versus shard 2's 978.222 seconds for identical source/output byte counts, Q8 count, native expert tensor count, and total record count, 24.796% lower elapsed time and 1.3297x throughput. D-077 checkpoint batching is also present, so this does not isolate the hardlink change.
 - Reason accepted: the immutable source inode remains checksum-bound and available until the final Reader and ledger gates permit deletion, while eliminating a redundant model-sized staging write and read.
 - Rejected claims: a hardlink is not a second payload copy, but it also does not make the source disposable before conversion completes. This change does not reduce final K3X bytes or inference traffic.
 - Revisit: replace the hardlink boundary with a direct immutable file descriptor only if it preserves manifest containment and resume identity with less complexity.
