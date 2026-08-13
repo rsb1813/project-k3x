@@ -216,6 +216,53 @@ def _write_ledger(path: Path, value: dict[str, object]) -> None:
     os.replace(temporary, path)
 
 
+def write_source_manifest(path: Path, plan: LocalFoundryPlan) -> None:
+    value = {
+        "repository": plan.repository,
+        "revision": plan.revision,
+        "shards": [
+            {
+                "filename": unit.filename,
+                "bytes": unit.source_bytes,
+                "sha256": unit.source_sha256,
+            }
+            for unit in plan.units
+        ],
+    }
+    value["record_sha256"] = _digest(value)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    with temporary.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write(_canonical_bytes(value).decode() + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+
+
+def load_source_manifest(
+    path: Path,
+) -> tuple[str, str, tuple[tuple[str, int, str], ...]]:
+    value = _read_json(path)
+    if set(value) != {"repository", "revision", "shards", "record_sha256"}:
+        raise K3XError("INVALID_LOCAL_SOURCE_MANIFEST")
+    embedded = value.pop("record_sha256")
+    if embedded != _digest(value):
+        raise K3XError("LOCAL_SOURCE_MANIFEST_DIGEST")
+    shards = value.get("shards")
+    if not isinstance(shards, list):
+        raise K3XError("INVALID_LOCAL_SOURCE_MANIFEST")
+    normalized = []
+    for item in shards:
+        if not isinstance(item, dict) or set(item) != {
+            "filename",
+            "bytes",
+            "sha256",
+        }:
+            raise K3XError("INVALID_LOCAL_SOURCE_MANIFEST")
+        normalized.append((item["filename"], item["bytes"], item["sha256"]))
+    return value["repository"], value["revision"], tuple(normalized)
+
+
 def create_ledger(path: Path, plan: LocalFoundryPlan) -> None:
     if path.exists():
         load_ledger(path, plan)

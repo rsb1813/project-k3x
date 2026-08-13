@@ -7,33 +7,11 @@ import shutil
 from pathlib import Path
 
 from k3x_converter.format import K3XError
-from k3x_converter.local_foundry import build_local_plan, check_disk_budget
-
-
-def _load_manifest(path: Path) -> tuple[str, str, tuple[tuple[str, int, str], ...]]:
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(value, dict) or set(value) != {
-            "repository",
-            "revision",
-            "shards",
-        }:
-            raise ValueError("manifest keys")
-        shards = value["shards"]
-        if not isinstance(shards, list):
-            raise ValueError("shards")
-        normalized = []
-        for item in shards:
-            if not isinstance(item, dict) or set(item) != {
-                "filename",
-                "bytes",
-                "sha256",
-            }:
-                raise ValueError("shard")
-            normalized.append((item["filename"], item["bytes"], item["sha256"]))
-        return value["repository"], value["revision"], tuple(normalized)
-    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, ValueError) as error:
-        raise K3XError("INVALID_LOCAL_SOURCE_MANIFEST") from error
+from k3x_converter.local_foundry import (
+    build_local_plan,
+    check_disk_budget,
+    load_source_manifest,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -46,7 +24,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.dry_run:
         raise K3XError("LOCAL_OFFICIAL_GATE_CLOSED")
-    repository, revision, shards = _load_manifest(args.manifest.resolve())
+    repository, revision, shards = load_source_manifest(args.manifest.resolve())
     plan = build_local_plan(repository, revision, shards)
     destination = args.destination.resolve(strict=True)
     staging = args.staging.resolve(strict=True)

@@ -20,6 +20,7 @@ from k3x_converter.local_foundry import (
     source_deletion_allowed,
     staged_source_path,
     verify_staged_unit,
+    write_source_manifest,
     xet_environment,
 )
 from k3x_ref.quant3 import Quant3Tensor, decode_groupwise_3bit, quantize_groupwise_3bit
@@ -160,19 +161,8 @@ def test_xet_staging_is_token_free_and_deletion_is_ledger_gated(tmp_path):
 
 def test_local_foundry_dry_run_publishes_no_ledger(tmp_path, capsys):
     manifest = tmp_path / "manifest.json"
-    manifest.write_text(
-        json.dumps(
-            {
-                "repository": "moonshotai/Kimi-K3",
-                "revision": "9f62e4e",
-                "shards": [
-                    {"filename": name, "bytes": size, "sha256": digest}
-                    for name, size, digest in SHARDS
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
+    plan = build_local_plan("moonshotai/Kimi-K3", "9f62e4e", SHARDS)
+    write_source_manifest(manifest, plan)
     ledger = tmp_path / "immortal.json"
 
     assert (
