@@ -492,6 +492,7 @@
 - [x] Add the exact host-round-trip/device-closure A1→A2→B1→B2 CUDA wrapper.
 - [x] Add explicit two-layer harness mode and closed telemetry.
 - [x] Add strict B-0034 evidence tooling.
-- [ ] Run actual-artifact correctness, sanitizer, production-guard, and full regression gates.
-- [ ] Run B-0034 exactly once and seal the evidence.
-- [ ] Synchronize README and TITAN Ledger, publish M33, and verify CI.
+- [x] Run actual-artifact correctness, sanitizer, production-guard, and full portable regression gates; record the complete CUDA Python timeout without overstating it.
+- [x] Run B-0034 exactly once successfully and seal the evidence after two fail-closed unpublished attempts.
+- [x] Synchronize README and TITAN Ledger for the measured local milestone.
+- [ ] Publish M33 and verify pull-request and post-merge CI.

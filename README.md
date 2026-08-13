@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2032-device%20route%20preparation-20a46b?style=flat-square)](#milestone-32--exact-device-route-preparation)
+[![Milestone](https://img.shields.io/badge/milestone%2033-two--layer%20closure-20a46b?style=flat-square)](#milestone-33--official-two-layer-closure)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -34,7 +34,7 @@ flowchart LR
 ```
 
 > [!IMPORTANT]
-> The executable token graph still uses a tiny synthetic model, but Milestone 29 executes one bounded official layer-1 KDA + natural Top-16 MoE sequence on RTX 5080, Milestone 30 attributes immutable KDA validation, Milestone 31 measures device-resident KDA state, and Milestone 32 measures exact device route preparation. This is a two-position layer-boundary fixture, not token generation or full-model throughput. No complete shard, full checkpoint, or paid cloud resource was used.
+> The executable token graph still uses a tiny synthetic model, but Milestones 29–32 execute and optimize one bounded official layer-1 KDA + natural Top-16 MoE sequence on RTX 5080. Milestone 33 closes real official layers 1 and 2 over two positions and measures both the host-round-trip reference and the experimental device-resident inter-layer path. This is a bounded layer fixture, not token generation or full-model throughput. No complete shard, full checkpoint, or paid cloud resource was used.
 
 | Milestone | GitHub status | Evidence |
 |---|---|---|
@@ -60,6 +60,7 @@ flowchart LR
 | Milestone 30 | [PR #52 merged](https://github.com/rsb1813/project-k3x/pull/52) at `51182575` | B-0031 measures exact immutable KDA admission validation without changing the default |
 | Milestone 31 | [PR #54 merged](https://github.com/rsb1813/project-k3x/pull/54) at `e1233891` | B-0032 measures exact single-slot KDA device-state handoff without changing the host default |
 | Milestone 32 | [PR #56 merged](https://github.com/rsb1813/project-k3x/pull/56) at `ab0ecb19` | Exact device residual/router preparation preserves routing and yields a mixed bounded result |
+| Milestone 33 | Local measured evidence sealed; public integration pending | B-0034 executes official layers 1 and 2 exactly; device closure removes inter-layer copies but is 13.82% slower |
 
 The latest audited public implementation baseline is Milestone 32 integration head `ab0ecb19`. PR #56 branch correctness `31510344481`, pull-request correctness `31510368444`, and pull-request CodeQL `31510368390` passed before merge; post-merge `main` correctness `31510749958` and CodeQL `31510749973` also succeeded.
 
@@ -772,13 +773,20 @@ Tiny CUDA parity and route, missing-expert, and FFN failure cleanup pass under C
 
 Device route preparation lowers the median by 0.690344%, or 0.443273 ms, while aggregate kernel time rises 27.294141% and orchestration falls 9.279958 ms per sequence. It adds 12,888,064 resident BF16 bytes and 7,168 logical logit D2H bytes per sequence. This mixed one-layer WSL2 result does not support changing the host default or claiming token throughput, quality, physical PCIe traffic, or full-model speed. The next evidence boundary is bounded multi-layer execution, where retained activations and route work can amortize API synchronization.
 
-## Milestone 33 — official two-layer closure in progress
+## Milestone 33 — official two-layer closure
 
-M33 targets real official decoder layers 1 and 2 as the smallest bounded multi-layer boundary. Implemented manufacturing now validates both pinned shard headers, fetches both layers' trunks before routing, schedules A1→A2→B1→B2 with independent KDA states, and fetches only first-use routed experts after each exact route is known. The oracle decodes BF16/F32 payload bytes and native MXFP4 packed/scale bytes, retains natural routing, runs selected experts serially, and binds inter-layer outputs, states, and route contributions by digest.
+M33 executes real official decoder layers 1 and 2 as the smallest bounded multi-layer boundary. Manufacturing validates both pinned shard headers, fetches both layers' trunks before routing, schedules A1→A2→B1→B2 with independent KDA states, and fetches only first-use routed experts after each exact route is known. The oracle decodes BF16/F32 payload bytes and native MXFP4 packed/scale bytes, retains natural routing, runs selected experts serially, and binds inter-layer outputs, states, and route contributions.
 
-Local commits through `d13f88e` add `--scope two-layer` dry-run/materialization, a deterministic two-layer oracle, execution-ordered K3X v1 assembly, strict two-layer metadata, crash-safe resume, Reader verification, a portable C++20 A1→A2→B1→B2 orchestrator, a capacity-two CUDA KDA state registry, an opaque inter-layer activation bridge, an exact two-mode CUDA wrapper, and a dedicated two-layer harness. The harness rejects invalid modes and malformed or duplicate-key manifests before file access, binds the official revision and two shard identities, verifies the A1→A2→B1→B2 route/state chain and oracle, rehashes the K3X root and every dense/MXFP4 packed/scale tensor, checks physical tensor order and exact layer IDs, recomputes the portable oracle, then permits resident admission-validated CUDA execution. Its JSON contains bounded wall samples, error, residency, VRAM, state/activation/router/inter-layer/final traffic, and front/tail counts without token/TPS fields. A parameterized common loader now serves both historical one-layer and new two-layer harnesses. Historical plus new harness Python tests pass 36/36; CUDA MoE/KDA/layer/two-layer CTest passes 4/4; strict changed-source compilation, the production non-executable guard, and Compute Sanitizer with zero errors pass. Device closure reports zero logical inter-layer hidden D2H/H2D; this is not measured physical PCIe traffic. No official M33 payload or B-0034 measurement exists yet, so no performance conclusion or default change is claimed.
+The bounded artifact is 3,641,057,536 bytes and contains 119 SHA-256-verified objects from only the required ranges of two pinned shards. The dedicated harness rejects malformed identities before CUDA construction, verifies the K3X root and every dense/MXFP4 tensor, recomputes the portable graph, and validates exact expert sets plus bounded cross-language numerical error. It records measured output, state, and contribution digests rather than copying oracle identities. The production token runtime still rejects this benchmark-only artifact.
 
-Task 7 adds the strict non-ranking B-0034 publisher and committed-evidence verifier. It fixes exactly two rows in `host-round-trip` then `device-closure` order, uses one artifact/manifest/oracle/runner identity, and requires three warmups, twenty measured A/B traces, 4 GiB resident admission, zero measured weight H2D, exact state/KDA/router/inter-layer/final transfer formulas, closed state/prepared lifetimes, and route/contribution/output/final-state identity. Publication uses canonical raw JSON, LF-only CSV, per-file and directory fsync, and atomic directory replacement. Any token throughput, TTFT, quality, physical PCIe/NVMe, utilization, or bandwidth field is rejected. The new and B-0030 through B-0033 evidence suites pass 87/87. No B-0034 row has been run or published.
+B-0034 compares three warmups and twenty measured two-position sequences per mode under a 4 GiB admission limit. Both modes preserve the exact natural Top-16 expert IDs, pass per-expert contribution tolerance, transfer zero warm weight bytes, and remain within the independent portable oracle's error envelope.
+
+| B-0034 row | Median | p05 | p95 | Maximum error | Resident weights |
+|---|---:|---:|---:|---:|---:|
+| Host round trip | 96.102951 ms | 92.875813 ms | 98.275077 ms | 0.000976562 | 3,640,872,960 B |
+| Device closure | 109.388034 ms | 104.939491 ms | 112.149396 ms | 0.00195312 | 3,640,958,976 B |
+
+Device closure removes 57,344 logical inter-layer H2D bytes and 57,344 logical inter-layer D2H bytes per measured sequence, but its median is 13.285083 ms, or 13.823803%, slower. It also adds 86,016 resident bytes and 258,048 tracked peak-device bytes. The host-round-trip path therefore remains the default. The next measured boundary is attribution and fusion of the extra front/tail kernel and synchronization overhead, not a wider closure. These figures are bounded WSL2 layer timings; decode/prefill TPS, TTFT, quality, utilization, bandwidth, and physical PCIe/NVMe traffic were not measured.
 
 ## Quality contract
 

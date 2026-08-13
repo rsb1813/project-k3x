@@ -1384,3 +1384,37 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Actual device-route Compute Sanitizer: `ERROR SUMMARY: 0 errors`; exact routes/output/state, 7,168 logit D2H bytes, two seeds/consumes, zero discard/invalidation, and zero warm weight H2D.
 - Production guard: actual bounded artifact returns `NON_EXECUTABLE_ARTIFACT` and creates no output.
 - Public integration: PR #56 rebase-merged at `ab0ecb19ade01e7989bcba9f6dbcd1c853c43432`. Branch correctness `31510344481`, pull-request correctness `31510368444`, pull-request CodeQL `31510368390`, post-merge `main` correctness `31510749958`, and post-merge CodeQL `31510749973` all succeeded. Workflow annotations are limited to the known Node 20 and CodeQL Action v3 deprecation notices.
+
+## B-0034 — official two-layer device closure
+
+- Date: 2026-08-13.
+- Evidence commit: `fa735fb`; implementation/correctness head before evidence: `77381ae`.
+- Hardware: AMD Ryzen 7 9800X3D, NVIDIA GeForce RTX 5080 16 GB, driver 591.86, CUDA 13.3.1, WSL2 Ubuntu 24.04.4 on Windows 11.
+- Model/checkpoint: 3,641,057,536-byte bounded official layers 1 and 2 fixture from `moonshotai/Kimi-K3` revision `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`; 119 verified range objects from two pinned shards; no complete shard/checkpoint.
+- Mode: exact A1→A2→B1→B2 KDA plus natural Top-16 Stable LatentMoE, host round trip versus experimental device closure, 4 GiB resident admission, three warmups, and twenty measured two-position sequences.
+- Context length: two fixed layer-boundary positions. This benchmark has no token semantics.
+
+| Row | Median | p05 | p95 | Maximum error | Resident weights | Peak device bytes |
+|---|---:|---:|---:|---:|---:|---:|
+| Host round trip | 96,102,951 ns | 92,875,813 ns | 98,275,077 ns | 0.000976562 | 3,640,872,960 B | 3,655,794,240 B |
+| Device closure | 109,388,034 ns | 104,939,491 ns | 112,149,396 ns | 0.00195312 | 3,640,958,976 B | 3,656,052,288 B |
+
+- Derived changes: device closure is 13,285,083 ns or 13.823803% slower at the median. It adds 86,016 resident bytes and 258,048 tracked peak-device bytes.
+- Correctness: both rows preserve identical natural Top-16 expert IDs for all four steps. Each row independently passes expert-ID-keyed contribution tolerance `2e-5`, final BF16 output tolerance `2e-3`, BF16 convolution-state tolerance `8e-3`, and recurrent-state tolerance `5e-4`. Observed contribution, output, and state digests are retained and are not falsely normalized to oracle identities.
+- Traffic: both rows transfer zero measured warm weight H2D. Host round trip records 57,344 logical inter-layer H2D and 57,344 logical inter-layer D2H bytes per sequence; device closure records zero for both. These are logical counters, not physical PCIe measurements.
+- Evidence SHA-256: artifact `ebc33ef266f43e3acf46b20bd79f966595ae8ef5b1b017652d6cabd896034dd5`; K3X root `2a0139cdfaddb57c95d4d50462ed79ff56b248e2946f49c773ddbb1e3c31913b`; manifest `8f4f65efa2ef7c2e9b178dee1796cf3cab221bd75fa9004f775457afd44af6b4`; oracle `f6e85aa6f5e0612d5b305e9f7b01199bdbe9c65703e3c02e8af6ea194bb4f824`; runner `96a3ec613a3561a77cc517bb895eda8e2f33529282e69bd67a3d3b00440beaa1`; aggregate `016df479907678a76cac22d4f178ab271c5ce5e074639971d22a2b8fa03cc258`; summary JSON `37e02f52a56995a820517f4419565613f649003816da11175b049fa8afce522b`; summary CSV `b151d5065af784b2805eedcea53010802c4bf34944f02e8921f24ab2301bc7d7`.
+- Raw JSON SHA-256: host `162967f6901031457ee39f3d313c62eaf2bd321289d04e03032c48ca537fdc42`; device `cd8dfb2326b04c46b9770baa813f112f46a5c966329335cbc59760c103a10730`.
+- Decode tok/s, prefill tok/s, TTFT, VRAM process-wide allocation, system RAM, physical NVMe GB/token, physical H2D GB/token, GPU utilization, GPU bandwidth, cache hit rate, average Top-K, speculative acceptance, unique experts per verification block, quality, and coding quality: not measured.
+- Decision: retain host round trip as the default. Attribute or fuse device front/tail kernel and synchronization overhead before attempting a wider closure.
+
+## Milestone 33 final local verification matrix
+
+- Date: 2026-08-13.
+- Portable CPU: CTest 20/20; Python 652 passed, 134 skipped.
+- liburing/direct capability: CTest 17/17.
+- ASan/UBSan with liburing: CTest 17/17.
+- CUDA: CTest 36/36; actual official two-layer harness 6/6.
+- Evidence regressions: B-0030 through B-0034 focused suite 93/93; strict committed B-0034 rehash passed.
+- Actual device-closure Compute Sanitizer: `ERROR SUMMARY: 0 errors`; maximum error `0.00195312`, zero inter-layer hidden H2D/D2H, closed state/prepared lifetimes, and exact B-0034 route/output/state identities.
+- Production guard: the actual bounded two-layer artifact emits `NON_EXECUTABLE_ARTIFACT` and creates no output. The direct shell wrapper does not preserve the child exit code, while the existing production regression asserts child exit 4.
+- The complete CUDA-enabled Python matrix exceeded the 10-minute command limit and is not claimed as passed. Its affected actual path is covered independently by CUDA CTest 36/36, harness 6/6, evidence 93/93, and Compute Sanitizer zero errors.
