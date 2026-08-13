@@ -850,37 +850,23 @@ private:
         if (payload->gate.quantization == 2 &&
             payload->up.quantization == 2 &&
             payload->down.quantization == 2) {
-            auto gate_weight = decode_groupwise_3bit(
-                payload->gate.packed, payload->gate.scales,
-                payload->gate.rows * payload->gate.cols,
-                config_.group_size);
-            auto up_weight = decode_groupwise_3bit(
-                payload->up.packed, payload->up.scales,
-                payload->up.rows * payload->up.cols,
-                config_.group_size);
-            auto down_weight = decode_groupwise_3bit(
-                payload->down.packed, payload->down.scales,
-                payload->down.rows * payload->down.cols,
-                config_.group_size);
-            if (!gate_weight || !up_weight || !down_weight) {
-                throw std::runtime_error("invalid 3-bit expert");
-            }
-            const std::array<DenseWeightView, 2> gate_up_views{{
-                {payload->gate.id, gate_weight.value(), payload->gate.rows,
-                 payload->gate.cols},
-                {payload->up.id, up_weight.value(), payload->up.rows,
-                 payload->up.cols},
-            }};
-            auto gate_up = backend_.dense_matvec_group(
-                input, gate_up_views, static_cast<std::uint32_t>(layer), phase);
-            if (!gate_up) throw std::runtime_error("invalid 3-bit expert");
+            const auto view = [&](const ExpertProjection& projection) {
+                return Quant3WeightView{
+                    projection.id, projection.packed, projection.scales,
+                    projection.rows, projection.cols, config_.group_size};
+            };
+            auto gate = backend_.quant3_matvec(
+                input, view(payload->gate),
+                static_cast<std::uint32_t>(layer), phase);
+            auto up = backend_.quant3_matvec(
+                input, view(payload->up),
+                static_cast<std::uint32_t>(layer), phase);
+            if (!gate || !up) throw std::runtime_error("invalid 3-bit expert");
             Vector activated(config_.expert_intermediate);
-            situ_glu(activated, gate_up.value()[0], gate_up.value()[1],
+            situ_glu(activated, gate.value(), up.value(),
                      config_.situ_beta, config_.situ_linear);
-            auto output = backend_.dense_matvec(
-                activated,
-                {payload->down.id, down_weight.value(), payload->down.rows,
-                 payload->down.cols},
+            auto output = backend_.quant3_matvec(
+                activated, view(payload->down),
                 static_cast<std::uint32_t>(layer), phase);
             if (!output) throw std::runtime_error("invalid 3-bit expert");
             return std::move(output.value());

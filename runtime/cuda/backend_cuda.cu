@@ -9,6 +9,7 @@
 #include "moe_layer.cuh"
 #include "official_kda.cuh"
 #include "official_moe_route.cuh"
+#include "quant3.cuh"
 #include "resident_weights.cuh"
 #include "situ.cuh"
 
@@ -669,6 +670,131 @@ public:
         }
         record(phase, ProfileOperation::device_to_host, precision, layer,
                d2h_start, 0, output_bytes, 0, true);
+        const auto device_nanoseconds = static_cast<std::uint64_t>(
+            std::llround(static_cast<double>(elapsed_milliseconds) * 1.0e6));
+        record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+               operation_start, logical_bytes, 0, device_nanoseconds, true);
+        return Result<std::vector<float>>::success(std::move(output));
+    }
+
+    Result<std::vector<float>> quant3_matvec(
+        std::span<const float> input, Quant3WeightView weight,
+        std::uint32_t layer, ProfilePhase phase) override {
+        const auto operation_start = std::chrono::steady_clock::now();
+        constexpr auto precision = NumericPrecision::groupwise_signed_3bit;
+        const auto logical_bytes =
+            weight.packed.size_bytes() + weight.scales_bf16.size_bytes();
+        const auto fail = [&](ErrorCode code, const char* message) {
+            record(phase, ProfileOperation::mxfp4_matvec, precision, layer,
+                   operation_start, logical_bytes, 0, 0, false);
+            return Result<std::vector<float>>::failure(code, message);
+        };
+        if (options_.kind != BackendKind::cuda_custom ||
+            input.size() != weight.cols || weight.rows == 0 ||
+            weight.cols == 0 || weight.group_size != 32 ||
+            weight.cols % 32 != 0 ||
+            weight.rows > std::numeric_limits<std::size_t>::max() /
+                              weight.cols) {
+            return fail(ErrorCode::invalid_quant3, "invalid 3-bit shape");
+        }
+        const auto elements = weight.rows * weight.cols;
+        const auto groups = elements / 32;
+        if (groups > std::numeric_limits<std::size_t>::max() / 12 ||
+            weight.packed.size() != groups * 12 ||
+            weight.scales_bf16.size() != groups * 2) {
+            return fail(ErrorCode::invalid_quant3, "invalid 3-bit extent");
+        }
+        for (std::size_t group = 0; group < groups; ++group) {
+            const auto low = std::to_integer<std::uint16_t>(
+                weight.scales_bf16[group * 2]);
+            const auto high = std::to_integer<std::uint16_t>(
+                weight.scales_bf16[group * 2 + 1]);
+            const auto bits = static_cast<std::uint16_t>(low | (high << 8U));
+            const auto scale = std::bit_cast<float>(
+                static_cast<std::uint32_t>(bits) << 16U);
+            if (!std::isfinite(scale) || scale <= 0.0F) {
+                return fail(ErrorCode::invalid_quant3, "invalid 3-bit scale");
+            }
+            for (std::size_t block = 0; block < 4; ++block) {
+                const auto offset = group * 12 + block * 3;
+                const auto word =
+                    std::to_integer<std::uint32_t>(weight.packed[offset]) |
+                    (std::to_integer<std::uint32_t>(weight.packed[offset + 1]) << 8U) |
+                    (std::to_integer<std::uint32_t>(weight.packed[offset + 2]) << 16U);
+                for (std::size_t index = 0; index < 8; ++index) {
+                    if (((word >> (index * 3U)) & 7U) == 7U) {
+                        return fail(ErrorCode::invalid_quant3,
+                                    "reserved 3-bit code");
+                    }
+                }
+            }
+        }
+
+        cuda::DeviceAllocation device_input(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation device_packed(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation device_scales(&memory_stats_, &runtime_stats_);
+        cuda::DeviceAllocation device_output(&memory_stats_, &runtime_stats_);
+        const auto input_bytes = input.size_bytes();
+        const auto output_bytes = weight.rows * sizeof(float);
+        if (device_input.allocate(input_bytes) != cudaSuccess ||
+            device_packed.allocate(weight.packed.size_bytes()) != cudaSuccess ||
+            device_scales.allocate(weight.scales_bf16.size_bytes()) != cudaSuccess ||
+            device_output.allocate(output_bytes) != cudaSuccess) {
+            return fail(ErrorCode::backend_unavailable,
+                        "CUDA 3-bit allocation failed");
+        }
+        const auto h2d_start = std::chrono::steady_clock::now();
+        if (cudaMemcpyAsync(device_input.get(), input.data(), input_bytes,
+                            cudaMemcpyHostToDevice, stream_) != cudaSuccess ||
+            cudaMemcpyAsync(device_packed.get(), weight.packed.data(),
+                            weight.packed.size_bytes(), cudaMemcpyHostToDevice,
+                            stream_) != cudaSuccess ||
+            cudaMemcpyAsync(device_scales.get(), weight.scales_bf16.data(),
+                            weight.scales_bf16.size_bytes(), cudaMemcpyHostToDevice,
+                            stream_) != cudaSuccess) {
+            return fail(ErrorCode::backend_unavailable,
+                        "CUDA 3-bit upload failed");
+        }
+        runtime_stats_.activation_h2d_bytes += input_bytes;
+        runtime_stats_.weight_h2d_bytes += logical_bytes;
+        record(phase, ProfileOperation::activation_host_to_device, precision,
+               layer, h2d_start, 0, input_bytes, 0, true);
+        record(phase, ProfileOperation::weight_host_to_device, precision,
+               layer, h2d_start, 0, logical_bytes, 0, true);
+
+        EventOwner event_start;
+        EventOwner event_end;
+        if (event_start.ensure() != cudaSuccess ||
+            event_end.ensure() != cudaSuccess ||
+            cudaEventRecord(event_start.get(), stream_) != cudaSuccess ||
+            cuda::launch_quant3_matvec(
+                static_cast<const float*>(device_input.get()),
+                static_cast<const std::uint8_t*>(device_packed.get()),
+                static_cast<const std::uint16_t*>(device_scales.get()),
+                static_cast<float*>(device_output.get()),
+                weight.rows, weight.cols, stream_) != cudaSuccess ||
+            cudaEventRecord(event_end.get(), stream_) != cudaSuccess) {
+            return fail(ErrorCode::backend_unavailable,
+                        "CUDA 3-bit launch failed");
+        }
+        std::vector<float> output(weight.rows);
+        const auto d2h_start = std::chrono::steady_clock::now();
+        if (cudaMemcpyAsync(output.data(), device_output.get(), output_bytes,
+                            cudaMemcpyDeviceToHost, stream_) != cudaSuccess ||
+            cudaStreamSynchronize(stream_) != cudaSuccess) {
+            return fail(ErrorCode::backend_unavailable,
+                        "CUDA 3-bit result failed");
+        }
+        ++runtime_stats_.stream_synchronization_count;
+        runtime_stats_.device_to_host_bytes += output_bytes;
+        record(phase, ProfileOperation::device_to_host, precision, layer,
+               d2h_start, 0, output_bytes, 0, true);
+        float elapsed_milliseconds = 0.0F;
+        if (cudaEventElapsedTime(&elapsed_milliseconds, event_start.get(),
+                                 event_end.get()) != cudaSuccess) {
+            return fail(ErrorCode::backend_unavailable,
+                        "CUDA 3-bit timing failed");
+        }
         const auto device_nanoseconds = static_cast<std::uint64_t>(
             std::llround(static_cast<double>(elapsed_milliseconds) * 1.0e6));
         record(phase, ProfileOperation::mxfp4_matvec, precision, layer,

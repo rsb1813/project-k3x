@@ -162,6 +162,15 @@ struct DenseMlpView {
     DenseWeightView down;
 };
 
+struct Quant3WeightView {
+    std::uint64_t tensor_id;
+    std::span<const std::byte> packed;
+    std::span<const std::byte> scales_bf16;
+    std::size_t rows;
+    std::size_t cols;
+    std::size_t group_size;
+};
+
 struct Bf16MlpView {
     Bf16WeightView gate;
     Bf16WeightView up;
@@ -335,6 +344,12 @@ public:
     virtual Result<std::vector<float>> mxfp4_matvec(
         std::span<const float> input, Mxfp4WeightView weight,
         std::uint32_t layer, ProfilePhase phase) = 0;
+    virtual Result<std::vector<float>> quant3_matvec(
+        std::span<const float>, Quant3WeightView,
+        std::uint32_t, ProfilePhase) {
+        return Result<std::vector<float>>::failure(
+            ErrorCode::backend_unavailable);
+    }
     virtual Result<std::vector<std::vector<float>>> dense_matvec_group(
         std::span<const float> input, std::span<const DenseWeightView> weights,
         std::uint32_t layer, ProfilePhase phase) = 0;

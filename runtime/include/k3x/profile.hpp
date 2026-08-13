@@ -24,7 +24,13 @@ enum class ProfileOperation {
     device_to_host,
 };
 
-enum class NumericPrecision { none, fp32, bf16_rounded, mxfp4_e2m1_e8m0 };
+enum class NumericPrecision {
+    none,
+    fp32,
+    bf16_rounded,
+    mxfp4_e2m1_e8m0,
+    groupwise_signed_3bit,
+};
 
 inline constexpr std::uint32_t profile_global_layer =
     std::numeric_limits<std::uint32_t>::max();

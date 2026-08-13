@@ -58,6 +58,40 @@ public:
         return result;
     }
 
+    Result<std::vector<float>> quant3_matvec(
+        std::span<const float> input, Quant3WeightView weight,
+        std::uint32_t layer, ProfilePhase phase) override {
+        const auto start = std::chrono::steady_clock::now();
+        if (!weight.rows || !weight.cols || input.size() != weight.cols ||
+            weight.rows > std::numeric_limits<std::size_t>::max() /
+                              weight.cols) {
+            record(phase, ProfileOperation::mxfp4_matvec,
+                   NumericPrecision::groupwise_signed_3bit, layer, start,
+                   weight.packed.size_bytes() + weight.scales_bf16.size_bytes(),
+                   false);
+            return Result<std::vector<float>>::failure(ErrorCode::invalid_quant3);
+        }
+        auto decoded = decode_groupwise_3bit(
+            weight.packed, weight.scales_bf16,
+            weight.rows * weight.cols, weight.group_size);
+        if (!decoded) {
+            record(phase, ProfileOperation::mxfp4_matvec,
+                   NumericPrecision::groupwise_signed_3bit, layer, start,
+                   weight.packed.size_bytes() + weight.scales_bf16.size_bytes(),
+                   false);
+            return Result<std::vector<float>>::failure(ErrorCode::invalid_quant3);
+        }
+        auto result = dense_matvec(
+            input,
+            {weight.tensor_id, decoded.value(), weight.rows, weight.cols},
+            layer, phase);
+        record(phase, ProfileOperation::mxfp4_matvec,
+               NumericPrecision::groupwise_signed_3bit, layer, start,
+               weight.packed.size_bytes() + weight.scales_bf16.size_bytes(),
+               static_cast<bool>(result));
+        return result;
+    }
+
     Result<std::vector<std::vector<float>>> dense_matvec_group(
         std::span<const float> input, std::span<const DenseWeightView> weights,
         std::uint32_t layer, ProfilePhase phase) override {
