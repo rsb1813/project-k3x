@@ -289,6 +289,11 @@ def materialize_official_range_object(
     requests = 0
     maximum_response = 0
     response_bytes = 0
+    partial_digest = hashlib.sha256()
+    if completed:
+        with partial_path.open("rb") as existing:
+            while chunk := existing.read(request_bytes):
+                partial_digest.update(chunk)
     mode = "ab" if completed else "wb"
     with partial_path.open(mode) as stream:
         position = start + completed
@@ -299,6 +304,7 @@ def materialize_official_range_object(
                 snapshot, shard, transport, position, next_end
             )
             stream.write(body)
+            partial_digest.update(body)
             stream.flush()
             os.fsync(stream.fileno())
             position += len(body)
@@ -311,13 +317,13 @@ def materialize_official_range_object(
                 {
                     **identity,
                     "completed": completed,
-                    "partial_sha256": _sha256_path(partial_path, request_bytes),
+                    "partial_sha256": partial_digest.hexdigest(),
                 },
             )
 
     if partial_path.stat().st_size != length:
         raise K3XError("OFFICIAL_RANGE_LENGTH_MISMATCH")
-    digest = _sha256_path(partial_path, request_bytes)
+    digest = partial_digest.hexdigest()
     object_path = object_directory / f"{digest}.blob"
     if object_path.exists():
         if (
