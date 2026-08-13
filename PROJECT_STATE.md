@@ -14,7 +14,9 @@ The automatic K3X finalizer/token runner is active and waiting for 96 ledger uni
 
 D-083 removes one redundant complete source hash before conversion while preserving converter authentication and the independent destructive-boundary recheck. Focused conversion/deletion coverage passes 2/2. Official timing begins with processes launched after shard 7 and is not yet measured.
 
-State synchronized on 2026-08-13 at implementation commit `c90688e`. Focused K3X strict/default and sealed set/store coverage passes 4/4, concurrent ledger/deletion coverage passes 3/3, duplicate-hash conversion/deletion coverage passes 2/2, all six modified Python modules compile, and all five graph CLIs expose `--k3x-set`. A real official shard-1 strict open found 23 records in 11.401 seconds and loaded finite BF16 norm and Q8 q-projection tensors; sealed directory-open exposed the same records in 0.004774 seconds. This is graph-binding and storage evidence only, not an official token or throughput result.
+D-084 binds every future K3X layer/state/head publication to the exact sealed-set digest and rejects cross-set resume. Focused identity/mismatch coverage passes 1/1; no K3X output exists yet.
+
+State synchronized on 2026-08-13 at implementation commit `5705772`. Focused K3X strict/default and sealed set/store coverage passes 4/4, concurrent ledger/deletion coverage passes 3/3, duplicate-hash conversion/deletion coverage passes 2/2, set-state identity coverage passes 1/1, all six modified Python modules compile, and all five graph CLIs expose `--k3x-set`. A real official shard-1 strict open found 23 records in 11.401 seconds and loaded finite BF16 norm and Q8 q-projection tensors; sealed directory-open exposed the same records in 0.004774 seconds. This is graph-binding and storage evidence only, not an official token or throughput result.
 
 ## Completed work
 
@@ -183,7 +185,7 @@ The task bullets below describe the gate reached at each named commit; later M33
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Current implementation branch: `codex/official-end-to-end-token`; latest implementation commit `c90688e` contains the sealed official graph path, D-081 open policy, resumed reference-token launcher, D-082 concurrent ledger boundary, automatic K3X finalizer/token runner, and D-083 source-read reduction.
+- Current implementation branch: `codex/official-end-to-end-token`; latest implementation commit `5705772` contains the sealed official graph path, D-081 open policy, resumed reference-token launcher, D-082 concurrent ledger boundary, automatic K3X finalizer/token runner, D-083 source-read reduction, and D-084 set-bound state provenance.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build`, `build-liburing`, `build-asan`, and `build-cuda`.
 
 ## Known failures and blockers
