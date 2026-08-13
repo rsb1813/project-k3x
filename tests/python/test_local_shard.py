@@ -7,6 +7,7 @@ from safetensors.torch import save_file
 
 import k3x_converter.local_shard as local_shard
 from k3x_converter.format import Quantization, fnv1a64
+from k3x_converter.fragment_tensor_store import K3XTensorStore
 from k3x_converter.local_shard import convert_local_official_shard
 from k3x_converter.reader import K3XReader
 from k3x_ref.fixtures import write_source_checkpoint
@@ -77,3 +78,9 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
     assert by_id[
         fnv1a64("model.layers.0.input_layernorm.weight")
     ].quantization == Quantization.NONE
+    store = K3XTensorStore.open([report.output_path])
+    loaded_matrix = store.load("model.layers.0.mlp.gate_proj.weight")
+    loaded_norm = store.load("model.layers.0.input_layernorm.weight")
+    assert torch.max(torch.abs(matrix.float() - loaded_matrix)).item() < 0.02
+    assert loaded_norm.dtype == torch.bfloat16
+    assert torch.equal(loaded_norm, torch.ones(128, dtype=torch.bfloat16))

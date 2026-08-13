@@ -7,7 +7,9 @@ from pathlib import Path
 
 import google_crc32c
 import pytest
+import torch
 
+from k3x_converter.fragment_tensor_store import K3XTensorStore
 from k3x_converter.format import (
     OPTIONAL_OFFICIAL_MOE_FIXTURE,
     OPTIONAL_STORAGE_FIXTURE,
@@ -27,6 +29,7 @@ from k3x_converter.reader import K3XReader
 from k3x_converter.safetensors_reader import inspect_shard, iter_tensor_chunks
 from k3x_converter.writer import convert
 from k3x_ref.storage_fixture import write_bounded_expert_source
+from k3x_ref.mxfp4 import mxfp4_matmul
 
 
 _BF16_BYTES = bytes.fromhex("0000803f004040408040a040")
@@ -296,6 +299,16 @@ def test_native_mxfp4_payload_round_trips_byte_for_byte(
     actual_data, actual_auxiliary = reader.read_tensor_extents(record)
     assert actual_data == b"".join(iter_tensor_chunks(packed, 257))
     assert actual_auxiliary == b"".join(iter_tensor_chunks(scale, 257))
+    value = torch.linspace(-1.0, 1.0, record.dimensions[1])
+    expected = mxfp4_matmul(
+        value,
+        actual_data,
+        actual_auxiliary,
+        record.dimensions[0],
+        record.dimensions[1],
+    )
+    actual = K3XTensorStore.open([artifact]).mxfp4_matvec(base, value)
+    assert torch.equal(actual, expected)
 
 
 def test_full_dimension_storage_fixture_round_trips_with_optional_identity(

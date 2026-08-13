@@ -528,6 +528,8 @@ The later D-076 user instruction supersedes that download lock with a different 
 
 For shard 5 onward, native MXFP4 and sensitive passthrough tensors stream directly from a same-volume hardlink to the authenticated official shard. A strict `k3-local-shard-v1` alias map binds each canonical K3X name to one declared physical safetensors tensor; undeclared tensors are not exposed. Only derived Q8 codes and scales occupy a temporary safetensors file. Source SHA verification, resumable extent validation, final root hashing, strict Reader verification, durable ledger publication, and gated source deletion remain unchanged.
 
+The Python first-token compatibility path now has a name-to-ID fragment tensor store. It decodes native BF16/F32 and group-128 Q8 dense records, reads bounded BF16 row slices for embeddings and the LM head, and performs literal native-MXFP4 expert matvecs from K3X extents. This is an executable graph-binding foundation, not the optimized final CUDA runtime; dense Q8 expansion and literal MXFP4 materialization remain profiling targets.
+
 The conductor overlaps the next authenticated Xet download with current conversion across two D-drive slots. A source shard is deleted only after official source SHA-256 verification, output CRC/root/SHA-256 verification, atomic quality-ledger publication, and a second deletion-eligibility check. Conversion work files reside on D so the C-drive final-volume reserve is not consumed by a duplicate temporary shard.
 
 ## TITAN component registry
