@@ -570,7 +570,7 @@
 - [x] Isolate Xet caches per conductor and verify live link utilization.
 - [x] Serialize finalized K3X output audits across conductors.
 - [ ] Complete and verify all 96 K3X fragments.
-- [ ] Complete the resumed original-precision layer-24 reference oracle and record its greedy token.
+- [x] Complete the resumed original-precision reference oracle and record greedy token 9689.
 - [ ] Assemble the final executable checkpoint and generate the first token.
 - [ ] Measure and optimize the actual end-to-end bottleneck.
 

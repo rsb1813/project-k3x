@@ -1568,3 +1568,14 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - The explicit sealed-set directory-open policy opened the same official shard-1 artifact and exposed the same 23 records in 0.004774 seconds without rescanning payload CRC/root bytes. Strict/default and sealed-open focused regressions pass 4/4. The roughly 2,388x open-elapsed ratio compares integrity policies and is neither token throughput nor evidence that periodic strict audits can be removed.
 - Decode tok/s, prefill tok/s, TTFT, VRAM, GPU utilization, coding quality, token agreement, and physical inference traffic are not measured.
 - Three-conductor download scheduling initially shared one Xet cache and serialized active Python children. After B/C restarted with per-conductor caches, a 20-second Windows Ethernet counter interval increased from 466,554,359,934 to 468,982,205,548 received bytes, or 121.39 MB/s and 971.14 Mb/s. This is host link traffic, includes protocol overhead, and is not effective checkpoint payload throughput.
+
+## B-0044 official original-precision first token
+
+- Date: 2026-08-14.
+- Commit: execution spanned the pinned M36/M37 official graph on branch `codex/official-end-to-end-token`; compact result file SHA-256 is `e4b57d6dde9f59e205c2e6b40be8908b45d255ef9d29e8b4465fcb634c13beb9`.
+- Hardware: AMD Ryzen 7 9800X3D host, NVIDIA RTX 5080 under WSL2, D-drive content-addressed range cache, C-drive durable prefix state.
+- Model: `moonshotai/Kimi-K3` revision `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`, exact 93-layer topology record `6ca55a34579f89bb9fb4fcc56af1b5d5b3dde4e04a8c49fdcce91af8237cb2ae`.
+- Mode: original released precision, natural Top-16 routing, input token ID 1, exact KDA/MLA recurrent state, chunked LM-head greedy selection.
+- Result: all layers 0 through 92 completed; generated token ID `9689` with FP32 logit `8.307021141052246`. Final normalized hidden SHA-256 is `84f7422be9d329bfdb0a3971f066de7c67ac137befd2e4e083afd051e1652b6a`.
+- Head boundary: 2,348,853,248 requested/downloaded payload bytes, 283 range requests, 91.725 seconds wall, and 209,960,960 peak CUDA allocated bytes. This is a one-off chunked-head correctness execution with cold payload materialization, not TTFT or steady-state throughput.
+- Decode tok/s, prefill tok/s, TTFT, end-to-end full-token wall, process-wide VRAM, RAM, physical NVMe GB/token, physical H2D GB/token, utilization, bandwidth, cache hit rate, and coding quality: not measured.

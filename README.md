@@ -902,6 +902,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Add bounded RAM-staging workers, combined output audits, immutable source-deletion identities, resume-byte accounting, serialized staging, and independent Xet caches.
 - [x] Make the IMMORTAL ledger safe for disjoint multi-worker Local Foundry publication.
 - [ ] Complete all 96 quality fragments, publish the official set manifest, and generate the first released-model token.
+- [x] Generate the independent original-precision released-model oracle token: input 1 produced greedy token 9689.
 - [ ] Grouped/resident/fused 3-bit CUDA FFN and complete official manufacturing.
 - [ ] SKYFORGE shard compiler for explicitly provisioned cloud jobs.
 - [ ] Full ablation and coding-quality suite.
