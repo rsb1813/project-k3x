@@ -236,9 +236,6 @@ def convert_local_official_shard(
         else output_directory
     )
     temporary_root.mkdir(parents=True, exist_ok=True)
-    source_sha256 = _sha256(source_path)
-    if source_sha256 != expected_sha256:
-        raise K3XError("LOCAL_SOURCE_SHA256", source_path.name)
     output_path = output_directory / (source_path.stem + ".k3x")
     with tempfile.TemporaryDirectory(dir=temporary_root) as temporary:
         work = Path(temporary)
@@ -249,6 +246,9 @@ def convert_local_official_shard(
             if exc.errno != errno.EXDEV:
                 raise K3XError("LOCAL_SOURCE_HARDLINK", source_path.name) from exc
             shutil.copyfile(source_path, source_link)
+        source_sha256 = _sha256(source_link)
+        if source_sha256 != expected_sha256:
+            raise K3XError("LOCAL_SOURCE_SHA256", source_path.name)
         tensors = inspect_shard(source_link)
         outputs, quant8_shapes, packed_shapes, quant8_count, native_expert_count = _plan(
             tensors

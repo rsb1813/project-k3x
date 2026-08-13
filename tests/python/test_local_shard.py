@@ -43,8 +43,10 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
     source_sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
     written_kinds = []
     inspected_paths = []
+    hashed_paths = []
     write_microshard = local_shard._write_microshard
     inspect_shard = local_shard.inspect_shard
+    sha256 = local_shard._sha256
 
     def capture(path, outputs, *, chunk_bytes):
         written_kinds.extend(output.kind for output in outputs)
@@ -57,6 +59,12 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
         return inspect_shard(path)
 
     monkeypatch.setattr(local_shard, "inspect_shard", capture_inspect)
+
+    def capture_sha256(path):
+        hashed_paths.append(path)
+        return sha256(path)
+
+    monkeypatch.setattr(local_shard, "_sha256", capture_sha256)
 
     def reject_cross_device_link(source_path, destination_path):
         raise OSError(errno.EXDEV, "cross-device link")
@@ -76,6 +84,10 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
     assert report.quant8_tensor_count == 1
     assert report.native_expert_tensor_count == 6
     assert [path.name for path in inspected_paths] == ["official.safetensors"]
+    assert [path.name for path in hashed_paths] == [
+        "official.safetensors",
+        "model-00001-of-000096.k3x",
+    ]
     assert "copy" not in written_kinds
     assert report.tensor_count == 6
     assert not any((tmp_path / "staging-work").iterdir())
