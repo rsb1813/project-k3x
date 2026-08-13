@@ -1111,3 +1111,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: shard 45 completed in 407.314 seconds and published 16,373,248,256 bytes with SHA-256 `dd96349e42b413c7d81a3c39bb9780e1095e7e4876fec9f0d3e449076533472f`, increasing the ledger to 29/96. This is manufacturing elapsed and not an isolated retry speedup or inference result.
 - Reason accepted: a hung transport can no longer block one range forever, while the existing official digest and immutable-source checks remain the authority for payload correctness.
 - Revisit: replace the wall timeout with byte-progress heartbeats only if legitimate downloads approach 600 seconds on a slower network.
+
+## D-096 — Run prefetch in an owned process instead of a PowerShell job
+
+- Date: 2026-08-14.
+- Status: implemented, parsed, focused-tested, and official-path verified through shard 78.
+- Decision: launch each marker-gated prefetch as a hidden child PowerShell process with explicit Xet environment and process-owned download mutex. The conductor waits for that process and verifies the expected final target before advancing.
+- Alternatives considered: retain `Start-Job`; disable prefetch and serialize every download before conversion; keep adding environment variables inside the job runspace.
+- Evidence: foreground downloads sustained 108–114 MiB/s, while `Start-Job` prefetch children repeatedly held zero CPU, network, and write bytes even after their preceding download completed. Explicit Xet environment did not cure the runspace stall. The process helper immediately sustained 116.65 MiB/s with shard 47 and 79 downloads while shard 14/78 conversion continued.
+- Benchmark result: shard 78 completed under the process-prefetch path in 589.095 seconds, published 16,373,248,256 bytes with SHA-256 `8fac53b47f135c758f7151bb8159ae3b8617a1f64c1a9437e388988f9ccd2749`, deleted its authenticated source, and increased the ledger to 35/96. The elapsed includes shared staging/audit waits and is not an isolated prefetch speedup.
+- Reason accepted: a real child process preserves independent Xet initialization and OS-owned mutex abandonment semantics while retaining download/conversion overlap.
+- Revisit: remove the redundant foreground cached-target check only if HF CLI exposes a stable local-only completion API.

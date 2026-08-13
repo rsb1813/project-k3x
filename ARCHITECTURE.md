@@ -546,6 +546,8 @@ D-091 through D-094 make the three-conductor transport path bounded and restarta
 
 D-095 also bounds the lifetime of each HF child. A timed-out process tree is terminated and restarted against the same per-conductor Xet cache for at most three attempts. HF final-target publication is only a transport-completion signal; the Local Foundry still hashes the complete shard against the pinned official digest before inspecting tensors, and deletion remains ledger-gated.
 
+D-096 implements marker-gated prefetch as an owned hidden process rather than a PowerShell background-job runspace. The child receives the conductor-specific Xet cache explicitly, owns a recoverable download mutex, and applies D-095 retries. The conductor validates the expected final target after child exit before using it; official SHA-256 verification still occurs in the converter.
+
 D-083 assigns the pre-conversion source identity check to the converter itself. The CLI no longer rereads the same source immediately beforehand. D-087 later allows deletion to reuse that verified official digest only when device, inode, size, and nanosecond modification time remain unchanged through durable ledger publication; any identity change fails closed.
 
 ## TITAN component registry
