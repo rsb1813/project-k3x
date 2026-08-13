@@ -8,6 +8,7 @@ param(
     [string]$TemporaryDirectory = "",
     [string]$StagingLock = "C:\K3X\foundry-ram-stage.lock",
     [string]$OutputAuditLock = "C:\K3X\foundry-output-audit.lock",
+    [int]$DownloadSlots = 2,
     [switch]$Finalize
 )
 
@@ -23,6 +24,9 @@ $hf = (Get-Command hf).Source
 if ($StartIndex -lt 1 -or $EndIndex -gt $manifest.shards.Count -or $StartIndex -gt $EndIndex) {
     throw "invalid shard range"
 }
+if ($DownloadSlots -lt 1) {
+    throw "invalid download slot count"
+}
 if ((hf auth whoami --format json | ConvertFrom-Json).user -ne "rsb1813") {
     throw "unexpected Hugging Face account"
 }
@@ -36,6 +40,27 @@ New-Item -ItemType Directory -Force -Path $destination,(Join-Path $stagingRoot "
 function Get-SlotPath([int]$index) {
     $slot = ($index - 1) % 2
     return Join-Path $stagingRoot "slot-$slot"
+}
+
+function Invoke-BoundedDownload(
+    [string]$filename,
+    [string]$slotPath
+) {
+    $semaphore = [System.Threading.Semaphore]::new(
+        $DownloadSlots, $DownloadSlots, "K3XFoundryDownloads"
+    )
+    $null = $semaphore.WaitOne()
+    try {
+        & $hf download $manifest.repository $filename `
+            --revision $revision --local-dir $slotPath --quiet
+        if ($LASTEXITCODE -ne 0) {
+            throw "download failed for $filename"
+        }
+    }
+    finally {
+        $null = $semaphore.Release()
+        $semaphore.Dispose()
+    }
 }
 
 function Start-NextDownload([int]$index) {
@@ -71,22 +96,32 @@ function Start-NextDownloadAfterMarker([int]$index, [string]$markerPath) {
     New-Item -ItemType Directory -Force -Path $slotPath | Out-Null
     $logBase = Join-Path $stagingRoot ("logs\download-" + $shard.filename)
     return Start-Job -ScriptBlock {
-        param($MarkerPath, $HfPath, $Repository, $Filename, $Revision, $SlotPath, $LogBase)
+        param($MarkerPath, $HfPath, $Repository, $Filename, $Revision, $SlotPath, $LogBase, $DownloadSlots)
         while (-not (Test-Path -LiteralPath $MarkerPath)) {
             Start-Sleep -Milliseconds 250
         }
-        $process = Start-Process -FilePath $HfPath -ArgumentList @(
-            "download", $Repository, $Filename,
-            "--revision", $Revision, "--local-dir", $SlotPath, "--quiet"
-        ) -RedirectStandardOutput ($LogBase + ".stdout.log") `
-          -RedirectStandardError ($LogBase + ".stderr.log") `
-          -WindowStyle Hidden -Wait -PassThru
-        if ($process.ExitCode -ne 0) {
-            throw "download failed for $Filename"
+        $semaphore = [System.Threading.Semaphore]::new(
+            $DownloadSlots, $DownloadSlots, "K3XFoundryDownloads"
+        )
+        $null = $semaphore.WaitOne()
+        try {
+            $process = Start-Process -FilePath $HfPath -ArgumentList @(
+                "download", $Repository, $Filename,
+                "--revision", $Revision, "--local-dir", $SlotPath, "--quiet"
+            ) -RedirectStandardOutput ($LogBase + ".stdout.log") `
+              -RedirectStandardError ($LogBase + ".stderr.log") `
+              -WindowStyle Hidden -Wait -PassThru
+            if ($process.ExitCode -ne 0) {
+                throw "download failed for $Filename"
+            }
+        }
+        finally {
+            $null = $semaphore.Release()
+            $semaphore.Dispose()
         }
     } -ArgumentList @(
         $markerPath, $hf, $manifest.repository, $shard.filename,
-        $revision, $slotPath, $logBase
+        $revision, $slotPath, $logBase, $DownloadSlots
     )
 }
 
@@ -104,11 +139,7 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
     $target = Join-Path $slotPath $shard.filename
     New-Item -ItemType Directory -Force -Path $slotPath | Out-Null
 
-    & $hf download $manifest.repository $shard.filename `
-        --revision $revision --local-dir $slotPath --quiet
-    if ($LASTEXITCODE -ne 0) {
-        throw "download failed for $($shard.filename)"
-    }
+    Invoke-BoundedDownload $shard.filename $slotPath
     $sourceLinux = (& wsl -e wslpath -a -u $target).Trim()
     $temporaryArgument = ""
     $stagingReadyArgument = ""
