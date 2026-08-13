@@ -898,6 +898,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Authenticated two-slot local manufacture started with native MXFP4 experts and group-128 8-bit selected trunk matrices; verified shards 1 through 5 are complete and their source files were ledger-gated before deletion.
 - [x] Implement a checksum-bound `K3XSET1` fragment index and C++ multi-fragment Reader without a second model-sized payload copy.
 - [x] Bind the exact Python layer-0, KDA-MoE, MLA-MoE, resume, and LM-head compatibility runners to sealed K3X fragments.
+- [x] Separate strict manufacture verification from millisecond sealed-set directory opening without changing the Reader default.
 - [ ] Complete all 96 quality fragments, publish the official set manifest, and generate the first released-model token.
 - [ ] Grouped/resident/fused 3-bit CUDA FFN and complete official manufacturing.
 - [ ] SKYFORGE shard compiler for explicitly provisioned cloud jobs.

@@ -50,7 +50,13 @@ class K3XReader:
     model_config: bytes
 
     @classmethod
-    def open(cls, path: Path, *, verify_root: bool = True) -> "K3XReader":
+    def open(
+        cls,
+        path: Path,
+        *,
+        verify_root: bool = True,
+        verify_payload: bool = True,
+    ) -> "K3XReader":
         path = Path(path)
         actual_length = path.stat().st_size
         with path.open("rb") as stream:
@@ -135,15 +141,16 @@ class K3XReader:
             expert_records = tuple(ExpertRecord.decode(item) for item in
                                    decode_directory(expert_bytes, b"EXPT", EXPERT_RECORD_BYTES))
             validate_extent_layout(tensor_records, actual_length, 4096)
-            for record in tensor_records:
-                data = _read_exact(stream, record.data_offset, record.data_length, actual_length)
-                if google_crc32c.value(data) != record.data_crc32c:
-                    raise K3XError("DATA_CRC_MISMATCH")
-                if record.auxiliary_length:
-                    auxiliary = _read_exact(stream, record.auxiliary_offset,
-                                            record.auxiliary_length, actual_length)
-                    if google_crc32c.value(auxiliary) != record.auxiliary_crc32c:
-                        raise K3XError("AUXILIARY_CRC_MISMATCH")
+            if verify_payload:
+                for record in tensor_records:
+                    data = _read_exact(stream, record.data_offset, record.data_length, actual_length)
+                    if google_crc32c.value(data) != record.data_crc32c:
+                        raise K3XError("DATA_CRC_MISMATCH")
+                    if record.auxiliary_length:
+                        auxiliary = _read_exact(stream, record.auxiliary_offset,
+                                                record.auxiliary_length, actual_length)
+                        if google_crc32c.value(auxiliary) != record.auxiliary_crc32c:
+                            raise K3XError("AUXILIARY_CRC_MISMATCH")
             directory_digest = hashlib.sha256(
                 tensor_bytes + layer_bytes + expert_bytes + config
             ).digest()

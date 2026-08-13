@@ -25,10 +25,18 @@ class K3XTensorStore:
     tensors: dict[int, _LocatedTensor]
 
     @classmethod
-    def open(cls, paths: Iterable[Path]) -> "K3XTensorStore":
+    def open(
+        cls,
+        paths: Iterable[Path],
+        *,
+        verify_root: bool = True,
+        verify_payload: bool = True,
+    ) -> "K3XTensorStore":
         tensors: dict[int, _LocatedTensor] = {}
         for path in paths:
-            reader = K3XReader.open(Path(path))
+            reader = K3XReader.open(
+                Path(path), verify_root=verify_root, verify_payload=verify_payload
+            )
             for record in reader.tensor_records:
                 if record.tensor_id in tensors:
                     raise K3XError("DUPLICATE_TENSOR_ID", f"{record.tensor_id:016x}")

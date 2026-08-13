@@ -554,6 +554,7 @@
 - [x] Stream passthrough tensors from the authenticated source shard without a model-sized temporary copy.
 - [x] Load BF16/F32/Q8 dense tensors and native MXFP4 expert matvecs by canonical name from K3X fragments.
 - [x] Bind every official Python graph entrypoint to a sealed K3XSET1 payload source.
+- [x] Avoid rescanning every fragment payload at each sealed compatibility-runner process start.
 - [ ] Complete and verify all 96 K3X fragments.
 - [ ] Assemble the final executable checkpoint and generate the first token.
 - [ ] Measure and optimize the actual end-to-end bottleneck.

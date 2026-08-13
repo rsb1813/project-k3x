@@ -19,7 +19,7 @@ def open_official_fragment(k3x_set: Path, source_shard: str) -> K3XTensorStore:
     path = next((item for item in manifest.fragments if item.name == filename), None)
     if path is None:
         raise K3XError("K3X_FRAGMENT_NOT_FOUND", filename)
-    return K3XTensorStore.open([path])
+    return K3XTensorStore.open([path], verify_root=False, verify_payload=False)
 
 
 def load_planned_tensors(store, planned, device: torch.device):

@@ -941,3 +941,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: this reuses already validated graph math and state publication while moving weight payload reads to manufactured K3X. It reaches the first-token correctness gate sooner without misrepresenting the compatibility runner as the final optimized runtime.
 - Rejected claims: strict fragment open and literal Q8/MXFP4 decoding are not performance defaults. The runner still fetches small official metadata for source-drift validation and cannot run until every required fragment, including shard 94 globals, is present.
 - Revisit: after the first token, compare against an independent reference token and replace the measured dense decode, expert materialization, fragment-open, and process-boundary bottlenecks in priority order.
+
+## D-081 — Trust sealed payload roots during compatibility-runner open
+
+- Date: 2026-08-13.
+- Status: implemented for the sealed Python compatibility path; strict Reader remains the default everywhere else.
+- Decision: after `K3XSET1` validates its own digest and each fragment's filename, size, finalized superblock, and recorded internal root, open that fragment's directories without rereading every payload CRC and root. Conversion completion still requires full extent CRC, final root, strict Reader reopen, output SHA-256, durable ledger publication, and deletion eligibility.
+- Alternatives considered: reread every 1–16 GB fragment for every layer subprocess; keep one long-lived Python process; add a signed external root cache before the first token.
+- Evidence: the current compatibility graph launches one process per layer and each strict Python Reader traverses the entire selected fragment before loading a tensor. Official shard 1 strict-open measured 11.401 seconds, while sealed directory-open measured 0.004774 seconds and exposed the same 23 records.
+- Benchmark result: one WSL2 `/mnt/c` paired policy observation is 11.401 versus 0.004774 seconds, roughly 2,388x lower open elapsed. Focused strict/default and sealed-open regressions pass 4/4. This is startup metadata timing, not token throughput.
+- Reason accepted: the payload identity was already established before source deletion and is sealed into the set. Repeating full payload verification at every layer adds no new model correctness information unless storage changed after manufacture.
+- Rejected claims: sealed-open cannot detect post-manufacture payload bit rot by itself. Periodic or explicit strict audit remains required, and the 2,388x ratio is not projected to end-to-end inference.
+- Revisit: move to one persistent process and audit fragments on a configurable cadence after the first token establishes the actual process/open contribution.
