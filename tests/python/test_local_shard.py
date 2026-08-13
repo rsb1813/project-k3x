@@ -47,8 +47,10 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
     write_microshard = local_shard._write_microshard
     inspect_shard = local_shard.inspect_shard
     sha256 = local_shard._sha256
+    staging_ready = tmp_path / "source.ram-ready"
 
     def capture(path, outputs, *, chunk_bytes):
+        assert staging_ready.is_file()
         written_kinds.extend(output.kind for output in outputs)
         return write_microshard(path, outputs, chunk_bytes=chunk_bytes)
 
@@ -78,9 +80,11 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
         expected_sha256=source_sha256,
         chunk_bytes=256,
         temporary_directory=tmp_path / "staging-work",
+        staging_ready_path=staging_ready,
     )
 
     assert report.source_sha256 == source_sha256
+    assert staging_ready.is_file()
     assert report.quant8_tensor_count == 1
     assert report.native_expert_tensor_count == 6
     assert [path.name for path in inspected_paths] == ["official.safetensors"]

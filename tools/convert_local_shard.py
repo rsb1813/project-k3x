@@ -30,6 +30,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--temporary-directory", type=Path)
+    parser.add_argument("--staging-ready-file", type=Path)
     parser.add_argument(
         "--output-budget-bytes", type=int, default=QUALITY_OUTPUT_BUDGET_BYTES
     )
@@ -82,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.temporary_directory is not None
             else source.parent / ".foundry-work"
         ),
+        staging_ready_path=args.staging_ready_file,
     )
     conversion_seconds = time.perf_counter() - conversion_start
     record_completed_unit(

@@ -228,6 +228,7 @@ def convert_local_official_shard(
     expected_sha256: str,
     chunk_bytes: int = 8 * 1024 * 1024,
     temporary_directory: Path | None = None,
+    staging_ready_path: Path | None = None,
 ) -> LocalShardReport:
     source_path = Path(source_path).resolve(strict=True)
     verified_source_identity = source_identity(source_path)
@@ -252,6 +253,12 @@ def convert_local_official_shard(
         source_sha256 = _sha256(source_link)
         if source_sha256 != expected_sha256:
             raise K3XError("LOCAL_SOURCE_SHA256", source_path.name)
+        if staging_ready_path is not None:
+            ready_path = Path(staging_ready_path)
+            ready_path.parent.mkdir(parents=True, exist_ok=True)
+            partial_ready_path = ready_path.with_suffix(ready_path.suffix + ".partial")
+            partial_ready_path.write_text(source_sha256 + "\n", encoding="ascii")
+            os.replace(partial_ready_path, ready_path)
         tensors = inspect_shard(source_link)
         outputs, quant8_shapes, packed_shapes, quant8_count, native_expert_count = _plan(
             tensors

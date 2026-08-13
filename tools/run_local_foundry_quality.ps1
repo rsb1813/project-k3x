@@ -56,7 +56,47 @@ function Start-NextDownload([int]$index) {
       -WindowStyle Hidden | Out-Null
 }
 
+function Start-NextDownloadAfterMarker([int]$index, [string]$markerPath) {
+    if ($index -gt $EndIndex) {
+        return $null
+    }
+    $shard = $manifest.shards[$index - 1]
+    $slotPath = Get-SlotPath $index
+    $target = Join-Path $slotPath $shard.filename
+    if (Test-Path -LiteralPath $target) {
+        return $null
+    }
+    New-Item -ItemType Directory -Force -Path $slotPath | Out-Null
+    $logBase = Join-Path $stagingRoot ("logs\download-" + $shard.filename)
+    return Start-Job -ScriptBlock {
+        param($MarkerPath, $HfPath, $Repository, $Filename, $Revision, $SlotPath, $LogBase)
+        while (-not (Test-Path -LiteralPath $MarkerPath)) {
+            Start-Sleep -Milliseconds 250
+        }
+        $process = Start-Process -FilePath $HfPath -ArgumentList @(
+            "download", $Repository, $Filename,
+            "--revision", $Revision, "--local-dir", $SlotPath, "--quiet"
+        ) -RedirectStandardOutput ($LogBase + ".stdout.log") `
+          -RedirectStandardError ($LogBase + ".stderr.log") `
+          -WindowStyle Hidden -Wait -PassThru
+        if ($process.ExitCode -ne 0) {
+            throw "download failed for $Filename"
+        }
+    } -ArgumentList @(
+        $markerPath, $hf, $manifest.repository, $shard.filename,
+        $revision, $slotPath, $logBase
+    )
+}
+
+$prefetchJob = $null
+
 for ($index = $StartIndex; $index -le $EndIndex; $index++) {
+    if ($null -ne $prefetchJob) {
+        Wait-Job -Job $prefetchJob | Out-Null
+        Receive-Job -Job $prefetchJob -ErrorAction Stop | Out-Null
+        Remove-Job -Job $prefetchJob
+        $prefetchJob = $null
+    }
     $shard = $manifest.shards[$index - 1]
     $slotPath = Get-SlotPath $index
     $target = Join-Path $slotPath $shard.filename
@@ -67,12 +107,19 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
     if ($LASTEXITCODE -ne 0) {
         throw "download failed for $($shard.filename)"
     }
-    Start-NextDownload ($index + 1)
-
     $sourceLinux = (& wsl -e wslpath -a -u $target).Trim()
     $temporaryArgument = ""
+    $stagingReadyArgument = ""
     if ($TemporaryDirectory) {
         $temporaryArgument = "--temporary-directory $TemporaryDirectory"
+        $stagingReady = $target + ".ram-ready"
+        Remove-Item -LiteralPath $stagingReady -Force -ErrorAction SilentlyContinue
+        $stagingReadyLinux = (& wsl -e wslpath -a -u $stagingReady).Trim()
+        $stagingReadyArgument = "--staging-ready-file $stagingReadyLinux"
+        $prefetchJob = Start-NextDownloadAfterMarker ($index + 1) $stagingReady
+    }
+    else {
+        Start-NextDownload ($index + 1)
     }
     $command = @(
         "cd /mnt/c/Users/jolib/Documents/project-k3x/.worktrees/milestone-twenty-four-cuda-graph-cache &&",
@@ -83,12 +130,16 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
         "--destination /mnt/c/K3X/shards",
         "--ledger $((& wsl -e wslpath -a -u $Ledger).Trim())",
         $temporaryArgument,
+        $stagingReadyArgument,
         "--output-budget-bytes 1510500000000",
         "--delete-source"
     ) -join " "
     $result = & wsl -e bash -lc $command
     if ($LASTEXITCODE -ne 0) {
         throw "conversion failed for $($shard.filename)"
+    }
+    if ($TemporaryDirectory) {
+        Remove-Item -LiteralPath $stagingReady -Force -ErrorAction SilentlyContinue
     }
     Add-Content -LiteralPath $progress -Value $result -Encoding utf8
 }
