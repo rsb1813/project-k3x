@@ -505,7 +505,7 @@
 - [x] Write and self-review the M34 implementation plan.
 - [x] Add the caller-owned attribution accumulator with CUDA ownership/parity tests.
 - [x] Add an opt-in harness schema while preserving default B-0034 output.
-- [ ] Add strict B-0035 evidence tooling.
+- [x] Add strict B-0035 evidence tooling.
 - [ ] Run actual-artifact correctness, sanitizer, production-guard, and regression gates.
 - [ ] Run B-0035 once successfully and seal the evidence.
 - [ ] Synchronize the TITAN Ledger, publish M34, and verify CI.
