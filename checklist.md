@@ -540,7 +540,7 @@
 - [x] Implement the disk-safe manifest and IMMORTAL ledger.
 - [x] Implement and verify the deterministic 3-bit expert codec.
 - [x] Pass the portable CPU/reference synthetic local manufacturing integration gate.
-- [ ] Launch the resumable 96-shard official manufacture.
+- [x] Launch the resumable 96-shard official manufacture.
 
 ## Milestone 38 — Quality Local Foundry
 
