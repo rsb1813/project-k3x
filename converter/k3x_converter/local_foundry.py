@@ -125,6 +125,62 @@ def check_disk_budget(
         raise K3XError("LOCAL_STAGING_SPACE")
 
 
+def xet_environment() -> dict[str, str]:
+    return {
+        "HF_XET_HIGH_PERFORMANCE": "1",
+        "HF_HUB_DISABLE_XET": "0",
+    }
+
+
+def staged_source_path(unit: ShardUnit, staging_root: Path) -> Path:
+    return Path(staging_root) / f"slot-{unit.slot}" / unit.filename
+
+
+def build_xet_command(
+    plan: LocalFoundryPlan, unit: ShardUnit, staging_root: Path
+) -> tuple[str, ...]:
+    if unit not in plan.units:
+        raise K3XError("INVALID_LOCAL_UNIT")
+    return (
+        "hf",
+        "download",
+        plan.repository,
+        unit.filename,
+        "--revision",
+        plan.revision,
+        "--local-dir",
+        str(staged_source_path(unit, staging_root).parent),
+        "--quiet",
+    )
+
+
+def verify_staged_unit(unit: ShardUnit, source_path: Path) -> None:
+    try:
+        if source_path.stat().st_size != unit.source_bytes:
+            raise K3XError("LOCAL_SOURCE_LENGTH", unit.filename)
+        digest = hashlib.sha256()
+        with source_path.open("rb") as stream:
+            while chunk := stream.read(8 * 1024 * 1024):
+                digest.update(chunk)
+    except OSError as error:
+        raise K3XError("LOCAL_SOURCE_IO", unit.filename) from error
+    if digest.hexdigest() != unit.source_sha256:
+        raise K3XError("LOCAL_SOURCE_SHA256", unit.filename)
+
+
+def source_deletion_allowed(
+    ledger_path: Path,
+    plan: LocalFoundryPlan,
+    unit: ShardUnit,
+    source_path: Path,
+) -> bool:
+    verify_staged_unit(unit, source_path)
+    ledger = load_ledger(ledger_path, plan)
+    return any(
+        item["unit_id"] == unit.unit_id for item in ledger["completed_units"]
+    )
+
+
 def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in pairs:

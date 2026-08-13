@@ -12,12 +12,18 @@ from k3x_converter.local_foundry import (
     OUTPUT_BUDGET_BYTES,
     STAGING_RESERVE_BYTES,
     build_local_plan,
+    build_xet_command,
     check_disk_budget,
     create_ledger,
     load_ledger,
     record_completed_unit,
+    source_deletion_allowed,
+    staged_source_path,
+    verify_staged_unit,
+    xet_environment,
 )
 from k3x_ref.quant3 import Quant3Tensor, decode_groupwise_3bit, quantize_groupwise_3bit
+from tools.run_local_foundry import main as local_foundry_main
 
 
 SHARDS = (
@@ -114,3 +120,79 @@ def test_quant3_decode_rejects_reserved_code():
 
     with pytest.raises(K3XError, match="QUANT3_RESERVED_CODE"):
         decode_groupwise_3bit(encoded)
+
+
+def test_xet_staging_is_token_free_and_deletion_is_ledger_gated(tmp_path):
+    payload = b"checksum-bound-source"
+    source_sha256 = __import__("hashlib").sha256(payload).hexdigest()
+    plan = build_local_plan(
+        "moonshotai/Kimi-K3",
+        "9f62e4e",
+        (("model-00001-of-000001.safetensors", len(payload), source_sha256),),
+    )
+    unit = plan.units[0]
+
+    command = build_xet_command(plan, unit, tmp_path / "staging")
+    assert command[:3] == ("hf", "download", "moonshotai/Kimi-K3")
+    assert "--token" not in command
+    assert xet_environment() == {
+        "HF_XET_HIGH_PERFORMANCE": "1",
+        "HF_HUB_DISABLE_XET": "0",
+    }
+    source_path = staged_source_path(unit, tmp_path / "staging")
+    source_path.parent.mkdir(parents=True)
+    source_path.write_bytes(payload)
+    verify_staged_unit(unit, source_path)
+
+    ledger_path = tmp_path / "immortal.json"
+    create_ledger(ledger_path, plan)
+    assert not source_deletion_allowed(ledger_path, plan, unit, source_path)
+    record_completed_unit(
+        ledger_path,
+        plan,
+        unit_id=unit.unit_id,
+        source_sha256=source_sha256,
+        output_sha256="aa" * 32,
+        output_bytes=10,
+    )
+    assert source_deletion_allowed(ledger_path, plan, unit, source_path)
+
+
+def test_local_foundry_dry_run_publishes_no_ledger(tmp_path, capsys):
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "repository": "moonshotai/Kimi-K3",
+                "revision": "9f62e4e",
+                "shards": [
+                    {"filename": name, "bytes": size, "sha256": digest}
+                    for name, size, digest in SHARDS
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    ledger = tmp_path / "immortal.json"
+
+    assert (
+        local_foundry_main(
+            [
+                "--manifest",
+                str(manifest),
+                "--destination",
+                str(__import__("pathlib").Path.cwd()),
+                "--staging",
+                str(__import__("pathlib").Path.cwd()),
+                "--ledger",
+                str(ledger),
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+    report = json.loads(capsys.readouterr().out)
+    assert report["format"] == "k3x-local-foundry-dry-run-v1"
+    assert report["unit_count"] == 2
+    assert report["official_launch_enabled"] is False
+    assert not ledger.exists()
