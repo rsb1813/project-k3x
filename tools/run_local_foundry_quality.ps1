@@ -23,6 +23,7 @@ $revision = $manifest.revision
 $destination = "C:\K3X\shards"
 $hf = (Get-Command hf).Source
 $downloadHelper = Join-Path $PSScriptRoot "invoke_hf_download.ps1"
+$prefetchHelper = Join-Path $PSScriptRoot "invoke_bounded_hf_prefetch.ps1"
 
 if ($StartIndex -lt 1 -or $EndIndex -gt $manifest.shards.Count -or $StartIndex -gt $EndIndex) {
     throw "invalid shard range"
@@ -115,63 +116,31 @@ function Start-NextDownloadAfterMarker([int]$index, [string]$markerPath) {
     }
     New-Item -ItemType Directory -Force -Path $slotPath | Out-Null
     $logBase = Join-Path $stagingRoot ("logs\download-" + $shard.filename)
-    return Start-Job -ScriptBlock {
-        param($MarkerPath, $DownloadHelper, $HfPath, $Repository, $Filename, $Revision, $SlotPath, $LogBase, $XetCache, $DownloadSlots, $TimeoutSeconds, $MaxAttempts)
-        $env:HF_XET_HIGH_PERFORMANCE = "1"
-        $env:HF_HUB_DISABLE_XET = "0"
-        $env:HF_XET_CACHE = $XetCache
-        Remove-Item Env:HF_HOME -ErrorAction SilentlyContinue
-        while (-not (Test-Path -LiteralPath $MarkerPath)) {
-            Start-Sleep -Milliseconds 250
-        }
-        $slotMutex = $null
-        while ($null -eq $slotMutex) {
-            for ($slot = 0; $slot -lt $DownloadSlots; $slot++) {
-                $candidate = [System.Threading.Mutex]::new(
-                    $false, "K3XFoundryDownloadSlot$slot"
-                )
-                try {
-                    if ($candidate.WaitOne(0)) {
-                        $slotMutex = $candidate
-                        break
-                    }
-                }
-                catch [System.Threading.AbandonedMutexException] {
-                    $slotMutex = $candidate
-                    break
-                }
-                $candidate.Dispose()
-            }
-            if ($null -eq $slotMutex) {
-                Start-Sleep -Milliseconds 250
-            }
-        }
-        try {
-            & $DownloadHelper -HfPath $HfPath -Repository $Repository `
-                -Filename $Filename -Revision $Revision -SlotPath $SlotPath `
-                -LogBase $LogBase -TimeoutSeconds $TimeoutSeconds `
-                -MaxAttempts $MaxAttempts
-        }
-        finally {
-            $slotMutex.ReleaseMutex()
-            $slotMutex.Dispose()
-        }
-    } -ArgumentList @(
-        $markerPath, $downloadHelper, $hf, $manifest.repository,
-        $shard.filename, $revision, $slotPath, $logBase,
-        (Join-Path $stagingRoot ".xet-cache"), $DownloadSlots,
-        $DownloadTimeoutSeconds, $DownloadMaxAttempts
-    )
+    return Start-Process powershell.exe -ArgumentList @(
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $prefetchHelper,
+        "-MarkerPath", $markerPath, "-DownloadHelper", $downloadHelper,
+        "-HfPath", $hf, "-Repository", $manifest.repository,
+        "-Filename", $shard.filename, "-Revision", $revision,
+        "-SlotPath", $slotPath, "-LogBase", $logBase,
+        "-XetCache", (Join-Path $stagingRoot ".xet-cache"),
+        "-DownloadSlots", $DownloadSlots,
+        "-TimeoutSeconds", $DownloadTimeoutSeconds,
+        "-MaxAttempts", $DownloadMaxAttempts
+    ) -WindowStyle Hidden -PassThru
 }
 
-$prefetchJob = $null
+$prefetchProcess = $null
+$prefetchTarget = $null
 
 for ($index = $StartIndex; $index -le $EndIndex; $index++) {
-    if ($null -ne $prefetchJob) {
-        Wait-Job -Job $prefetchJob | Out-Null
-        Receive-Job -Job $prefetchJob -ErrorAction Stop | Out-Null
-        Remove-Job -Job $prefetchJob
-        $prefetchJob = $null
+    if ($null -ne $prefetchProcess) {
+        $prefetchProcess.WaitForExit()
+        if (-not (Test-Path -LiteralPath $prefetchTarget)) {
+            throw "prefetch process failed"
+        }
+        $prefetchProcess.Dispose()
+        $prefetchProcess = $null
+        $prefetchTarget = $null
     }
     $shard = $manifest.shards[$index - 1]
     $slotPath = Get-SlotPath $index
@@ -194,7 +163,11 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
         $stagingLockArgument = "--staging-lock-file $stagingLockLinux"
         $outputAuditLockLinux = (& wsl -e wslpath -a -u $OutputAuditLock).Trim()
         $outputAuditLockArgument = "--output-audit-lock-file $outputAuditLockLinux"
-        $prefetchJob = Start-NextDownloadAfterMarker ($index + 1) $stagingReady
+        $prefetchProcess = Start-NextDownloadAfterMarker ($index + 1) $stagingReady
+        if ($null -ne $prefetchProcess) {
+            $prefetchTarget = Join-Path (Get-SlotPath ($index + 1)) `
+                $manifest.shards[$index].filename
+        }
     }
     else {
         Start-NextDownload ($index + 1)
