@@ -518,7 +518,9 @@ The local Foundry path now has a deterministic group-32 signed 3-bit routed-expe
 
 The PyTorch oracle and portable C++ runtime decode the same packed representation and execute the complete synthetic K3 graph. The focused integration gate converts a synthetic checkpoint, checks every quantized extent, and compares prefill layer outputs, logits, and incremental greedy tokens. Existing native-MXFP4 synthetic execution remains the reference path.
 
-This is a portable correctness boundary, not the production codec completion gate. The current C++ path expands a selected 3-bit expert projection to FP32 before backend matvec. It therefore cannot manufacture or efficiently execute the 1.28 TB official target. Direct packed CUDA decode/GEMM, bounded conversion from official native MXFP4, sensitivity calibration, mixed-precision recipe closure, and quality evaluation remain unimplemented. The authenticated 96-shard launch remains disabled until those gates pass.
+The RTX 5080 CUDA backend now has a scalar direct-packed matvec. It uploads the input, 3-bit payload, and BF16 scales without creating a host FP32 weight matrix, decodes each code inside the CUDA kernel, and returns FP32 row outputs. A literal CUDA test binds H2D/D2H byte accounting to the packed representation, and the complete synthetic CUDA graph matches the quantized Python model's layers, logits, and greedy tokens. Compute Sanitizer reports zero errors.
+
+This is still not the production codec completion gate. Each projection uses a separate launch and transient upload; grouped gate/up, resident weights, fused SiTU/down, bounded official native-MXFP4 conversion, sensitivity calibration, mixed-precision recipe closure, and quality evaluation remain unimplemented. The authenticated 96-shard launch remains disabled until those manufacture and quality gates pass.
 
 ## TITAN component registry
 

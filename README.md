@@ -892,7 +892,8 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Admission-time immutable validation with B-0024 attribution and bounded ordered-set CUDA Graph update/cache experiments with B-0025 evidence.
 - [ ] Learned drafting, acceptance-aware block sizing, and cost-aware verification experiments.
 - [ ] Sensitivity-calibrated mixed trunk quantization.
-- [ ] Direct packed 3-bit CUDA decode/GEMM and bounded official MXFP4-to-3-bit manufacturing.
+- [x] Scalar direct-packed 3-bit CUDA matvec with synthetic layer/logit/token parity and sanitizer coverage.
+- [ ] Grouped/resident/fused 3-bit CUDA FFN and bounded official MXFP4-to-3-bit manufacturing.
 - [ ] SKYFORGE shard compiler for explicitly provisioned cloud jobs.
 - [ ] Full ablation and coding-quality suite.
 

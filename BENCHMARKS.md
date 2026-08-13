@@ -1498,3 +1498,15 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Correctness: prefill layer outputs and logits match the independently constructed quantized Python model at `1e-6` absolute and relative tolerance; six greedy tokens match exactly.
 - Verification: C++ `ops` 1/1; focused Python/converter/reader/runtime regression 28/28; CUDA-enabled `k3x_run` build plus the same 3-bit CPU execution gate 1/1.
 - Performance and traffic fields: not measured. No decode tok/s, prefill tok/s, TTFT, VRAM, RAM, NVMe, H2D, cache, Top-K, speculation, or quality result is claimed.
+
+## Milestone 37 direct-packed CUDA correctness gate
+
+- Date: 2026-08-13.
+- Commit: `5f61c59`.
+- Hardware: NVIDIA RTX 5080 under WSL2, CUDA 13.3, native `sm_120` build.
+- Model: one literal 2-by-32 group-wise 3-bit matrix and the deterministic synthetic K3-compatible checkpoint.
+- Mode: scalar transient direct-packed CUDA matvec with FP32 activation and output.
+- Correctness: literal output matches the portable decoder/matvec at `1e-5`; complete synthetic prefill layers and logits match the quantized Python model at `1e-4`; six incremental greedy tokens match exactly.
+- Transfer contract: the literal test requires weight H2D to equal the 24 packed bytes plus four BF16 scale bytes, activation H2D to equal 128 bytes, and D2H to equal eight bytes. No host FP32 weight extent is transferred.
+- Verification: CPU `ops|backend` 2/2; focused CPU Python 27/27; CUDA `cuda_mxfp4|cuda_quant3` 2/2; synthetic CUDA parity 1/1; Compute Sanitizer `ERROR SUMMARY: 0 errors`.
+- Performance fields: not measured. Test wall time is not reported as an inference benchmark.

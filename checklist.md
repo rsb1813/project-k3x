@@ -549,4 +549,5 @@
 - [x] Implement the minimum Python writer/reader and C++ reader/runtime boundary.
 - [x] Convert the synthetic K3-compatible model and prove layer/token parity.
 - [x] Update the TITAN Ledger documents and commit the verified boundary.
-- [ ] Implement direct packed CUDA execution and close the official conversion recipe gate.
+- [x] Implement scalar direct-packed CUDA execution and synthetic parity.
+- [ ] Close the official conversion recipe and quality gates.
