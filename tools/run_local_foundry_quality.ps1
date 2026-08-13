@@ -116,7 +116,11 @@ function Start-NextDownloadAfterMarker([int]$index, [string]$markerPath) {
     New-Item -ItemType Directory -Force -Path $slotPath | Out-Null
     $logBase = Join-Path $stagingRoot ("logs\download-" + $shard.filename)
     return Start-Job -ScriptBlock {
-        param($MarkerPath, $DownloadHelper, $HfPath, $Repository, $Filename, $Revision, $SlotPath, $LogBase, $DownloadSlots, $TimeoutSeconds, $MaxAttempts)
+        param($MarkerPath, $DownloadHelper, $HfPath, $Repository, $Filename, $Revision, $SlotPath, $LogBase, $XetCache, $DownloadSlots, $TimeoutSeconds, $MaxAttempts)
+        $env:HF_XET_HIGH_PERFORMANCE = "1"
+        $env:HF_HUB_DISABLE_XET = "0"
+        $env:HF_XET_CACHE = $XetCache
+        Remove-Item Env:HF_HOME -ErrorAction SilentlyContinue
         while (-not (Test-Path -LiteralPath $MarkerPath)) {
             Start-Sleep -Milliseconds 250
         }
@@ -154,7 +158,8 @@ function Start-NextDownloadAfterMarker([int]$index, [string]$markerPath) {
         }
     } -ArgumentList @(
         $markerPath, $downloadHelper, $hf, $manifest.repository,
-        $shard.filename, $revision, $slotPath, $logBase, $DownloadSlots,
+        $shard.filename, $revision, $slotPath, $logBase,
+        (Join-Path $stagingRoot ".xet-cache"), $DownloadSlots,
         $DownloadTimeoutSeconds, $DownloadMaxAttempts
     )
 }
