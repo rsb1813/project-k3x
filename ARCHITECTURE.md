@@ -506,6 +506,12 @@ D-072's attribution-only boundary is implemented. An optional caller-owned accum
 
 The historical path passes no accumulator and preserves the B-0034 schema. Explicit attribution creates a profiler-backed backend and emits the separate `k3x-official-two-layer-attribution-v1` schema. B-0035 retains the B-0034 artifact, correctness, residency, traffic, and 3/20 measurement contracts. Device-closure averages 69.822990 ms front wall, 0.039036 ms canonical host route wall, 41.060877 ms tail wall, and 0.023582 ms checked remainder per sequence. Front and tail account for 62.934% and 37.010% of attributed wall time; their existing-event CUDA times average 52.571374 and 30.057734 ms. This supports operation-level attribution inside those regions, not an immediate fusion or default change. The design is in [`docs/superpowers/specs/2026-08-13-k3x-two-layer-closure-attribution-design.md`](docs/superpowers/specs/2026-08-13-k3x-two-layer-closure-attribution-design.md).
 
+## Milestone 35 proposed operation-level attribution
+
+D-073 selects synchronization-free classification of the profiler events already emitted inside each front and tail snapshot. Front `dense_matvec` device time represents the official KDA call, front `moe_mix` represents device route preparation, and tail `moe_mix` represents the official MoE FFN. Checked unclassified buckets retain unknown or future successful operations and must close back to each existing regional device total.
+
+The default and M34 schemas remain unchanged. A new explicit schema will own B-0036 and reuse the exact B-0035 artifact, correctness, traffic, residency, and 3/20 contracts. No implementation, B-0036 measurement, fusion, or default change exists yet. The design is in [`docs/superpowers/specs/2026-08-13-k3x-two-layer-operation-attribution-design.md`](docs/superpowers/specs/2026-08-13-k3x-two-layer-operation-attribution-design.md).
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.
