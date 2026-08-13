@@ -556,6 +556,7 @@
 - [x] Bind every official Python graph entrypoint to a sealed K3XSET1 payload source.
 - [x] Avoid rescanning every fragment payload at each sealed compatibility-runner process start.
 - [ ] Complete and verify all 96 K3X fragments.
+- [ ] Complete the resumed original-precision layer-24 reference oracle and record its greedy token.
 - [ ] Assemble the final executable checkpoint and generate the first token.
 - [ ] Measure and optimize the actual end-to-end bottleneck.
 
