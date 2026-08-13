@@ -121,4 +121,39 @@ Result<std::vector<float>> decode_groupwise_3bit(
     }
     return Result<std::vector<float>>::success(std::move(output));
 }
+
+Result<std::vector<float>> decode_groupwise_8bit(
+    std::span<const std::byte> codes,
+    std::span<const std::byte> scales_bf16,
+    std::size_t values,
+    std::size_t group_size) {
+    if (!values || group_size != 128) {
+        return Result<std::vector<float>>::failure(ErrorCode::invalid_quant8);
+    }
+    const auto groups = values / group_size + (values % group_size != 0);
+    if (groups > static_cast<std::size_t>(-1) / group_size ||
+        codes.size() != groups * group_size ||
+        scales_bf16.size() != groups * 2) {
+        return Result<std::vector<float>>::failure(ErrorCode::invalid_quant8);
+    }
+    std::vector<float> output(values);
+    for (std::size_t group = 0; group < groups; ++group) {
+        const auto low = std::to_integer<std::uint16_t>(scales_bf16[group * 2]);
+        const auto high = std::to_integer<std::uint16_t>(scales_bf16[group * 2 + 1]);
+        const auto scale = std::bit_cast<float>(
+            static_cast<std::uint32_t>(low | (high << 8U)) << 16U);
+        if (!std::isfinite(scale) || scale <= 0.0F) {
+            return Result<std::vector<float>>::failure(ErrorCode::invalid_quant8);
+        }
+        for (std::size_t index = 0; index < group_size; ++index) {
+            const auto logical = group * group_size + index;
+            if (logical < values) {
+                const auto code = static_cast<std::int8_t>(
+                    std::to_integer<std::uint8_t>(codes[logical]));
+                output[logical] = static_cast<float>(code) * scale;
+            }
+        }
+    }
+    return Result<std::vector<float>>::success(std::move(output));
+}
 }

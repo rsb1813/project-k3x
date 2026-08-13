@@ -34,5 +34,12 @@ int main() {
     quant3_packed[0] = std::byte{0x8f};
     if (k3x::decode_groupwise_3bit(
             quant3_packed, quant3_scales, 8, 32)) return 5;
+    std::array<std::byte, 128> quant8_codes{};
+    quant8_codes[0] = std::byte{0x81};
+    quant8_codes[1] = std::byte{0x7f};
+    const auto quant8 = k3x::decode_groupwise_8bit(
+        quant8_codes, quant3_scales, 2, 128);
+    if (!quant8 || quant8.value().size() != 2 ||
+        quant8.value()[0] != -127.0F || quant8.value()[1] != 127.0F) return 6;
     return 0;
 }

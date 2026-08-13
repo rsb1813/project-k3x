@@ -10,7 +10,9 @@
 
 int main() {
     if (k3x::required_bf16_tensors != 1ULL ||
-        k3x::supported_required_features != k3x::required_bf16_tensors ||
+        k3x::required_quant3_tensors != 2ULL ||
+        k3x::required_quant8_tensors != 4ULL ||
+        k3x::supported_required_features != 7ULL ||
         k3x::optional_official_moe_fixture != 2ULL) {
         return 4;
     }

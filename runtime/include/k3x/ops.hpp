@@ -28,4 +28,9 @@ Result<std::vector<float>> decode_groupwise_3bit(
     std::span<const std::byte> scales_bf16,
     std::size_t values,
     std::size_t group_size = 32);
+Result<std::vector<float>> decode_groupwise_8bit(
+    std::span<const std::byte> codes,
+    std::span<const std::byte> scales_bf16,
+    std::size_t values,
+    std::size_t group_size = 128);
 }
