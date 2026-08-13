@@ -929,3 +929,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: the immutable source inode remains checksum-bound and available until the final Reader and ledger gates permit deletion, while eliminating a redundant model-sized staging write and read.
 - Rejected claims: a hardlink is not a second payload copy, but it also does not make the source disposable before conversion completes. This change does not reduce final K3X bytes or inference traffic.
 - Revisit: replace the hardlink boundary with a direct immutable file descriptor only if it preserves manifest containment and resume identity with less complexity.
+
+## D-080 — Use a sealed K3X compatibility runner for the first official token
+
+- Date: 2026-08-13.
+- Status: implemented through all graph entrypoints; end-to-end execution awaits the complete 96-fragment set.
+- Decision: connect the existing exact PyTorch official layer 0, KDA-MoE, MLA-MoE, resume, and LM-head runners to canonical tensors from a sealed `K3XSET1` manifest. Keep natural Top-16 routing and the existing state/output digest publications. Use this compatibility path for the first correctness token before replacing it with the optimized production C++ scheduler.
+- Alternatives considered: wait for a complete C++ 93-layer runtime before producing any token; continue downloading per-tensor HTTP range objects; accept an unsealed directory of fragments.
+- Evidence: the Python store independently matches dense Q8 and native-MXFP4 reference decoding. All five graph CLIs expose `--k3x-set`, and the Python set parser verifies the canonical seal, plan identity field, fragment names, sizes, and internal roots before strict Reader opening. A real shard-1 strict open found 23 records in 11.401 seconds and loaded finite `[7168]` input norm and `[12288,7168]` Q8 q-projection tensors.
+- Benchmark result: focused set/store coverage passes 3/3 and all six modified Python entrypoints compile; five CLI contracts expose the set flag. No official layer output, token, tok/s, or quality result is claimed yet.
+- Reason accepted: this reuses already validated graph math and state publication while moving weight payload reads to manufactured K3X. It reaches the first-token correctness gate sooner without misrepresenting the compatibility runner as the final optimized runtime.
+- Rejected claims: strict fragment open and literal Q8/MXFP4 decoding are not performance defaults. The runner still fetches small official metadata for source-drift validation and cannot run until every required fragment, including shard 94 globals, is present.
+- Revisit: after the first token, compare against an independent reference token and replace the measured dense decode, expert materialization, fragment-open, and process-boundary bottlenecks in priority order.

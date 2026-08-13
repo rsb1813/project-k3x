@@ -28,6 +28,7 @@ from tools.run_official_layer0 import (
     _write_json_atomic,
 )
 from tools.run_official_layer1 import _load_state, _residual_input
+from tools.official_k3x_source import open_official_fragment
 
 
 _HEAD = "language_model.lm_head.weight"
@@ -56,6 +57,7 @@ def main() -> int:
     parser.add_argument("--object-dir", type=Path, required=True)
     parser.add_argument("--state-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--k3x-set", type=Path)
     args = parser.parse_args()
     if not torch.cuda.is_available():
         raise K3XError("CUDA_UNAVAILABLE")
@@ -100,15 +102,26 @@ def main() -> int:
     download_start = time.perf_counter()
     requests = downloaded_bytes = reused_objects = 0
     small_objects = {}
-    for name in _GLOBAL_ROLES:
-        item = global_contract[name]
-        result = _fetch(
-            snapshot, item, item["offset"], item["length"], object_dir
-        )
-        small_objects[name] = result
-        requests += result.requests
-        downloaded_bytes += result.response_bytes
-        reused_objects += int(result.reused)
+    stores = (
+        {
+            shard: open_official_fragment(args.k3x_set, shard)
+            for shard in {item["shard"] for item in global_contract.values()}
+        }
+        if args.k3x_set is not None
+        else {}
+    )
+    if not stores:
+        for name in _GLOBAL_ROLES:
+            item = global_contract[name]
+            result = _fetch(
+                snapshot, item, item["offset"], item["length"], object_dir
+            )
+            small_objects[name] = result
+            requests += result.requests
+            downloaded_bytes += result.response_bytes
+            reused_objects += int(result.reused)
+    else:
+        reused_objects += len(_GLOBAL_ROLES)
 
     device = torch.device("cuda")
     torch.cuda.empty_cache()
@@ -116,15 +129,24 @@ def main() -> int:
     prior_state, hidden, block_sources = _load_state(
         args.state_dir.resolve() / "state.json", device, 93
     )
-    global_weights = {
-        role: _load_tensor(
-            small_objects[name].path,
-            global_contract[name]["dtype"],
-            global_contract[name]["shape"],
-            device,
-        )
-        for name, role in _GLOBAL_ROLES.items()
-    }
+    global_weights = (
+        {
+            role: stores[global_contract[name]["shard"]].load(
+                name.removeprefix("language_model."), device=device
+            )
+            for name, role in _GLOBAL_ROLES.items()
+        }
+        if stores
+        else {
+            role: _load_tensor(
+                small_objects[name].path,
+                global_contract[name]["dtype"],
+                global_contract[name]["shape"],
+                device,
+            )
+            for name, role in _GLOBAL_ROLES.items()
+        }
+    )
     mixed = _residual_input(
         hidden,
         block_sources,
@@ -154,21 +176,38 @@ def main() -> int:
     torch.cuda.synchronize(device)
     compute_start = time.perf_counter()
     with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {
-            executor.submit(
-                _fetch, snapshot, head, start, length, object_dir
-            ): (first_row, rows)
-            for first_row, rows, start, length in chunks
-        }
+        futures = (
+            {
+                executor.submit(
+                    stores[head["shard"]].load_rows,
+                    "lm_head.weight",
+                    first_row,
+                    rows,
+                    device="cpu",
+                ): (first_row, rows)
+                for first_row, rows, _start, _length in chunks
+            }
+            if stores
+            else {
+                executor.submit(
+                    _fetch, snapshot, head, start, length, object_dir
+                ): (first_row, rows)
+                for first_row, rows, start, length in chunks
+            }
+        )
         for position, future in enumerate(as_completed(futures), 1):
             first_row, rows = futures[future]
-            result = future.result()
-            requests += result.requests
-            downloaded_bytes += result.response_bytes
-            reused_objects += int(result.reused)
-            weight = _load_tensor(
-                result.path, "BF16", [rows, 7_168], device
-            )
+            if stores:
+                weight = future.result().to(device)
+                reused_objects += 1
+            else:
+                result = future.result()
+                requests += result.requests
+                downloaded_bytes += result.response_bytes
+                reused_objects += int(result.reused)
+                weight = _load_tensor(
+                    result.path, "BF16", [rows, 7_168], device
+                )
             logits = weight.float() @ normalized.float()
             local_index = int(torch.argmax(logits).item())
             local_logit = float(logits[local_index].item())

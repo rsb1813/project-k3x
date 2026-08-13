@@ -32,6 +32,7 @@ from k3x_ref.official_kda import (
     zero_official_kda_state,
 )
 from k3x_ref.ops import rms_norm
+from tools.official_k3x_source import open_official_fragment
 
 
 _EMBEDDING = "language_model.model.embed_tokens.weight"
@@ -110,6 +111,7 @@ def main() -> int:
     parser.add_argument("--state-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--token-id", type=int, default=1)
+    parser.add_argument("--k3x-set", type=Path)
     args = parser.parse_args()
     if args.token_id < 0 or args.token_id >= 163_840:
         raise K3XError("OFFICIAL_TOKEN_ID")
@@ -148,56 +150,84 @@ def main() -> int:
     requests = 0
     downloaded_bytes = 0
     reused_objects = 0
-    for position, item in enumerate(layer_contract, 1):
-        result = materialize_official_range_object(
-            snapshot,
-            item["shard"],
-            item["offset"],
-            item["length"],
-            UrllibTransport(),
-            object_dir,
-        )
-        objects[item["name"]] = result
-        requests += result.requests
-        downloaded_bytes += result.response_bytes
-        reused_objects += int(result.reused)
-        print(
-            f"layer0_objects={position}/{len(layer_contract)} "
-            f"downloaded_bytes={downloaded_bytes}",
-            flush=True,
-        )
+    stores = (
+        {
+            shard: open_official_fragment(args.k3x_set, shard)
+            for shard in sorted(shard_paths)
+        }
+        if args.k3x_set is not None
+        else {}
+    )
+    if not stores:
+        for position, item in enumerate(layer_contract, 1):
+            result = materialize_official_range_object(
+                snapshot,
+                item["shard"],
+                item["offset"],
+                item["length"],
+                UrllibTransport(),
+                object_dir,
+            )
+            objects[item["name"]] = result
+            requests += result.requests
+            downloaded_bytes += result.response_bytes
+            reused_objects += int(result.reused)
+            print(
+                f"layer0_objects={position}/{len(layer_contract)} "
+                f"downloaded_bytes={downloaded_bytes}",
+                flush=True,
+            )
+    else:
+        reused_objects += len(layer_contract)
 
     embedding_item = next(
         item for item in globals_contract if item["name"] == _EMBEDDING
     )
     embedding_row_bytes = 7_168 * 2
-    embedding = materialize_official_range_object(
-        snapshot,
-        embedding_item["shard"],
-        embedding_item["offset"] + args.token_id * embedding_row_bytes,
-        embedding_row_bytes,
-        UrllibTransport(),
-        object_dir,
-    )
-    requests += embedding.requests
-    downloaded_bytes += embedding.response_bytes
-    reused_objects += int(embedding.reused)
+    embedding = None
+    if not stores:
+        embedding = materialize_official_range_object(
+            snapshot,
+            embedding_item["shard"],
+            embedding_item["offset"] + args.token_id * embedding_row_bytes,
+            embedding_row_bytes,
+            UrllibTransport(),
+            object_dir,
+        )
+        requests += embedding.requests
+        downloaded_bytes += embedding.response_bytes
+        reused_objects += int(embedding.reused)
+    else:
+        reused_objects += 1
     download_seconds = time.perf_counter() - download_start
 
     device = torch.device("cuda")
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats(device)
-    weights = {
-        item["name"][len(_LAYER_PREFIX) :]: _load_tensor(
-            objects[item["name"]].path,
-            item["dtype"],
-            item["shape"],
-            device,
-        )
-        for item in layer_contract
-    }
-    hidden = _load_tensor(
-        embedding.path, "BF16", [7_168], device
+    weights = (
+        {
+            item["name"][len(_LAYER_PREFIX) :]: stores[item["shard"]].load(
+                item["name"].removeprefix("language_model."), device=device
+            )
+            for item in layer_contract
+        }
+        if stores
+        else {
+            item["name"][len(_LAYER_PREFIX) :]: _load_tensor(
+                objects[item["name"]].path,
+                item["dtype"],
+                item["shape"],
+                device,
+            )
+            for item in layer_contract
+        }
+    )
+    hidden = (
+        stores[embedding_item["shard"]]
+        .load_rows("model.embed_tokens.weight", args.token_id, 1, device=device)
+        .reshape(7_168)
+        if stores
+        else _load_tensor(embedding.path, "BF16", [7_168], device)
     )
     kda_config = OfficialKdaConfig(7_168, 96, 128, 4, 1.0e-5, -5.0)
     kda_weights = OfficialKdaWeights(

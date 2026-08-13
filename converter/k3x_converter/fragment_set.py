@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
@@ -11,6 +12,69 @@ from .format import K3XError, SUPERBLOCK_BYTES, Superblock
 
 
 _SHA256 = re.compile(r"[0-9a-f]{64}")
+
+
+@dataclass(frozen=True)
+class FragmentSetManifest:
+    path: Path
+    plan_sha256: str
+    fragments: tuple[Path, ...]
+    record_sha256: str
+
+
+def read_fragment_set_manifest(path: Path) -> FragmentSetManifest:
+    path = Path(path).resolve(strict=True)
+    try:
+        lines = path.read_text(encoding="ascii").splitlines(keepends=True)
+    except (UnicodeDecodeError, OSError) as exc:
+        raise K3XError("INVALID_FRAGMENT_SET_MANIFEST") from exc
+    if len(lines) < 3 or not all(line.endswith("\n") for line in lines):
+        raise K3XError("INVALID_FRAGMENT_SET_MANIFEST")
+    header = lines[0].removesuffix("\n").split("\t")
+    if len(header) != 3 or header[0] != "K3XSET1" or _SHA256.fullmatch(header[1]) is None:
+        raise K3XError("INVALID_FRAGMENT_SET_MANIFEST")
+    try:
+        count = int(header[2])
+    except ValueError as exc:
+        raise K3XError("INVALID_FRAGMENT_SET_MANIFEST") from exc
+    if count <= 0 or count > 256 or len(lines) != count + 2:
+        raise K3XError("INVALID_FRAGMENT_SET_COUNT")
+    final = lines[-1].removesuffix("\n").split("\t")
+    canonical = "".join(lines[:-1]).encode("ascii")
+    digest = hashlib.sha256(canonical).hexdigest()
+    if len(final) != 2 or final[0] != "SHA256" or final[1] != digest:
+        raise K3XError("FRAGMENT_SET_SHA256_MISMATCH")
+    fragments = []
+    for line in lines[1:-1]:
+        fields = line.removesuffix("\n").split("\t")
+        if (
+            len(fields) != 4
+            or fields[0] != "FRAGMENT"
+            or not fields[1]
+            or fields[1] in {".", ".."}
+            or any(separator in fields[1] for separator in ("/", "\\"))
+            or _SHA256.fullmatch(fields[3]) is None
+        ):
+            raise K3XError("INVALID_FRAGMENT_SET_MANIFEST")
+        try:
+            expected_size = int(fields[2])
+        except ValueError as exc:
+            raise K3XError("INVALID_FRAGMENT_SET_MANIFEST") from exc
+        fragment = path.parent / fields[1]
+        if expected_size <= 0 or not fragment.is_file() or fragment.stat().st_size != expected_size:
+            raise K3XError("INVALID_FRAGMENT_SET_ARTIFACT", fields[1])
+        with fragment.open("rb") as stream:
+            superblock = Superblock.decode(stream.read(SUPERBLOCK_BYTES))
+        if (
+            superblock.state != 1
+            or superblock.file_length != expected_size
+            or superblock.root_sha256.hex() != fields[3]
+        ):
+            raise K3XError("INVALID_FRAGMENT_SET_ARTIFACT", fields[1])
+        fragments.append(fragment)
+    if len(set(fragments)) != len(fragments):
+        raise K3XError("DUPLICATE_FRAGMENT_SET_PATH")
+    return FragmentSetManifest(path, header[1], tuple(fragments), digest)
 
 
 def write_fragment_set_manifest(

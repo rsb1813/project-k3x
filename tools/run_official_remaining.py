@@ -17,6 +17,7 @@ def main() -> int:
     parser.add_argument("--state-dir", type=Path, required=True)
     parser.add_argument("--result-dir", type=Path, required=True)
     parser.add_argument("--stop-layer", type=int, default=92)
+    parser.add_argument("--k3x-set", type=Path)
     args = parser.parse_args()
 
     topology_path = args.topology.resolve()
@@ -57,6 +58,8 @@ def main() -> int:
             "--layer-id",
             str(layer_id),
         ]
+        if args.k3x_set is not None:
+            command.extend(("--k3x-set", str(args.k3x_set.resolve())))
         print(
             f"starting_layer={layer_id} attention={layer['attention']}",
             flush=True,

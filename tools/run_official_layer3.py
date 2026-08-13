@@ -40,6 +40,7 @@ from tools.run_official_layer1 import (
     _prepare_ffn_hidden,
     _residual_input,
 )
+from tools.official_k3x_source import expert_matvec, open_official_fragment
 
 
 _ROLE_BY_SUFFIX = {
@@ -86,6 +87,7 @@ def main() -> int:
     parser.add_argument("--state-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--layer-id", type=int, required=True)
+    parser.add_argument("--k3x-set", type=Path)
     args = parser.parse_args()
     if not torch.cuda.is_available():
         raise K3XError("CUDA_UNAVAILABLE")
@@ -132,22 +134,30 @@ def main() -> int:
     download_start = time.perf_counter()
     objects = {}
     requests = downloaded_bytes = reused_objects = 0
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {
-            executor.submit(_fetch, snapshot, shard, item, object_dir): item
-            for item in trunk
-        }
-        for position, future in enumerate(as_completed(futures), 1):
-            item, result = future.result()
-            objects[item["name"]] = result
-            requests += result.requests
-            downloaded_bytes += result.response_bytes
-            reused_objects += int(result.reused)
-            print(
-                f"layer{layer_id}_trunk={position}/{len(trunk)} "
-                f"downloaded_bytes={downloaded_bytes}",
-                flush=True,
-            )
+    store = (
+        open_official_fragment(args.k3x_set, shard)
+        if args.k3x_set is not None
+        else None
+    )
+    if store is None:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {
+                executor.submit(_fetch, snapshot, shard, item, object_dir): item
+                for item in trunk
+            }
+            for position, future in enumerate(as_completed(futures), 1):
+                item, result = future.result()
+                objects[item["name"]] = result
+                requests += result.requests
+                downloaded_bytes += result.response_bytes
+                reused_objects += int(result.reused)
+                print(
+                    f"layer{layer_id}_trunk={position}/{len(trunk)} "
+                    f"downloaded_bytes={downloaded_bytes}",
+                    flush=True,
+                )
+    else:
+        reused_objects += len(trunk)
 
     device = torch.device("cuda")
     torch.cuda.empty_cache()
@@ -155,15 +165,24 @@ def main() -> int:
     prior_state, hidden, block_sources = _load_state(
         args.state_dir.resolve() / "state.json", device, layer_id
     )
-    roles = {
-        _ROLE_BY_SUFFIX[item["name"][len(prefix) :]]: _load_tensor(
-            objects[item["name"]].path,
-            item["dtype"],
-            item["shape"],
-            device,
-        )
-        for item in trunk
-    }
+    roles = (
+        {
+            _ROLE_BY_SUFFIX[item["name"][len(prefix) :]]: store.load(
+                item["name"].removeprefix("language_model."), device=device
+            )
+            for item in trunk
+        }
+        if store is not None
+        else {
+            _ROLE_BY_SUFFIX[item["name"][len(prefix) :]]: _load_tensor(
+                objects[item["name"]].path,
+                item["dtype"],
+                item["shape"],
+                device,
+            )
+            for item in trunk
+        }
+    )
     residual = _residual_input(
         hidden,
         block_sources,
@@ -227,31 +246,34 @@ def main() -> int:
         for expert_id in route.expert_ids
     }
     expert_objects = {}
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {
-            executor.submit(
-                materialize_official_range_object,
-                snapshot,
-                shard,
-                plan.payload_start,
-                plan.payload_bytes,
-                UrllibTransport(),
-                object_dir,
-            ): expert_id
-            for expert_id, plan in expert_plans.items()
-        }
-        for position, future in enumerate(as_completed(futures), 1):
-            expert_id = futures[future]
-            result = future.result()
-            expert_objects[expert_id] = result
-            requests += result.requests
-            downloaded_bytes += result.response_bytes
-            reused_objects += int(result.reused)
-            print(
-                f"layer{layer_id}_experts={position}/{len(route.expert_ids)} "
-                f"downloaded_bytes={downloaded_bytes}",
-                flush=True,
-            )
+    if store is None:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {
+                executor.submit(
+                    materialize_official_range_object,
+                    snapshot,
+                    shard,
+                    plan.payload_start,
+                    plan.payload_bytes,
+                    UrllibTransport(),
+                    object_dir,
+                ): expert_id
+                for expert_id, plan in expert_plans.items()
+            }
+            for position, future in enumerate(as_completed(futures), 1):
+                expert_id = futures[future]
+                result = future.result()
+                expert_objects[expert_id] = result
+                requests += result.requests
+                downloaded_bytes += result.response_bytes
+                reused_objects += int(result.reused)
+                print(
+                    f"layer{layer_id}_experts={position}/{len(route.expert_ids)} "
+                    f"downloaded_bytes={downloaded_bytes}",
+                    flush=True,
+                )
+    else:
+        reused_objects += len(route.expert_ids)
     download_seconds = time.perf_counter() - download_start
 
     torch.cuda.synchronize(device)
@@ -268,17 +290,32 @@ def main() -> int:
     mixed = torch.zeros_like(latent, dtype=torch.float32)
     for expert_id, contribution in zip(route.expert_ids, route.contributions):
         plan = expert_plans[expert_id]
-        path = expert_objects[expert_id].path
-        gate = _expert_matrix(path, plan, "gate", latent, device)
-        up = _expert_matrix(path, plan, "up", latent, device)
+        gate = (
+            expert_matvec(store, plan, "gate", latent)
+            if store is not None
+            else _expert_matrix(
+                expert_objects[expert_id].path, plan, "gate", latent, device
+            )
+        )
+        up = (
+            expert_matvec(store, plan, "up", latent)
+            if store is not None
+            else _expert_matrix(
+                expert_objects[expert_id].path, plan, "up", latent, device
+            )
+        )
         activated = _situ(
             gate,
             up,
             config.activation_situ_beta,
             config.activation_situ_linear_beta,
         )
-        mixed += contribution * _expert_matrix(
-            path, plan, "down", activated, device
+        mixed += contribution * (
+            expert_matvec(store, plan, "down", activated)
+            if store is not None
+            else _expert_matrix(
+                expert_objects[expert_id].path, plan, "down", activated, device
+            )
         )
     routed_norm = _rms_norm(mixed.to(torch.bfloat16), roles["routed_norm"])
     routed = _bf16_matvec(routed_norm, roles["routed_up"])

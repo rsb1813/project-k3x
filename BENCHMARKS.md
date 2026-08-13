@@ -1543,7 +1543,10 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 |---|---:|---:|---:|---:|---:|---|
 | 1 | 2,341,216,112 | 1,189,290,240 | 13 | 0 | 75.091 | `48ba2a106782c539e5b23d6412bbc797a5e779129aa4c4edd3cabf0923ec35aa` |
 | 2 | 16,990,911,504 | 16,373,248,256 | 15 | 5,376 | 978.222 | `70ca52402d1583e93ebaeba25c00ac63c9ade6477e29a2700aa9947eb88d2fea` |
+| 3 | 16,990,911,504 | 16,373,248,256 | 15 | 5,376 | not recorded | `40004c7b90c1f0606c1d63edb3dfc70541cbdf46d206e03c83c4dd1815277557` |
+| 4 | 16,567,501,776 | 16,157,917,440 | 13 | 5,376 | not recorded | `9acfbd97ccb746d694951e3c878eae1239fd7e8dda842329fac9cd9dadcade91` |
 
 - Both source objects matched their official SHA-256. Both source files were deleted only after the quality IMMORTAL ledger recorded their output identity; they remain recoverable by checksum-bound redownload.
-- Shards 3 through 96 are being processed by the resumable background conductor. This table does not claim their completion.
+- Shards 1 through 4 are complete; shard 5 onward is being processed by the resumable background conductor. Conversion timing was not emitted for shards 3 and 4, so no elapsed value is reconstructed from timestamps.
+- The strict Python Reader reopened official shard 1 in 11.401 seconds and then loaded finite `[7168]` BF16 input norm and `[12288,7168]` group-128 Q8 q-projection tensors by canonical name. The artifact contains 23 records. This one-run WSL2 `/mnt/c` diagnostic is not startup authority, decode throughput, or a token benchmark.
 - Decode tok/s, prefill tok/s, TTFT, VRAM, GPU utilization, coding quality, token agreement, and physical inference traffic are not measured.
