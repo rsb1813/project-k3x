@@ -85,7 +85,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     deleted = False
     if args.delete_source:
-        if not source_deletion_allowed(ledger_path, plan, unit, source):
+        if not source_deletion_allowed(
+            ledger_path,
+            plan,
+            unit,
+            source,
+            verified_source_sha256=report.source_sha256,
+            verified_source_identity=report.source_identity,
+        ):
             raise K3XError("LOCAL_SOURCE_DELETE_NOT_ALLOWED", source.name)
         source.unlink()
         deleted = True

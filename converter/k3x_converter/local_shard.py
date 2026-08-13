@@ -18,6 +18,7 @@ import torch
 from k3x_ref.quant8 import quantize_groupwise_8bit
 
 from .format import K3XError, root_and_file_sha256
+from .local_foundry import source_identity
 from .reader import K3XReader
 from .safetensors_reader import SourceTensor, inspect_shard, iter_tensor_chunks
 from .writer import convert
@@ -45,6 +46,7 @@ class LocalShardReport:
     tensor_count: int
     quant8_tensor_count: int
     native_expert_tensor_count: int
+    source_identity: tuple[int, int, int, int]
 
 
 @dataclass(frozen=True)
@@ -228,6 +230,7 @@ def convert_local_official_shard(
     temporary_directory: Path | None = None,
 ) -> LocalShardReport:
     source_path = Path(source_path).resolve(strict=True)
+    verified_source_identity = source_identity(source_path)
     output_directory = Path(output_directory).resolve()
     output_directory.mkdir(parents=True, exist_ok=True)
     temporary_root = (
@@ -301,4 +304,5 @@ def convert_local_official_shard(
         len(reader.tensor_records),
         quant8_count,
         native_expert_count,
+        verified_source_identity,
     )

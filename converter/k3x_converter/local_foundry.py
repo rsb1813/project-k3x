@@ -196,12 +196,29 @@ def source_deletion_allowed(
     plan: LocalFoundryPlan,
     unit: ShardUnit,
     source_path: Path,
+    *,
+    verified_source_sha256: str | None = None,
+    verified_source_identity: tuple[int, int, int, int] | None = None,
 ) -> bool:
-    verify_staged_unit(unit, source_path)
+    if verified_source_sha256 is None and verified_source_identity is None:
+        verify_staged_unit(unit, source_path)
+    else:
+        if verified_source_sha256 != unit.source_sha256:
+            raise K3XError("LOCAL_SOURCE_SHA256", unit.filename)
+        if verified_source_identity != source_identity(source_path):
+            raise K3XError("LOCAL_SOURCE_CHANGED", unit.filename)
     ledger = load_ledger(ledger_path, plan)
     return any(
         item["unit_id"] == unit.unit_id for item in ledger["completed_units"]
     )
+
+
+def source_identity(source_path: Path) -> tuple[int, int, int, int]:
+    try:
+        stat = source_path.stat()
+    except OSError as error:
+        raise K3XError("LOCAL_SOURCE_IO", source_path.name) from error
+    return stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns
 
 
 def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:

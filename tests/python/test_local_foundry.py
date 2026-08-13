@@ -210,6 +210,26 @@ def test_xet_staging_is_token_free_and_deletion_is_ledger_gated(tmp_path):
         output_bytes=10,
     )
     assert source_deletion_allowed(ledger_path, plan, unit, source_path)
+    stat = source_path.stat()
+    identity = (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
+    assert source_deletion_allowed(
+        ledger_path,
+        plan,
+        unit,
+        source_path,
+        verified_source_sha256=source_sha256,
+        verified_source_identity=identity,
+    )
+    source_path.write_bytes(payload[::-1])
+    with pytest.raises(K3XError, match="LOCAL_SOURCE_CHANGED"):
+        source_deletion_allowed(
+            ledger_path,
+            plan,
+            unit,
+            source_path,
+            verified_source_sha256=source_sha256,
+            verified_source_identity=identity,
+        )
 
 
 def test_local_foundry_dry_run_publishes_no_ledger(tmp_path, capsys):
