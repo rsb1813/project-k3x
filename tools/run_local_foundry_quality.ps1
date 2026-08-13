@@ -1,7 +1,11 @@
 # 공식 Kimi K3 shard를 두 slot으로 내려받아 quality K3X fragment로 제조합니다.
 param(
     [int]$StartIndex = 3,
-    [int]$EndIndex = 96
+    [int]$EndIndex = 96,
+    [string]$StagingRoot = "D:\K3X-staging",
+    [string]$Ledger = "C:\K3X\immortal-ledger-quality.json",
+    [string]$Progress = "C:\K3X\foundry-progress.jsonl",
+    [switch]$Finalize
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,10 +14,7 @@ $manifestPath = Join-Path $repositoryRoot "artifacts\m37-local-foundry\source-ma
 $configManifestPath = Join-Path $repositoryRoot "artifacts\m26-official\live\source-manifest.json"
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
 $revision = $manifest.revision
-$stagingRoot = "D:\K3X-staging"
 $destination = "C:\K3X\shards"
-$ledger = "C:\K3X\immortal-ledger-quality.json"
-$progress = "C:\K3X\foundry-progress.jsonl"
 $hf = (Get-Command hf).Source
 
 if ($StartIndex -lt 1 -or $EndIndex -gt $manifest.shards.Count -or $StartIndex -gt $EndIndex) {
@@ -25,7 +26,7 @@ if ((hf auth whoami --format json | ConvertFrom-Json).user -ne "rsb1813") {
 
 $env:HF_XET_HIGH_PERFORMANCE = "1"
 $env:HF_HUB_DISABLE_XET = "0"
-$env:HF_XET_CACHE = Join-Path $stagingRoot ".xet-cache"
+$env:HF_XET_CACHE = "D:\K3X-staging\.xet-cache"
 Remove-Item Env:HF_HOME -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $destination,(Join-Path $stagingRoot "logs") | Out-Null
 
@@ -66,7 +67,7 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
     }
     Start-NextDownload ($index + 1)
 
-    $sourceLinux = "/mnt/d/K3X-staging/slot-$((($index - 1) % 2))/$($shard.filename)"
+    $sourceLinux = (& wsl -e wslpath -a $target).Trim()
     $command = @(
         "cd /mnt/c/Users/jolib/Documents/project-k3x/.worktrees/milestone-twenty-four-cuda-graph-cache &&",
         "PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python tools/convert_local_shard.py",
@@ -74,7 +75,7 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
         "--config-manifest artifacts/m26-official/live/source-manifest.json",
         "--source $sourceLinux",
         "--destination /mnt/c/K3X/shards",
-        "--ledger /mnt/c/K3X/immortal-ledger-quality.json",
+        "--ledger $((& wsl -e wslpath -a $Ledger).Trim())",
         "--output-budget-bytes 1510500000000",
         "--delete-source"
     ) -join " "
@@ -85,7 +86,7 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
     Add-Content -LiteralPath $progress -Value $result -Encoding utf8
 }
 
-if ($EndIndex -ne $manifest.shards.Count) {
+if (-not $Finalize) {
     exit 0
 }
 
@@ -94,7 +95,7 @@ $setCommand = @(
     "PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python tools/write_fragment_set.py",
     "--manifest artifacts/m37-local-foundry/source-manifest.json",
     "--destination /mnt/c/K3X/shards",
-    "--ledger /mnt/c/K3X/immortal-ledger-quality.json",
+    "--ledger $((& wsl -e wslpath -a $Ledger).Trim())",
     "--output /mnt/c/K3X/shards/model.k3xset",
     "--output-budget-bytes 1510500000000"
 ) -join " "

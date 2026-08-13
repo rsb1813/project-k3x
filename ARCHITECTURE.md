@@ -534,6 +534,8 @@ D-081 separates manufacture-time payload proof from repeated execution-time dire
 
 The conductor overlaps the next authenticated Xet download with current conversion across two D-drive slots. A source shard is deleted only after official source SHA-256 verification, output CRC/root/SHA-256 verification, atomic quality-ledger publication, and a second deletion-eligibility check. Conversion work files reside on D so the C-drive final-volume reserve is not consumed by a duplicate temporary shard.
 
+D-082 permits disjoint conductor ranges to run concurrently with separate two-slot staging roots and one output directory. A process-shared ledger lock serializes only ledger creation and completion publication; downloads, conversion, strict artifact verification, and checksum-gated source cleanup remain independent. The global ledger therefore continues to enforce one output budget and is the sole input to final `K3XSET1` publication.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

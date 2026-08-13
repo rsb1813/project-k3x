@@ -555,6 +555,8 @@
 - [x] Load BF16/F32/Q8 dense tensors and native MXFP4 expert matvecs by canonical name from K3X fragments.
 - [x] Bind every official Python graph entrypoint to a sealed K3XSET1 payload source.
 - [x] Avoid rescanning every fragment payload at each sealed compatibility-runner process start.
+- [x] Serialize concurrent IMMORTAL ledger publication and parameterize disjoint staging ranges.
+- [ ] Launch three disjoint workers after shard 6 and measure aggregate manufacture throughput.
 - [ ] Complete and verify all 96 K3X fragments.
 - [ ] Complete the resumed original-precision layer-24 reference oracle and record its greedy token.
 - [ ] Assemble the final executable checkpoint and generate the first token.

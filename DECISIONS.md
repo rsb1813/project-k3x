@@ -953,3 +953,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: the payload identity was already established before source deletion and is sealed into the set. Repeating full payload verification at every layer adds no new model correctness information unless storage changed after manufacture.
 - Rejected claims: sealed-open cannot detect post-manufacture payload bit rot by itself. Periodic or explicit strict audit remains required, and the 2,388x ratio is not projected to end-to-end inference.
 - Revisit: move to one persistent process and audit fragments on a configurable cadence after the first token establishes the actual process/open contribution.
+
+## D-082 — Parallelize disjoint Local Foundry shard ranges on one ledger
+
+- Date: 2026-08-13.
+- Status: implemented and concurrency-tested; multi-worker launch awaits shard 6 completion.
+- Decision: allow multiple Local Foundry conductors to use disjoint shard ranges and staging roots while publishing to one IMMORTAL ledger. Serialize ledger creation and read-modify-write completion with a Linux advisory lock. Keep source verification, fragment output paths, final budget accounting, strict Reader gates, and source deletion checks unchanged.
+- Alternatives considered: retain one worker; use independent ledgers and merge later; run concurrent converters against the existing unlocked ledger; build a database coordinator.
+- Evidence: one official conversion uses roughly one CPU core and produced only about 22 MB/s of final bytes on storage capable of much more. Separate ledgers would fail the global disk-budget equation and require a second merge trust boundary, while an unlocked shared ledger can lose a concurrent completion update.
+- Benchmark result: focused ledger resume, two-process concurrent publication, and source-deletion gates pass 3/3. The parameterized PowerShell conductor parses successfully. No multi-worker throughput result is claimed before launch and completed shards.
+- Reason accepted: three disjoint two-slot workers can use additional CPU, HDD, NVMe, RAM, and download concurrency without weakening the one-plan budget or fragment identity ledger.
+- Rejected claims: three workers do not imply 3x throughput. The 1 Gbps network, HDD reads, NVMe writes, source hashing, and Python conversion may contend; worker count remains subject to measured completion time and free-space checks.
+- Revisit: compare per-shard elapsed and system utilization after at least one completion from each worker; reduce to two workers if contention raises aggregate time or threatens the destination reserve.

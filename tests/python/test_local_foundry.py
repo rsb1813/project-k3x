@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import multiprocessing
+from pathlib import Path
 
 import pytest
 import torch
@@ -32,6 +34,19 @@ SHARDS = (
     ("model-00001-of-000002.safetensors", 17_000_000_000, "11" * 32),
     ("model-00002-of-000002.safetensors", 4_700_000_000, "22" * 32),
 )
+
+
+def _record_parallel_completion(path: str, index: int) -> None:
+    plan = build_local_plan("moonshotai/Kimi-K3", "9f62e4e", SHARDS)
+    unit = plan.units[index]
+    record_completed_unit(
+        Path(path),
+        plan,
+        unit_id=unit.unit_id,
+        source_sha256=unit.source_sha256,
+        output_sha256=("aa" if index == 0 else "bb") * 32,
+        output_bytes=9_000_000_000,
+    )
 
 
 def test_plan_assigns_two_slots_and_enforces_disk_reserves():
@@ -97,6 +112,22 @@ def test_ledger_resumes_only_checksum_bound_completed_units(tmp_path):
     path.write_text(json.dumps(tampered), encoding="utf-8")
     with pytest.raises(K3XError, match="LOCAL_LEDGER_DIGEST"):
         load_ledger(path, plan)
+
+
+def test_ledger_serializes_parallel_completions(tmp_path):
+    plan = build_local_plan("moonshotai/Kimi-K3", "9f62e4e", SHARDS)
+    path = tmp_path / "parallel.json"
+    create_ledger(path, plan)
+    workers = [
+        multiprocessing.Process(target=_record_parallel_completion, args=(str(path), i))
+        for i in range(2)
+    ]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+    assert [worker.exitcode for worker in workers] == [0, 0]
+    assert len(load_ledger(path, plan)["completed_units"]) == 2
 
 
 def test_ledger_rejects_output_budget_overflow(tmp_path):

@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import hashlib
+import fcntl
 import json
 import os
 import re
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Sequence
@@ -29,6 +31,18 @@ _COMPLETED_KEYS = {
     "output_sha256",
     "output_bytes",
 }
+
+
+@contextmanager
+def _ledger_lock(path: Path):
+    lock_path = path.with_name(path.name + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+b") as stream:
+        fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
 @dataclass(frozen=True)
@@ -273,18 +287,19 @@ def load_source_manifest(
 
 
 def create_ledger(path: Path, plan: LocalFoundryPlan) -> None:
-    if path.exists():
-        load_ledger(path, plan)
-        return
-    _write_ledger(
-        path,
-        {
-            "format": "k3x-local-foundry-ledger-v1",
-            "plan_sha256": plan.plan_sha256,
-            "completed_units": [],
-            "completed_output_bytes": 0,
-        },
-    )
+    with _ledger_lock(path):
+        if path.exists():
+            load_ledger(path, plan)
+            return
+        _write_ledger(
+            path,
+            {
+                "format": "k3x-local-foundry-ledger-v1",
+                "plan_sha256": plan.plan_sha256,
+                "completed_units": [],
+                "completed_output_bytes": 0,
+            },
+        )
 
 
 def load_ledger(path: Path, plan: LocalFoundryPlan) -> dict[str, object]:
@@ -335,37 +350,38 @@ def record_completed_unit(
     output_sha256: str,
     output_bytes: int,
 ) -> None:
-    value = load_ledger(path, plan)
-    by_id = {unit.unit_id: unit for unit in plan.units}
-    unit = by_id.get(unit_id)
-    if (
-        unit is None
-        or source_sha256 != unit.source_sha256
-        or not _SHA256_RE.fullmatch(output_sha256)
-        or not isinstance(output_bytes, int)
-        or isinstance(output_bytes, bool)
-        or output_bytes <= 0
-        or any(item["unit_id"] == unit_id for item in value["completed_units"])
-    ):
-        raise K3XError("INVALID_LOCAL_COMPLETION")
-    new_total = value["completed_output_bytes"] + output_bytes
-    if new_total > plan.output_budget_bytes:
-        raise K3XError("LOCAL_OUTPUT_BUDGET")
-    completed = list(value["completed_units"])
-    completed.append(
-        {
-            "unit_id": unit_id,
-            "source_sha256": source_sha256,
-            "output_sha256": output_sha256,
-            "output_bytes": output_bytes,
-        }
-    )
-    _write_ledger(
-        path,
-        {
-            "format": value["format"],
-            "plan_sha256": value["plan_sha256"],
-            "completed_units": completed,
-            "completed_output_bytes": new_total,
-        },
-    )
+    with _ledger_lock(path):
+        value = load_ledger(path, plan)
+        by_id = {unit.unit_id: unit for unit in plan.units}
+        unit = by_id.get(unit_id)
+        if (
+            unit is None
+            or source_sha256 != unit.source_sha256
+            or not _SHA256_RE.fullmatch(output_sha256)
+            or not isinstance(output_bytes, int)
+            or isinstance(output_bytes, bool)
+            or output_bytes <= 0
+            or any(item["unit_id"] == unit_id for item in value["completed_units"])
+        ):
+            raise K3XError("INVALID_LOCAL_COMPLETION")
+        new_total = value["completed_output_bytes"] + output_bytes
+        if new_total > plan.output_budget_bytes:
+            raise K3XError("LOCAL_OUTPUT_BUDGET")
+        completed = list(value["completed_units"])
+        completed.append(
+            {
+                "unit_id": unit_id,
+                "source_sha256": source_sha256,
+                "output_sha256": output_sha256,
+                "output_bytes": output_bytes,
+            }
+        )
+        _write_ledger(
+            path,
+            {
+                "format": value["format"],
+                "plan_sha256": value["plan_sha256"],
+                "completed_units": completed,
+                "completed_output_bytes": new_total,
+            },
+        )
