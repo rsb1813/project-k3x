@@ -8,7 +8,9 @@ The exact Python first-token compatibility graph is now bound to sealed K3X frag
 
 An independent original-precision reference oracle is also active from the preserved, digest-bound layer-24 prefix state. It resumes layers 25 through 92 and the LM head in the background, stores new range objects on D, and will provide the comparison token for the later K3X run. It has started layer 25 but has not generated a token yet.
 
-State synchronized on 2026-08-13 at implementation commit `4b0f4ce`. Focused K3X strict/default and sealed set/store coverage passes 4/4, all six modified Python modules compile, and all five graph CLIs expose `--k3x-set`. A real official shard-1 strict open found 23 records in 11.401 seconds and loaded finite BF16 norm and Q8 q-projection tensors; sealed directory-open exposed the same records in 0.004774 seconds. This is graph-binding and storage evidence only, not an official token or throughput result.
+D-082 has made the shared IMMORTAL ledger safe for disjoint multi-process completion publication and parameterized conductor staging ranges. Focused concurrency/deletion coverage passes 3/3. The active single conductor remains authoritative through shard 6; three disjoint workers will launch only after shard 6 reaches its durable gate.
+
+State synchronized on 2026-08-13 at implementation commit `e003f96`. Focused K3X strict/default and sealed set/store coverage passes 4/4, concurrent ledger/deletion coverage passes 3/3, all six modified Python modules compile, and all five graph CLIs expose `--k3x-set`. A real official shard-1 strict open found 23 records in 11.401 seconds and loaded finite BF16 norm and Q8 q-projection tensors; sealed directory-open exposed the same records in 0.004774 seconds. This is graph-binding and storage evidence only, not an official token or throughput result.
 
 ## Completed work
 
@@ -177,7 +179,7 @@ The task bullets below describe the gate reached at each named commit; later M33
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Current implementation branch: `codex/official-end-to-end-token`; latest implementation commit `4b0f4ce` contains the sealed official graph path, D-081 open policy, and resumed reference-token launcher.
+- Current implementation branch: `codex/official-end-to-end-token`; latest implementation commit `e003f96` contains the sealed official graph path, D-081 open policy, resumed reference-token launcher, and D-082 concurrent ledger boundary.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build`, `build-liburing`, `build-asan`, and `build-cuda`.
 
 ## Known failures and blockers
