@@ -849,11 +849,11 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-073 — Classify existing profiler operations before finer CUDA instrumentation
 
 - Date: 2026-08-13.
-- Status: accepted design; implementation and measurement pending.
+- Status: implemented and measured; no fusion or default change accepted.
 - Decision: classify successful existing profiler events inside the current two-layer front and tail snapshots into front KDA, front route preparation, tail FFN, and checked unclassified device-time buckets. Emit them only through a new opt-in M35 schema.
 - Alternatives considered: aggregate current `ProfileEvent::operation` values; add per-kernel CUDA events inside official kernels; rely only on external Nsight traces.
 - Evidence: sealed B-0035 attributes 62.934%/37.010% of device-closure wall time to front/tail and only 0.035% to canonical host routing. The backend already emits timed `dense_matvec` for official KDA and `moe_mix` for route preparation and FFN.
-- Benchmark result: none. B-0036 has not run, and no fusion target is selected.
+- Benchmark result: sealed B-0036 records host/device medians of 102,157,295/116,049,550 ns. Device closure averages 36,345,792 ns KDA, 19,075,499 ns route preparation, and 31,698,525 ns MoE FFN device time, with zero unclassified time. Their classified-device-time shares are 41.719%, 21.896%, and 36.385%. Exact routes and output/state identities pass, warm weight H2D is zero, and Compute Sanitizer reports zero errors.
 - Reason accepted: existing-event classification adds no CUDA synchronization or execution change, retains unknown operations through checked remainder buckets, and creates a reproducible decision boundary before finer instrumentation.
 - Rejected claims: this decision does not establish a kernel bottleneck, speedup, token rate, physical traffic result, or production-default change.
-- Revisit: after sealed B-0036, add finer instrumentation only for the dominant operation if its current device-time share is material and stable.
+- Revisit: KDA is the largest single operation but not a majority. Add synchronization-neutral KDA-internal attribution before selecting a fusion; retain device closure as experimental and host round trip as default.

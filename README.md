@@ -802,6 +802,21 @@ B-0035 uses the same bounded 3,641,057,536-byte artifact, natural Top-16 routes,
 
 For device closure, front and tail account for 62.934% and 37.010% of attributed wall time; routing is only 0.035%. Existing CUDA event time averages 52.571374 ms in front and 30.057734 ms in tail. The next evidence boundary is therefore operation-level attribution inside the front and tail regions before selecting a fusion target. Host round trip remains the default. These are bounded WSL2 layer timings, not token throughput or physical PCIe/NVMe measurements.
 
+## Milestone 35 — two-layer operation attribution
+
+M35 classifies only the successful profiler events already inside the M34 front and tail snapshots. It adds no CUDA events, synchronization, backend calls, or execution branches. A new opt-in schema reports front KDA, front device route preparation, tail MoE FFN, and checked unclassified device time while the default and M34 schemas remain unchanged.
+
+B-0036 reuses the exact B-0035 fixture and 3/20 measurement contract. The device-closure row has a 116.049550 ms median and its existing-event CUDA time splits as follows.
+
+| B-0036 device operation | Mean per sequence | Share of classified device time |
+|---|---:|---:|
+| Official KDA | 36.345792 ms | 41.719% |
+| Device route preparation | 19.075499 ms | 21.896% |
+| Official MoE FFN | 31.698525 ms | 36.385% |
+| Unclassified | 0 | 0% |
+
+KDA is the largest single operation, but it is not a majority of device time. The next bounded evidence target is therefore KDA-internal attribution before selecting any fusion. Host round trip remains the default. B-0035 and B-0036 use different runner binaries and are not treated as a paired overhead comparison.
+
 ## Quality contract
 
 | Mode | Intended semantics |
@@ -847,6 +862,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Fixed B-0033 host/device route-preparation attribution.
 - [x] Exact bounded official two-layer execution, device closure, and fixed B-0034 evidence.
 - [x] Opt-in front/route/tail/remainder attribution with fixed B-0035 evidence.
+- [x] Opt-in existing-event operation attribution with fixed B-0036 evidence.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.
