@@ -22,6 +22,7 @@ from .format import (
     Quantization,
     REQUIRED_BF16_TENSORS,
     REQUIRED_QUANT3_TENSORS,
+    REQUIRED_QUANT8_TENSORS,
     decode_directory,
     root_sha256,
     validate_extent_layout,
@@ -72,6 +73,7 @@ class K3XReader:
                                    decode_directory(tensor_bytes, b"TENS", TENSOR_RECORD_BYTES))
             has_bf16 = False
             has_quant3 = False
+            has_quant8 = False
             for record in tensor_records:
                 values = 1
                 for dimension in record.dimensions:
@@ -83,6 +85,18 @@ class K3XReader:
                         record.dtype != DType.UINT8
                         or not values
                         or record.data_length != groups * 12
+                        or record.logical_length != values * 4
+                        or record.auxiliary_length != groups * 2
+                    ):
+                        raise K3XError("INVALID_TENSOR_FEATURE")
+                    continue
+                if record.quantization == Quantization.GROUPWISE_8BIT:
+                    groups = (values + 127) // 128
+                    has_quant8 = True
+                    if (
+                        record.dtype != DType.UINT8
+                        or not values
+                        or record.data_length != groups * 128
                         or record.logical_length != values * 4
                         or record.auxiliary_length != groups * 2
                     ):
@@ -110,6 +124,11 @@ class K3XReader:
                 superblock.required_features & REQUIRED_QUANT3_TENSORS
             )
             if has_quant3 != quant3_feature:
+                raise K3XError("INVALID_TENSOR_FEATURE")
+            quant8_feature = bool(
+                superblock.required_features & REQUIRED_QUANT8_TENSORS
+            )
+            if has_quant8 != quant8_feature:
                 raise K3XError("INVALID_TENSOR_FEATURE")
             layer_records = tuple(LayerRecord.decode(item) for item in
                                   decode_directory(layer_bytes, b"LAYR", LAYER_RECORD_BYTES))

@@ -46,6 +46,8 @@ def load_source_manifest(source: Path) -> dict[str, object]:
         raise K3XError("INVALID_SOURCE_MANIFEST")
     if not isinstance(manifest.get("quant3_shapes", {}), dict):
         raise K3XError("INVALID_SOURCE_MANIFEST")
+    if not isinstance(manifest.get("quant8_shapes", {}), dict):
+        raise K3XError("INVALID_SOURCE_MANIFEST")
     weight_map = manifest.get("weight_map")
     if not isinstance(weight_map, dict) or any(
         not isinstance(name, str)

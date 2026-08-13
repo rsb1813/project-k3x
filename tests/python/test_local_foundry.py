@@ -10,6 +10,7 @@ from k3x_converter.format import K3XError
 from k3x_converter.local_foundry import (
     DESTINATION_RESERVE_BYTES,
     OUTPUT_BUDGET_BYTES,
+    QUALITY_OUTPUT_BUDGET_BYTES,
     STAGING_RESERVE_BYTES,
     build_local_plan,
     build_xet_command,
@@ -51,6 +52,27 @@ def test_plan_assigns_two_slots_and_enforces_disk_reserves():
             ),
             staging_free_bytes=2 * SHARDS[0][1] + STAGING_RESERVE_BYTES,
         )
+
+
+def test_quality_plan_counts_completed_output_when_rechecking_disk() -> None:
+    plan = build_local_plan(
+        "moonshotai/Kimi-K3",
+        "9f62e4e",
+        SHARDS,
+        output_budget_bytes=QUALITY_OUTPUT_BUDGET_BYTES,
+    )
+    assert plan.output_budget_bytes == 1_510_500_000_000
+    completed = 20_000_000_000
+    check_disk_budget(
+        plan,
+        destination_free_bytes=(
+            QUALITY_OUTPUT_BUDGET_BYTES
+            + DESTINATION_RESERVE_BYTES
+            - completed
+        ),
+        staging_free_bytes=2 * SHARDS[0][1] + STAGING_RESERVE_BYTES,
+        completed_output_bytes=completed,
+    )
 
 
 def test_ledger_resumes_only_checksum_bound_completed_units(tmp_path):

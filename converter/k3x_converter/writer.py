@@ -20,6 +20,7 @@ from .format import (
     OPTIONAL_STORAGE_FIXTURE,
     REQUIRED_BF16_TENSORS,
     REQUIRED_QUANT3_TENSORS,
+    REQUIRED_QUANT8_TENSORS,
     SUPERBLOCK_BYTES,
     TENSOR_RECORD_BYTES,
     DType,
@@ -122,9 +123,27 @@ def _load_plans(source: Path) -> tuple[dict, list[_TensorPlan]]:
             name in consumed
             or name.endswith(".weight_scale")
             or name.endswith(".weight_q3_scale")
+            or name.endswith(".q8_scale")
         ):
             continue
-        if name.endswith(".weight_q3_packed"):
+        if name.endswith(".q8_codes"):
+            base = name.removesuffix(".q8_codes")
+            auxiliary_name = base + ".q8_scale"
+            if auxiliary_name not in tensors or base not in manifest.get("quant8_shapes", {}):
+                raise K3XError("INCOMPLETE_QUANT8_TENSOR", base)
+            canonical, auxiliary = base, tensors[auxiliary_name]
+            if tensors[name].dtype != "U8" or auxiliary.dtype != "U8":
+                raise K3XError("UNSUPPORTED_SOURCE_DTYPE", tensors[name].dtype)
+            dimensions = tuple(manifest["quant8_shapes"][base])
+            values = 1
+            for dimension in dimensions:
+                values *= dimension
+            groups = (values + 127) // 128
+            if tensors[name].length != groups * 128 or auxiliary.length != groups * 2:
+                raise K3XError("INVALID_QUANT8_LENGTH", base)
+            dtype, quantization = DType.UINT8, Quantization.GROUPWISE_8BIT
+            consumed.add(auxiliary_name)
+        elif name.endswith(".weight_q3_packed"):
             base = name.removesuffix(".weight_q3_packed")
             auxiliary_name = base + ".weight_q3_scale"
             if auxiliary_name not in tensors or base not in manifest.get("quant3_shapes", {}):
@@ -390,6 +409,8 @@ def convert(
     )
     if any(plan.quantization == Quantization.GROUPWISE_3BIT for plan in plans):
         required_features |= REQUIRED_QUANT3_TENSORS
+    if any(plan.quantization == Quantization.GROUPWISE_8BIT for plan in plans):
+        required_features |= REQUIRED_QUANT8_TENSORS
     optional_features = 0
     if manifest["format"] == "k3-storage-slice-v1":
         optional_features = OPTIONAL_STORAGE_FIXTURE
@@ -536,6 +557,8 @@ def convert(
             if plan.quantization == Quantization.MXFP4:
                 logical_length = values * 4
             elif plan.quantization == Quantization.GROUPWISE_3BIT:
+                logical_length = values * 4
+            elif plan.quantization == Quantization.GROUPWISE_8BIT:
                 logical_length = values * 4
             elif plan.dtype == DType.BF16:
                 logical_length = values * 2

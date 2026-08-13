@@ -12,6 +12,7 @@ from typing import Sequence
 from .format import K3XError
 
 OUTPUT_BUDGET_BYTES = 1_280_000_000_000
+QUALITY_OUTPUT_BUDGET_BYTES = 1_510_500_000_000
 DESTINATION_RESERVE_BYTES = 200 * 2**30
 STAGING_RESERVE_BYTES = 100 * 2**30
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
@@ -62,8 +63,10 @@ def build_local_plan(
     repository: str,
     revision: str,
     shards: Sequence[tuple[str, int, str]],
+    *,
+    output_budget_bytes: int = OUTPUT_BUDGET_BYTES,
 ) -> LocalFoundryPlan:
-    if not repository or not revision or not shards:
+    if not repository or not revision or not shards or output_budget_bytes <= 0:
         raise K3XError("INVALID_LOCAL_PLAN")
     ordered = sorted(shards, key=lambda item: item[0])
     if len({item[0] for item in ordered}) != len(ordered):
@@ -95,7 +98,7 @@ def build_local_plan(
     contract = {
         "repository": repository,
         "revision": revision,
-        "output_budget_bytes": OUTPUT_BUDGET_BYTES,
+        "output_budget_bytes": output_budget_bytes,
         "destination_reserve_bytes": DESTINATION_RESERVE_BYTES,
         "staging_reserve_bytes": STAGING_RESERVE_BYTES,
         "units": [asdict(item) for item in units],
@@ -103,7 +106,7 @@ def build_local_plan(
     return LocalFoundryPlan(
         repository,
         revision,
-        OUTPUT_BUDGET_BYTES,
+        output_budget_bytes,
         DESTINATION_RESERVE_BYTES,
         STAGING_RESERVE_BYTES,
         tuple(units),
@@ -116,8 +119,14 @@ def check_disk_budget(
     *,
     destination_free_bytes: int,
     staging_free_bytes: int,
+    completed_output_bytes: int = 0,
 ) -> None:
-    if destination_free_bytes < plan.output_budget_bytes + plan.destination_reserve_bytes:
+    if (
+        completed_output_bytes < 0
+        or completed_output_bytes > plan.output_budget_bytes
+        or destination_free_bytes + completed_output_bytes
+        < plan.output_budget_bytes + plan.destination_reserve_bytes
+    ):
         raise K3XError("LOCAL_DESTINATION_SPACE")
     required_staging = 2 * max(unit.source_bytes for unit in plan.units)
     required_staging += plan.staging_reserve_bytes
