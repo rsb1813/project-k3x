@@ -551,6 +551,7 @@
 - [x] Decode native BF16 and group-128 Q8 trunk tensors in the portable model loader.
 - [x] Batch converter durability checkpoints while preserving resume and final verification gates.
 - [x] Open fragments through one checksum-bound sharded K3X index without copying payloads.
+- [x] Stream passthrough tensors from the authenticated source shard without a model-sized temporary copy.
 - [ ] Complete and verify all 96 K3X fragments.
 - [ ] Assemble the final executable checkpoint and generate the first token.
 - [ ] Measure and optimize the actual end-to-end bottleneck.

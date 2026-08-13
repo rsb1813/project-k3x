@@ -6,9 +6,11 @@ import shutil
 from pathlib import Path
 
 import pytest
+import torch
+from safetensors.torch import save_file
 
 from k3x_converter.format import K3XError
-from k3x_converter.source_manifest import load_source_manifest
+from k3x_converter.source_manifest import inspect_manifest_tensors, load_source_manifest
 from k3x_converter.writer import convert
 
 
@@ -32,6 +34,34 @@ def _assert_rejected_without_output(source: Path, output: Path, code: str) -> No
 
 def _weight_map(manifest: dict[str, object]) -> dict[str, str]:
     return manifest["weight_map"]  # type: ignore[return-value]
+
+
+def test_local_alias_manifest_selects_only_declared_physical_tensor(tmp_path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    shard = source / "official.safetensors"
+    save_file(
+        {
+            "official.weight": torch.tensor([1.0], dtype=torch.float32),
+            "unselected.weight": torch.tensor([2.0], dtype=torch.float32),
+        },
+        shard,
+    )
+    manifest = {
+        "format": "k3-local-shard-v1",
+        "config": {},
+        "packed_shapes": {},
+        "weight_map": {"model.weight": shard.name},
+        "source_names": {"model.weight": "official.weight"},
+    }
+    _write_manifest(source, manifest)
+
+    loaded = load_source_manifest(source)
+    tensors = inspect_manifest_tensors(source, loaded)
+
+    assert set(tensors) == {"model.weight"}
+    assert tensors["model.weight"].name == "model.weight"
+    assert tensors["model.weight"].length == 4
 
 
 def test_converter_rejects_parent_traversal_shard(

@@ -917,3 +917,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: the set keeps per-shard restartability and random access, adds deterministic identity and path constraints, and consumes only a small metadata file instead of another model-sized artifact.
 - Rejected claims: `open_set` does not yet bind the complete official graph or generate a token. Default checksum mode rereads each fragment root at open; a ledger-trusted metadata-only startup policy requires a separate measured decision.
 - Revisit: measure checksum-open startup and consider a signed ledger/root cache only if repeated full-root validation materially delays restart.
+
+## D-079 — Stream passthrough tensors from the authenticated source shard
+
+- Date: 2026-08-13.
+- Status: implemented and focused-tested for shard 5 onward; official timing is pending.
+- Decision: hardlink the authenticated official safetensors shard into the bounded staging directory, map canonical K3X tensor names to their declared physical source names, and write only derived group-128 Q8 codes and scales to a temporary safetensors file. Fail closed if the same-volume hardlink cannot be created.
+- Alternatives considered: continue copying every native MXFP4 and sensitive tensor into a model-sized temporary microshard; teach the K3X writer to parse the official index directly; silently fall back to a full copy across volumes.
+- Evidence: shard 2 wrote and reread a model-sized temporary microshard before producing its 16,373,248,256-byte K3X fragment. The alias-manifest test exposes only the declared physical tensor under its canonical name, and the local-shard test confirms that no passthrough tensor reaches the temporary writer.
+- Benchmark result: focused alias and local-shard coverage passes 2/2. No official speedup is claimed until a shard launched after this change completes and records `conversion_seconds`.
+- Reason accepted: the immutable source inode remains checksum-bound and available until the final Reader and ledger gates permit deletion, while eliminating a redundant model-sized staging write and read.
+- Rejected claims: a hardlink is not a second payload copy, but it also does not make the source disposable before conversion completes. This change does not reduce final K3X bytes or inference traffic.
+- Revisit: replace the hardlink boundary with a direct immutable file descriptor only if it preserves manifest containment and resume identity with less complexity.

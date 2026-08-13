@@ -5,6 +5,7 @@ import json
 import torch
 from safetensors.torch import save_file
 
+import k3x_converter.local_shard as local_shard
 from k3x_converter.format import Quantization, fnv1a64
 from k3x_converter.local_shard import convert_local_official_shard
 from k3x_converter.reader import K3XReader
@@ -12,7 +13,9 @@ from k3x_ref.fixtures import write_source_checkpoint
 from k3x_ref.quant8 import Quant8Tensor, decode_groupwise_8bit
 
 
-def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(tmp_path) -> None:
+def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
+    tmp_path, monkeypatch
+) -> None:
     baseline = tmp_path / "baseline"
     write_source_checkpoint(baseline)
     config = json.loads((baseline / "source-manifest.json").read_text())["config"]
@@ -36,6 +39,14 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(tmp_path) 
         ] = torch.ones(1, dtype=torch.uint8)
     save_file(payload, source)
     source_sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    written_kinds = []
+    write_microshard = local_shard._write_microshard
+
+    def capture(path, outputs, *, chunk_bytes):
+        written_kinds.extend(output.kind for output in outputs)
+        return write_microshard(path, outputs, chunk_bytes=chunk_bytes)
+
+    monkeypatch.setattr(local_shard, "_write_microshard", capture)
 
     report = convert_local_official_shard(
         source,
@@ -49,6 +60,7 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(tmp_path) 
     assert report.source_sha256 == source_sha256
     assert report.quant8_tensor_count == 1
     assert report.native_expert_tensor_count == 6
+    assert "copy" not in written_kinds
     assert report.tensor_count == 6
     assert not any((tmp_path / "staging-work").iterdir())
     reader = K3XReader.open(report.output_path)

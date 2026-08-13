@@ -38,6 +38,7 @@ def load_source_manifest(source: Path) -> dict[str, object]:
         "synthetic-k3-source-v1",
         "k3-storage-slice-v1",
         "k3-official-moe-slice-v1",
+        "k3-local-shard-v1",
     }:
         raise K3XError("UNSUPPORTED_SOURCE_FORMAT")
     if not isinstance(manifest.get("config"), dict) or not isinstance(
@@ -56,6 +57,26 @@ def load_source_manifest(source: Path) -> dict[str, object]:
         or not shard_name
         for name, shard_name in weight_map.items()
     ):
+        raise K3XError("INVALID_SOURCE_MANIFEST")
+    source_names = manifest.get("source_names")
+    if manifest.get("format") == "k3-local-shard-v1":
+        if (
+            not isinstance(source_names, dict)
+            or set(source_names) != set(weight_map)
+            or any(
+                not isinstance(name, str) or not name
+                for name in source_names.values()
+            )
+            or len(
+                {
+                    (weight_map[logical], physical)
+                    for logical, physical in source_names.items()
+                }
+            )
+            != len(source_names)
+        ):
+            raise K3XError("INVALID_SOURCE_MANIFEST")
+    elif source_names is not None:
         raise K3XError("INVALID_SOURCE_MANIFEST")
     return manifest
 
@@ -89,6 +110,29 @@ def inspect_manifest_tensors(
     weight_map = manifest.get("weight_map")
     if not isinstance(weight_map, dict):
         raise K3XError("INVALID_SOURCE_MANIFEST")
+    source_names = manifest.get("source_names")
+    if isinstance(source_names, dict):
+        tensors: dict[str, SourceTensor] = {}
+        inspected: dict[str, dict[str, SourceTensor]] = {}
+        for logical_name, shard_name in weight_map.items():
+            if not isinstance(logical_name, str) or not isinstance(shard_name, str):
+                raise K3XError("INVALID_SOURCE_MANIFEST")
+            if shard_name not in inspected:
+                shard_path = _resolve_source_shard(source, shard_name)
+                inspected[shard_name] = inspect_shard(shard_path)
+            physical_name = source_names.get(logical_name)
+            physical = inspected[shard_name].get(physical_name)
+            if physical is None:
+                raise K3XError("SOURCE_TENSOR_SHARD_MISMATCH", logical_name)
+            tensors[logical_name] = SourceTensor(
+                physical.path,
+                logical_name,
+                physical.dtype,
+                physical.shape,
+                physical.offset,
+                physical.length,
+            )
+        return tensors
     tensors: dict[str, SourceTensor] = {}
     for shard_name in sorted(set(weight_map.values())):
         if not isinstance(shard_name, str):

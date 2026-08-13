@@ -244,14 +244,30 @@ def convert_local_official_shard(
     output_path = output_directory / (source_path.stem + ".k3x")
     with tempfile.TemporaryDirectory(dir=temporary_root) as temporary:
         work = Path(temporary)
-        microshard = work / "model.safetensors"
-        _write_microshard(microshard, outputs, chunk_bytes=chunk_bytes)
+        source_link = work / "official.safetensors"
+        try:
+            os.link(source_path, source_link)
+        except OSError as exc:
+            raise K3XError("LOCAL_SOURCE_HARDLINK", source_path.name) from exc
+        copy_outputs = [output for output in outputs if output.kind == "copy"]
+        quantized_outputs = [output for output in outputs if output.kind != "copy"]
+        weight_map = {output.name: source_link.name for output in copy_outputs}
+        source_names = {output.name: output.source.name for output in copy_outputs}
+        if quantized_outputs:
+            quantized_shard = work / "quantized.safetensors"
+            _write_microshard(
+                quantized_shard, quantized_outputs, chunk_bytes=chunk_bytes
+            )
+            for output in quantized_outputs:
+                weight_map[output.name] = quantized_shard.name
+                source_names[output.name] = output.name
         manifest = {
-            "format": "synthetic-k3-source-v1",
+            "format": "k3-local-shard-v1",
             "config": config,
             "packed_shapes": packed_shapes,
             "quant8_shapes": quant8_shapes,
-            "weight_map": {output.name: microshard.name for output in outputs},
+            "source_names": source_names,
+            "weight_map": weight_map,
         }
         (work / "source-manifest.json").write_text(
             json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n",
