@@ -9,6 +9,8 @@ param(
     [string]$StagingLock = "C:\K3X\foundry-ram-stage.lock",
     [string]$OutputAuditLock = "C:\K3X\foundry-output-audit.lock",
     [int]$DownloadSlots = 2,
+    [int]$DownloadTimeoutSeconds = 600,
+    [int]$DownloadMaxAttempts = 3,
     [switch]$Finalize
 )
 
@@ -20,12 +22,13 @@ $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
 $revision = $manifest.revision
 $destination = "C:\K3X\shards"
 $hf = (Get-Command hf).Source
+$downloadHelper = Join-Path $PSScriptRoot "invoke_hf_download.ps1"
 
 if ($StartIndex -lt 1 -or $EndIndex -gt $manifest.shards.Count -or $StartIndex -gt $EndIndex) {
     throw "invalid shard range"
 }
-if ($DownloadSlots -lt 1) {
-    throw "invalid download slot count"
+if ($DownloadSlots -lt 1 -or $DownloadTimeoutSeconds -lt 1 -or $DownloadMaxAttempts -lt 1) {
+    throw "invalid download configuration"
 }
 if ((hf auth whoami --format json | ConvertFrom-Json).user -ne "rsb1813") {
     throw "unexpected Hugging Face account"
@@ -68,11 +71,11 @@ function Invoke-BoundedDownload(
 ) {
     $slotMutex = Enter-DownloadSlot
     try {
-        & $hf download $manifest.repository $filename `
-            --revision $revision --local-dir $slotPath --quiet
-        if ($LASTEXITCODE -ne 0) {
-            throw "download failed for $filename"
-        }
+        & $downloadHelper -HfPath $hf -Repository $manifest.repository `
+            -Filename $filename -Revision $revision -SlotPath $slotPath `
+            -LogBase (Join-Path $stagingRoot ("logs\download-" + $filename)) `
+            -TimeoutSeconds $DownloadTimeoutSeconds `
+            -MaxAttempts $DownloadMaxAttempts
     }
     finally {
         $slotMutex.ReleaseMutex()
@@ -113,7 +116,7 @@ function Start-NextDownloadAfterMarker([int]$index, [string]$markerPath) {
     New-Item -ItemType Directory -Force -Path $slotPath | Out-Null
     $logBase = Join-Path $stagingRoot ("logs\download-" + $shard.filename)
     return Start-Job -ScriptBlock {
-        param($MarkerPath, $HfPath, $Repository, $Filename, $Revision, $SlotPath, $LogBase, $DownloadSlots)
+        param($MarkerPath, $DownloadHelper, $HfPath, $Repository, $Filename, $Revision, $SlotPath, $LogBase, $DownloadSlots, $TimeoutSeconds, $MaxAttempts)
         while (-not (Test-Path -LiteralPath $MarkerPath)) {
             Start-Sleep -Milliseconds 250
         }
@@ -140,23 +143,19 @@ function Start-NextDownloadAfterMarker([int]$index, [string]$markerPath) {
             }
         }
         try {
-            $process = Start-Process -FilePath $HfPath -ArgumentList @(
-                "download", $Repository, $Filename,
-                "--revision", $Revision, "--local-dir", $SlotPath, "--quiet"
-            ) -RedirectStandardOutput ($LogBase + ".stdout.log") `
-              -RedirectStandardError ($LogBase + ".stderr.log") `
-              -WindowStyle Hidden -Wait -PassThru
-            if ($process.ExitCode -ne 0) {
-                throw "download failed for $Filename"
-            }
+            & $DownloadHelper -HfPath $HfPath -Repository $Repository `
+                -Filename $Filename -Revision $Revision -SlotPath $SlotPath `
+                -LogBase $LogBase -TimeoutSeconds $TimeoutSeconds `
+                -MaxAttempts $MaxAttempts
         }
         finally {
             $slotMutex.ReleaseMutex()
             $slotMutex.Dispose()
         }
     } -ArgumentList @(
-        $markerPath, $hf, $manifest.repository, $shard.filename,
-        $revision, $slotPath, $logBase, $DownloadSlots
+        $markerPath, $downloadHelper, $hf, $manifest.repository,
+        $shard.filename, $revision, $slotPath, $logBase, $DownloadSlots,
+        $DownloadTimeoutSeconds, $DownloadMaxAttempts
     )
 }
 
