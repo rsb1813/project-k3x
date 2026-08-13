@@ -10,6 +10,7 @@ import torch
 from safetensors.torch import save_file
 
 from k3x_converter.reader import K3XReader
+from k3x_converter.fragment_set import write_fragment_set_manifest
 from k3x_converter.writer import convert
 from k3x_ref.config import SyntheticK3Config
 from k3x_ref.fixtures import build_synthetic_model
@@ -61,6 +62,18 @@ def test_cpp_reader_opens_two_fragments_as_one_set(
         [str(cpp_binary("test_fragment_reader")), *(str(path) for path in fragments)],
         check=True,
     )
+    manifest = tmp_path / "model.k3xset"
+    write_fragment_set_manifest(manifest, fragments, plan_sha256="a" * 64)
+    subprocess.run(
+        [str(cpp_binary("test_fragment_reader")), str(manifest)],
+        check=True,
+    )
+    tampered = manifest.read_text(encoding="ascii").replace("a" * 64, "b" * 64, 1)
+    manifest.write_text(tampered, encoding="ascii")
+    assert subprocess.run(
+        [str(cpp_binary("test_fragment_reader")), str(manifest)],
+        check=False,
+    ).returncode == 6
 
 
 def cpu_only_build() -> bool:

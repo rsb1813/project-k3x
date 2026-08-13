@@ -58,6 +58,9 @@ public:
     static Result<Reader> open_fragments(
         std::span<const std::filesystem::path> paths,
         ReaderOptions options = {});
+    static Result<Reader> open_set(
+        const std::filesystem::path& manifest,
+        ReaderOptions options = {});
     Result<std::vector<std::byte>> read_tensor(std::uint64_t tensor_id) const;
     Result<std::vector<std::byte>> read_auxiliary(std::uint64_t tensor_id) const;
     Result<std::vector<std::vector<std::byte>>> read_extents(

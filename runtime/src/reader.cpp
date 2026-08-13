@@ -11,11 +11,14 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <charconv>
 #include <cstring>
 #include <fstream>
+#include <iomanip>
 #include <limits>
 #include <mutex>
 #include <optional>
+#include <sstream>
 #include <span>
 #include <unordered_set>
 
@@ -403,6 +406,42 @@ std::uint64_t Reader::direct_memory_alignment() const {
         return fragments_.front()->direct_memory_alignment();
     }
     return data_plane_ ? data_plane_->direct_alignment.memory : 0;
+}
+
+bool lowercase_sha256(std::string_view value) {
+    return value.size() == 64 && std::all_of(
+        value.begin(), value.end(), [](char item) {
+            return (item >= '0' && item <= '9') ||
+                   (item >= 'a' && item <= 'f');
+        });
+}
+
+std::string digest_hex(const std::array<std::byte, 32>& digest) {
+    std::ostringstream output;
+    output << std::hex << std::setfill('0');
+    for (const auto value : digest) {
+        output << std::setw(2) << std::to_integer<unsigned>(value);
+    }
+    return output.str();
+}
+
+std::vector<std::string> split_tabs(const std::string& line) {
+    std::vector<std::string> values;
+    std::size_t start = 0;
+    while (true) {
+        const auto end = line.find('\t', start);
+        values.push_back(line.substr(start, end - start));
+        if (end == std::string::npos) return values;
+        start = end + 1;
+    }
+}
+
+bool parse_u64(std::string_view value, std::uint64_t& output) {
+    if (value.empty()) return false;
+    const auto parsed = std::from_chars(
+        value.data(), value.data() + value.size(), output);
+    return parsed.ec == std::errc{} &&
+           parsed.ptr == value.data() + value.size();
 }
 
 std::uint64_t Reader::direct_offset_alignment() const {
@@ -852,6 +891,76 @@ Result<Reader> Reader::open_fragments(
     combined.superblock_.file_length =
         std::numeric_limits<std::uint64_t>::max();
     return Result<Reader>::success(std::move(combined));
+}
+
+Result<Reader> Reader::open_set(
+    const std::filesystem::path& manifest,
+    ReaderOptions options) {
+    std::ifstream stream(manifest, std::ios::binary);
+    if (!stream) return Result<Reader>::failure(ErrorCode::io_error);
+    std::string canonical;
+    std::string line;
+    if (!std::getline(stream, line)) {
+        return Result<Reader>::failure(ErrorCode::invalid_directory);
+    }
+    const auto header = split_tabs(line);
+    std::uint64_t expected_count = 0;
+    if (header.size() != 3 || header[0] != "K3XSET1" ||
+        !lowercase_sha256(header[1]) ||
+        !parse_u64(header[2], expected_count) ||
+        expected_count == 0 || expected_count > 256) {
+        return Result<Reader>::failure(ErrorCode::invalid_directory);
+    }
+    canonical += line + '\n';
+    std::vector<std::filesystem::path> paths;
+    std::vector<std::uint64_t> lengths;
+    std::vector<std::string> roots;
+    for (std::uint64_t index = 0; index < expected_count; ++index) {
+        if (!std::getline(stream, line)) {
+            return Result<Reader>::failure(ErrorCode::invalid_directory);
+        }
+        const auto fields = split_tabs(line);
+        std::uint64_t length = 0;
+        if (fields.size() != 4 || fields[0] != "FRAGMENT" ||
+            fields[1].empty() || fields[1] == "." || fields[1] == ".." ||
+            fields[1].find_first_of("/\\") != std::string::npos ||
+            !parse_u64(fields[2], length) ||
+            length < superblock_bytes || !lowercase_sha256(fields[3])) {
+            return Result<Reader>::failure(ErrorCode::invalid_directory);
+        }
+        canonical += line + '\n';
+        paths.push_back(manifest.parent_path() / fields[1]);
+        lengths.push_back(length);
+        roots.push_back(fields[3]);
+    }
+    if (!std::getline(stream, line)) {
+        return Result<Reader>::failure(ErrorCode::invalid_directory);
+    }
+    const auto seal = split_tabs(line);
+    if (seal.size() != 2 || seal[0] != "SHA256" ||
+        !lowercase_sha256(seal[1]) ||
+        digest_hex(sha256(std::as_bytes(std::span(canonical)))) != seal[1] ||
+        std::getline(stream, line)) {
+        return Result<Reader>::failure(ErrorCode::invalid_directory);
+    }
+    std::unordered_set<std::string> names;
+    for (std::size_t index = 0; index < paths.size(); ++index) {
+        std::error_code error;
+        const auto length = std::filesystem::file_size(paths[index], error);
+        if (error || length != lengths[index] ||
+            !names.insert(paths[index].filename().string()).second) {
+            return Result<Reader>::failure(ErrorCode::invalid_directory);
+        }
+    }
+    auto combined = open_fragments(paths, options);
+    if (!combined) return combined;
+    for (std::size_t index = 0; index < roots.size(); ++index) {
+        if (digest_hex(combined.value().fragments_[index]
+                           ->superblock_.root_sha256) != roots[index]) {
+            return Result<Reader>::failure(ErrorCode::root_sha256_mismatch);
+        }
+    }
+    return combined;
 }
 
 Result<std::vector<std::vector<std::byte>>> Reader::read_extents(

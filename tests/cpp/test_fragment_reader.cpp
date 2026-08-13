@@ -5,6 +5,14 @@
 #include <filesystem>
 
 int main(int argc, char** argv) {
+    if (argc == 2) {
+        auto reader = k3x::Reader::open_set(std::filesystem::path(argv[1]));
+        if (!reader || reader.value().tensors().size() != 2) return 6;
+        for (const auto& record : reader.value().tensors()) {
+            if (!reader.value().read_tensor(record.tensor_id)) return 7;
+        }
+        return 0;
+    }
     if (argc != 3) return 2;
     const std::array paths{
         std::filesystem::path(argv[1]), std::filesystem::path(argv[2])};

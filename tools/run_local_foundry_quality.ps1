@@ -84,3 +84,22 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
     }
     Add-Content -LiteralPath $progress -Value $result -Encoding utf8
 }
+
+if ($EndIndex -ne $manifest.shards.Count) {
+    exit 0
+}
+
+$setCommand = @(
+    "cd /mnt/c/Users/jolib/Documents/project-k3x/.worktrees/milestone-twenty-four-cuda-graph-cache &&",
+    "PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python tools/write_fragment_set.py",
+    "--manifest artifacts/m37-local-foundry/source-manifest.json",
+    "--destination /mnt/c/K3X/shards",
+    "--ledger /mnt/c/K3X/immortal-ledger-quality.json",
+    "--output /mnt/c/K3X/shards/model.k3xset",
+    "--output-budget-bytes 1510500000000"
+) -join " "
+$setResult = & wsl -e bash -lc $setCommand
+if ($LASTEXITCODE -ne 0) {
+    throw "fragment set finalization failed"
+}
+Add-Content -LiteralPath $progress -Value $setResult -Encoding utf8

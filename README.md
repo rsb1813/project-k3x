@@ -896,7 +896,8 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Exact pinned-header byte accounting for a sub-1.28 TB mixed recipe and one Reader-valid released-expert 3-bit conversion.
 - [ ] Acceptable released/full-model 3-bit quality. The first bounded expert proxy measured 0.325 relative L2 and therefore did not unlock manufacture.
 - [x] Authenticated two-slot local manufacture started with native MXFP4 experts and group-128 8-bit selected trunk matrices; verified shards 1 and 2 are complete and their source files were ledger-gated before deletion.
-- [ ] Complete all 96 quality fragments, assemble the final executable K3X checkpoint, and generate the first released-model token.
+- [x] Implement a checksum-bound `K3XSET1` fragment index and C++ multi-fragment Reader without a second model-sized payload copy.
+- [ ] Complete all 96 quality fragments, publish the official set manifest, and generate the first released-model token.
 - [ ] Grouped/resident/fused 3-bit CUDA FFN and complete official manufacturing.
 - [ ] SKYFORGE shard compiler for explicitly provisioned cloud jobs.
 - [ ] Full ablation and coding-quality suite.
@@ -926,7 +927,7 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
 - Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0025 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; transient, bounded-resident, resident-grid, resident MoE-layer, admission-validation, and CUDA Graph paths are exact opt-in experiments. B-0025 finds mixed stable/alternating deltas and rotating churn 6.09%–11.57% slower, so no graph default changes. There is no learned DSpark drafter, reduced-precision draft path, eviction-capable draft residency, device-resident whole-token graph, or full-model speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
-- The converter and dedicated CUDA harness have processed and executed a bounded official Kimi K3 layer-1 KDA transformer boundary with two natural Top-16 routes and a 32-expert union. No complete shard, full checkpoint, multi-layer token graph, or production checkpoint has been processed. Provenance remains transport-pinned range identity, not recomputed full-object LFS verification or signed publisher provenance.
+- The quality Local Foundry has produced complete, Reader-valid official shard fragments while the 96-shard conductor remains active. The checksum-bound fragment-set format and Reader are implemented, but the official set, complete multi-layer token graph, and production first token do not exist yet. Provenance is pinned official shard SHA-256 plus K3X roots and the local ledger, not signed publisher provenance.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.
 - No open-source license has been selected yet; public visibility does not itself grant reuse rights.
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import time
 from pathlib import Path
 
 from k3x_converter.format import K3XError
@@ -62,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
     config = config_document.get("config")
     if not isinstance(config, dict):
         raise K3XError("INVALID_LOCAL_CONFIG")
+    conversion_start = time.perf_counter()
     report = convert_local_official_shard(
         source,
         destination,
@@ -69,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
         expected_sha256=unit.source_sha256,
         temporary_directory=source.parent / ".foundry-work",
     )
+    conversion_seconds = time.perf_counter() - conversion_start
     record_completed_unit(
         ledger_path,
         plan,
@@ -96,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
                 "tensor_count": report.tensor_count,
                 "quant8_tensor_count": report.quant8_tensor_count,
                 "native_expert_tensor_count": report.native_expert_tensor_count,
+                "conversion_seconds": conversion_seconds,
                 "source_deleted": deleted,
             },
             sort_keys=True,

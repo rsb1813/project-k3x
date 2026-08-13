@@ -905,3 +905,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: a crash can lose at most the uncommitted 127-extent suffix, which is truncated and recomputed. This removes thousands of durability barriers and O(N²) JSON bytes while preserving the completed artifact's checksum boundary.
 - Rejected claims: the focused synthetic timing is not an official manufacturing benchmark, and batching does not reduce source, output, or final verification bytes.
 - Revisit: tune the batch size only from measured shard timing and interruption-recovery cost; consider a compact append-only binary journal if ledger serialization remains material.
+
+## D-078 — Publish a manifest-backed fragment set instead of copying a monolith
+
+- Date: 2026-08-13.
+- Status: implemented and synthetic-tested; official set publication awaits all 96 fragments.
+- Decision: keep each official shard conversion as an independent K3X file and publish one canonical `K3XSET1` manifest after the IMMORTAL ledger contains every planned unit. Reserve logical offset bits 63 through 56 for the fragment index and retain each fragment's original offset in bits 55 through 0.
+- Alternatives considered: copy all payloads into one monolithic K3X file; expose 96 unrelated Reader instances to the model; use a general JSON index; rely only on directory enumeration.
+- Evidence: the quality output ceiling is 1,510,500,000,000 bytes while the final volume also retains a 200 GiB reserve, so a second full payload copy cannot fit. The synthetic integration opens two independently rooted fragments, preserves single and cross-fragment batch bytes, and rejects a tampered manifest seal.
+- Benchmark result: the focused C++/Python fragment-set integration passes 1/1. No official startup latency or inference throughput is claimed.
+- Reason accepted: the set keeps per-shard restartability and random access, adds deterministic identity and path constraints, and consumes only a small metadata file instead of another model-sized artifact.
+- Rejected claims: `open_set` does not yet bind the complete official graph or generate a token. Default checksum mode rereads each fragment root at open; a ledger-trusted metadata-only startup policy requires a separate measured decision.
+- Revisit: measure checksum-open startup and consider a signed ledger/root cache only if repeated full-root validation materially delays restart.

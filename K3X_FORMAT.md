@@ -51,6 +51,19 @@ Optional feature bit 0 identifies a non-executable `STORAGE_FIXTURE`. Readers ma
 
 Every directory begins with a 16-byte header containing a four-byte tag, `u32 record_size`, and `u64 record_count`. Tags are `TENS`, `LAYR`, and `EXPT`.
 
+## Fragment set manifest
+
+A completed local checkpoint may remain as independently verified K3X files instead of being copied into a second monolithic payload. The ASCII `model.k3xset` manifest lives in the same directory as every fragment and has this canonical LF-only form.
+
+```text
+K3XSET1<TAB>plan_sha256<TAB>fragment_count<LF>
+FRAGMENT<TAB>filename<TAB>file_bytes<TAB>k3x_root_sha256<LF>
+...
+SHA256<TAB>sha256_of_all_preceding_lines<LF>
+```
+
+`fragment_count` is in `[1, 256]`. Digests are exactly 64 lowercase hexadecimal characters. `filename` is a single relative filename with no slash, backslash, tab, newline, `.` or `..`. Entries are execution-manufacture order, tensor IDs must be unique across fragments, every fragment must carry an identical model-config block, and every file length and internal K3X root must match the manifest. Runtime logical offsets reserve bits 63 through 56 for the fragment index and bits 55 through 0 for the original aligned extent offset. The manifest contains no payload bytes and therefore avoids a second checkpoint-sized copy.
+
 ## Tensor record
 
 Tensor records are 128 bytes.
