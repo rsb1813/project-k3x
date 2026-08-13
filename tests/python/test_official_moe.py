@@ -254,8 +254,17 @@ def test_official_moe_plan_rejects_layer_two_cross_shard_binding() -> None:
         plan_official_moe_slice(mixed_index, header, _config(), layer_id=2)
 
 
-@pytest.mark.parametrize("layer_id", [0, 3])
-def test_official_moe_plan_rejects_layers_outside_bounded_pair(
+@pytest.mark.parametrize("layer_id", [3, 92])
+def test_official_moe_plan_accepts_released_moe_layers(layer_id: int) -> None:
+    index, header = _plan_inputs_for_layer(layer_id, _SHARD)
+
+    plan = plan_official_moe_slice(index, header, _config(), layer_id=layer_id)
+
+    assert plan.layer_id == layer_id
+
+
+@pytest.mark.parametrize("layer_id", [0, 93])
+def test_official_moe_plan_rejects_non_moe_layers(
     layer_id: int,
 ) -> None:
     index, header = _plan_inputs_for_layer(layer_id, _SHARD)

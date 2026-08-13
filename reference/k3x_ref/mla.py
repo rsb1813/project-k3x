@@ -115,7 +115,8 @@ def mla_decode(
         batch_size, 1, cfg.mla_heads * cfg.v_head_dim
     )
     output_gate = torch.sigmoid(functional.linear(x_one, weights.g_proj).to(torch.float32))
-    output = functional.linear(merged * output_gate, weights.o_proj)
+    gated = (merged * output_gate).to(weights.o_proj.dtype)
+    output = functional.linear(gated, weights.o_proj)
     return output, MLAState(keys, values, shared_keys, state.length + 1)
 
 

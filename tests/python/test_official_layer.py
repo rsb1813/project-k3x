@@ -238,8 +238,24 @@ def test_official_kda_layer_plan_rejects_layer_two_not_declared_as_kda() -> None
         )
 
 
-@pytest.mark.parametrize("layer_id", [0, 3])
-def test_official_kda_layer_plan_rejects_layers_outside_bounded_pair(
+def test_official_kda_layer_plan_accepts_released_kda_layer_four() -> None:
+    shard = "model-00005-of-000096.safetensors"
+    index, header = _plan_inputs_for_layer(4, shard)
+
+    plan = plan_official_kda_layer(
+        index,
+        header,
+        _config(),
+        source_blob_id=_SOURCE_BLOB,
+        layer_id=4,
+    )
+
+    assert plan.layer_id == 4
+    assert plan.shard_path == shard
+
+
+@pytest.mark.parametrize("layer_id", [0, 3, 7, 92])
+def test_official_kda_layer_plan_rejects_dense_or_mla_layers(
     layer_id: int,
 ) -> None:
     index, header = _plan_inputs_for_layer(layer_id, _SHARD)

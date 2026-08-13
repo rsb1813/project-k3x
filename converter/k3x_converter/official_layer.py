@@ -159,10 +159,10 @@ def plan_official_kda_layer(
     layer_id: int = 1,
 ) -> OfficialLayerPlan:
     if (
-        layer_id not in (1, 2)
+        not 1 <= layer_id < config.num_hidden_layers
         or source_blob_id != OFFICIAL_KDA_SOURCE_BLOB_ID
         or config.num_hidden_layers != 93
-        or layer_id not in config.kda_layers
+        or (layer_id + 1) not in config.kda_layers
         or config.kda_heads != 96
         or config.kda_head_dim != 128
         or config.short_conv_kernel_size != 4

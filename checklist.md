@@ -528,5 +528,6 @@
 - [x] Generate and validate the pinned 93-layer topology manifest without payload download.
 - [ ] Implement the verified selected-range cache.
 - [ ] Connect the missing dense, MLA, embedding, output residual, norm, and LM-head nodes.
+- [x] Execute actual released layers 0 through 3, including the first KDA/KDA/KDA/MLA hybrid block.
 - [ ] Execute and seal one actual released-checkpoint greedy token.
 - [ ] Run one focused gate and one integration gate, then publish.

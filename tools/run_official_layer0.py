@@ -49,6 +49,21 @@ def _write_json_atomic(path: Path, value: dict[str, object]) -> None:
     os.replace(partial, path)
 
 
+def _write_bytes_atomic(path: Path, payload: bytes) -> str:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_suffix(path.suffix + ".partial")
+    with partial.open("wb") as stream:
+        stream.write(payload)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(partial, path)
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _tensor_payload(tensor: torch.Tensor) -> bytes:
+    return tensor.detach().cpu().contiguous().view(torch.uint8).numpy().tobytes()
+
+
 def _load_topology(path: Path) -> dict[str, object]:
     record = json.loads(path.read_text(encoding="utf-8"))
     digest = record.pop("record_sha256", None)
@@ -92,6 +107,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--topology", type=Path, required=True)
     parser.add_argument("--object-dir", type=Path, required=True)
+    parser.add_argument("--state-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--token-id", type=int, default=1)
     args = parser.parse_args()
@@ -231,6 +247,40 @@ def main() -> int:
     if not torch.isfinite(output).all():
         raise K3XError("OFFICIAL_LAYER0_NONFINITE")
 
+    state_dir = args.state_dir.resolve()
+    state_tensors = {
+        "block_source_0": hidden,
+        "hidden_after_layer_0": output,
+        "kda_0_conv_q": kda.state.conv_q,
+        "kda_0_conv_k": kda.state.conv_k,
+        "kda_0_conv_v": kda.state.conv_v,
+        "kda_0_recurrent_v_first": kda.state.recurrent_v_first,
+    }
+    state_records = {}
+    for name, tensor in state_tensors.items():
+        path = state_dir / f"{name}.bin"
+        payload = _tensor_payload(tensor)
+        state_records[name] = {
+            "path": path.name,
+            "dtype": str(tensor.dtype).removeprefix("torch."),
+            "shape": list(tensor.shape),
+            "bytes": len(payload),
+            "sha256": _write_bytes_atomic(path, payload),
+        }
+    state_manifest = {
+        "format": "k3x-official-prefix-state-v1",
+        "resolved_revision": snapshot.resolved_revision,
+        "token_id": args.token_id,
+        "completed_layer": 0,
+        "tensors": state_records,
+    }
+    state_encoded = json.dumps(
+        state_manifest, sort_keys=True, separators=(",", ":")
+    ).encode()
+    state_manifest["record_sha256"] = hashlib.sha256(state_encoded).hexdigest()
+    state_manifest_path = state_dir / "state.json"
+    _write_json_atomic(state_manifest_path, state_manifest)
+
     result = {
         "format": "k3x-official-layer0-execution-v1",
         "repository": snapshot.repository,
@@ -245,6 +295,7 @@ def main() -> int:
             output, b"k3x-official-layer0-output-bf16\0"
         ),
         "layer0_kda_state_sha256": _state_digest(kda.state),
+        "state_manifest_sha256": state_manifest["record_sha256"],
         "downloaded_payload_bytes": downloaded_bytes,
         "requested_payload_bytes": sum(item["length"] for item in layer_contract)
         + embedding_row_bytes,

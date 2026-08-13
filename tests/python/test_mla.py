@@ -57,3 +57,18 @@ def test_mla_extra_key_subspace_is_position_independent() -> None:
     first, _ = mla_decode(x, weights, empty_mla_state(1, cfg, x.dtype, x.device), cfg)
     second, _ = mla_decode(x, weights, empty_mla_state(1, cfg, x.dtype, x.device), cfg)
     assert torch.equal(first, second)
+
+
+def test_mla_decode_preserves_bfloat16_projection_contract() -> None:
+    cfg = SyntheticK3Config.default()
+    weights = MLAWeights(
+        *(tensor.to(torch.bfloat16) for tensor in _weights(cfg).__dict__.values())
+    )
+    x = torch.ones((1, 1, cfg.hidden_size), dtype=torch.bfloat16)
+
+    output, state = mla_decode(
+        x, weights, empty_mla_state(1, cfg, x.dtype, x.device), cfg
+    )
+
+    assert output.dtype == torch.bfloat16
+    assert state.keys.dtype == torch.bfloat16
