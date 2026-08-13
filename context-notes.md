@@ -1100,3 +1100,6 @@
 - Fresh shards 39 and 69 completed in 452.074 and 449.727 seconds; shard 70 completed in 601.916 seconds after its RAM copy briefly overlapped worker B. The ledger now has 14 durable units. These are manufacture timings, not tok/s.
 - Per-conductor markers did not prevent independent workers from copying shards 39 and 70 simultaneously. D-090 adds one shared advisory lock around only cross-device copy plus staged SHA verification. Focused ownership coverage passes 1/1; newly restarted B/C conductors use it for shards 40 and 71 onward.
 - The original-precision reference remains durable at completed layer 46. Layer 47 failed once with `OFFICIAL_RANGE_LENGTH_MISMATCH` after a long process suspension; it can restart from layer 47 without recomputing prior layers.
+- Reference retry succeeded and advanced through layer 54 while manufacture continued.
+- Shard 8 completed in 398.151 seconds and raised the durable ledger to 17 units. A third bounded RAM worker is therefore active for shards 8–36; measured WSL memory before launch showed 52 GiB available and zero swap use.
+- D-091 gives each conductor an independent Xet cache. The first two restarted conductors then ran active Python/Xet children simultaneously and host Ethernet received 2,427,845,614 bytes in 20 seconds, 121.39 MB/s or 971.14 Mb/s. This is link traffic, not effective payload throughput.

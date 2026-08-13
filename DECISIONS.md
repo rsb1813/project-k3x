@@ -1056,3 +1056,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: focused lock ownership and conversion coverage passes 1/1; Python compilation and PowerShell parsing pass. No isolated official elapsed result exists yet because shards 39/70 launched under the prior conductor process.
 - Reason accepted: the HDD copy is the only globally serialized section; all CPU, RAM, NVMe, and network work remains eligible to overlap.
 - Revisit: replace the global lock with measured deadline scheduling only if multiple physical source drives are introduced.
+
+## D-091 — Isolate Xet caches per conductor
+
+- Date: 2026-08-14.
+- Status: implemented and active for newly restarted B/C conductors; A applies it after its current process restarts.
+- Decision: place `HF_XET_CACHE` below each conductor's independent staging root instead of sharing one global cache directory. Continue using separate two-slot local directories and the shared RAM-staging lock.
+- Alternatives considered: keep one global Xet cache; run only one download; disable Xet and use HTTP.
+- Evidence: with the shared cache, only one Python/Xet child consumed CPU while the other conductors waited. After B/C restarted with independent caches, both Python children consumed CPU concurrently and 20-second Ethernet receive increased by 2,427,845,614 bytes, 121.39 MB/s or 971.14 Mb/s.
+- Benchmark result: one live network interval nearly saturated the 1 Gbps link. This measures host receive traffic during manufacture, not effective payload throughput, conversion throughput, or inference.
+- Reason accepted: official shards are independent and checksum-bound; isolated transient caches remove cross-process cache locking without changing source identity or final artifacts.
+- Revisit: compare complete download elapsed and HDD assembly pressure; return to fewer concurrent downloads if physical D writes become the dominant bottleneck.
