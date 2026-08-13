@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from safetensors.torch import save_file
 
 from k3x_converter.reader import K3XReader
 from k3x_converter.writer import convert
@@ -25,6 +26,41 @@ from k3x_ref.storage_fixture import write_bounded_expert_source
 import pytest
 
 from conftest import cpp_binary
+
+
+def test_cpp_reader_opens_two_fragments_as_one_set(
+    synthetic_source: Path, tmp_path: Path
+) -> None:
+    source_manifest = json.loads(
+        (synthetic_source / "source-manifest.json").read_text(encoding="utf-8")
+    )
+    fragments = []
+    for index, value in enumerate((1.25, -3.5), 1):
+        source = tmp_path / f"source-{index}"
+        source.mkdir()
+        shard = "model.safetensors"
+        save_file(
+            {f"fragment.{index}": torch.tensor([value], dtype=torch.float32)},
+            source / shard,
+        )
+        manifest = {
+            "format": "synthetic-k3-source-v1",
+            "config": source_manifest["config"],
+            "packed_shapes": {},
+            "weight_map": {f"fragment.{index}": shard},
+        }
+        (source / "source-manifest.json").write_text(
+            json.dumps(manifest, sort_keys=True, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        fragment = tmp_path / f"fragment-{index}.k3x"
+        convert(source, fragment, chunk_bytes=257)
+        fragments.append(fragment)
+
+    subprocess.run(
+        [str(cpp_binary("test_fragment_reader")), *(str(path) for path in fragments)],
+        check=True,
+    )
 
 
 def cpu_only_build() -> bool:

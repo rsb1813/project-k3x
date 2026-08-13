@@ -31,6 +31,10 @@
 
 namespace k3x {
 namespace {
+constexpr std::uint64_t fragment_offset_shift = 56;
+constexpr std::uint64_t fragment_offset_mask =
+    (std::uint64_t{1} << fragment_offset_shift) - 1;
+
 template <typename T>
 T little(std::span<const std::byte> bytes, std::size_t offset) {
     T value{};
@@ -395,10 +399,16 @@ Reader& Reader::operator=(Reader&&) noexcept = default;
 Reader::~Reader() = default;
 
 std::uint64_t Reader::direct_memory_alignment() const {
+    if (!fragments_.empty()) {
+        return fragments_.front()->direct_memory_alignment();
+    }
     return data_plane_ ? data_plane_->direct_alignment.memory : 0;
 }
 
 std::uint64_t Reader::direct_offset_alignment() const {
+    if (!fragments_.empty()) {
+        return fragments_.front()->direct_offset_alignment();
+    }
     return data_plane_ ? data_plane_->direct_alignment.offset : 0;
 }
 
@@ -795,10 +805,90 @@ Result<Reader> Reader::open(const std::filesystem::path& path,
     return Result<Reader>::success(std::move(reader));
 }
 
+Result<Reader> Reader::open_fragments(
+    std::span<const std::filesystem::path> paths,
+    ReaderOptions options) {
+    if (paths.empty() || paths.size() > 256) {
+        return Result<Reader>::failure(ErrorCode::invalid_state,
+                                       "fragment count is out of range");
+    }
+    Reader combined;
+    combined.options_ = options;
+    std::unordered_set<std::uint64_t> tensor_ids;
+    for (std::size_t index = 0; index < paths.size(); ++index) {
+        auto opened = open(paths[index], options);
+        if (!opened) {
+            return Result<Reader>::failure(opened.error(), opened.message());
+        }
+        auto fragment = std::make_unique<Reader>(std::move(opened.value()));
+        if (fragment->superblock_.file_length > fragment_offset_mask) {
+            return Result<Reader>::failure(ErrorCode::invalid_extent,
+                                           "fragment is too large");
+        }
+        if (index == 0) {
+            combined.superblock_ = fragment->superblock_;
+            combined.model_config_ = fragment->model_config_;
+        } else if (combined.model_config_ != fragment->model_config_) {
+            return Result<Reader>::failure(ErrorCode::invalid_directory,
+                                           "fragment model configs differ");
+        }
+        combined.superblock_.required_features |=
+            fragment->superblock_.required_features;
+        combined.superblock_.optional_features |=
+            fragment->superblock_.optional_features;
+        const auto prefix = static_cast<std::uint64_t>(index)
+                            << fragment_offset_shift;
+        for (auto record : fragment->tensors_) {
+            if (!tensor_ids.insert(record.tensor_id).second) {
+                return Result<Reader>::failure(ErrorCode::invalid_directory,
+                                               "duplicate fragment tensor");
+            }
+            record.data_offset |= prefix;
+            if (record.auxiliary_length) record.auxiliary_offset |= prefix;
+            combined.tensors_.push_back(record);
+        }
+        combined.fragments_.push_back(std::move(fragment));
+    }
+    combined.superblock_.file_length =
+        std::numeric_limits<std::uint64_t>::max();
+    return Result<Reader>::success(std::move(combined));
+}
+
 Result<std::vector<std::vector<std::byte>>> Reader::read_extents(
     std::span<const ExtentRequest> requests) const {
     if (requests.empty()) {
         return Result<std::vector<std::vector<std::byte>>>::success({});
+    }
+    if (!fragments_.empty()) {
+        std::vector<std::vector<ExtentRequest>> grouped(fragments_.size());
+        std::vector<std::vector<std::size_t>> positions(fragments_.size());
+        for (std::size_t position = 0; position < requests.size(); ++position) {
+            const auto& request = requests[position];
+            const auto fragment_index = static_cast<std::size_t>(
+                request.offset >> fragment_offset_shift);
+            if (!request.length || fragment_index >= fragments_.size()) {
+                return Result<std::vector<std::vector<std::byte>>>::failure(
+                    ErrorCode::invalid_extent);
+            }
+            grouped[fragment_index].push_back(
+                {request.offset & fragment_offset_mask, request.length});
+            positions[fragment_index].push_back(position);
+        }
+        std::vector<std::vector<std::byte>> output(requests.size());
+        for (std::size_t index = 0; index < fragments_.size(); ++index) {
+            if (grouped[index].empty()) continue;
+            auto loaded = fragments_[index]->read_extents(grouped[index]);
+            if (!loaded) {
+                return Result<std::vector<std::vector<std::byte>>>::failure(
+                    loaded.error(), loaded.message());
+            }
+            for (std::size_t item = 0; item < loaded.value().size(); ++item) {
+                output[positions[index][item]] =
+                    std::move(loaded.value()[item]);
+            }
+        }
+        return Result<std::vector<std::vector<std::byte>>>::success(
+            std::move(output));
     }
     for (const auto& request : requests) {
         if (!request.length ||
@@ -836,6 +926,23 @@ Result<std::vector<std::vector<std::byte>>> Reader::read_extents(
 }
 
 ReadCounters Reader::counters() const {
+    if (!fragments_.empty()) {
+        ReadCounters total{};
+        for (const auto& fragment : fragments_) {
+            const auto value = fragment->counters();
+            total.calls += value.calls;
+            total.requested_bytes += value.requested_bytes;
+            total.completed_bytes += value.completed_bytes;
+            total.batch_submissions += value.batch_submissions;
+            total.storage_submitted_bytes += value.storage_submitted_bytes;
+            total.storage_completed_bytes += value.storage_completed_bytes;
+            total.completions += value.completions;
+            total.short_reads += value.short_reads;
+            total.failures += value.failures;
+            total.storage_nanoseconds += value.storage_nanoseconds;
+        }
+        return total;
+    }
     std::lock_guard lock(data_plane_->operation_mutex);
     return counters_;
 }

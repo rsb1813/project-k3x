@@ -55,6 +55,9 @@ public:
                                VerifyMode mode = VerifyMode::checksums);
     static Result<Reader> open(const std::filesystem::path& path,
                                ReaderOptions options);
+    static Result<Reader> open_fragments(
+        std::span<const std::filesystem::path> paths,
+        ReaderOptions options = {});
     Result<std::vector<std::byte>> read_tensor(std::uint64_t tensor_id) const;
     Result<std::vector<std::byte>> read_auxiliary(std::uint64_t tensor_id) const;
     Result<std::vector<std::vector<std::byte>>> read_extents(
@@ -71,6 +74,7 @@ private:
     struct DataPlane;
     std::filesystem::path path_;
     std::unique_ptr<DataPlane> data_plane_;
+    std::vector<std::unique_ptr<Reader>> fragments_;
     ReaderOptions options_{};
     Superblock superblock_;
     std::vector<TensorRecord> tensors_;
