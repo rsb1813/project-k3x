@@ -23,6 +23,8 @@ STATE_BYTES = 2 * 6_512_640
 KDA_OUTPUT_BYTES = 4 * 7_168 * 4
 ROUTER_BYTES = 4 * 896 * 4
 RESIDENT_BYTES = 2 * 1_816_322_048
+ROUTE_PREPARATION_BYTES = 2 * 12_888_064
+DEVICE_FRONT_BYTES = 2 * 3 * 7_168 * 2
 
 
 def _manifest() -> dict[str, object]:
@@ -128,8 +130,17 @@ def _runner_record(mode: str, warmups: int, iterations: int) -> dict[str, object
         "prepared_consumes": 4 * runs,
         "prepared_discards": 0,
         "prepared_invalidations": 0,
-        "resident_weight_bytes": RESIDENT_BYTES,
-        "peak_device_bytes": RESIDENT_BYTES + 1_048_576,
+        "resident_weight_bytes": (
+            RESIDENT_BYTES
+            + ROUTE_PREPARATION_BYTES
+            + (0 if host else DEVICE_FRONT_BYTES)
+        ),
+        "peak_device_bytes": (
+            RESIDENT_BYTES
+            + ROUTE_PREPARATION_BYTES
+            + (0 if host else DEVICE_FRONT_BYTES)
+            + 1_048_576
+        ),
         "k3x_root_sha256": "e" * 64,
         "route_expert_ids": [
             list(range(offset, offset + 16)) for offset in (0, 16, 32, 48)
@@ -273,6 +284,9 @@ def test_run_preserves_measured_output_and_state_digest_divergence(
     host, device = summary["records"]
     assert host["final_output_sha256"] != device["final_output_sha256"]
     assert host["final_state_sha256"] != device["final_state_sha256"]
+    assert device["resident_weight_bytes"] - host["resident_weight_bytes"] == (
+        DEVICE_FRONT_BYTES
+    )
 
 
 @pytest.mark.parametrize(
