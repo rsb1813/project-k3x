@@ -560,6 +560,7 @@
 - [ ] Measure aggregate three-worker manufacture throughput.
 - [x] Remove one duplicate full-source hash while retaining pre-conversion and pre-deletion authentication.
 - [x] Arm an idempotent 96-fragment finalizer and K3X first-token runner.
+- [x] Bind every K3X prefix state and result to the sealed set digest.
 - [ ] Complete and verify all 96 K3X fragments.
 - [ ] Complete the resumed original-precision layer-24 reference oracle and record its greedy token.
 - [ ] Assemble the final executable checkpoint and generate the first token.

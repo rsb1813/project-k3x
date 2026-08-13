@@ -40,7 +40,12 @@ from tools.run_official_layer1 import (
     _prepare_ffn_hidden,
     _residual_input,
 )
-from tools.official_k3x_source import expert_matvec, open_official_fragment
+from tools.official_k3x_source import (
+    expert_matvec,
+    k3x_set_identity,
+    open_official_fragment,
+    require_k3x_state_identity,
+)
 
 
 _ROLE_BY_SUFFIX = {
@@ -139,6 +144,9 @@ def main() -> int:
         if args.k3x_set is not None
         else None
     )
+    set_identity = (
+        k3x_set_identity(args.k3x_set) if args.k3x_set is not None else None
+    )
     if store is None:
         with ThreadPoolExecutor(max_workers=8) as executor:
             futures = {
@@ -165,6 +173,8 @@ def main() -> int:
     prior_state, hidden, block_sources = _load_state(
         args.state_dir.resolve() / "state.json", device, layer_id
     )
+    if set_identity is not None:
+        require_k3x_state_identity(prior_state, set_identity)
     roles = (
         {
             _ROLE_BY_SUFFIX[item["name"][len(prefix) :]]: store.load(
@@ -356,6 +366,8 @@ def main() -> int:
         "completed_layer": layer_id,
         "tensors": state_records,
     }
+    if set_identity is not None:
+        state_manifest["k3x_set_manifest_sha256"] = set_identity
     state_encoded = json.dumps(
         state_manifest, sort_keys=True, separators=(",", ":")
     ).encode()
@@ -392,6 +404,9 @@ def main() -> int:
         "peak_cuda_reserved_bytes": torch.cuda.max_memory_reserved(device),
         "token_generated": False,
     }
+    if set_identity is not None:
+        result["weight_source"] = "k3x-set"
+        result["k3x_set_manifest_sha256"] = set_identity
     encoded = json.dumps(result, sort_keys=True, separators=(",", ":")).encode()
     result["record_sha256"] = hashlib.sha256(encoded).hexdigest()
     _write_json_atomic(args.output.resolve(), result)

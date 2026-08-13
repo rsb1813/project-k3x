@@ -977,3 +977,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: one full HDD read is removed without changing the authoritative pre-conversion digest or the post-publication deletion gate.
 - Rejected claims: this does not remove source authentication or make deletion trust the earlier hash. The final source recheck remains intentional TOCTOU protection.
 - Revisit: compare shard 8 or a B/C worker's first matching shard against shard 5 after separating multi-worker contention.
+
+## D-084 — Bind every K3X execution state and result to the set digest
+
+- Date: 2026-08-13.
+- Status: implemented and focused-tested before the first K3X token.
+- Decision: record `weight_source=k3x-set` and the canonical `K3XSET1` manifest SHA-256 in layer, state, and head publications. Require every resumed K3X layer and head to consume a state carrying the same set digest.
+- Alternatives considered: infer K3X use from zero downloaded bytes; bind only the final head; trust the directory path without an artifact identity.
+- Evidence: official revision/index/config identities alone do not identify the mixed-precision K3X payload. Before this decision, a K3X result record was schema-compatible with the HTTP range runner and its prefix state could be resumed against a different rebuilt set.
+- Benchmark result: focused sealed-set identity and mismatched-state rejection passes 1/1; all modified graph modules compile. No token or quality result exists yet.
+- Reason accepted: layer/state provenance must remain transitive across 93 subprocesses so the final token can be attributed to one exact manufactured set.
+- Rejected claims: matching a set digest does not establish quality equivalence to the BF16 source graph. Token/logit/state divergence remains a separate measured comparison.
+- Revisit: include converter configuration and quality-mode identity directly in a future K3X v2 superblock if set metadata alone becomes insufficient.

@@ -32,7 +32,7 @@ from k3x_ref.official_kda import (
     zero_official_kda_state,
 )
 from k3x_ref.ops import rms_norm
-from tools.official_k3x_source import open_official_fragment
+from tools.official_k3x_source import k3x_set_identity, open_official_fragment
 
 
 _EMBEDDING = "language_model.model.embed_tokens.weight"
@@ -157,6 +157,9 @@ def main() -> int:
         }
         if args.k3x_set is not None
         else {}
+    )
+    set_identity = (
+        k3x_set_identity(args.k3x_set) if args.k3x_set is not None else None
     )
     if not stores:
         for position, item in enumerate(layer_contract, 1):
@@ -307,6 +310,8 @@ def main() -> int:
         "completed_layer": 0,
         "tensors": state_records,
     }
+    if set_identity is not None:
+        state_manifest["k3x_set_manifest_sha256"] = set_identity
     state_encoded = json.dumps(
         state_manifest, sort_keys=True, separators=(",", ":")
     ).encode()
@@ -341,6 +346,9 @@ def main() -> int:
         "peak_cuda_reserved_bytes": torch.cuda.max_memory_reserved(device),
         "token_generated": False,
     }
+    if set_identity is not None:
+        result["weight_source"] = "k3x-set"
+        result["k3x_set_manifest_sha256"] = set_identity
     encoded = json.dumps(result, sort_keys=True, separators=(",", ":")).encode()
     result["record_sha256"] = hashlib.sha256(encoded).hexdigest()
     _write_json_atomic(args.output.resolve(), result)

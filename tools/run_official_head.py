@@ -28,7 +28,11 @@ from tools.run_official_layer0 import (
     _write_json_atomic,
 )
 from tools.run_official_layer1 import _load_state, _residual_input
-from tools.official_k3x_source import open_official_fragment
+from tools.official_k3x_source import (
+    k3x_set_identity,
+    open_official_fragment,
+    require_k3x_state_identity,
+)
 
 
 _HEAD = "language_model.lm_head.weight"
@@ -110,6 +114,9 @@ def main() -> int:
         if args.k3x_set is not None
         else {}
     )
+    set_identity = (
+        k3x_set_identity(args.k3x_set) if args.k3x_set is not None else None
+    )
     if not stores:
         for name in _GLOBAL_ROLES:
             item = global_contract[name]
@@ -129,6 +136,8 @@ def main() -> int:
     prior_state, hidden, block_sources = _load_state(
         args.state_dir.resolve() / "state.json", device, 93
     )
+    if set_identity is not None:
+        require_k3x_state_identity(prior_state, set_identity)
     global_weights = (
         {
             role: stores[global_contract[name]["shard"]].load(
@@ -259,6 +268,9 @@ def main() -> int:
         "token_generated": True,
         "throughput_measured": False,
     }
+    if set_identity is not None:
+        result["weight_source"] = "k3x-set"
+        result["k3x_set_manifest_sha256"] = set_identity
     encoded = json.dumps(result, sort_keys=True, separators=(",", ":")).encode()
     result["record_sha256"] = hashlib.sha256(encoded).hexdigest()
     _write_json_atomic(args.output.resolve(), result)
