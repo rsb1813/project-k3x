@@ -173,3 +173,44 @@ def test_two_layer_harness_rejects_artifact_after_verified_oracle(
 
     assert completed.returncode == 4
     assert "TRUNCATED_FILE" in completed.stderr
+
+
+def test_two_layer_harness_executes_bounded_fixture_on_cuda() -> None:
+    root = Path(__file__).resolve().parents[2]
+    fixture = root / "artifacts" / "m33-official-two-layer"
+    artifact = fixture / "official-two-layer.k3x"
+    manifest = fixture / "two-layer-route-state-manifest.json"
+    oracle = fixture / "official-two-layer-oracle-v1.bin"
+    if not artifact.is_file() or not manifest.is_file() or not oracle.is_file():
+        pytest.skip("bounded official two-layer fixture is not materialized")
+
+    completed = subprocess.run(
+        [
+            str(_runner()),
+            "--artifact",
+            str(artifact),
+            "--manifest",
+            str(manifest),
+            "--oracle",
+            str(oracle),
+            "--mode",
+            "host-round-trip",
+            "--resident-bytes",
+            "4294967296",
+            "--warmup",
+            "0",
+            "--iterations",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout)
+    assert payload["schema"] == "k3x-official-two-layer-bench-v1"
+    assert payload["mode"] == "host-round-trip"
+    assert payload["warmup"] == 0
+    assert payload["iterations"] == 1
+    assert payload["weight_h2d_bytes"] > 0
