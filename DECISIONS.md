@@ -1078,3 +1078,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: focused lock ownership and conversion coverage passes 1/1. The first newly launched comparable shard remains pending.
 - Reason accepted: both artifacts still receive complete independent cryptographic audits, while WSL DrvFS no longer services multiple checkpoint-sized audit scans simultaneously.
 - Revisit: remove the lock only after native Linux destination I/O or measured parallel audit throughput proves better.
+
+## D-093 — Bound concurrent Xet download and HDD assembly to two
+
+- Date: 2026-08-14.
+- Status: implemented, parsed, and active for conductors restarted at shards 10, 43, and 74.
+- Decision: gate each complete HF Xet download transaction, including local shard assembly, with a Windows named semaphore of capacity two. Keep three converters and three staging ranges.
+- Alternatives considered: retain three simultaneous downloads; reduce to one; reduce the complete worker count to two.
+- Evidence: three independent caches filled the link but left three Python processes simultaneously assembling roughly 17 GB files on one D drive, with 41–123 MB/s aggregate writes, queue length 2–6, and long completion tails. Two slots subsequently exposed exactly two `hf.exe` processes while the third conductor waited.
+- Benchmark result: with two slots active, host Ethernet received 6,626,752,954 bytes in 55 seconds, 120.49 MB/s or 963.89 Mb/s. Thus the 1 Gbps link remained saturated without a third concurrent assembler. This is host traffic, not effective model payload throughput.
+- Reason accepted: it preserves three-way conversion parallelism and near-line-rate download while bounding HDD assembly pressure and Windows RAM consumption.
+- Revisit: tune to one or three only from complete-shard wall times on different storage hardware.

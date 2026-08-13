@@ -1568,6 +1568,7 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - The explicit sealed-set directory-open policy opened the same official shard-1 artifact and exposed the same 23 records in 0.004774 seconds without rescanning payload CRC/root bytes. Strict/default and sealed-open focused regressions pass 4/4. The roughly 2,388x open-elapsed ratio compares integrity policies and is neither token throughput nor evidence that periodic strict audits can be removed.
 - Decode tok/s, prefill tok/s, TTFT, VRAM, GPU utilization, coding quality, token agreement, and physical inference traffic are not measured.
 - Three-conductor download scheduling initially shared one Xet cache and serialized active Python children. After B/C restarted with per-conductor caches, a 20-second Windows Ethernet counter interval increased from 466,554,359,934 to 468,982,205,548 received bytes, or 121.39 MB/s and 971.14 Mb/s. This is host link traffic, includes protocol overhead, and is not effective checkpoint payload throughput.
+- Three simultaneous independent-cache downloads later created three concurrent HDD assembly tails. D-093 bounded full download transactions to two; the first live 55-second two-slot interval increased Ethernet receive from 622,116,018,109 to 628,742,771,063 bytes, or 120.49 MB/s and 963.89 Mb/s. Only shard 10 and 43 `hf.exe` processes existed while shard 74 waited, confirming the capacity boundary.
 
 ## B-0044 official original-precision first token
 

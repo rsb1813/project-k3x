@@ -569,6 +569,7 @@
 - [x] Serialize the RAM staging copy across independent conductors.
 - [x] Isolate Xet caches per conductor and verify live link utilization.
 - [x] Serialize finalized K3X output audits across conductors.
+- [x] Bound Xet download plus HDD assembly to two concurrent transactions.
 - [ ] Complete and verify all 96 K3X fragments.
 - [x] Complete the resumed original-precision reference oracle and record greedy token 9689.
 - [ ] Assemble the final executable checkpoint and generate the first token.
