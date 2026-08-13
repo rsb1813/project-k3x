@@ -837,11 +837,11 @@ Post-review note: final read-only review found that partial-submit or completion
 ## D-072 — Attribute existing front and tail regions before adding CUDA events or fusion
 
 - Date: 2026-08-13.
-- Status: accepted design; implementation and measurement pending.
+- Status: implemented and measured; host round trip remains the default.
 - Decision: add opt-in M34 attribution by snapshotting the existing CUDA backend `Profiler` around the exact two-layer front and tail calls, separately timing canonical host route plus expert resolution, and computing a checked wrapper remainder. Preserve the historical B-0034 path and schema when attribution is disabled.
 - Alternatives considered: add new CUDA events around each front/tail sub-kernel; duplicate the two-layer orchestration inside the benchmark harness; reuse existing profiler events at the wrapper boundary.
 - Evidence: sealed B-0034 shows device closure is 13.823803% slower while removing only 114,688 total logical inter-layer bytes per sequence. The backend already records synchronized device time for its KDA, route, and FFN operations, while the exact wrapper centrally owns tokens, state, recovery, and canonical routing.
-- Benchmark result: none. B-0035 has not run, and no region is yet claimed to cause the regression.
+- Benchmark result: sealed B-0035 records host/device medians of 99,316,205/110,701,472 ns. Device closure averages 69,822,990 ns front wall, 39,036 ns canonical host route wall, 41,060,877 ns tail wall, and 23,582 ns checked remainder per sequence. Front/tail existing-event CUDA time averages 52,571,374/30,057,734 ns. Exact routes and output/state identities pass, warm weight H2D is zero, and Compute Sanitizer reports zero errors.
 - Reason accepted: profiler snapshots add no new CUDA event or synchronization, do not duplicate execution, and are sufficient to decide whether finer per-kernel instrumentation is warranted.
 - Rejected claims: the design does not implement fusion, establish a speedup, measure token throughput or physical traffic, or authorize a default change.
-- Revisit: after sealed B-0035, instrument individual kernels only if front or tail device time materially explains the regression; otherwise retain the exact path unchanged or investigate wrapper/host synchronization.
+- Revisit: B-0035 shows that front and tail dominate while route wall time is negligible. Next expose existing profiler events by operation inside front and tail, then select a fusion or synchronization target only if the operation-level evidence is decisive.
