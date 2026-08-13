@@ -321,3 +321,26 @@ def root_sha256(stream, file_length: int, chunk_bytes: int = 1024 * 1024) -> byt
         digest.update(chunk)
         position += len(chunk)
     return digest.digest()
+
+
+def root_and_file_sha256(
+    stream, file_length: int, chunk_bytes: int = 8 * 1024 * 1024
+) -> tuple[bytes, bytes]:
+    root_digest = hashlib.sha256()
+    file_digest = hashlib.sha256()
+    stream.seek(0)
+    position = 0
+    while position < file_length:
+        raw = stream.read(min(chunk_bytes, file_length - position))
+        if not raw:
+            raise K3XError("TRUNCATED_FILE")
+        file_digest.update(raw)
+        chunk = bytearray(raw)
+        for start, end in ((200, 232), (4092, 4096)):
+            left = max(start - position, 0)
+            right = min(end - position, len(chunk))
+            if left < right:
+                chunk[left:right] = bytes(right - left)
+        root_digest.update(chunk)
+        position += len(chunk)
+    return root_digest.digest(), file_digest.digest()

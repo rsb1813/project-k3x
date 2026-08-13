@@ -84,10 +84,10 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
     assert report.quant8_tensor_count == 1
     assert report.native_expert_tensor_count == 6
     assert [path.name for path in inspected_paths] == ["official.safetensors"]
-    assert [path.name for path in hashed_paths] == [
-        "official.safetensors",
-        "model-00001-of-000096.k3x",
-    ]
+    assert [path.name for path in hashed_paths] == ["official.safetensors"]
+    assert report.output_sha256 == hashlib.sha256(
+        report.output_path.read_bytes()
+    ).hexdigest()
     assert "copy" not in written_kinds
     assert report.tensor_count == 6
     assert not any((tmp_path / "staging-work").iterdir())

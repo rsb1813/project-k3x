@@ -17,7 +17,7 @@ import torch
 
 from k3x_ref.quant8 import quantize_groupwise_8bit
 
-from .format import K3XError
+from .format import K3XError, root_and_file_sha256
 from .reader import K3XReader
 from .safetensors_reader import SourceTensor, inspect_shard, iter_tensor_chunks
 from .writer import convert
@@ -280,7 +280,15 @@ def convert_local_official_shard(
         report = convert(work, output_path, chunk_bytes=chunk_bytes)
         if not report.completed:
             raise K3XError("LOCAL_SHARD_CONVERSION_INCOMPLETE", source_path.name)
-    reader = K3XReader.open(output_path)
+    reader = K3XReader.open(
+        output_path, verify_root=False, verify_payload=False
+    )
+    with output_path.open("rb") as stream:
+        observed_root, output_sha256 = root_and_file_sha256(
+            stream, output_path.stat().st_size
+        )
+    if observed_root != reader.superblock.root_sha256:
+        raise K3XError("ROOT_SHA256_MISMATCH")
     expected_records = len(outputs) - quant8_count - native_expert_count // 2
     if len(reader.tensor_records) != expected_records:
         raise K3XError("LOCAL_SHARD_TENSOR_COUNT", source_path.name)
@@ -288,7 +296,7 @@ def convert_local_official_shard(
         source_path,
         source_sha256,
         output_path,
-        _sha256(output_path),
+        output_sha256.hex(),
         output_path.stat().st_size,
         len(reader.tensor_records),
         quant8_count,
