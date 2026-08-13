@@ -1048,3 +1048,6 @@
 - The shortest honest K3X path is selected-range execution, not a 1.56 TB full-checkpoint download and not a temporary third-party engine. One embedding row, always-active layer tensors, natural Top-16 experts, and LM-head chunks are sufficient for one exact text token.
 - Development validation is limited to one focused test after the connected change and one final integration gate. Correctness failures remain visible and fail closed.
 - Public M35 post-merge correctness run `31681318225` and CodeQL run `31681318273` both succeeded at `046a27f195ebf02cf0ce58c7da22d11f43a1b19f`.
+- The live pinned metadata transaction inspected all 96 headers in 41.5 seconds with eight independent readers and zero tensor payload bytes. It found 497,220 checkpoint tensors and 1,560,860,324,864 tensor bytes; the text graph owns 497,052 tensors and 1,559,965,606,912 bytes.
+- The manifest closes 69 zero-based KDA layers, 24 zero-based MLA layers, dense layer 0, and MoE layers 1 through 92. Its record SHA-256 is `0617a499fec4cbe9a0f35f67517ef0eb7470e28a13097cd4bf3515429ba8e596`.
+- Existing exact component byte contracts imply 139,339,113,472 source tensor bytes for natural Top-16 one-token execution before replacing the full embedding matrix with one 14,336-byte row. This is an engineering byte model, not measured runtime traffic or TPS.
