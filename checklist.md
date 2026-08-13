@@ -508,4 +508,4 @@
 - [x] Add strict B-0035 evidence tooling.
 - [x] Run final actual-artifact correctness, production-guard, and complete regression gates.
 - [x] Run B-0035 once successfully, strictly reverify it, and seal the evidence.
-- [ ] Synchronize the TITAN Ledger, publish M34, and verify CI.
+- [x] Synchronize the TITAN Ledger, publish M34 through PR #60, and verify pull-request plus post-merge CI.
