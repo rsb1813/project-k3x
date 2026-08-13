@@ -538,6 +538,6 @@
 - [x] Verify the 1.28 TB output, 200 GiB NVMe reserve, and two-slot HDD staging budget.
 - [x] Freeze the local Foundry design and inline implementation plan.
 - [x] Implement the disk-safe manifest and IMMORTAL ledger.
-- [ ] Implement and verify the deterministic 3-bit expert codec.
+- [x] Implement and verify the deterministic 3-bit expert codec.
 - [ ] Pass the synthetic local manufacturing integration gate.
 - [ ] Launch the resumable 96-shard official manufacture.

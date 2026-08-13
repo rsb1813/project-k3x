@@ -79,6 +79,12 @@ Tensor records are 128 bytes.
 
 For native MXFP4, data contains low-nibble-first E2M1 codes and the auxiliary extent contains E8M0 group scales. Group size is stored in model config.
 
+### Proposed quantization value 2 — group-wise signed 3-bit
+
+Milestone 37 reserves quantization value `2` for a proposed group-32 signed 3-bit routed-expert representation. Eight codes are packed little-endian into three bytes. Codes `0..6` represent integers `-3..3`; code `7` is reserved and must be rejected. One BF16 scale is stored per 32 values in the auxiliary extent, yielding 3.5 bits per weight before alignment and directory overhead.
+
+This value is not yet a supported K3X v1 runtime record. Writers must not publish it in a production artifact until the C++ reader, CPU reference decode, CUDA decode/GEMM boundary, required-feature negotiation, and synthetic token-parity gate are implemented. Native MXFP4 remains the exact expert representation.
+
 ## Layer record
 
 Layer records are 64 bytes and contain `layer_index`, `attention_kind`, `ffn_kind`, the first tensor index and count, the first expert index and count, an Attention Residual write index or -1, flags, and 32 reserved bytes.

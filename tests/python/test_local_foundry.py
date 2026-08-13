@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 import pytest
+import torch
 
 from k3x_converter.format import K3XError
 from k3x_converter.local_foundry import (
@@ -16,6 +17,7 @@ from k3x_converter.local_foundry import (
     load_ledger,
     record_completed_unit,
 )
+from k3x_ref.quant3 import Quant3Tensor, decode_groupwise_3bit, quantize_groupwise_3bit
 
 
 SHARDS = (
@@ -82,3 +84,33 @@ def test_ledger_rejects_output_budget_overflow(tmp_path):
             output_sha256="aa" * 32,
             output_bytes=OUTPUT_BUDGET_BYTES + 1,
         )
+
+
+def test_quant3_round_trip_is_deterministic_and_budget_closed():
+    source = torch.linspace(-3.0, 3.0, 64, dtype=torch.float32).reshape(8, 8)
+
+    first = quantize_groupwise_3bit(source)
+    second = quantize_groupwise_3bit(source)
+    decoded = decode_groupwise_3bit(first)
+
+    assert first == second
+    assert source.shape == decoded.shape
+    assert len(first.packed) == 24
+    assert len(first.scales_bf16) == 4
+    assert torch.max(torch.abs(source - decoded)).item() < 0.55
+
+
+def test_quant3_decode_rejects_reserved_code():
+    encoded = Quant3Tensor(
+        shape=(8,),
+        values=8,
+        group_size=32,
+        packed=b"\xff\xff\xff" + bytes(9),
+        scales_bf16=torch.tensor([1.0], dtype=torch.bfloat16)
+        .view(torch.uint8)
+        .numpy()
+        .tobytes(),
+    )
+
+    with pytest.raises(K3XError, match="QUANT3_RESERVED_CODE"):
+        decode_groupwise_3bit(encoded)
