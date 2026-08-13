@@ -570,6 +570,7 @@
 - [x] Isolate Xet caches per conductor and verify live link utilization.
 - [x] Serialize finalized K3X output audits across conductors.
 - [x] Bound Xet download plus HDD assembly to two concurrent transactions.
+- [x] Replace kill-leaky semaphore capacity with process-owned abandoned-mutex recovery and restart at 25/96.
 - [ ] Complete and verify all 96 K3X fragments.
 - [x] Complete the resumed original-precision reference oracle and record greedy token 9689.
 - [ ] Assemble the final executable checkpoint and generate the first token.

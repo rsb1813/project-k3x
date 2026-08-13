@@ -542,7 +542,9 @@ D-085 optionally places a worker's bounded conversion directory on WSL tmpfs. Wh
 
 D-086 through D-090 remove later redundant scans without weakening the artifact boundary. Final K3X root verification and whole-file SHA-256 share one output pass. After the staged SHA succeeds, deletion may reuse the recorded source filesystem identity only if device, inode, size, and nanosecond modification time remain unchanged through ledger publication. Disk admission credits only structurally valid, plan-bound resumable partial bytes. In RAM mode an atomic staging-ready marker starts the next HF Xet prefetch only after D-to-RAM copy and official SHA verification. A shared advisory lock spans each cross-device copy plus staged SHA check across all conductors, so independent workers cannot simultaneously turn sequential HDD reads into competing transfers.
 
-D-083 assigns the pre-conversion source identity check to the converter itself. The CLI no longer rereads the same source immediately beforehand, while deletion still performs a fresh complete SHA-256 after ledger publication. The source is therefore authenticated once before any tensor interpretation and independently reauthenticated at the destructive boundary.
+D-091 through D-094 make the three-conductor transport path bounded and restartable. Each conductor owns an independent Xet cache, finalized K3X audits share one advisory lock, and two process-owned Windows mutex slots bound complete download-plus-HDD-assembly transactions. If a conductor dies while holding a slot, the next waiter acquires the abandoned mutex instead of losing scheduler capacity. These controls do not relax official source digests, fragment audits, ledger durability, or the 200 GiB final-volume reserve.
+
+D-083 assigns the pre-conversion source identity check to the converter itself. The CLI no longer rereads the same source immediately beforehand. D-087 later allows deletion to reuse that verified official digest only when device, inode, size, and nanosecond modification time remain unchanged through durable ledger publication; any identity change fails closed.
 
 ## TITAN component registry
 

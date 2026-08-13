@@ -1089,3 +1089,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: with two slots active, host Ethernet received 6,626,752,954 bytes in 55 seconds, 120.49 MB/s or 963.89 Mb/s. Thus the 1 Gbps link remained saturated without a third concurrent assembler. This is host traffic, not effective model payload throughput.
 - Reason accepted: it preserves three-way conversion parallelism and near-line-rate download while bounding HDD assembly pressure and Windows RAM consumption.
 - Revisit: tune to one or three only from complete-shard wall times on different storage hardware.
+
+## D-094 — Recover download capacity after conductor termination
+
+- Date: 2026-08-14.
+- Status: implemented, parsed, and active for conductors restarted at shards 11, 44, and 75. Deliberate live abandonment injection is deferred because it would discard useful in-flight download work.
+- Decision: replace the process-counting Windows semaphore with two named mutex slots. Treat `AbandonedMutexException` as successful ownership acquisition and release only a mutex owned by the current process.
+- Alternatives considered: retain the semaphore and manually reset leaked capacity; add a heartbeat/reaper protocol; remove the global download bound.
+- Evidence: the prior conductors were terminated while background prefetch jobs held semaphore capacity, leaving shard 11 and 44 `hf.exe` trees stalled and the third conductor unable to enter. After exact process-tree cleanup and restart on the mutex implementation, three conductors remained live while exactly two `hf.exe` downloads ran and the third waited. Two measured receive intervals sustained 107.60 and 108.49 MiB/s.
+- Benchmark result: the PowerShell script parses, the durable ledger remained at 25 completed units across restart, the first-token waiter remained live, and the two-slot live capacity boundary held. No completed-shard timing or abandonment-recovery wall time is claimed yet.
+- Reason accepted: Windows named mutex ownership is process-bound and abandoned ownership is recoverable by the next waiter, so conductor death cannot permanently consume a download slot.
+- Revisit: add a non-destructive isolated process-abandonment regression if this scheduler becomes a reusable component rather than a bounded local manufacturing tool.
