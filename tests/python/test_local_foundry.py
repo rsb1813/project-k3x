@@ -20,12 +20,14 @@ from k3x_converter.local_foundry import (
     create_ledger,
     load_ledger,
     record_completed_unit,
+    resumable_partial_bytes,
     source_deletion_allowed,
     staged_source_path,
     verify_staged_unit,
     write_source_manifest,
     xet_environment,
 )
+from k3x_converter.resume import CompletedExtent, ResumeManifest, write_resume_manifest
 from k3x_ref.quant3 import Quant3Tensor, decode_groupwise_3bit, quantize_groupwise_3bit
 from tools.run_local_foundry import main as local_foundry_main
 
@@ -87,6 +89,38 @@ def test_quality_plan_counts_completed_output_when_rechecking_disk() -> None:
         ),
         staging_free_bytes=2 * SHARDS[0][1] + STAGING_RESERVE_BYTES,
         completed_output_bytes=completed,
+    )
+
+
+def test_disk_budget_credits_only_manifested_partial_bytes(tmp_path) -> None:
+    plan = build_local_plan(
+        "moonshotai/Kimi-K3",
+        "9f62e4e",
+        SHARDS,
+        output_budget_bytes=QUALITY_OUTPUT_BUDGET_BYTES,
+    )
+    output = tmp_path / "model-00001-of-000002.k3x"
+    partial = output.with_suffix(".k3x.partial")
+    partial.write_bytes(bytes(8192))
+    write_resume_manifest(
+        output.with_suffix(".k3x.resume.json"),
+        ResumeManifest(
+            "11" * 32,
+            "test",
+            "22" * 32,
+            "33" * 16,
+            (CompletedExtent("0000000000000001:data", 4096, 8, 0),),
+        ),
+    )
+    credited = resumable_partial_bytes(tmp_path, plan, completed_unit_ids=set())
+    assert credited == 8192
+    check_disk_budget(
+        plan,
+        destination_free_bytes=(
+            QUALITY_OUTPUT_BUDGET_BYTES + DESTINATION_RESERVE_BYTES - credited
+        ),
+        staging_free_bytes=2 * SHARDS[0][1] + STAGING_RESERVE_BYTES,
+        resumable_output_bytes=credited,
     )
 
 

@@ -11,7 +11,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Sequence
 
-from .format import K3XError
+from .format import K3XError, SUPERBLOCK_BYTES, align_up
+from .resume import read_resume_manifest
 
 OUTPUT_BUDGET_BYTES = 1_280_000_000_000
 QUALITY_OUTPUT_BUDGET_BYTES = 1_510_500_000_000
@@ -134,11 +135,15 @@ def check_disk_budget(
     destination_free_bytes: int,
     staging_free_bytes: int,
     completed_output_bytes: int = 0,
+    resumable_output_bytes: int = 0,
 ) -> None:
     if (
         completed_output_bytes < 0
+        or resumable_output_bytes < 0
         or completed_output_bytes > plan.output_budget_bytes
-        or destination_free_bytes + completed_output_bytes
+        or completed_output_bytes + resumable_output_bytes
+        > plan.output_budget_bytes
+        or destination_free_bytes + completed_output_bytes + resumable_output_bytes
         < plan.output_budget_bytes + plan.destination_reserve_bytes
     ):
         raise K3XError("LOCAL_DESTINATION_SPACE")
@@ -146,6 +151,44 @@ def check_disk_budget(
     required_staging += plan.staging_reserve_bytes
     if staging_free_bytes < required_staging:
         raise K3XError("LOCAL_STAGING_SPACE")
+
+
+def resumable_partial_bytes(
+    destination: Path,
+    plan: LocalFoundryPlan,
+    *,
+    completed_unit_ids: set[str],
+) -> int:
+    total = 0
+    for unit in plan.units:
+        if unit.unit_id in completed_unit_ids:
+            continue
+        output = destination / Path(unit.filename).with_suffix(".k3x").name
+        partial = output.with_suffix(output.suffix + ".partial")
+        resume = output.with_suffix(output.suffix + ".resume.json")
+        if not partial.exists() and not resume.exists():
+            continue
+        if not partial.is_file() or not resume.is_file():
+            raise K3XError("INVALID_PARTIAL_ARTIFACT", unit.filename)
+        ledger = read_resume_manifest(resume)
+        expected_offset = align_up(SUPERBLOCK_BYTES)
+        extent_ids: set[str] = set()
+        committed_end = SUPERBLOCK_BYTES
+        for item in ledger.completed:
+            if (
+                item.extent_id in extent_ids
+                or item.offset != expected_offset
+                or item.length <= 0
+            ):
+                raise K3XError("INVALID_PARTIAL_ARTIFACT", unit.filename)
+            extent_ids.add(item.extent_id)
+            committed_end = item.offset + item.length
+            expected_offset = align_up(committed_end)
+        partial_bytes = partial.stat().st_size
+        if partial_bytes < committed_end or partial_bytes > plan.output_budget_bytes:
+            raise K3XError("INVALID_PARTIAL_ARTIFACT", unit.filename)
+        total += partial_bytes
+    return total
 
 
 def xet_environment() -> dict[str, str]:

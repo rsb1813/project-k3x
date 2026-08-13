@@ -16,6 +16,7 @@ from k3x_converter.local_foundry import (
     load_ledger,
     load_source_manifest,
     record_completed_unit,
+    resumable_partial_bytes,
     source_deletion_allowed,
 )
 from k3x_converter.local_shard import convert_local_official_shard
@@ -50,11 +51,19 @@ def main(argv: list[str] | None = None) -> int:
     ledger_path = args.ledger.resolve()
     create_ledger(ledger_path, plan)
     ledger = load_ledger(ledger_path, plan)
+    resumable_bytes = resumable_partial_bytes(
+        destination,
+        plan,
+        completed_unit_ids={
+            item["unit_id"] for item in ledger["completed_units"]
+        },
+    )
     check_disk_budget(
         plan,
         destination_free_bytes=shutil.disk_usage(destination).free,
         staging_free_bytes=shutil.disk_usage(source.parent).free,
         completed_output_bytes=ledger["completed_output_bytes"],
+        resumable_output_bytes=resumable_bytes,
     )
     config_document = json.loads(
         args.config_manifest.read_text(encoding="utf-8")
