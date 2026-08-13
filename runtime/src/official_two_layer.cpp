@@ -130,21 +130,47 @@ Result<OfficialTwoLayerCudaResult> official_two_layer_cuda(
                 std::chrono::steady_clock::now() - start)
                 .count());
     };
+    struct DeviceBreakdown {
+        std::uint64_t total{};
+        std::uint64_t dense{};
+        std::uint64_t moe{};
+        std::uint64_t unclassified{};
+    };
     const auto device_delta = [&](std::size_t first)
-        -> std::optional<std::uint64_t> {
-        if (!attribution_profiler) return std::uint64_t{};
+        -> std::optional<DeviceBreakdown> {
+        if (!attribution_profiler) return DeviceBreakdown{};
         const auto& events = attribution_profiler->events();
         if (events.size() < first) return std::nullopt;
-        std::uint64_t total{};
+        DeviceBreakdown result;
         for (std::size_t index = first; index < events.size(); ++index) {
             if (!events[index].success) continue;
+            auto* bucket = &result.unclassified;
+            if (events[index].operation == ProfileOperation::dense_matvec) {
+                bucket = &result.dense;
+            } else if (events[index].operation == ProfileOperation::moe_mix) {
+                bucket = &result.moe;
+            }
             if (events[index].device_nanoseconds >
-                std::numeric_limits<std::uint64_t>::max() - total) {
+                    std::numeric_limits<std::uint64_t>::max() - result.total ||
+                events[index].device_nanoseconds >
+                    std::numeric_limits<std::uint64_t>::max() - *bucket) {
                 return std::nullopt;
             }
-            total += events[index].device_nanoseconds;
+            result.total += events[index].device_nanoseconds;
+            *bucket += events[index].device_nanoseconds;
         }
-        return total;
+        if (result.dense > result.total || result.moe > result.total - result.dense ||
+            result.unclassified != result.total - result.dense - result.moe) {
+            return std::nullopt;
+        }
+        return result;
+    };
+    const auto add_checked = [](std::uint64_t value, std::uint64_t& target) {
+        if (value > std::numeric_limits<std::uint64_t>::max() - target) {
+            return false;
+        }
+        target += value;
+        return true;
     };
 
     std::array<OfficialKdaDeviceStateToken, 2> state_tokens{};
@@ -269,11 +295,17 @@ Result<OfficialTwoLayerCudaResult> official_two_layer_cuda(
                 elapsed(front_start);
             const auto front_device = device_delta(front_event);
             if (!front_device ||
-                *front_device > std::numeric_limits<std::uint64_t>::max() -
-                    measured_attribution.front_device_nanoseconds) {
+                !add_checked(front_device->total,
+                             measured_attribution.front_device_nanoseconds) ||
+                !add_checked(front_device->dense,
+                             measured_attribution.front_kda_device_nanoseconds) ||
+                !add_checked(front_device->moe,
+                             measured_attribution.front_route_device_nanoseconds) ||
+                !add_checked(
+                    front_device->unclassified,
+                    measured_attribution.front_unclassified_device_nanoseconds)) {
                 return fail(ErrorCode::invalid_state);
             }
-            measured_attribution.front_device_nanoseconds += *front_device;
             if (!front) {
                 return fail(front.error(),
                             "device front layer " + std::to_string(layer) +
@@ -337,11 +369,17 @@ Result<OfficialTwoLayerCudaResult> official_two_layer_cuda(
             measured_attribution.tail_wall_nanoseconds += elapsed(tail_start);
             const auto tail_device = device_delta(tail_event);
             if (!tail_device ||
-                *tail_device > std::numeric_limits<std::uint64_t>::max() -
-                    measured_attribution.tail_device_nanoseconds) {
+                !add_checked(tail_device->total,
+                             measured_attribution.tail_device_nanoseconds) ||
+                !add_checked(tail_device->moe,
+                             measured_attribution.tail_ffn_device_nanoseconds) ||
+                tail_device->dense > std::numeric_limits<std::uint64_t>::max() -
+                                         tail_device->unclassified ||
+                !add_checked(
+                    tail_device->dense + tail_device->unclassified,
+                    measured_attribution.tail_unclassified_device_nanoseconds)) {
                 return fail(ErrorCode::invalid_state);
             }
-            measured_attribution.tail_device_nanoseconds += *tail_device;
             if (!tail) {
                 return fail(tail.error(),
                             "device tail layer " + std::to_string(layer) +

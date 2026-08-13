@@ -255,9 +255,19 @@ int run_mode(k3x::OfficialTwoLayerCudaMode mode) {
     if (mode == k3x::OfficialTwoLayerCudaMode::device_closure) {
         if (attribution.front_wall_nanoseconds == 0 ||
             attribution.front_device_nanoseconds == 0 ||
+            attribution.front_kda_device_nanoseconds == 0 ||
+            attribution.front_route_device_nanoseconds == 0 ||
+            attribution.front_device_nanoseconds !=
+                attribution.front_kda_device_nanoseconds +
+                    attribution.front_route_device_nanoseconds +
+                    attribution.front_unclassified_device_nanoseconds ||
             attribution.route_wall_nanoseconds == 0 ||
             attribution.tail_wall_nanoseconds == 0 ||
             attribution.tail_device_nanoseconds == 0 ||
+            attribution.tail_ffn_device_nanoseconds == 0 ||
+            attribution.tail_device_nanoseconds !=
+                attribution.tail_ffn_device_nanoseconds +
+                    attribution.tail_unclassified_device_nanoseconds ||
             attribution.total_wall_nanoseconds <
                 attribution.front_wall_nanoseconds +
                     attribution.route_wall_nanoseconds +
@@ -271,9 +281,14 @@ int run_mode(k3x::OfficialTwoLayerCudaMode mode) {
         }
     } else if (attribution.front_wall_nanoseconds != 0 ||
                attribution.front_device_nanoseconds != 0 ||
+               attribution.front_kda_device_nanoseconds != 0 ||
+               attribution.front_route_device_nanoseconds != 0 ||
+               attribution.front_unclassified_device_nanoseconds != 0 ||
                attribution.route_wall_nanoseconds != 0 ||
                attribution.tail_wall_nanoseconds != 0 ||
                attribution.tail_device_nanoseconds != 0 ||
+               attribution.tail_ffn_device_nanoseconds != 0 ||
+               attribution.tail_unclassified_device_nanoseconds != 0 ||
                attribution.total_wall_nanoseconds == 0 ||
                attribution.unattributed_wall_nanoseconds !=
                    attribution.total_wall_nanoseconds) {
@@ -288,7 +303,8 @@ int invalid_contracts() {
     const std::array<k3x::OfficialKdaState, 2> states{{zero, zero}};
     std::array<k3x::OfficialTwoLayerCudaWeights, 2> layers{{
         {1, fixture.cuda_weights()}, {2, fixture.cuda_weights()}}};
-    auto backend = k3x::make_cuda_backend(options());
+    k3x::Profiler profiler;
+    auto backend = k3x::make_cuda_backend(options(), &profiler);
     if (!backend) return 1;
 
     std::swap(layers[0], layers[1]);
@@ -304,10 +320,18 @@ int invalid_contracts() {
 
     auto missing = layers;
     missing[1].weights.moe.experts = {};
+    k3x::OfficialTwoLayerAttribution unchanged;
+    unchanged.total_wall_nanoseconds = 101;
+    unchanged.front_kda_device_nanoseconds = 202;
+    unchanged.tail_ffn_device_nanoseconds = 303;
     if (k3x::official_two_layer_cuda(
             *backend.value(), fixture.inputs, missing, states, fixture.config,
             2, 4, 25, k3x::ProfilePhase::decode,
-            k3x::OfficialTwoLayerCudaMode::device_closure)) return 4;
+            k3x::OfficialTwoLayerCudaMode::device_closure, &profiler,
+            &unchanged) ||
+        unchanged.total_wall_nanoseconds != 101 ||
+        unchanged.front_kda_device_nanoseconds != 202 ||
+        unchanged.tail_ffn_device_nanoseconds != 303) return 4;
     const auto recovered = k3x::official_two_layer_cuda(
         *backend.value(), fixture.inputs, layers, states, fixture.config,
         2, 4, 25, k3x::ProfilePhase::decode,
