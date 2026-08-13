@@ -67,7 +67,7 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
     }
     Start-NextDownload ($index + 1)
 
-    $sourceLinux = (& wsl -e wslpath -a $target).Trim()
+    $sourceLinux = (& wsl -e wslpath -a -u $target).Trim()
     $command = @(
         "cd /mnt/c/Users/jolib/Documents/project-k3x/.worktrees/milestone-twenty-four-cuda-graph-cache &&",
         "PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python tools/convert_local_shard.py",
@@ -75,7 +75,7 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
         "--config-manifest artifacts/m26-official/live/source-manifest.json",
         "--source $sourceLinux",
         "--destination /mnt/c/K3X/shards",
-        "--ledger $((& wsl -e wslpath -a $Ledger).Trim())",
+        "--ledger $((& wsl -e wslpath -a -u $Ledger).Trim())",
         "--output-budget-bytes 1510500000000",
         "--delete-source"
     ) -join " "
@@ -95,7 +95,7 @@ $setCommand = @(
     "PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python tools/write_fragment_set.py",
     "--manifest artifacts/m37-local-foundry/source-manifest.json",
     "--destination /mnt/c/K3X/shards",
-    "--ledger $((& wsl -e wslpath -a $Ledger).Trim())",
+    "--ledger $((& wsl -e wslpath -a -u $Ledger).Trim())",
     "--output /mnt/c/K3X/shards/model.k3xset",
     "--output-budget-bytes 1510500000000"
 ) -join " "
