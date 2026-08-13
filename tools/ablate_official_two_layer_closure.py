@@ -44,6 +44,8 @@ _ROUTER_BYTES = 4 * 896 * 4
 _KDA_WEIGHT_BYTES = 887_800_832
 _MOE_COMMON_BYTES = 367_008_768
 _EXPERT_BYTES = 17_547_264
+_ROUTE_PREPARATION_BYTES = 12_888_064
+_DEVICE_FRONT_BYTES = 3 * 7_168 * 2
 _MAXIMUM_ERROR = 2.0e-3
 _OFFICIAL_RESIDENT_CAPACITY = 4_294_967_296
 _FORBIDDEN = {
@@ -266,13 +268,16 @@ def manifest_identity(source: Path | Mapping[str, object]) -> dict[str, object]:
     }
 
 
-def _expected_resident(identity: Mapping[str, object]) -> int:
+def _expected_resident(identity: Mapping[str, object], *, host: bool) -> int:
     selected = identity["selected_experts"]
     assert isinstance(selected, list)
-    return sum(
+    layer_weights = sum(
         _KDA_WEIGHT_BYTES + _MOE_COMMON_BYTES + len(layer) * _EXPERT_BYTES
         for layer in selected
     )
+    route_preparation = len(selected) * _ROUTE_PREPARATION_BYTES
+    device_front = 0 if host else len(selected) * _DEVICE_FRONT_BYTES
+    return layer_weights + route_preparation + device_front
 
 
 def _validate_record(
@@ -388,7 +393,7 @@ def _validate_record(
     }
     if any(record.get(field) != value for field, value in lifetime.items()):
         raise RuntimeError(f"{name} lifetime counter diverged")
-    expected_resident = _expected_resident(identity)
+    expected_resident = _expected_resident(identity, host=host)
     if (
         expected_resident > resident_bytes
         or record.get("resident_weight_bytes") != expected_resident
@@ -449,7 +454,6 @@ def _cross_row_parity(records: list[dict[str, object]]) -> None:
     for field in (
         "route_expert_ids",
         "route_contribution_sha256",
-        "resident_weight_bytes",
         "weight_h2d_bytes",
     ):
         if records[1][field] != records[0][field]:
