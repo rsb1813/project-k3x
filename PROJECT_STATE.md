@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 34 implementation and formal B-0035 evidence are locally complete and awaiting publication. The opt-in two-layer front/route/tail/remainder attribution adds no CUDA synchronization, preserves the historical B-0034 path and schema, and leaves host round trip as the default. The bounded artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, full shard, or paid cloud resource exists.
+Milestone 34 is publicly complete through PR #60 at `a7ba52044e4d0ccbb23371cac54b5db87d4002f1`. The opt-in two-layer front/route/tail/remainder attribution adds no CUDA synchronization, preserves the historical B-0034 path and schema, and leaves host round trip as the default. The bounded artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, full shard, or paid cloud resource exists.
 
-State audited last on 2026-08-13 at local M34 evidence commit `129012c` over public M33 publication head `f46147f1b1f0c908fa1608f194e1305b328a0d2e`. CPU CTest 20/20, liburing CTest 21/21, ASan/UBSan CTest 21/21, CUDA CTest 36/36, portable Python 658/136, focused actual CUDA/attribution Python 14/14, 99 B-0030 through B-0035 evidence regressions, strict B-0035 rehash, actual attribution Compute Sanitizer with zero errors, and the production non-executable guard pass. No complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-13 at public M34 head `a7ba52044e4d0ccbb23371cac54b5db87d4002f1`. Push correctness `31677396649`, pull-request correctness `31677408262`, pull-request CodeQL `31677408278`, post-merge correctness `31677651704`, and post-merge CodeQL `31677651706` passed. Local gates remain CPU CTest 20/20, liburing CTest 21/21, ASan/UBSan CTest 21/21, CUDA CTest 36/36, portable Python 658/136, focused actual CUDA/attribution Python 14/14, evidence regressions 99/99, strict B-0035 rehash, actual attribution Compute Sanitizer with zero errors, and the production non-executable guard. No complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -193,8 +193,8 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 ## Next concrete tasks
 
-1. Publish M34, verify pull-request and post-merge correctness/CodeQL, then synchronize the public ledger.
-2. Begin the next bounded milestone by exposing existing front/tail profiler events by operation; do not select a fusion target before that evidence.
+1. Begin Milestone 35 by exposing existing front/tail profiler events by operation; do not select a fusion target before that evidence.
+2. Seal one fixed operation-level attribution ablation over the same bounded official fixture and retain the default unless correctness plus timing justify a change.
 3. Keep wider closure, complete checkpoint, full-shard downloads, paid Cloud Run, and billable SKYFORGE execution deferred until evidence or explicit user execution authorizes them.
 
 ## Hardware assumptions
@@ -220,7 +220,7 @@ D-071 retains device closure as an explicit exact experiment but does not select
 
 ## Last known-good state
 
-- Local M34 evidence commit `129012c` seals B-0035 with aggregate SHA-256 `db3ef6e688fbe5d064cce555ba9fe1ceae0c9f8f939da44245402dd62a58c32a`, summary JSON `a0f4cb9da16692794850dd9fd53deeffa471eda54b825f4418fd59ce4d1828c5`, and summary CSV `da17f480255221d961ee4c016c30a24bb38f59afd851fec55bda5b4df904d2a0`. Strict verification passes. CPU CTest 20/20, liburing CTest 21/21, ASan/UBSan CTest 21/21, CUDA CTest 36/36, portable Python 658/136, focused actual CUDA/attribution Python 14/14, evidence regressions 99/99, actual attribution Compute Sanitizer with zero errors, and the production non-executable guard pass.
+- Public M34 head `a7ba52044e4d0ccbb23371cac54b5db87d4002f1` contains PR #60 and sealed B-0035. Aggregate SHA-256 is `db3ef6e688fbe5d064cce555ba9fe1ceae0c9f8f939da44245402dd62a58c32a`, summary JSON is `a0f4cb9da16692794850dd9fd53deeffa471eda54b825f4418fd59ce4d1828c5`, and summary CSV is `da17f480255221d961ee4c016c30a24bb38f59afd851fec55bda5b4df904d2a0`. Local gates and strict rehash pass; PR and post-merge correctness/CodeQL all succeeded.
 - Public M33 implementation head `9ce513f9d79b6cee88b7bb2de176e6fbbb79f43b` and evidence commit `ead4371` seal B-0034 with aggregate SHA-256 `016df479907678a76cac22d4f178ab271c5ce5e074639971d22a2b8fa03cc258`, summary JSON `37e02f52a56995a820517f4419565613f649003816da11175b049fa8afce522b`, and summary CSV `b151d5065af784b2805eedcea53010802c4bf34944f02e8921f24ab2301bc7d7`. Fresh gates pass portable CTest 20/20 plus Python 652/134, liburing/direct CTest 17/17, ASan/UBSan CTest 17/17, CUDA CTest 36/36, actual harness 6/6, evidence regressions 93/93, strict evidence rehash, and actual device-closure Compute Sanitizer with zero errors. The complete CUDA Python suite timed out after ten minutes and is not claimed as passed. PR #58 and post-merge correctness/CodeQL all succeeded.
 - Local M33 Task 1 head `752972a` passes 111 official MoE/layer/source, source-manifest integrity, and converter-resume tests plus Python compilation and `git diff --check`. It changes no materializer, artifact, runtime, benchmark, or production path.
 - Local M33 manufacturer head `324822f` passes 139 focused plus historical official converter, format, source-integrity, resume, and discovery CLI tests, Python compilation, and Windows `git diff --check`. It includes a tiny synthetic K3X v1 round-trip and mocked transport orchestration; no actual M33 official payload, runtime path, or benchmark exists at this head.
