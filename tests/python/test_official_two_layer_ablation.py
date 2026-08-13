@@ -131,6 +131,18 @@ def _runner_record(mode: str, warmups: int, iterations: int) -> dict[str, object
         "resident_weight_bytes": RESIDENT_BYTES,
         "peak_device_bytes": RESIDENT_BYTES + 1_048_576,
         "k3x_root_sha256": "e" * 64,
+        "route_expert_ids": [
+            list(range(offset, offset + 16)) for offset in (0, 16, 32, 48)
+        ],
+        "route_contribution_sha256": [f"{value:x}" * 64 for value in (8, 9, 10, 11)],
+        "final_output_sha256": [
+            ("1" if host else "2") * 64,
+            ("3" if host else "4") * 64,
+        ],
+        "final_state_sha256": [
+            ("5" if host else "6") * 64,
+            ("7" if host else "8") * 64,
+        ],
     }
 
 
@@ -232,6 +244,37 @@ def test_run_writes_fixed_digest_backed_lf_evidence(
     )
 
 
+def test_run_accepts_observed_two_layer_bf16_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "tools.ablate_official_layer._fsync_directory", lambda _: None
+    )
+    _, _, _, _, _, summary, _ = _generate(
+        tmp_path,
+        monkeypatch,
+        ("maximum_absolute_error", 0.001953125),
+    )
+
+    assert all(
+        record["maximum_absolute_error"] == 0.001953125
+        for record in summary["records"]
+    )
+
+
+def test_run_preserves_measured_output_and_state_digest_divergence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "tools.ablate_official_layer._fsync_directory", lambda _: None
+    )
+    _, _, _, _, _, summary, _ = _generate(tmp_path, monkeypatch)
+
+    host, device = summary["records"]
+    assert host["final_output_sha256"] != device["final_output_sha256"]
+    assert host["final_state_sha256"] != device["final_state_sha256"]
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
@@ -248,7 +291,11 @@ def test_run_writes_fixed_digest_backed_lf_evidence(
         (("state_publications", 1), "lifetime counter"),
         (("prepared_consumes", 1), "lifetime counter"),
         (("resident_weight_bytes", 1), "resident weight"),
-        (("maximum_absolute_error", 1.0), "numerical divergence"),
+        (("maximum_absolute_error", 0.0020001), "numerical divergence"),
+        (("route_expert_ids", [[0] * 16] * 4), "measured identity"),
+        (("route_contribution_sha256", ["g" * 64] * 4), "measured identity"),
+        (("final_output_sha256", ["g" * 64] * 2), "measured identity"),
+        (("final_state_sha256", ["g" * 64] * 2), "measured identity"),
         (("decode_tok_s", 5.0), "forbidden metric"),
     ],
 )

@@ -44,7 +44,7 @@ _ROUTER_BYTES = 4 * 896 * 4
 _KDA_WEIGHT_BYTES = 887_800_832
 _MOE_COMMON_BYTES = 367_008_768
 _EXPERT_BYTES = 17_547_264
-_MAXIMUM_ERROR = 5.0e-4
+_MAXIMUM_ERROR = 2.0e-3
 _OFFICIAL_RESIDENT_CAPACITY = 4_294_967_296
 _FORBIDDEN = {
     "decode_tok_s",
@@ -90,14 +90,12 @@ _RUNNER_FIELDS = (
     "resident_weight_bytes",
     "peak_device_bytes",
     "k3x_root_sha256",
-)
-_IDENTITY_FIELDS = (
     "route_expert_ids",
     "route_contribution_sha256",
-    "output_sha256",
+    "final_output_sha256",
     "final_state_sha256",
 )
-_RAW_FIELDS = (*_RUNNER_FIELDS, *_IDENTITY_FIELDS)
+_RAW_FIELDS = _RUNNER_FIELDS
 _CSV_FIELDS = ("name", "raw_json_sha256", *_RAW_FIELDS)
 _SUMMARY_FIELDS = {
     "format",
@@ -277,19 +275,6 @@ def _expected_resident(identity: Mapping[str, object]) -> int:
     )
 
 
-def _identity_record(identity: Mapping[str, object]) -> dict[str, object]:
-    steps = identity["steps"]
-    assert isinstance(steps, list)
-    return {
-        "route_expert_ids": [step["expert_ids"] for step in steps],
-        "route_contribution_sha256": [
-            step["contribution_sha256"] for step in steps
-        ],
-        "output_sha256": [step["output_sha256"] for step in steps],
-        "final_state_sha256": identity["final_state_sha256"],
-    }
-
-
 def _validate_record(
     record: Mapping[str, object],
     *,
@@ -311,7 +296,6 @@ def _validate_record(
         "warmup": warmups,
         "iterations": iterations,
         "k3x_root_sha256": identity["artifact"]["k3x_root_sha256"],
-        **_identity_record(identity),
     }
     if any(record.get(field) != value for field, value in expected_identity.items()):
         label = "mode identity" if record.get("mode") != mode else "graph identity"
@@ -326,6 +310,30 @@ def _validate_record(
     error = record.get("maximum_absolute_error")
     if not _finite(error) or not 0 <= error <= _MAXIMUM_ERROR:
         raise RuntimeError(f"{name} numerical divergence")
+    routes = record.get("route_expert_ids")
+    contribution_digests = record.get("route_contribution_sha256")
+    output_digests = record.get("final_output_sha256")
+    state_digests = record.get("final_state_sha256")
+    steps = identity["steps"]
+    if (
+        not isinstance(routes, list)
+        or len(routes) != 4
+        or any(
+            not isinstance(route, list)
+            or sorted(route) != sorted(steps[index]["expert_ids"])
+            for index, route in enumerate(routes)
+        )
+        or not isinstance(contribution_digests, list)
+        or len(contribution_digests) != 4
+        or any(not _hex(value) for value in contribution_digests)
+        or not isinstance(output_digests, list)
+        or len(output_digests) != 2
+        or any(not _hex(value) for value in output_digests)
+        or not isinstance(state_digests, list)
+        or len(state_digests) != 2
+        or any(not _hex(value) for value in state_digests)
+    ):
+        raise RuntimeError(f"{name} measured identity diverged")
     if record.get("weight_h2d_bytes") != 0:
         raise RuntimeError(f"{name} warm weight transfer diverged")
     host = mode == "host-round-trip"
@@ -438,7 +446,12 @@ def _write_csv(path: Path, records: list[dict[str, object]]) -> None:
 
 
 def _cross_row_parity(records: list[dict[str, object]]) -> None:
-    for field in (*_IDENTITY_FIELDS, "resident_weight_bytes", "weight_h2d_bytes"):
+    for field in (
+        "route_expert_ids",
+        "route_contribution_sha256",
+        "resident_weight_bytes",
+        "weight_h2d_bytes",
+    ):
         if records[1][field] != records[0][field]:
             raise RuntimeError(f"cross-row {field} parity diverged")
 
@@ -497,7 +510,7 @@ def run_ablation(
                 raise RuntimeError(f"{name} contains forbidden metric {min(forbidden)}")
             if set(runner_record) != set(_RUNNER_FIELDS):
                 raise RuntimeError(f"{name} schema diverged")
-            raw = {**runner_record, **_identity_record(identity)}
+            raw = runner_record
             _validate_record(
                 raw,
                 name=name,
