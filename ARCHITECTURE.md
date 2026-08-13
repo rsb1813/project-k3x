@@ -558,13 +558,13 @@ VEILBREAK remains isolated from model correctness modes and from serving-layer p
 
 ## K3X data flow
 
-The file format is deliberately execution ordered. The converter reads bounded source chunks, copies or transforms one extent, verifies it after `fsync`, records completion in an atomic ledger, and releases temporary memory. On resume it validates the canonical committed prefix before truncating only the uncommitted suffix to the final extent's exact end. Only after every extent is verified are directories and the superblock finalized and the `.partial` artifact atomically renamed.
+The file format is deliberately execution ordered. The converter reads bounded source chunks, copies or transforms extents, computes each extent CRC32C while writing, and publishes an atomic resume ledger after each bounded 128-extent `fsync` checkpoint. On resume it revalidates every committed extent against both the current source and partial artifact before truncating only the uncommitted suffix to the final durable extent's exact end. Final root SHA-256 generation rereads the complete output, and the strict Reader verifies the source-derived per-extent CRCs before the local Foundry ledger permits source deletion. Only then is the `.partial` artifact atomically renamed.
 
 ```mermaid
 flowchart LR
     SOURCE["Source checkpoint shards"] -->|"bounded reads"| CONVERT["Streaming converter"]
     CONVERT --> PARTIAL[".partial aligned extents"]
-    PARTIAL --> VERIFY["read-back CRC32C"]
+    PARTIAL --> VERIFY["128-extent fsync checkpoint"]
     VERIFY --> LEDGER["atomic resume ledger"]
     LEDGER -->|"validate prefix; truncate orphan suffix"| PARTIAL
     LEDGER --> FINAL["directories + SHA-256 + final rename"]

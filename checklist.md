@@ -549,6 +549,7 @@
 - [x] Download, verify, manufacture, ledger, and source-clean official shards 1 and 2.
 - [x] Start the resumable two-slot conductor for shards 3 through 96.
 - [x] Decode native BF16 and group-128 Q8 trunk tensors in the portable model loader.
+- [x] Batch converter durability checkpoints while preserving resume and final verification gates.
 - [ ] Open all fragments through one checksum-bound sharded K3X index without copying payloads.
 - [ ] Complete and verify all 96 K3X fragments.
 - [ ] Assemble the final executable checkpoint and generate the first token.

@@ -893,3 +893,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: this route directly serves the user's request to begin local manufacture while avoiding the measured 3-bit expert divergence. Two-slot staging and source deletion after durable ledger publication keep the full source checkpoint off disk.
 - Rejected claims: the fragment set is not yet a merged executable checkpoint, group-128 8-bit trunk quality is not yet an end-to-end score, and no first-token or tok/s result exists.
 - Revisit: after the first actual token and quality comparison, use sensitivity evidence to raise selected trunk tensors to BF16 or lower safe tensors only if capacity requires it.
+
+## D-077 — Batch durable converter checkpoints without weakening final verification
+
+- Date: 2026-08-13.
+- Status: implemented for shard 4 onward; official before/after timing is pending.
+- Decision: compute CRC32C per extent while writing, but group `fsync` and atomic resume-ledger publication into bounded batches of 128 extents. A requested test interruption forces an immediate checkpoint. Resume still rehashes current source extents and rereads every committed output extent before reuse; final root SHA-256 and strict Reader CRC verification remain mandatory before source deletion.
+- Alternatives considered: retain one `fsync`, readback, and growing JSON rewrite per extent; remove resumability; checkpoint only once per shard; use a database-backed journal.
+- Evidence: official shard 2 contains 5,376 native expert source tensors and took 978.222 seconds. Static inspection found one `fsync`, one extent readback, and one complete growing resume-manifest rewrite for each output extent. The synthetic conversion issued 251 resume writes before the change and three after batching 250 extents.
+- Benchmark result: the focused batching, interruption/resume, and committed-corruption tests pass 3/3. No official speedup is claimed until shard 4 completes under the new code and is compared with shard 3 under the previous code.
+- Reason accepted: a crash can lose at most the uncommitted 127-extent suffix, which is truncated and recomputed. This removes thousands of durability barriers and O(N²) JSON bytes while preserving the completed artifact's checksum boundary.
+- Rejected claims: the focused synthetic timing is not an official manufacturing benchmark, and batching does not reduce source, output, or final verification bytes.
+- Revisit: tune the batch size only from measured shard timing and interruption-recovery cost; consider a compact append-only binary journal if ledger serialization remains material.

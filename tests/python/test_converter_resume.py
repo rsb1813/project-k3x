@@ -7,10 +7,29 @@ from pathlib import Path
 import google_crc32c
 import pytest
 
+import k3x_converter.writer as writer
 from k3x_converter.format import SUPERBLOCK_BYTES, K3XError
 from k3x_converter.resume import read_resume_manifest
 from k3x_converter.writer import convert
 from k3x_ref.storage_fixture import write_bounded_expert_source
+
+
+def test_conversion_batches_durable_resume_checkpoints(
+    synthetic_source: Path, tmp_path: Path, monkeypatch
+) -> None:
+    checkpoints = []
+    write_checkpoint = writer.write_resume_manifest
+
+    def capture(path, manifest):
+        checkpoints.append(len(manifest.completed))
+        write_checkpoint(path, manifest)
+
+    monkeypatch.setattr(writer, "write_resume_manifest", capture)
+    writer.convert(synthetic_source, tmp_path / "batched.k3x", chunk_bytes=257)
+
+    assert checkpoints[0] == 0
+    assert checkpoints[-1] > 1
+    assert len(checkpoints) == 3
 
 
 def _interrupted_output(synthetic_source: Path, tmp_path: Path) -> Path:

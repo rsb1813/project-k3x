@@ -44,6 +44,7 @@ from .source_manifest import (
 )
 
 CONVERTER_VERSION = "k3x-converter-0.1.0"
+_RESUME_CHECKPOINT_EXTENTS = 128
 _LAYER_RE = re.compile(r"^model\.layers\.(\d+)\.")
 _EXPERT_RE = re.compile(r"^model\.layers\.(\d+)\.feed_forward\.experts\.(\d+)\.(gate|up|down)$")
 
@@ -510,6 +511,7 @@ def convert(
             file_uuid.hex(), (),
         ))
     completed_map = {item.extent_id: item for item in completed}
+    checkpointed_extents = len(completed)
     records: list[TensorRecord] = []
     newly_written = 0
     with partial.open("r+b") as stream:
@@ -534,21 +536,29 @@ def convert(
                     stream.write(chunk)
                     checksum.update(chunk)
                     length += len(chunk)
-                stream.flush()
-                os.fsync(stream.fileno())
                 crc = int.from_bytes(checksum.digest(), "big")
-                if _crc_at(stream, offset, length, chunk_bytes) != crc:
-                    raise K3XError("EXTENT_READBACK_MISMATCH")
                 item = CompletedExtent(extent_id, offset, length, crc)
                 completed.append(item)
                 completed_map[extent_id] = item
-                write_resume_manifest(resume_path, ResumeManifest(
-                    source_fingerprint.hex(), CONVERTER_VERSION, config_fingerprint,
-                    file_uuid.hex(), tuple(completed),
-                ))
                 newly_written += 1
                 extent_values.append((offset, length, crc))
-                if stop_after_extents is not None and newly_written >= stop_after_extents:
+                should_stop = (
+                    stop_after_extents is not None
+                    and newly_written >= stop_after_extents
+                )
+                if (
+                    len(completed) - checkpointed_extents
+                    >= _RESUME_CHECKPOINT_EXTENTS
+                    or should_stop
+                ):
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                    write_resume_manifest(resume_path, ResumeManifest(
+                        source_fingerprint.hex(), CONVERTER_VERSION,
+                        config_fingerprint, file_uuid.hex(), tuple(completed),
+                    ))
+                    checkpointed_extents = len(completed)
+                if should_stop:
                     return ConversionReport(False, tuple(reused), maximum_read, output)
             data, auxiliary = extent_values
             values = 1
@@ -568,6 +578,13 @@ def convert(
                 fnv1a64(plan.name), 0, plan.dtype, plan.quantization, plan.dimensions,
                 plan.layer_id, plan.expert_id, data[0], data[1], logical_length,
                 auxiliary[0], auxiliary[1], data[2], auxiliary[2],
+            ))
+        if checkpointed_extents != len(completed):
+            stream.flush()
+            os.fsync(stream.fileno())
+            write_resume_manifest(resume_path, ResumeManifest(
+                source_fingerprint.hex(), CONVERTER_VERSION,
+                config_fingerprint, file_uuid.hex(), tuple(completed),
             ))
         layers, experts = _directory_records(plans, records, manifest["config"])
         tensor_directory = encode_directory(b"TENS", TENSOR_RECORD_BYTES,
