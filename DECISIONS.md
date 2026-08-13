@@ -1045,3 +1045,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: shard 68 completed in 694.020 seconds and shard 38 in 697.560 seconds on the preceding two-worker RAM setup. These are complete fresh-shard timings but include the prior scheduling path, so the marker's isolated effect remains unmeasured.
 - Reason accepted: two work roots fit the bounded memory envelope; three do not leave enough safe headroom for quantized intermediates and reference execution. Serializing only the HDD copy preserves network/conversion overlap afterward.
 - Revisit: compare shards 39 and 69 plus their successors before adding a third worker or changing the WSL cap.
+
+## D-090 — Serialize RAM staging across independent conductors
+
+- Date: 2026-08-14.
+- Status: implemented and focused-tested; newly restarted conductors use the shared lock.
+- Decision: acquire one Linux advisory lock around every cross-device source copy and staged SHA-256 verification. Release it immediately after the verified readiness marker, leaving quantization, output packing, and next-shard download concurrent.
+- Alternatives considered: rely only on each conductor's readiness marker; manually suspend colliding workers; serialize complete fragment conversions.
+- Evidence: workers B and C independently began copying shards 39 and 70 into RAM at the same time because per-worker markers have no cross-process ownership. Manually pausing B until C's marker completed restored one sequential D read. The regression opens a competing file descriptor during `copyfile` and proves nonblocking exclusive acquisition fails.
+- Benchmark result: focused lock ownership and conversion coverage passes 1/1; Python compilation and PowerShell parsing pass. No isolated official elapsed result exists yet because shards 39/70 launched under the prior conductor process.
+- Reason accepted: the HDD copy is the only globally serialized section; all CPU, RAM, NVMe, and network work remains eligible to overlap.
+- Revisit: replace the global lock with measured deadline scheduling only if multiple physical source drives are introduced.
