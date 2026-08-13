@@ -568,6 +568,7 @@
 - [x] Delay next-shard Xet prefetch until RAM staging and official SHA verification complete.
 - [x] Serialize the RAM staging copy across independent conductors.
 - [x] Isolate Xet caches per conductor and verify live link utilization.
+- [x] Serialize finalized K3X output audits across conductors.
 - [ ] Complete and verify all 96 K3X fragments.
 - [ ] Complete the resumed original-precision layer-24 reference oracle and record its greedy token.
 - [ ] Assemble the final executable checkpoint and generate the first token.

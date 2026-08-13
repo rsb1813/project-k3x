@@ -1067,3 +1067,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: one live network interval nearly saturated the 1 Gbps link. This measures host receive traffic during manufacture, not effective payload throughput, conversion throughput, or inference.
 - Reason accepted: official shards are independent and checksum-bound; isolated transient caches remove cross-process cache locking without changing source identity or final artifacts.
 - Revisit: compare complete download elapsed and HDD assembly pressure; return to fewer concurrent downloads if physical D writes become the dominant bottleneck.
+
+## D-092 — Serialize finalized output audits across conductors
+
+- Date: 2026-08-14.
+- Status: implemented and focused-tested; conductors restarted at shards 9, 42, and 73.
+- Decision: use one advisory lock only around the finalized K3X root plus file-SHA audit pass. Keep fragment writing, RAM conversion, download, and source staging concurrent.
+- Alternatives considered: allow concurrent complete C-drive scans; serialize full conversions; remove the final audit.
+- Evidence: shards 41 and 72 reached final output auditing together. Shard 72 completed in 397.259 seconds while shard 41 remained in `/mnt/c` `p9_client_rpc` with no physical-disk reads and ultimately completed in 719.230 seconds.
+- Benchmark result: focused lock ownership and conversion coverage passes 1/1. The first newly launched comparable shard remains pending.
+- Reason accepted: both artifacts still receive complete independent cryptographic audits, while WSL DrvFS no longer services multiple checkpoint-sized audit scans simultaneously.
+- Revisit: remove the lock only after native Linux destination I/O or measured parallel audit throughput proves better.

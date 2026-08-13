@@ -1548,13 +1548,18 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 | 5 | 16,990,911,504 | 16,373,248,256 | 15 | 5,376 | 735.660 | `e7eeece7da23f79d2271aa96d98c3c20698fb778552bf24c016f76ddfc294ed9` |
 | 6 | 16,990,911,504 | 16,373,248,256 | not recorded | not recorded | not recorded | `6415fe154a539ecc96a5e722066564861d08884c706e2a1c4d7f453b2b8d7e43` |
 | 7 | 16,990,911,504 | 16,373,248,256 | 15 | 5,376 | 598.707 | `ac077f3804a920ce24a333d538be2e4b3b02f1ae93de71bb27637e6365fd4b31` |
+| 8 | 16,567,501,776 | 16,157,917,440 | 13 | 5,376 | 398.151 | `2a9f7c0d701e37c8c8f61b63a87f323a1f25547b796412a3762fecfd43e87e05` |
 | 37 | 16,990,911,504 | 16,373,248,256 | 15 | 5,376 | 471.855 | `f4bae47cc6d2b0036939126e79e29ecdc1d418368d6aeed8b2eb184bd4ed5100` |
 | 38 | 16,990,911,504 | 16,373,248,256 | 15 | 5,376 | 697.560 | `f816129454d08041042dc729740b4360f2bb0493af5b3aa2361d0b99be4c3383` |
 | 39 | 16,990,911,504 | 16,373,248,256 | 15 | 5,376 | 452.074 | `00759cdb5a974d16d9526fd954db11ee8037f7cefcbdca6ddbd1b4118bde283e` |
+| 40 | 16,567,507,176 | 16,157,917,440 | 13 | 5,376 | 401.198 | `f5c6953670fd96a25e16b7c9f77894aa9508d2c51aefb1088e825c41f6329894` |
+| 41 | 16,990,916,912 | 16,373,248,256 | 15 | 5,376 | 719.230 | `474151aff5df919137c24537b3d2204f1ec301320ecfb2382bbf9cfb6c6017a9` |
 | 67 | 16,990,911,504 | 16,373,248,256 | 15 | 5,376 | 408.273 | `e554928b86c77946125850597aa8578aa74756b7203e2f31edbee22f1dea53c5` |
 | 68 | 16,567,501,776 | 16,157,917,440 | 13 | 5,376 | 694.020 | `aa57235520b41b75ce4c2aa6d24ce3376ca8411f5cf165058005fc09651d5e67` |
 | 69 | 16,990,911,504 | 16,373,248,256 | 15 | 5,376 | 449.727 | `2b76f65baf9b53f4e97587a3703a97671ab238e78d107ee52c07bee96f2a5847` |
 | 70 | 16,990,911,504 | 16,373,248,256 | 15 | 5,376 | 601.916 | `b603c8cc0459cf6f27c2c68382535a4c843b35b5eb9404995dcbb6e96e60e3ff` |
+| 71 | 16,990,916,912 | 16,373,248,256 | 15 | 5,376 | 401.689 | `9664b1c70ffdae03c201b6c15fface6ae1fc3be2457e6db9c519a2e2f4cf5a31` |
+| 72 | 16,567,507,176 | 16,157,917,440 | 13 | 5,376 | 397.259 | `3577f94e87be31af66f06225f8ef9b3f32e7091a4853aa34b3e3fea9b7576129` |
 
 - Both source objects matched their official SHA-256. Both source files were deleted only after the quality IMMORTAL ledger recorded their output identity; they remain recoverable by checksum-bound redownload.
 - Shards 1 through 7, 37 through 39, and 67 through 70 are complete and source-cleaned, for 14 durable ledger units. Shards 37 and 67 resumed existing partial artifacts, so their lower elapsed values are not comparable to full fresh conversion. Fresh shards 39 and 69 completed in 452.074/449.727 seconds after the combined audit, immutable-source deletion, and RAM-staging changes, 35.2%/35.2% below fresh shards 38/68. This combined-path observation does not isolate any one change and remains manufacturing elapsed, not inference throughput. Shard 70 overlapped a competing cross-worker copy before D-090 and took 601.916 seconds. Conversion timing was not emitted for shards 3, 4, or 6, so no elapsed value is reconstructed from timestamps.
