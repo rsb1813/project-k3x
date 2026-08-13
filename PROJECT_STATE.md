@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 34 is publicly complete through PR #60 at `a7ba52044e4d0ccbb23371cac54b5db87d4002f1`. The opt-in two-layer front/route/tail/remainder attribution adds no CUDA synchronization, preserves the historical B-0034 path and schema, and leaves host round trip as the default. The bounded artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, full shard, or paid cloud resource exists.
+Milestone 34 is publicly complete through implementation PR #60 and publication PR #61 at `acc14d0dad1796305161249001bfd24598086601`. Milestone 35 operation-level attribution is the current local design milestone. D-073 accepts classifying existing successful profiler events inside the front/tail snapshots without new CUDA synchronization or execution changes. No M35 implementation or B-0036 measurement exists. The bounded artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, full shard, or paid cloud resource exists.
 
-State audited last on 2026-08-13 at public M34 head `a7ba52044e4d0ccbb23371cac54b5db87d4002f1`. Push correctness `31677396649`, pull-request correctness `31677408262`, pull-request CodeQL `31677408278`, post-merge correctness `31677651704`, and post-merge CodeQL `31677651706` passed. Local gates remain CPU CTest 20/20, liburing CTest 21/21, ASan/UBSan CTest 21/21, CUDA CTest 36/36, portable Python 658/136, focused actual CUDA/attribution Python 14/14, evidence regressions 99/99, strict B-0035 rehash, actual attribution Compute Sanitizer with zero errors, and the production non-executable guard. No complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-13 at public M34 publication head `acc14d0dad1796305161249001bfd24598086601`. PR #61 push correctness `31677995234`, pull-request correctness `31678009269`, and CodeQL `31678009301` passed; post-merge correctness `31678280229` and CodeQL `31678280137` passed. M34 local gates remain CPU CTest 20/20, liburing CTest 21/21, ASan/UBSan CTest 21/21, CUDA CTest 36/36, portable Python 658/136, focused actual CUDA/attribution Python 14/14, evidence regressions 99/99, strict B-0035 rehash, actual attribution Compute Sanitizer with zero errors, and the production non-executable guard. No complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -193,9 +193,10 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 ## Next concrete tasks
 
-1. Begin Milestone 35 by exposing existing front/tail profiler events by operation; do not select a fusion target before that evidence.
-2. Seal one fixed operation-level attribution ablation over the same bounded official fixture and retain the default unless correctness plus timing justify a change.
-3. Keep wider closure, complete checkpoint, full-shard downloads, paid Cloud Run, and billable SKYFORGE execution deferred until evidence or explicit user execution authorizes them.
+1. Add RED tests for M35 profiler-event ownership, recognized operation buckets, checked remainders, and unchanged caller state on failure.
+2. Implement the minimal opt-in operation-attribution schema and fail-closed B-0036 evidence transaction.
+3. Seal one fixed operation-level attribution ablation over the same bounded official fixture and retain the default unless correctness plus timing justify a change.
+4. Keep wider closure, complete checkpoint, full-shard downloads, paid Cloud Run, and billable SKYFORGE execution deferred until evidence or explicit user execution authorizes them.
 
 ## Hardware assumptions
 

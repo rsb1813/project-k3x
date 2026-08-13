@@ -845,3 +845,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: profiler snapshots add no new CUDA event or synchronization, do not duplicate execution, and are sufficient to decide whether finer per-kernel instrumentation is warranted.
 - Rejected claims: the design does not implement fusion, establish a speedup, measure token throughput or physical traffic, or authorize a default change.
 - Revisit: B-0035 shows that front and tail dominate while route wall time is negligible. Next expose existing profiler events by operation inside front and tail, then select a fusion or synchronization target only if the operation-level evidence is decisive.
+
+## D-073 — Classify existing profiler operations before finer CUDA instrumentation
+
+- Date: 2026-08-13.
+- Status: accepted design; implementation and measurement pending.
+- Decision: classify successful existing profiler events inside the current two-layer front and tail snapshots into front KDA, front route preparation, tail FFN, and checked unclassified device-time buckets. Emit them only through a new opt-in M35 schema.
+- Alternatives considered: aggregate current `ProfileEvent::operation` values; add per-kernel CUDA events inside official kernels; rely only on external Nsight traces.
+- Evidence: sealed B-0035 attributes 62.934%/37.010% of device-closure wall time to front/tail and only 0.035% to canonical host routing. The backend already emits timed `dense_matvec` for official KDA and `moe_mix` for route preparation and FFN.
+- Benchmark result: none. B-0036 has not run, and no fusion target is selected.
+- Reason accepted: existing-event classification adds no CUDA synchronization or execution change, retains unknown operations through checked remainder buckets, and creates a reproducible decision boundary before finer instrumentation.
+- Rejected claims: this decision does not establish a kernel bottleneck, speedup, token rate, physical traffic result, or production-default change.
+- Revisit: after sealed B-0036, add finer instrumentation only for the dominant operation if its current device-time share is material and stable.

@@ -509,3 +509,15 @@
 - [x] Run final actual-artifact correctness, production-guard, and complete regression gates.
 - [x] Run B-0035 once successfully, strictly reverify it, and seal the evidence.
 - [x] Synchronize the TITAN Ledger, publish M34 through PR #60, and verify pull-request plus post-merge CI.
+
+## Milestone 35 — Two-layer operation attribution
+
+- [x] Read sealed B-0035 and inspect the exact existing profiler event boundary.
+- [x] Compare current-event aggregation, new per-kernel CUDA events, and external-only profiling.
+- [x] Accept D-073 and write the M35 design plus implementation plan.
+- [ ] Add RED ownership, classification, closure, and compatibility tests.
+- [ ] Implement checked existing-event classification without new CUDA synchronization.
+- [ ] Add the opt-in operation-attribution harness schema and B-0036 evidence transaction.
+- [ ] Run actual-artifact correctness, sanitizer, production-guard, and full regression gates.
+- [ ] Run B-0036 once successfully and seal the evidence.
+- [ ] Synchronize the TITAN Ledger, publish M35, and verify CI.
