@@ -899,6 +899,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Implement a checksum-bound `K3XSET1` fragment index and C++ multi-fragment Reader without a second model-sized payload copy.
 - [x] Bind the exact Python layer-0, KDA-MoE, MLA-MoE, resume, and LM-head compatibility runners to sealed K3X fragments.
 - [x] Separate strict manufacture verification from millisecond sealed-set directory opening without changing the Reader default.
+- [x] Add one bounded RAM-staging Foundry worker while retaining D-drive source and deletion authority.
 - [x] Make the IMMORTAL ledger safe for disjoint multi-worker Local Foundry publication.
 - [ ] Complete all 96 quality fragments, publish the official set manifest, and generate the first released-model token.
 - [ ] Grouped/resident/fused 3-bit CUDA FFN and complete official manufacturing.

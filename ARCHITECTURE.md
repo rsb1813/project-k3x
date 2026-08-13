@@ -538,6 +538,8 @@ The conductor overlaps the next authenticated Xet download with current conversi
 
 D-082 permits disjoint conductor ranges to run concurrently with separate two-slot staging roots and one output directory. A process-shared ledger lock serializes only ledger creation and completion publication; downloads, conversion, strict artifact verification, and checksum-gated source cleanup remain independent. The global ledger therefore continues to enforce one output budget and is the sole input to final `K3XSET1` publication.
 
+D-085 optionally places one worker's bounded conversion directory on WSL tmpfs. When the source and work roots are on different filesystems, the converter copies the authenticated shard once into the temporary root, verifies SHA-256 and inspects tensors from that copy, then performs Q8 derivation and K3X packing from RAM. The ledger and source-deletion gate still name and reverify the original staged source. The current 23 GiB tmpfs permits only one approximately 16 GiB shard worker; other workers remain on HDD until measured completion data justifies a different split.
+
 D-083 assigns the pre-conversion source identity check to the converter itself. The CLI no longer rereads the same source immediately beforehand, while deletion still performs a fresh complete SHA-256 after ledger publication. The source is therefore authenticated once before any tensor interpretation and independently reauthenticated at the destructive boundary.
 
 ## TITAN component registry

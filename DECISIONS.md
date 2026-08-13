@@ -989,3 +989,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: layer/state provenance must remain transitive across 93 subprocesses so the final token can be attributed to one exact manufactured set.
 - Rejected claims: matching a set digest does not establish quality equivalence to the BF16 source graph. Token/logit/state divergence remains a separate measured comparison.
 - Revisit: include converter configuration and quality-mode identity directly in a future K3X v2 superblock if set metadata alone becomes insufficient.
+
+## D-085 — Use one bounded RAM staging worker for repeated source reads
+
+- Date: 2026-08-13.
+- Status: implemented, focused-tested, and active for worker A; official elapsed impact is pending.
+- Decision: allow an explicit temporary conversion root on another filesystem. On `EXDEV`, copy the source shard into that root, authenticate and inspect the copied bytes, and perform all later quantization and packing reads there. Keep the original D-drive source as the ledger/deletion authority. Use only one `/dev/shm` worker because WSL exposes 23 GiB tmpfs and 45 GiB total RAM.
+- Alternatives considered: keep all repeated reads on D; place all three shards in RAM; move staging to the capacity-constrained C NVMe; reduce worker count without evidence.
+- Evidence: three active workers produced only 7.8–20.2 MB/s sampled physical D reads with queue length 5–14. Pausing A and then B did not improve the remaining sampled D throughput. A full shard fits in tmpfs with its bounded derived microshard, while three do not.
+- Benchmark result: the cross-filesystem copy, staged inspection, staged SHA-256, quantization, K3X readback, and cleanup focused test passes 1/1. Python compilation, CLI exposure, and PowerShell parsing pass. No official speedup is claimed until worker A completes comparable shards.
+- Reason accepted: one sequential D-to-RAM copy replaces repeated random/replayed source reads without changing tensor bytes, quantization, K3X output, ledger identity, or deletion authorization.
+- Rejected claims: tmpfs is not persistent and is not a source checkpoint. Worker termination may discard only uncommitted temporary work; the authenticated D source remains available for restart.
+- Revisit: compare worker A shard elapsed against B/C and shard 5. Increase WSL memory or change worker placement only if measured aggregate completion time improves without violating the 200 GiB C reserve.
