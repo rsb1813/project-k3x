@@ -2,11 +2,11 @@
 
 ## Current milestone
 
-Milestone 38 quality Local Foundry is actively manufacturing the pinned official checkpoint. Explicit user instruction superseded D-075's launch lock through D-076 without accepting the lossy 3-bit expert recipe. The active path preserves every routed expert in native MXFP4, preserves sensitive BF16/F32 tensors, and applies group-128 signed 8-bit only to selected trunk matrices. Fourteen fragments are Reader-valid, ledger-complete, and source-cleaned: shards 1–7, 37–39, and 67–70. Two resumable conductors cover 40–66 and 71–96 with bounded 128-extent durability checkpoints, one locked ledger, two bounded RAM work roots, and one shared HDD-to-RAM staging lock. Shards 8–36 begin when a RAM slot becomes available.
+Milestone 38 quality Local Foundry is actively manufacturing the pinned official checkpoint. Explicit user instruction superseded D-075's launch lock through D-076 without accepting the lossy 3-bit expert recipe. The active path preserves every routed expert in native MXFP4, preserves sensitive BF16/F32 tensors, and applies group-128 signed 8-bit only to selected trunk matrices. Twenty-two fragments are Reader-valid, ledger-complete, and source-cleaned: shards 1–9, 37–42, and 67–73. Three resumable conductors cover 10–36, 43–66, and 74–96 with bounded checkpoints, one locked ledger, three bounded RAM work roots, shared HDD-to-RAM and output-audit locks, and independent Xet caches.
 
 The exact Python first-token compatibility graph is now bound to sealed K3X fragments through layer 0, KDA-MoE, MLA-MoE, resumed execution, and the chunked LM head. The optimized C++ production graph remains incomplete, and the Python path cannot run end to end until all 96 fragments and `model.k3xset` exist. No official token, tok/s, quality result, complete checkpoint, or paid cloud resource exists.
 
-An independent original-precision reference oracle remains durable from the preserved prefix state through layer 46. Layer 47 failed once with `OFFICIAL_RANGE_LENGTH_MISMATCH` after a long process suspension; retry starts at layer 47 and does not recompute prior layers. It stores range objects on D and will provide the comparison token for the later K3X run. It has not generated a token yet.
+The independent original-precision reference oracle is complete. Input token ID 1 executed all official layers 0 through 92 with natural Top-16 routing and generated greedy token ID 9689 at FP32 logit 8.307021141052246. The compact B-0044 result is committed at `b9a743e` with SHA-256 `e4b57d6dde9f59e205c2e6b40be8908b45d255ef9d29e8b4465fcb634c13beb9`. It records `throughput_measured=false`; no tok/s claim exists.
 
 D-082 has made the shared IMMORTAL ledger safe for disjoint multi-process completion publication and parameterized conductor staging ranges. D-086 through D-090 combine output audits, reuse an unchanged verified source identity at deletion, account for valid resume bytes, defer prefetch until verified RAM staging, and serialize cross-worker source copies. Focused lock/conversion coverage passes 1/1, Python compilation passes, and the conductor parses.
 
@@ -16,15 +16,16 @@ D-083 removes one redundant complete source hash before conversion. D-087 later 
 
 D-084 binds every future K3X layer/state/head publication to the exact sealed-set digest and rejects cross-set resume. Focused identity/mismatch coverage passes 1/1; no K3X output exists yet.
 
-D-085 and D-089 use a 72 GiB WSL cap, 16 GiB swap, and 60 GiB `/dev/shm` for two bounded RAM workers. Fresh shards 39 and 69 completed in 452.074 and 449.727 seconds, 35.2% below fresh shards 38 and 68 under the preceding path. This is a combined-path manufacture result, not inference throughput or an isolated optimization measurement.
+D-085 and D-089 use a 72 GiB WSL cap, 16 GiB swap, and 60 GiB `/dev/shm` for up to three bounded RAM workers. D-090 serializes only HDD-to-RAM staging, D-091 isolates Xet caches, and D-092 serializes only finalized K3X output audits. Fresh shards 8/9/40/71/72 completed in 398.151/405.581/401.198/401.689/397.259 seconds. This is combined-path manufacturing evidence, not inference throughput.
 
-State synchronized on 2026-08-14 at implementation commit `76dddbc` and documentation commit `abe9002`. Focused RAM marker/lock coverage passes 1/1, Python compilation and PowerShell parsing pass, and the previously recorded K3X set/ledger/state gates remain unchanged. A real official shard-1 strict open found 23 records in 11.401 seconds and loaded finite BF16 norm and Q8 q-projection tensors; sealed directory-open exposed the same records in 0.004774 seconds. This is graph-binding and storage evidence only, not an official token or throughput result.
+State synchronized on 2026-08-14 at implementation commit `f2d08dc` and evidence commit `b9a743e`. Focused RAM staging/output-audit lock coverage passes 1/1, Python compilation and PowerShell parsing pass, and the previously recorded K3X set/ledger/state gates remain unchanged. The original-precision oracle token is now measured; the K3X mixed-precision token still awaits all 96 fragments and the sealed set.
 
 ## Completed work
 
 - Milestone 37 group-32 signed 3-bit K3X writer/reader ABI, strict required-feature negotiation, PyTorch and portable C++ decode, scalar direct-packed RTX 5080 matvec, synthetic CPU/CUDA layer/logit/token parity, packed-byte transfer assertions, and sanitizer coverage. No performance result is claimed.
 - Milestone 37 exact pinned-header accounting for 82,432 routed experts and the proposed selective trunk policy, plus a Reader-valid 14,471,424-byte K3X conversion of released layer-1 expert 0 and a deterministic native-MXFP4 divergence proxy.
-- Milestone 38 group-128 8-bit Python/C++ K3X ABI, portable BF16/Q8 model decode, bounded official-shard converter, 1,510,500,000,000-byte quality plan, authenticated conductors, 14 completed fragments with durable output identities and verified source deletion, batched crash-safe checkpoints, source-alias/RAM staging without a model-sized persistent copy, and synthetic-tested `K3XSET1` multi-fragment publication without a second payload copy.
+- Milestone 38 group-128 8-bit Python/C++ K3X ABI, portable BF16/Q8 model decode, bounded official-shard converter, 1,510,500,000,000-byte quality plan, authenticated conductors, 22 completed fragments with durable output identities and verified source deletion, batched crash-safe checkpoints, source-alias/RAM staging without a model-sized persistent copy, and synthetic-tested `K3XSET1` multi-fragment publication without a second payload copy.
+- B-0044 original-precision official first-token oracle: all 93 layers, token 9689, logit 8.307021141052246, no throughput claim.
 - Python fragment tensor store and sealed-set compatibility graph for canonical BF16/F32/Q8 dense loads, bounded BF16 row reads, native-MXFP4 expert matvecs, all 93 official layers, persisted prefix state, chunked logits, and greedy selection. Focused set/store coverage passes 3/3; end-to-end execution awaits the complete set.
 - Explicit sealed-set directory-open policy that preserves strict Reader defaults and all manufacture/deletion gates while avoiding a full payload rescan for each compatibility-runner subprocess.
 - Milestone 0 deterministic synthetic K3-compatible PyTorch graph, K3X v1 streaming converter, strict Python/C++ readers, and independent portable C++20 runtime.
@@ -187,7 +188,7 @@ The task bullets below describe the gate reached at each named commit; later M33
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Current implementation branch: `codex/official-end-to-end-token`; latest implementation commit `76dddbc` serializes cross-worker RAM staging on top of combined artifact audits, immutable source deletion identity, valid resume-byte accounting, and verified staging-before-prefetch. Documentation commit `abe9002` records D-090 and 14 completed fragments.
+- Current implementation branch: `codex/official-end-to-end-token`; latest implementation commit `f2d08dc` serializes finalized output audits on top of isolated Xet caches and shared RAM staging. Evidence commit `b9a743e` seals the original-precision first token.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build`, `build-liburing`, `build-asan`, and `build-cuda`.
 
 ## Known failures and blockers
@@ -195,7 +196,7 @@ The task bullets below describe the gate reached at each named commit; later M33
 - The CPU 3-bit path intentionally expands a selected projection to FP32 as a correctness oracle. CUDA reads scalar projection payloads directly, but grouped gate/up, resident payloads, and fused SiTU/down remain unimplemented.
 - The 1.28 TB byte recipe is closed but not quality-approved. One released expert's deterministic random-normal output proxy has 0.325174 relative L2 divergence after optimized scaling; this is neither an end-to-end rejection nor sufficient evidence to launch all 96 shards.
 - Group-128 8-bit packing, strict Python/C++ Reader validation, portable model decode, no-copy fragment-set Reader, and exact Python official graph binding now exist, but the CUDA Q8 kernel and optimized C++ 93-layer scheduler are not yet implemented.
-- The reference oracle is complete only through layer 46. Layer 47's transient `OFFICIAL_RANGE_LENGTH_MISMATCH` must be retried after the active HDD staging copy finishes; no prior layer state was lost.
+- The K3X mixed-precision execution remains blocked on the incomplete 96-fragment set. The independent original-precision oracle is no longer a blocker.
 - Only shards 1 through 6 are currently complete. Background conductor liveness and the quality ledger are authoritative for later shards; no full-checkpoint or first-token claim exists yet.
 - The live capacity check reports 1,529.88 GB free on C and 750.46 GB free on D while shards 7, 37, and 67 are converting. This is sufficient for the current bounded staging and final-output plan; it must be rechecked before any cleanup or worker-count change.
 - Windows Smart App Control still blocks unsigned `k3x_run.exe`; WSL2 is the verified local CUDA path and native Linux remains the final performance authority.
@@ -221,7 +222,7 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 1. Keep the two shared-lock RAM conductors running through shards 40–66 and 71–96, then assign the first free RAM slot to shards 8–36. Verify every fragment and ledger entry and delete each source only after durable completion.
 2. Keep the sealed Python compatibility graph launch-ready and validate each newly available storage boundary without competing materially with manufacture.
-3. Finish the resumed original-precision reference token, then publish and checksum-open the official `model.k3xset`, generate the K3X greedy token, compare them under the documented mixed-precision contract, and optimize measured bottlenecks.
+3. Publish and checksum-open the official `model.k3xset`, generate the K3X greedy token, compare it to oracle token 9689 under the documented mixed-precision contract, and optimize measured bottlenecks.
 
 ## Hardware assumptions
 
@@ -241,7 +242,7 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 B-0036 is the latest formal performance measurement. Host-round-trip/device-closure medians are 102,157,295/116,049,550 ns per exact two-layer, two-position sequence. Both preserve identical natural Top-16 expert IDs and measured output/state/contribution identities, pass independent numerical gates, and transfer zero warm weight bytes.
 
-The latest comparable sealed manufacturing observations are fresh shards 39 and 69 at 452.074 and 449.727 seconds for 16,990,911,504 source bytes and 16,373,248,256 K3X bytes. They are 35.2% below fresh shards 38 and 68 under the preceding path, but the result combines RAM staging, audit, deletion, and scheduling changes and does not isolate one optimization. Shard 70 overlapped a competing cross-worker staging copy before D-090 and took 601.916 seconds. Separately, official shard-1 strict/sealed directory opens measured 11.401/0.004774 seconds; this is a WSL2 integrity-policy diagnostic, not token startup authority.
+The latest clean comparable sealed manufacturing observations are fresh shards 8/9/40/71/72 at 397.259–405.581 seconds. Shard 41 overlapped a concurrent full output audit and took 719.230 seconds; D-092 now serializes that audit section. Shard 42 then spent 984.518 seconds after three simultaneous Xet downloads shifted the bottleneck to HDD assembly and delayed its staging turn. Current scheduling retains three conversion workers but will cap effective download/assembly concurrency if this repeats. These are manufacturing results, not token throughput.
 
 Device closure's classified existing-event CUDA time averages 36,345,792 ns KDA, 19,075,499 ns device route preparation, and 31,698,525 ns MoE FFN, with zero unclassified time. Their shares are 41.719%, 21.896%, and 36.385%. KDA is the largest single operation but not a majority.
 
