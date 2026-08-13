@@ -1100,3 +1100,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: the PowerShell script parses, the durable ledger remained at 25 completed units across restart, the first-token waiter remained live, and the two-slot live capacity boundary held. No completed-shard timing or abandonment-recovery wall time is claimed yet.
 - Reason accepted: Windows named mutex ownership is process-bound and abandoned ownership is recoverable by the next waiter, so conductor death cannot permanently consume a download slot.
 - Revisit: add a non-destructive isolated process-abandonment regression if this scheduler becomes a reusable component rather than a bounded local manufacturing tool.
+
+## D-095 — Bound and resume stalled HF Xet processes
+
+- Date: 2026-08-14.
+- Status: implemented, parser-checked, focused-tested, and active from shards 12, 45, and 76.
+- Decision: execute every foreground and prefetched HF download through one helper with a 600-second per-attempt timeout and at most three attempts. Kill only the timed-out process tree, preserve Xet partial state, and accept process completion only when HF's final target exists; the converter remains responsible for official SHA-256 authentication before tensor interpretation.
+- Alternatives considered: allow unbounded waits; restart conductors manually whenever activity stops; infer progress from noisy network or process counters; accept an unavailable PowerShell 5.1 `Start-Process` exit code.
+- Evidence: shard 12 and 45 children remained alive for roughly 10 and 15 minutes with zero CPU, network, and D-drive I/O. The initial helper then exposed a Windows PowerShell 5.1 behavior where a successful `hf` process printed the final path and created the target but its `Start-Process -PassThru` `ExitCode` remained empty. A completed-target success test and a missing-target two-attempt failure test now pass. Shard 45 subsequently completed full official digest verification, conversion, ledger publication, and source deletion under the corrected helper.
+- Benchmark result: shard 45 completed in 407.314 seconds and published 16,373,248,256 bytes with SHA-256 `dd96349e42b413c7d81a3c39bb9780e1095e7e4876fec9f0d3e449076533472f`, increasing the ledger to 29/96. This is manufacturing elapsed and not an isolated retry speedup or inference result.
+- Reason accepted: a hung transport can no longer block one range forever, while the existing official digest and immutable-source checks remain the authority for payload correctness.
+- Revisit: replace the wall timeout with byte-progress heartbeats only if legitimate downloads approach 600 seconds on a slower network.

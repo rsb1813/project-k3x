@@ -544,6 +544,8 @@ D-086 through D-090 remove later redundant scans without weakening the artifact 
 
 D-091 through D-094 make the three-conductor transport path bounded and restartable. Each conductor owns an independent Xet cache, finalized K3X audits share one advisory lock, and two process-owned Windows mutex slots bound complete download-plus-HDD-assembly transactions. If a conductor dies while holding a slot, the next waiter acquires the abandoned mutex instead of losing scheduler capacity. These controls do not relax official source digests, fragment audits, ledger durability, or the 200 GiB final-volume reserve.
 
+D-095 also bounds the lifetime of each HF child. A timed-out process tree is terminated and restarted against the same per-conductor Xet cache for at most three attempts. HF final-target publication is only a transport-completion signal; the Local Foundry still hashes the complete shard against the pinned official digest before inspecting tensors, and deletion remains ledger-gated.
+
 D-083 assigns the pre-conversion source identity check to the converter itself. The CLI no longer rereads the same source immediately beforehand. D-087 later allows deletion to reuse that verified official digest only when device, inode, size, and nanosecond modification time remain unchanged through durable ledger publication; any identity change fails closed.
 
 ## TITAN component registry
