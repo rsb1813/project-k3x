@@ -1,4 +1,5 @@
 # 공식 safetensors shard 하나를 독립 K3X 제조 단위로 변환하는 경계를 검증합니다.
+import errno
 import hashlib
 import json
 
@@ -41,13 +42,26 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
     save_file(payload, source)
     source_sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
     written_kinds = []
+    inspected_paths = []
     write_microshard = local_shard._write_microshard
+    inspect_shard = local_shard.inspect_shard
 
     def capture(path, outputs, *, chunk_bytes):
         written_kinds.extend(output.kind for output in outputs)
         return write_microshard(path, outputs, chunk_bytes=chunk_bytes)
 
     monkeypatch.setattr(local_shard, "_write_microshard", capture)
+
+    def capture_inspect(path):
+        inspected_paths.append(path)
+        return inspect_shard(path)
+
+    monkeypatch.setattr(local_shard, "inspect_shard", capture_inspect)
+
+    def reject_cross_device_link(source_path, destination_path):
+        raise OSError(errno.EXDEV, "cross-device link")
+
+    monkeypatch.setattr(local_shard.os, "link", reject_cross_device_link)
 
     report = convert_local_official_shard(
         source,
@@ -61,6 +75,7 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
     assert report.source_sha256 == source_sha256
     assert report.quant8_tensor_count == 1
     assert report.native_expert_tensor_count == 6
+    assert [path.name for path in inspected_paths] == ["official.safetensors"]
     assert "copy" not in written_kinds
     assert report.tensor_count == 6
     assert not any((tmp_path / "staging-work").iterdir())

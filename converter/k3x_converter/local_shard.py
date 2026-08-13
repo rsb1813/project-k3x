@@ -1,11 +1,13 @@
 # 공식 Kimi K3 shard 하나를 bounded K3X 제조 단위로 변환합니다.
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import math
 import os
 import re
+import shutil
 import struct
 import tempfile
 from dataclasses import dataclass
@@ -237,10 +239,6 @@ def convert_local_official_shard(
     source_sha256 = _sha256(source_path)
     if source_sha256 != expected_sha256:
         raise K3XError("LOCAL_SOURCE_SHA256", source_path.name)
-    tensors = inspect_shard(source_path)
-    outputs, quant8_shapes, packed_shapes, quant8_count, native_expert_count = _plan(
-        tensors
-    )
     output_path = output_directory / (source_path.stem + ".k3x")
     with tempfile.TemporaryDirectory(dir=temporary_root) as temporary:
         work = Path(temporary)
@@ -248,7 +246,13 @@ def convert_local_official_shard(
         try:
             os.link(source_path, source_link)
         except OSError as exc:
-            raise K3XError("LOCAL_SOURCE_HARDLINK", source_path.name) from exc
+            if exc.errno != errno.EXDEV:
+                raise K3XError("LOCAL_SOURCE_HARDLINK", source_path.name) from exc
+            shutil.copyfile(source_path, source_link)
+        tensors = inspect_shard(source_link)
+        outputs, quant8_shapes, packed_shapes, quant8_count, native_expert_count = _plan(
+            tensors
+        )
         copy_outputs = [output for output in outputs if output.kind == "copy"]
         quantized_outputs = [output for output in outputs if output.kind != "copy"]
         weight_map = {output.name: source_link.name for output in copy_outputs}

@@ -5,6 +5,7 @@ param(
     [string]$StagingRoot = "D:\K3X-staging",
     [string]$Ledger = "C:\K3X\immortal-ledger-quality.json",
     [string]$Progress = "C:\K3X\foundry-progress.jsonl",
+    [string]$TemporaryDirectory = "",
     [switch]$Finalize
 )
 
@@ -69,6 +70,10 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
     Start-NextDownload ($index + 1)
 
     $sourceLinux = (& wsl -e wslpath -a -u $target).Trim()
+    $temporaryArgument = ""
+    if ($TemporaryDirectory) {
+        $temporaryArgument = "--temporary-directory $TemporaryDirectory"
+    }
     $command = @(
         "cd /mnt/c/Users/jolib/Documents/project-k3x/.worktrees/milestone-twenty-four-cuda-graph-cache &&",
         "PYTHONPATH=converter:reference /home/jolib/.venvs/k3x-m1/bin/python tools/convert_local_shard.py",
@@ -77,6 +82,7 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
         "--source $sourceLinux",
         "--destination /mnt/c/K3X/shards",
         "--ledger $((& wsl -e wslpath -a -u $Ledger).Trim())",
+        $temporaryArgument,
         "--output-budget-bytes 1510500000000",
         "--delete-source"
     ) -join " "

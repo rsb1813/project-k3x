@@ -28,6 +28,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument("--ledger", type=Path, required=True)
+    parser.add_argument("--temporary-directory", type=Path)
     parser.add_argument(
         "--output-budget-bytes", type=int, default=QUALITY_OUTPUT_BUDGET_BYTES
     )
@@ -67,7 +68,11 @@ def main(argv: list[str] | None = None) -> int:
         destination,
         config=config,
         expected_sha256=unit.source_sha256,
-        temporary_directory=source.parent / ".foundry-work",
+        temporary_directory=(
+            args.temporary_directory
+            if args.temporary_directory is not None
+            else source.parent / ".foundry-work"
+        ),
     )
     conversion_seconds = time.perf_counter() - conversion_start
     record_completed_unit(
