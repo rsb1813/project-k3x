@@ -17,7 +17,6 @@ from k3x_converter.local_foundry import (
     load_source_manifest,
     record_completed_unit,
     source_deletion_allowed,
-    verify_staged_unit,
 )
 from k3x_converter.local_shard import convert_local_official_shard
 
@@ -56,7 +55,6 @@ def main(argv: list[str] | None = None) -> int:
         staging_free_bytes=shutil.disk_usage(source.parent).free,
         completed_output_bytes=ledger["completed_output_bytes"],
     )
-    verify_staged_unit(unit, source)
     config_document = json.loads(
         args.config_manifest.read_text(encoding="utf-8")
     )

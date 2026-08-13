@@ -965,3 +965,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: three disjoint two-slot workers can use additional CPU, HDD, NVMe, RAM, and download concurrency without weakening the one-plan budget or fragment identity ledger.
 - Rejected claims: three workers do not imply 3x throughput. The 1 Gbps network, HDD reads, NVMe writes, source hashing, and Python conversion may contend; worker count remains subject to measured completion time and free-space checks.
 - Revisit: compare per-shard elapsed and system utilization after at least one completion from each worker; reduce to two workers if contention raises aggregate time or threatens the destination reserve.
+
+## D-083 — Remove the pre-converter duplicate source hash pass
+
+- Date: 2026-08-13.
+- Status: implemented for new converter processes after shard 7.
+- Decision: let `convert_local_official_shard` perform the authoritative pre-read SHA-256 check and remove the identical `verify_staged_unit` call immediately before it. Retain the independent post-ledger source SHA-256 check before deletion.
+- Alternatives considered: keep three complete source hash passes; remove the deletion-time recheck; trust only HF Xet completion metadata.
+- Evidence: `convert_local_shard.py` called `verify_staged_unit`, then `convert_local_official_shard` hashed the same resolved source before inspecting any tensor, then `source_deletion_allowed` hashed it again after durable ledger publication. The first two checks used the same expected official digest with no mutation between them.
+- Benchmark result: focused local conversion and checksum-gated deletion coverage passes 2/2. Official elapsed impact is pending a newly launched shard; no speedup is claimed yet.
+- Reason accepted: one full HDD read is removed without changing the authoritative pre-conversion digest or the post-publication deletion gate.
+- Rejected claims: this does not remove source authentication or make deletion trust the earlier hash. The final source recheck remains intentional TOCTOU protection.
+- Revisit: compare shard 8 or a B/C worker's first matching shard against shard 5 after separating multi-worker contention.

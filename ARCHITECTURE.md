@@ -536,6 +536,8 @@ The conductor overlaps the next authenticated Xet download with current conversi
 
 D-082 permits disjoint conductor ranges to run concurrently with separate two-slot staging roots and one output directory. A process-shared ledger lock serializes only ledger creation and completion publication; downloads, conversion, strict artifact verification, and checksum-gated source cleanup remain independent. The global ledger therefore continues to enforce one output budget and is the sole input to final `K3XSET1` publication.
 
+D-083 assigns the pre-conversion source identity check to the converter itself. The CLI no longer rereads the same source immediately beforehand, while deletion still performs a fresh complete SHA-256 after ledger publication. The source is therefore authenticated once before any tensor interpretation and independently reauthenticated at the destructive boundary.
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.

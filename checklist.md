@@ -558,6 +558,7 @@
 - [x] Serialize concurrent IMMORTAL ledger publication and parameterize disjoint staging ranges.
 - [x] Launch three disjoint workers after shard 6.
 - [ ] Measure aggregate three-worker manufacture throughput.
+- [x] Remove one duplicate full-source hash while retaining pre-conversion and pre-deletion authentication.
 - [x] Arm an idempotent 96-fragment finalizer and K3X first-token runner.
 - [ ] Complete and verify all 96 K3X fragments.
 - [ ] Complete the resumed original-precision layer-24 reference oracle and record its greedy token.
