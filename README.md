@@ -893,7 +893,9 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [ ] Learned drafting, acceptance-aware block sizing, and cost-aware verification experiments.
 - [ ] Sensitivity-calibrated mixed trunk quantization.
 - [x] Scalar direct-packed 3-bit CUDA matvec with synthetic layer/logit/token parity and sanitizer coverage.
-- [ ] Grouped/resident/fused 3-bit CUDA FFN and bounded official MXFP4-to-3-bit manufacturing.
+- [x] Exact pinned-header byte accounting for a sub-1.28 TB mixed recipe and one Reader-valid released-expert 3-bit conversion.
+- [ ] Acceptable released/full-model 3-bit quality. The first bounded expert proxy measured 0.325 relative L2 and therefore did not unlock manufacture.
+- [ ] Grouped/resident/fused 3-bit CUDA FFN and complete official manufacturing.
 - [ ] SKYFORGE shard compiler for explicitly provisioned cloud jobs.
 - [ ] Full ablation and coding-quality suite.
 

@@ -520,7 +520,9 @@ The PyTorch oracle and portable C++ runtime decode the same packed representatio
 
 The RTX 5080 CUDA backend now has a scalar direct-packed matvec. It uploads the input, 3-bit payload, and BF16 scales without creating a host FP32 weight matrix, decodes each code inside the CUDA kernel, and returns FP32 row outputs. A literal CUDA test binds H2D/D2H byte accounting to the packed representation, and the complete synthetic CUDA graph matches the quantized Python model's layers, logits, and greedy tokens. Compute Sanitizer reports zero errors.
 
-This is still not the production codec completion gate. Each projection uses a separate launch and transient upload; grouped gate/up, resident weights, fused SiTU/down, bounded official native-MXFP4 conversion, sensitivity calibration, mixed-precision recipe closure, and quality evaluation remain unimplemented. The authenticated 96-shard launch remains disabled until those manufacture and quality gates pass.
+The pinned official headers now close a bounded manufacturing recipe without downloading tensor payloads. All 82,432 routed experts become group-32 3-bit; embeddings, LM head, one-dimensional tensors, norms, and router gates remain at source precision; remaining non-expert BF16 matrices become group-128 8-bit; and non-text tensors pass through. The exact payload estimate is 1,252,654,054,352 bytes. A deliberately conservative 4 KiB alignment and directory upper bound is 1,254,823,319,114 bytes, leaving 25,176,680,886 bytes below the 1.28 TB cap.
+
+One released layer-1 expert has also been converted to a 14,471,424-byte Reader-valid 3-bit K3X artifact. Least-squares group-scale fitting improves its deterministic random-normal expert-output proxy from 0.929302 to 0.945909 cosine and from 0.369519 to 0.325174 relative L2 error. This is bounded divergence evidence, not an end-to-end model-quality score. It fails the current loss-minimization launch gate, so the 96-shard download remains disabled. Grouped/resident/fused 3-bit FFN, the group-128 8-bit trunk codec/runtime, broader sensitivity sampling, and token/coding-quality evaluation remain unimplemented.
 
 ## TITAN component registry
 

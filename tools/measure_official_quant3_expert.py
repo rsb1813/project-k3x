@@ -47,6 +47,16 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _tensor_payload_sha256(tensors: dict[str, torch.Tensor]) -> str:
+    digest = hashlib.sha256()
+    for name in sorted(tensors):
+        payload = tensors[name].contiguous().numpy().tobytes()
+        digest.update(name.encode("utf-8") + b"\0")
+        digest.update(len(payload).to_bytes(8, "little"))
+        digest.update(payload)
+    return digest.hexdigest()
+
+
 def _write_json(path: Path, value: object) -> None:
     temporary = path.with_name(path.name + ".tmp")
     with temporary.open("w", encoding="utf-8", newline="\n") as stream:
@@ -161,6 +171,7 @@ def main(argv: list[str] | None = None) -> int:
         "expert_output_metrics": _metrics(native_expert_output, quant3_expert_output),
         "native_payload_bytes": int(source_manifest["payload_bytes"]),
         "quant3_payload_bytes": sum(tensor.numel() for tensor in quant3_tensors.values()),
+        "quant3_payload_sha256": _tensor_payload_sha256(quant3_tensors),
         "quant3_source_shard_bytes": q3_shard.stat().st_size,
         "k3x_bytes": k3x_path.stat().st_size,
         "k3x_sha256": _sha256(k3x_path),

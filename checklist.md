@@ -552,6 +552,6 @@
 - [x] Implement scalar direct-packed CUDA execution and synthetic parity.
 - [ ] Close the official conversion recipe and quality gates.
   - [x] Seal an exact byte-accounting recipe below 1.28 TB from the pinned official index.
-  - [ ] Convert one released MXFP4 expert to group-32 3-bit and measure output divergence.
+  - [x] Convert one released MXFP4 expert to group-32 3-bit and measure output divergence.
   - [ ] Run the direct-packed CUDA path on the released-size expert fixture.
-  - [ ] Keep the 96-shard launch disabled unless all three gates pass.
+  - [x] Keep the 96-shard launch disabled because the bounded quality gate did not pass.

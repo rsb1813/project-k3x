@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 37 local Foundry now has portable and scalar direct-packed CUDA 3-bit correctness paths. Commit `0b8a1e5` implements K3X quantization value 2 with required-feature negotiation, strict Python/C++ metadata validation, a deterministic PyTorch oracle, and portable execution. Commit `5f61c59` adds a native `sm_120` kernel that reads packed codes and BF16 scales directly without host FP32 weight expansion. Literal transfer accounting, complete synthetic layer/logit/token parity, existing MXFP4 regression, and Compute Sanitizer pass. This is not the production manufacture gate: bounded official MXFP4-to-3-bit conversion, exact byte-budget recipe closure, and quality calibration remain incomplete, so the authenticated 96-shard launch is still disabled.
+Milestone 37 local Foundry now has portable and scalar direct-packed CUDA 3-bit correctness, exact official-header byte accounting, and one bounded released-expert quality proxy. The proposed mixed recipe has a conservative 1,254,823,319,114-byte K3X upper bound, but the released expert records 0.325174 relative L2 error and 0.945909 cosine at its complete output after least-squares scale fitting. Under D-075 this does not satisfy the loss-minimization launch gate. The authenticated 96-shard download and manufacture remain disabled while a less lossy target or broader end-to-end quality evidence is selected.
 
 Milestone 35 implementation and formal B-0036 evidence are locally complete and awaiting publication. Existing successful profiler events are classified into KDA, device route preparation, MoE FFN, and checked unclassified buckets without new CUDA synchronization or execution changes. KDA is largest at 41.719% of classified device time, but no fusion or default change is accepted. The bounded artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, full shard, or paid cloud resource exists.
 
@@ -11,6 +11,7 @@ State audited last on 2026-08-13 at local M35 evidence commit `4a41223` over pub
 ## Completed work
 
 - Milestone 37 group-32 signed 3-bit K3X writer/reader ABI, strict required-feature negotiation, PyTorch and portable C++ decode, scalar direct-packed RTX 5080 matvec, synthetic CPU/CUDA layer/logit/token parity, packed-byte transfer assertions, and sanitizer coverage. No performance result is claimed.
+- Milestone 37 exact pinned-header accounting for 82,432 routed experts and the proposed selective trunk policy, plus a Reader-valid 14,471,424-byte K3X conversion of released layer-1 expert 0 and a deterministic native-MXFP4 divergence proxy.
 - Milestone 0 deterministic synthetic K3-compatible PyTorch graph, K3X v1 streaming converter, strict Python/C++ readers, and independent portable C++20 runtime.
 - Milestone 28 bounded official layer-1 MoE FFN manufacturing, exact natural Top-16 A/B routing, 32-expert union, portable/CUDA parity, exact residency, B-0029 evidence, and full local verification without a complete shard or checkpoint.
 - Milestone 29 bounded official layer-1 Attention-Residual/KDA/MoE execution, exact full/incremental state parity, B-0030 evidence, public PR #50, and post-merge CI without a complete shard or checkpoint.
@@ -171,12 +172,14 @@ The task bullets below describe the gate reached at each named commit; later M33
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Current implementation branch: `codex/milestone-thirty-three-multilayer` from public M32 publication head `f0a5d2a`.
+- Current implementation branch: `codex/official-end-to-end-token`; latest code commit `eb02a4b` over the Milestone 37 lineage.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build`, `build-liburing`, `build-asan`, and `build-cuda`.
 
 ## Known failures and blockers
 
-- The CPU 3-bit path intentionally expands a selected projection to FP32 as a correctness oracle. CUDA reads scalar projection payloads directly, but grouped gate/up, resident payloads, fused SiTU/down, and official native-MXFP4 conversion remain unimplemented.
+- The CPU 3-bit path intentionally expands a selected projection to FP32 as a correctness oracle. CUDA reads scalar projection payloads directly, but grouped gate/up, resident payloads, and fused SiTU/down remain unimplemented.
+- The 1.28 TB byte recipe is closed but not quality-approved. One released expert's deterministic random-normal output proxy has 0.325174 relative L2 divergence after optimized scaling; this is neither an end-to-end rejection nor sufficient evidence to launch all 96 shards.
+- The proposed recipe also depends on a group-128 8-bit non-expert codec/runtime that is not implemented. A roughly 1.51 TB native-expert alternative is an estimate, not an accepted artifact or quality result.
 - Windows Smart App Control still blocks unsigned `k3x_run.exe`; WSL2 is the verified local CUDA path and native Linux remains the final performance authority.
 - The production-executable checkpoint is synthetic and tiny. The bounded official M29–M31 artifact executes only through the dedicated benchmark harness and remains rejected by `k3x_run`; no complete shard or full checkpoint has been downloaded. B-0032 is one complete layer-boundary sequence attribution, not token throughput or full-model evidence.
 - M26 binds transport, snapshot, index, config, shard header, range, tensor, microshard, and K3X identities, but does not recompute the complete shard LFS digest or provide signed publisher provenance. Production conversion needs stronger complete-object or authenticated-chunk verification.
@@ -198,9 +201,9 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 ## Next concrete tasks
 
-1. Add bounded official native-MXFP4-to-3-bit conversion and close the exact 1.28 TB recipe accounting without downloading all shards.
-2. Run sensitivity and token/quality gates on bounded official slices while retaining native MXFP4 reference artifacts.
-3. Enable the authenticated two-slot 96-shard local manufacture only if correctness, quality, output-budget, and disk-reserve gates pass; then optimize grouped/resident/fused 3-bit CUDA execution from measurements.
+1. Choose the quality/storage target using measured evidence: broaden 3-bit expert sampling, or adopt a less lossy native-MXFP4 expert plus 8-bit trunk target near 1.51 TB.
+2. Implement and validate only the codec/runtime required by that selected recipe, retaining native MXFP4 reference artifacts.
+3. Enable the authenticated two-slot 96-shard local manufacture only after correctness, quality, output-budget, and disk-reserve gates pass.
 
 ## Hardware assumptions
 
@@ -218,6 +221,8 @@ The task bullets below describe the gate reached at each named commit; later M33
 ## Latest measured bottleneck
 
 B-0036 is the latest formal performance measurement. Host-round-trip/device-closure medians are 102,157,295/116,049,550 ns per exact two-layer, two-position sequence. Both preserve identical natural Top-16 expert IDs and measured output/state/contribution identities, pass independent numerical gates, and transfer zero warm weight bytes.
+
+The latest manufacturing blocker is quality rather than capacity. The pinned recipe fits below 1.28 TB, but the first released-expert 3-bit proxy has 0.325174 relative L2 output divergence. Its canonical named 3-bit payload SHA-256 is `cade06a1c12ef136edee8ec1fe12b6bf488f918d057c06719304e48eacbd2594`. Full-model transfer is therefore gated before bandwidth, CUDA throughput, or tok/s can become the next measured bottleneck.
 
 Device closure's classified existing-event CUDA time averages 36,345,792 ns KDA, 19,075,499 ns device route preparation, and 31,698,525 ns MoE FFN, with zero unclassified time. Their shares are 41.719%, 21.896%, and 36.385%. KDA is the largest single operation but not a majority.
 

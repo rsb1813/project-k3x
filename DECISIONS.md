@@ -869,3 +869,15 @@ Post-review note: final read-only review found that partial-submit or completion
 - Reason accepted: it fails closed on unsupported readers and prevents manufacturing an artifact that the local runtime cannot interpret at all.
 - Rejected claims: scalar transient CUDA execution is not a fused or resident production codec, performance evidence, quality evidence, or authorization to launch all 96 official shards.
 - Revisit: implement bounded official MXFP4-to-3-bit conversion, recipe size closure, and quality calibration before enabling the official manifest; grouped/resident/fused CUDA work remains a performance gate before useful full-model execution.
+
+## D-075 — Keep the 1.28 TB manufacture disabled after bounded released-expert divergence
+
+- Date: 2026-08-13.
+- Status: accepted launch gate; the final storage/precision recipe remains undecided.
+- Decision: retain the authenticated 96-shard launch lock. Do not manufacture the complete 1.28 TB candidate until broader quality evidence justifies the released-expert 3-bit path or a less lossy storage target is selected.
+- Alternatives considered: launch immediately because the byte budget closes; preserve native MXFP4 experts and target roughly 1.51 TB with selective 8-bit trunk matrices; keep full source precision near 1.56 TB; develop sensitivity-ranked mixed native/3-bit experts between these sizes.
+- Evidence: exact pinned-header accounting closes the proposed 1.28 TB recipe at a conservative 1,254,823,319,114-byte upper bound. A released layer-1 expert converted from 17,547,264 native bytes to a 14,471,424-byte K3X artifact. Least-squares group-scale fitting still produces 0.325174 relative L2 error and 0.945909 cosine on a deterministic four-sample random-normal expert-output proxy.
+- Benchmark result: this is a bounded quality proxy only. Decode tok/s, token agreement, perplexity, coding quality, and full-model divergence were not measured.
+- Reason accepted: byte closure alone cannot override correctness and quality priorities. Starting a five-hour source transfer before choosing a defensible precision recipe would create a large artifact whose quality is not established.
+- Rejected claims: the proxy does not prove that full-model 3-bit quality is unusable, and the roughly 1.51 TB alternative is not accepted or runnable until its 8-bit trunk codec and quality gates exist.
+- Revisit: compare a broader expert sample and an exact native-expert plus 8-bit-trunk candidate, or explicitly accept the 1.28 TB quality risk after end-to-end token/coding evaluation.
