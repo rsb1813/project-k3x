@@ -6,7 +6,7 @@ Milestone 38 quality Local Foundry is actively manufacturing the pinned official
 
 The exact Python first-token compatibility graph is now bound to sealed K3X fragments through layer 0, KDA-MoE, MLA-MoE, resumed execution, and the chunked LM head. The optimized C++ production graph remains incomplete, and the Python path cannot run end to end until all 96 fragments and `model.k3xset` exist. No official token, tok/s, quality result, complete checkpoint, or paid cloud resource exists.
 
-State synchronized on 2026-08-13 at implementation commit `d04794a`. Focused K3X set/store coverage passes 3/3, all six modified Python modules compile, and all five graph CLIs expose `--k3x-set`. A real official shard-1 strict open found 23 records in 11.401 seconds and loaded finite BF16 norm and Q8 q-projection tensors. This is graph-binding and storage evidence only, not an official token or throughput result.
+State synchronized on 2026-08-13 at implementation commit `e7bcaca`. Focused K3X strict/default and sealed set/store coverage passes 4/4, all six modified Python modules compile, and all five graph CLIs expose `--k3x-set`. A real official shard-1 strict open found 23 records in 11.401 seconds and loaded finite BF16 norm and Q8 q-projection tensors; sealed directory-open exposed the same records in 0.004774 seconds. This is graph-binding and storage evidence only, not an official token or throughput result.
 
 ## Completed work
 
@@ -14,6 +14,7 @@ State synchronized on 2026-08-13 at implementation commit `d04794a`. Focused K3X
 - Milestone 37 exact pinned-header accounting for 82,432 routed experts and the proposed selective trunk policy, plus a Reader-valid 14,471,424-byte K3X conversion of released layer-1 expert 0 and a deterministic native-MXFP4 divergence proxy.
 - Milestone 38 group-128 8-bit Python/C++ K3X ABI, portable BF16/Q8 model decode, bounded official-shard converter, 1,510,500,000,000-byte quality plan, authenticated two-slot conductor, completed shards 1 through 5 with durable output identities and verified source deletion, batched crash-safe checkpoints, source-alias streaming without a model-sized temporary copy, and synthetic-tested `K3XSET1` multi-fragment publication without a second payload copy.
 - Python fragment tensor store and sealed-set compatibility graph for canonical BF16/F32/Q8 dense loads, bounded BF16 row reads, native-MXFP4 expert matvecs, all 93 official layers, persisted prefix state, chunked logits, and greedy selection. Focused set/store coverage passes 3/3; end-to-end execution awaits the complete set.
+- Explicit sealed-set directory-open policy that preserves strict Reader defaults and all manufacture/deletion gates while avoiding a full payload rescan for each compatibility-runner subprocess.
 - Milestone 0 deterministic synthetic K3-compatible PyTorch graph, K3X v1 streaming converter, strict Python/C++ readers, and independent portable C++20 runtime.
 - Milestone 28 bounded official layer-1 MoE FFN manufacturing, exact natural Top-16 A/B routing, 32-expert union, portable/CUDA parity, exact residency, B-0029 evidence, and full local verification without a complete shard or checkpoint.
 - Milestone 29 bounded official layer-1 Attention-Residual/KDA/MoE execution, exact full/incremental state parity, B-0030 evidence, public PR #50, and post-merge CI without a complete shard or checkpoint.
@@ -174,7 +175,7 @@ The task bullets below describe the gate reached at each named commit; later M33
 - The L2 batch API submits concurrent operations for one batch but waits before returning. It is not the chartered N/N+1/N+2 deadline pipeline yet.
 - The deadline worker schedules only the current routed layer and remains slower than blocking in all B-0009 rows. ORBIT, multiple L2 workers, eviction-aware priority, and future-layer recall are not implemented.
 - Natural routing, `pread + buffered`, blocking scheduling, disabled L1, and CUDA MoE fusion `none` remain defaults because B-0007 through B-0013 are WSL2 evidence, not native P44 Pro or full-model evidence.
-- Current implementation branch: `codex/official-end-to-end-token`; latest implementation commit `d04794a` over the active Milestone 38 lineage.
+- Current implementation branch: `codex/official-end-to-end-token`; latest implementation commit `e7bcaca` contains the sealed official graph path and D-081 open policy.
 - Linux Python environment: `/home/jolib/.venvs/k3x-m1`; verified WSL builds in the worktree: `build`, `build-liburing`, `build-asan`, and `build-cuda`.
 
 ## Known failures and blockers
@@ -225,7 +226,7 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 B-0036 is the latest formal performance measurement. Host-round-trip/device-closure medians are 102,157,295/116,049,550 ns per exact two-layer, two-position sequence. Both preserve identical natural Top-16 expert IDs and measured output/state/contribution identities, pass independent numerical gates, and transfer zero warm weight bytes.
 
-The latest sealed manufacturing measurement is shard 5 at 735.660 seconds for 16,990,911,504 source bytes and 16,373,248,256 K3X bytes. Shard 2 had identical source/output sizes and tensor composition and took 978.222 seconds, so the D-077 plus D-079 path is 242.562 seconds or 24.796% lower elapsed, a 1.3297x ratio. This combined result does not isolate either optimization. Shards 3 and 4 are sealed but did not emit timing. Separately, one strict official shard-1 Python open measured 11.401 seconds; it is a WSL2 diagnostic, not token startup authority.
+The latest sealed manufacturing measurement is shard 5 at 735.660 seconds for 16,990,911,504 source bytes and 16,373,248,256 K3X bytes. Shard 2 had identical source/output sizes and tensor composition and took 978.222 seconds, so the D-077 plus D-079 path is 242.562 seconds or 24.796% lower elapsed, a 1.3297x ratio. This combined result does not isolate either optimization. Shards 3 and 4 are sealed but did not emit timing. Separately, official shard-1 strict/sealed directory opens measured 11.401/0.004774 seconds; this is a WSL2 integrity-policy diagnostic, not token startup authority.
 
 Device closure's classified existing-event CUDA time averages 36,345,792 ns KDA, 19,075,499 ns device route preparation, and 31,698,525 ns MoE FFN, with zero unclassified time. Their shares are 41.719%, 21.896%, and 36.385%. KDA is the largest single operation but not a majority.
 
