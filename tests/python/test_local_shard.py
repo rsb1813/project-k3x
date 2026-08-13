@@ -74,7 +74,8 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
 
     root_and_file_sha256 = local_shard.root_and_file_sha256
 
-    def capture_output_audit(stream, length):
+    def capture_output_audit(stream, length, *, chunk_bytes):
+        assert chunk_bytes == 128 * 1024 * 1024
         with output_audit_lock.open("a+b") as contender:
             try:
                 fcntl.flock(contender.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -82,7 +83,7 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
                 pass
             else:
                 raise AssertionError("output audit was not serialized")
-        return root_and_file_sha256(stream, length)
+        return root_and_file_sha256(stream, length, chunk_bytes=chunk_bytes)
 
     monkeypatch.setattr(local_shard, "root_and_file_sha256", capture_output_audit)
 

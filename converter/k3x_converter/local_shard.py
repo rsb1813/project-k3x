@@ -324,7 +324,9 @@ def convert_local_official_shard(
     with _staging_lock(output_audit_lock_path):
         with output_path.open("rb") as stream:
             observed_root, output_sha256 = root_and_file_sha256(
-                stream, output_path.stat().st_size
+                stream,
+                output_path.stat().st_size,
+                chunk_bytes=128 * 1024 * 1024,
             )
     if observed_root != reader.superblock.root_sha256:
         raise K3XError("ROOT_SHA256_MISMATCH")
