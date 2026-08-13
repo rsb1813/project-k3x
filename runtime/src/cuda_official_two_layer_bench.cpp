@@ -49,6 +49,7 @@ struct Arguments {
     std::uint64_t resident_bytes{};
     std::uint64_t warmup{};
     std::uint64_t iterations{};
+    bool attribution{};
 };
 
 std::optional<std::uint64_t> parse_u64(std::string_view text) {
@@ -105,6 +106,15 @@ std::optional<Arguments> parse_arguments(int argc, char** argv) {
                 return std::nullopt;
             }
             result.iterations = *parsed;
+        } else if (key == "--attribution") {
+            if (value == "true") {
+                result.attribution = true;
+            } else if (value == "false") {
+                result.attribution = false;
+            } else {
+                std::cerr << "invalid attribution\n";
+                return std::nullopt;
+            }
         } else {
             std::cerr << "unknown argument\n";
             return std::nullopt;
@@ -1028,8 +1038,11 @@ int main(int argc, char** argv) {
         return 4;
     }
 
+    std::optional<k3x::Profiler> attribution_profiler;
+    if (arguments->attribution) attribution_profiler.emplace();
     auto backend = k3x::make_cuda_backend(
-        backend_options(arguments->resident_bytes));
+        backend_options(arguments->resident_bytes),
+        attribution_profiler ? &*attribution_profiler : nullptr);
     if (!backend) {
         std::cerr << k3x::error_code_name(backend.error()) << ": "
                   << backend.message() << '\n';
@@ -1054,11 +1067,15 @@ int main(int argc, char** argv) {
     std::vector<std::uint64_t> wall_nanoseconds;
     wall_nanoseconds.reserve(arguments->iterations);
     float maximum_error{};
+    k3x::OfficialTwoLayerAttribution attribution;
     for (std::uint64_t index = 0; index < arguments->iterations; ++index) {
         const auto start = std::chrono::steady_clock::now();
+        k3x::OfficialTwoLayerAttribution measured_attribution;
         auto measured = k3x::official_two_layer_cuda(
             *backend.value(), inputs, cuda_layers, states, config, 16, 4, 25,
-            k3x::ProfilePhase::decode, mode);
+            k3x::ProfilePhase::decode, mode,
+            attribution_profiler ? &*attribution_profiler : nullptr,
+            arguments->attribution ? &measured_attribution : nullptr);
         const auto elapsed = static_cast<std::uint64_t>(
             std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - start).count());
@@ -1108,6 +1125,22 @@ int main(int argc, char** argv) {
             return 5;
         }
         maximum_error = std::max(maximum_error, error);
+        if (arguments->attribution) {
+            attribution.total_wall_nanoseconds +=
+                measured_attribution.total_wall_nanoseconds;
+            attribution.front_wall_nanoseconds +=
+                measured_attribution.front_wall_nanoseconds;
+            attribution.front_device_nanoseconds +=
+                measured_attribution.front_device_nanoseconds;
+            attribution.route_wall_nanoseconds +=
+                measured_attribution.route_wall_nanoseconds;
+            attribution.tail_wall_nanoseconds +=
+                measured_attribution.tail_wall_nanoseconds;
+            attribution.tail_device_nanoseconds +=
+                measured_attribution.tail_device_nanoseconds;
+            attribution.unattributed_wall_nanoseconds +=
+                measured_attribution.unattributed_wall_nanoseconds;
+        }
         wall_nanoseconds.push_back(elapsed);
         last = std::move(measured.value());
     }
@@ -1123,7 +1156,10 @@ int main(int argc, char** argv) {
     const std::array measured_state_sha256{
         state_digest(last.final_states[0]),
         state_digest(last.final_states[1])};
-    std::cout << "{\"schema\":\"k3x-official-two-layer-bench-v1\""
+    std::cout << "{\"schema\":\""
+              << (arguments->attribution
+                      ? "k3x-official-two-layer-attribution-v1"
+                      : "k3x-official-two-layer-bench-v1") << "\""
               << ",\"mode\":\""
               << (arguments->mode == Mode::host_round_trip
                       ? "host-round-trip" : "device-closure") << "\""
@@ -1154,6 +1190,42 @@ int main(int argc, char** argv) {
               << last.telemetry.layer_front_calls
               << ",\"layer_tail_calls\":"
               << last.telemetry.layer_tail_calls
+              << (arguments->attribution
+                      ? ",\"total_wall_nanoseconds\":" : "")
+              << (arguments->attribution
+                      ? std::to_string(attribution.total_wall_nanoseconds)
+                      : "")
+              << (arguments->attribution
+                      ? ",\"front_wall_nanoseconds\":" : "")
+              << (arguments->attribution
+                      ? std::to_string(attribution.front_wall_nanoseconds)
+                      : "")
+              << (arguments->attribution
+                      ? ",\"front_device_nanoseconds\":" : "")
+              << (arguments->attribution
+                      ? std::to_string(attribution.front_device_nanoseconds)
+                      : "")
+              << (arguments->attribution
+                      ? ",\"route_wall_nanoseconds\":" : "")
+              << (arguments->attribution
+                      ? std::to_string(attribution.route_wall_nanoseconds)
+                      : "")
+              << (arguments->attribution
+                      ? ",\"tail_wall_nanoseconds\":" : "")
+              << (arguments->attribution
+                      ? std::to_string(attribution.tail_wall_nanoseconds)
+                      : "")
+              << (arguments->attribution
+                      ? ",\"tail_device_nanoseconds\":" : "")
+              << (arguments->attribution
+                      ? std::to_string(attribution.tail_device_nanoseconds)
+                      : "")
+              << (arguments->attribution
+                      ? ",\"unattributed_wall_nanoseconds\":" : "")
+              << (arguments->attribution
+                      ? std::to_string(
+                            attribution.unattributed_wall_nanoseconds)
+                      : "")
               << ",\"state_seeds\":"
               << stats.official_kda_device_state_seeds
               << ",\"state_continuations\":"
