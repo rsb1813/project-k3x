@@ -1,0 +1,1 @@
+{"downloaded_payload_bytes":844335616,"error":"expected mat1 and mat2 to have the same dtype, but got: float != c10::BFloat16","format":"k3x-official-recovered-download-v1","layer_id":3,"published":false}
