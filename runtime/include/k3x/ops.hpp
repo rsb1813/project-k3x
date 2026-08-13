@@ -1,6 +1,7 @@
 // C++ reference runtime의 독립 수치 primitive를 선언합니다.
 #pragma once
 
+#include "k3x/format.hpp"
 #include "k3x/status.hpp"
 
 #include <cstddef>
@@ -33,4 +34,8 @@ Result<std::vector<float>> decode_groupwise_8bit(
     std::span<const std::byte> scales_bf16,
     std::size_t values,
     std::size_t group_size = 128);
+Result<std::vector<float>> decode_tensor_f32(
+    const TensorRecord& record,
+    std::span<const std::byte> data,
+    std::span<const std::byte> auxiliary = {});
 }

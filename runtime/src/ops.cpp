@@ -6,6 +6,8 @@
 #include <bit>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
+#include <limits>
 
 namespace k3x {
 void rms_norm(std::span<float> output, std::span<const float> input,
@@ -155,5 +157,50 @@ Result<std::vector<float>> decode_groupwise_8bit(
         }
     }
     return Result<std::vector<float>>::success(std::move(output));
+}
+
+Result<std::vector<float>> decode_tensor_f32(
+    const TensorRecord& record,
+    std::span<const std::byte> data,
+    std::span<const std::byte> auxiliary) {
+    std::size_t values = 1;
+    if (!record.rank || record.rank > record.dimensions.size()) {
+        return Result<std::vector<float>>::failure(ErrorCode::invalid_state);
+    }
+    for (std::size_t index = 0; index < record.rank; ++index) {
+        const auto dimension = record.dimensions[index];
+        if (!dimension ||
+            dimension > std::numeric_limits<std::size_t>::max() / values) {
+            return Result<std::vector<float>>::failure(ErrorCode::invalid_state);
+        }
+        values *= static_cast<std::size_t>(dimension);
+    }
+    if (record.quantization == 3 && record.dtype == 2) {
+        return decode_groupwise_8bit(data, auxiliary, values, 128);
+    }
+    if (record.quantization != 0 || !auxiliary.empty()) {
+        return Result<std::vector<float>>::failure(ErrorCode::invalid_state);
+    }
+    std::vector<float> output(values);
+    if (record.dtype == 1) {
+        if (data.size() != values * sizeof(float)) {
+            return Result<std::vector<float>>::failure(ErrorCode::invalid_state);
+        }
+        std::memcpy(output.data(), data.data(), data.size());
+        return Result<std::vector<float>>::success(std::move(output));
+    }
+    if (record.dtype == 3) {
+        if (data.size() != values * 2) {
+            return Result<std::vector<float>>::failure(ErrorCode::invalid_state);
+        }
+        for (std::size_t index = 0; index < values; ++index) {
+            const auto low = std::to_integer<std::uint16_t>(data[index * 2]);
+            const auto high = std::to_integer<std::uint16_t>(data[index * 2 + 1]);
+            output[index] = std::bit_cast<float>(
+                static_cast<std::uint32_t>(low | (high << 8U)) << 16U);
+        }
+        return Result<std::vector<float>>::success(std::move(output));
+    }
+    return Result<std::vector<float>>::failure(ErrorCode::invalid_state);
 }
 }

@@ -41,5 +41,24 @@ int main() {
         quant8_codes, quant3_scales, 2, 128);
     if (!quant8 || quant8.value().size() != 2 ||
         quant8.value()[0] != -127.0F || quant8.value()[1] != 127.0F) return 6;
+    k3x::TensorRecord bf16_record{};
+    bf16_record.dtype = 3;
+    bf16_record.rank = 1;
+    bf16_record.dimensions[0] = 2;
+    bf16_record.logical_length = 4;
+    std::array<std::byte, 4> bf16_data{
+        std::byte{0x80}, std::byte{0x3f}, std::byte{0x00}, std::byte{0xc0}};
+    const auto bf16 = k3x::decode_tensor_f32(bf16_record, bf16_data);
+    if (!bf16 || bf16.value()[0] != 1.0F || bf16.value()[1] != -2.0F) return 7;
+    k3x::TensorRecord quant8_record{};
+    quant8_record.dtype = 2;
+    quant8_record.quantization = 3;
+    quant8_record.rank = 1;
+    quant8_record.dimensions[0] = 2;
+    quant8_record.logical_length = 8;
+    const auto quant8_tensor = k3x::decode_tensor_f32(
+        quant8_record, quant8_codes, quant3_scales);
+    if (!quant8_tensor || quant8_tensor.value()[0] != -127.0F ||
+        quant8_tensor.value()[1] != 127.0F) return 8;
     return 0;
 }

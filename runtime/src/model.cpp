@@ -494,12 +494,30 @@ private:
 
     const Vector& tensor(const std::string& name) {
         const auto id = fnv1a64(name.c_str());
-        if (const auto found = tensors_.find(id); found != tensors_.end()) return found->second;
+        if (const auto found = tensors_.find(id); found != tensors_.end())
+            return found->second;
+        const auto record = std::find_if(
+            reader_.tensors().begin(), reader_.tensors().end(),
+            [id](const auto& item) { return item.tensor_id == id; });
+        if (record == reader_.tensors().end()) {
+            throw std::runtime_error("missing tensor: " + name);
+        }
         auto bytes = reader_.read_tensor(id);
-        if (!bytes || bytes.value().size() % sizeof(float)) throw std::runtime_error("missing FP32 tensor: " + name);
-        Vector values(bytes.value().size() / sizeof(float));
-        std::memcpy(values.data(), bytes.value().data(), bytes.value().size());
-        return tensors_.emplace(id, std::move(values)).first->second;
+        if (!bytes)
+            throw std::runtime_error("missing tensor payload: " + name);
+        std::vector<std::byte> auxiliary;
+        if (record->auxiliary_length) {
+            auto loaded = reader_.read_auxiliary(id);
+            if (!loaded)
+                throw std::runtime_error("missing tensor auxiliary: " + name);
+            auxiliary = std::move(loaded.value());
+        }
+        auto decoded = decode_tensor_f32(*record, bytes.value(), auxiliary);
+        if (!decoded)
+            throw std::runtime_error("unsupported tensor encoding: " + name);
+        return tensors_
+            .emplace(id, std::move(decoded.value()))
+            .first->second;
     }
 
     DenseWeightView dense_weight(const std::string& name, std::size_t rows,
