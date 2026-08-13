@@ -2,9 +2,9 @@
 
 ## Current milestone
 
-Milestone 33 is publicly integrated through PR #58 at implementation head `9ce513f9d79b6cee88b7bb2de176e6fbbb79f43b`; this publication update records its successful post-merge CI. The bounded 3,641,057,536-byte official layers 1 and 2 fixture contains 119 verified range objects, and sealed B-0034 compares exact host-round-trip and experimental device-closure execution. Device closure removes logical inter-layer transfers but is 13.823803% slower, so host round trip remains the default. The bounded artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, full shard, or paid cloud resource exists.
+Milestone 33 is publicly complete through implementation PR #58 and publication PR #59 at public head `f46147f1b1f0c908fa1608f194e1305b328a0d2e`. The bounded 3,641,057,536-byte official layers 1 and 2 fixture contains 119 verified range objects, and sealed B-0034 compares exact host-round-trip and experimental device-closure execution. Device closure removes logical inter-layer transfers but is 13.823803% slower, so host round trip remains the default. Milestone 34 attribution design D-072 and its implementation plan are local; no M34 implementation or B-0035 measurement exists. The bounded artifact remains non-executable through `k3x_run`; no token metric, quality result, complete checkpoint, full shard, or paid cloud resource exists.
 
-State audited last on 2026-08-13 at public M33 implementation head `9ce513f9d79b6cee88b7bb2de176e6fbbb79f43b` and public evidence commit `ead4371`. Branch correctness `31673610347`, pull-request correctness `31673636564`, pull-request CodeQL `31673636680`, post-merge correctness `31673888294`, and post-merge CodeQL `31673888289` succeeded. Fresh local verification passes portable CTest 20/20 plus Python 652/134, liburing/direct CTest 17/17, ASan/UBSan CTest 17/17, CUDA CTest 36/36, actual official two-layer harness 6/6, evidence regressions 93/93, strict B-0034 rehash, actual device-closure Compute Sanitizer with zero errors, and the production non-executable guard. The complete CUDA Python suite exceeded the ten-minute command limit and is not claimed as passed. No complete shard, full checkpoint, or paid cloud resource is in use.
+State audited last on 2026-08-13 at public M33 publication head `f46147f1b1f0c908fa1608f194e1305b328a0d2e`. PR #59 pull-request correctness `31674244214`, push correctness `31674241529`, and CodeQL `31674244202` passed; post-merge correctness `31674457349` and CodeQL `31674457230` also succeeded. Fresh M33 local verification remains portable CTest 20/20 plus Python 652/134, liburing/direct CTest 17/17, ASan/UBSan CTest 17/17, CUDA CTest 36/36, actual official two-layer harness 6/6, evidence regressions 93/93, strict B-0034 rehash, actual device-closure Compute Sanitizer with zero errors, and the production non-executable guard. The complete CUDA Python suite exceeded the ten-minute command limit and is not claimed as passed. No complete shard, full checkpoint, or paid cloud resource is in use.
 
 ## Completed work
 
@@ -191,9 +191,10 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 ## Next concrete tasks
 
-1. Merge the M33 publication-only state update after its correctness and CodeQL checks pass.
-2. Start the next local milestone by attributing device front/tail kernel and synchronization overhead before considering wider device closure.
-3. Keep the complete checkpoint, full-shard downloads, paid Cloud Run, and billable SKYFORGE execution deferred behind explicit user execution.
+1. Implement the D-072 caller-owned accumulator with RED/GREEN CUDA ownership and parity tests.
+2. Add the opt-in attribution harness schema while proving default B-0034 output remains unchanged.
+3. Add fail-closed B-0035 evidence tooling, pass actual-artifact gates, then run one sealed measurement.
+4. Keep kernel fusion, wider closure, complete checkpoint, full-shard downloads, paid Cloud Run, and billable SKYFORGE execution deferred until evidence or explicit user execution authorizes them.
 
 ## Hardware assumptions
 

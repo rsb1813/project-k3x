@@ -500,6 +500,12 @@ The B-0034 evidence boundary is implemented separately from the CUDA harness. It
 
 K3X v1 already supports canonical tensor names and per-layer directories, so M33 uses one execution-ordered 3,641,057,536-byte bounded artifact rather than a format revision. Its 119 content-addressed objects cover only required ranges from the pinned layer-1 and layer-2 shards. Sealed B-0034 measures host-round-trip and device-closure modes over the same resident expert union. Device closure removes all 57,344-byte logical inter-layer transfers in each direction per sequence, but adds 86,016 resident bytes and is 13.823803% slower at the median. The accepted architecture therefore keeps host round trip as the default and retains device closure as an experimental exact path. The next architecture boundary is front/tail kernel and synchronization attribution or fusion before any wider closure. No full-checkpoint execution, token throughput, quality result, physical PCIe result, or production-default change exists. The complete design is in [`docs/superpowers/specs/2026-08-12-k3x-official-two-layer-device-closure-design.md`](docs/superpowers/specs/2026-08-12-k3x-official-two-layer-device-closure-design.md).
 
+## Milestone 34 proposed two-layer closure attribution
+
+D-072 accepts an attribution-only boundary before any fusion. An optional caller-owned accumulator snapshots the existing backend `Profiler` around the unchanged front and tail calls, measures canonical host route/expert-resolution wall time, and reports the checked wrapper remainder. Reusing existing events avoids new CUDA synchronization and keeps the exact wrapper as the single ownership and cleanup authority.
+
+The historical path passes no accumulator and preserves the B-0034 schema. Explicit attribution creates a profiler-backed backend and emits a separate `k3x-official-two-layer-attribution-v1` benchmark schema. The proposed B-0035 transaction retains the B-0034 artifact, correctness, residency, traffic, and 3/20 measurement contracts. No attribution implementation or B-0035 result exists yet. The design is in [`docs/superpowers/specs/2026-08-13-k3x-two-layer-closure-attribution-design.md`](docs/superpowers/specs/2026-08-13-k3x-two-layer-closure-attribution-design.md).
+
 ## TITAN component registry
 
 Status meanings are strict. `Implemented` requires code and passing tests. `Experimental` requires code behind a non-default switch. `Proposed` is architecture-only. `Reserved` has no accepted responsibility.
