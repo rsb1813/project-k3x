@@ -1,5 +1,6 @@
 # 공식 safetensors shard 하나를 독립 K3X 제조 단위로 변환하는 경계를 검증합니다.
 import errno
+import fcntl
 import hashlib
 import json
 
@@ -48,6 +49,8 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
     inspect_shard = local_shard.inspect_shard
     sha256 = local_shard._sha256
     staging_ready = tmp_path / "source.ram-ready"
+    staging_lock = tmp_path / "ram-stage.lock"
+    copyfile = local_shard.shutil.copyfile
 
     def capture(path, outputs, *, chunk_bytes):
         assert staging_ready.is_file()
@@ -73,6 +76,18 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
 
     monkeypatch.setattr(local_shard.os, "link", reject_cross_device_link)
 
+    def capture_copyfile(source_path, destination_path):
+        with staging_lock.open("a+b") as contender:
+            try:
+                fcntl.flock(contender.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                pass
+            else:
+                raise AssertionError("RAM staging copy was not serialized")
+        return copyfile(source_path, destination_path)
+
+    monkeypatch.setattr(local_shard.shutil, "copyfile", capture_copyfile)
+
     report = convert_local_official_shard(
         source,
         tmp_path / "output",
@@ -81,6 +96,7 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
         chunk_bytes=256,
         temporary_directory=tmp_path / "staging-work",
         staging_ready_path=staging_ready,
+        staging_lock_path=staging_lock,
     )
 
     assert report.source_sha256 == source_sha256

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import errno
+import fcntl
 import hashlib
 import json
 import math
@@ -10,6 +11,7 @@ import re
 import shutil
 import struct
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,6 +24,21 @@ from .local_foundry import source_identity
 from .reader import K3XReader
 from .safetensors_reader import SourceTensor, inspect_shard, iter_tensor_chunks
 from .writer import convert
+
+
+@contextmanager
+def _staging_lock(path: Path | None):
+    if path is None:
+        yield
+        return
+    lock_path = Path(path)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+b") as stream:
+        fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
 _EXPERT = re.compile(
@@ -229,6 +246,7 @@ def convert_local_official_shard(
     chunk_bytes: int = 8 * 1024 * 1024,
     temporary_directory: Path | None = None,
     staging_ready_path: Path | None = None,
+    staging_lock_path: Path | None = None,
 ) -> LocalShardReport:
     source_path = Path(source_path).resolve(strict=True)
     verified_source_identity = source_identity(source_path)
@@ -249,16 +267,25 @@ def convert_local_official_shard(
         except OSError as exc:
             if exc.errno != errno.EXDEV:
                 raise K3XError("LOCAL_SOURCE_HARDLINK", source_path.name) from exc
-            shutil.copyfile(source_path, source_link)
-        source_sha256 = _sha256(source_link)
-        if source_sha256 != expected_sha256:
-            raise K3XError("LOCAL_SOURCE_SHA256", source_path.name)
-        if staging_ready_path is not None:
-            ready_path = Path(staging_ready_path)
-            ready_path.parent.mkdir(parents=True, exist_ok=True)
-            partial_ready_path = ready_path.with_suffix(ready_path.suffix + ".partial")
-            partial_ready_path.write_text(source_sha256 + "\n", encoding="ascii")
-            os.replace(partial_ready_path, ready_path)
+            with _staging_lock(staging_lock_path):
+                shutil.copyfile(source_path, source_link)
+                source_sha256 = _sha256(source_link)
+                if source_sha256 != expected_sha256:
+                    raise K3XError("LOCAL_SOURCE_SHA256", source_path.name)
+                if staging_ready_path is not None:
+                    ready_path = Path(staging_ready_path)
+                    ready_path.parent.mkdir(parents=True, exist_ok=True)
+                    partial_ready_path = ready_path.with_suffix(
+                        ready_path.suffix + ".partial"
+                    )
+                    partial_ready_path.write_text(
+                        source_sha256 + "\n", encoding="ascii"
+                    )
+                    os.replace(partial_ready_path, ready_path)
+        else:
+            source_sha256 = _sha256(source_link)
+            if source_sha256 != expected_sha256:
+                raise K3XError("LOCAL_SOURCE_SHA256", source_path.name)
         tensors = inspect_shard(source_link)
         outputs, quant8_shapes, packed_shapes, quant8_count, native_expert_count = _plan(
             tensors

@@ -6,6 +6,7 @@ param(
     [string]$Ledger = "C:\K3X\immortal-ledger-quality.json",
     [string]$Progress = "C:\K3X\foundry-progress.jsonl",
     [string]$TemporaryDirectory = "",
+    [string]$StagingLock = "C:\K3X\foundry-ram-stage.lock",
     [switch]$Finalize
 )
 
@@ -110,12 +111,15 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
     $sourceLinux = (& wsl -e wslpath -a -u $target).Trim()
     $temporaryArgument = ""
     $stagingReadyArgument = ""
+    $stagingLockArgument = ""
     if ($TemporaryDirectory) {
         $temporaryArgument = "--temporary-directory $TemporaryDirectory"
         $stagingReady = $target + ".ram-ready"
         Remove-Item -LiteralPath $stagingReady -Force -ErrorAction SilentlyContinue
         $stagingReadyLinux = (& wsl -e wslpath -a -u $stagingReady).Trim()
         $stagingReadyArgument = "--staging-ready-file $stagingReadyLinux"
+        $stagingLockLinux = (& wsl -e wslpath -a -u $StagingLock).Trim()
+        $stagingLockArgument = "--staging-lock-file $stagingLockLinux"
         $prefetchJob = Start-NextDownloadAfterMarker ($index + 1) $stagingReady
     }
     else {
@@ -131,6 +135,7 @@ for ($index = $StartIndex; $index -le $EndIndex; $index++) {
         "--ledger $((& wsl -e wslpath -a -u $Ledger).Trim())",
         $temporaryArgument,
         $stagingReadyArgument,
+        $stagingLockArgument,
         "--output-budget-bytes 1510500000000",
         "--delete-source"
     ) -join " "
