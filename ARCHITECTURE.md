@@ -626,6 +626,12 @@ The in-process driver retains one authenticated `OfficialRuntimeContext`, packed
 
 The measurements establish the next architecture boundary. Q8 trunk residency in system RAM eliminates second-token Q8 storage misses, but pageable host-to-device projection supply remains large and nonresident routed experts still require cold reads. The next production design must combine lower-bit trunk execution, native-Linux storage, deadline overlap, and a quality-gated reduction or amortization of expert bytes per token.
 
+## Milestone 46 persistent ext4 extent hot bank
+
+`PersistentExtentCache` is an optional, byte-bounded L2 hot bank for immutable MXFP4 tensor extents and chunked LM-head row slices. Each cache object binds a source/set-derived key, exact byte length, and payload SHA-256 under a fixed header. Publication uses `fsync` plus atomic rename, and corruption fails closed. Stable admission never mutates the 96 source fragments; a zero-byte budget preserves the previous path.
+
+B-0064 populates 18,369,727,840 bytes of WSL ext4 cache while executing three lossy Top-4 tokens. B-0065 replays the same deterministic sequence with 3,147 cache hits, zero cache misses, and zero new admissions. Its two-token decode average is 0.0226354 tok/s and the last token takes 41.308851 seconds. This isolates the next boundary: after cold DrvFS extent reads are removed, 52,481,428,480 bytes of host-resident Q8 trunk weights, repeated H2D supply, 1,159 packed matvecs, and Python launch/orchestration dominate. The cache is therefore an implemented WSL/native-storage bridge, not a production throughput solution.
+
 ## K3X data flow
 
 The file format is deliberately execution ordered. The converter reads bounded source chunks, copies or transforms extents, computes each extent CRC32C while writing, and publishes an atomic resume ledger after each bounded 128-extent `fsync` checkpoint. On resume it revalidates every committed extent against both the current source and partial artifact before truncating only the uncommitted suffix to the final durable extent's exact end. Final root SHA-256 generation rereads the complete output, and the strict Reader verifies the source-derived per-extent CRCs before the local Foundry ledger permits source deletion. Only then is the `.partial` artifact atomically renamed.

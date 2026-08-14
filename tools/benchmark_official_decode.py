@@ -115,6 +115,11 @@ def main() -> int:
                 {
                     "q8": context.packed_q8_cache.snapshot(),
                     "mxfp4": context.packed_mxfp4_cache.snapshot(),
+                    "persistent_extent": (
+                        context.persistent_extent_cache.snapshot()
+                        if context.persistent_extent_cache is not None
+                        else None
+                    ),
                 }
             )
             current_token = state.generated_tokens[-1]

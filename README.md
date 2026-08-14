@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2045-measured%20decode-20a46b?style=flat-square)](#current-limitations)
+[![Milestone](https://img.shields.io/badge/milestone%2046-hot%20extent%20replay-20a46b?style=flat-square)](#current-limitations)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -34,7 +34,7 @@ flowchart LR
 ```
 
 > [!IMPORTANT]
-> The complete 96-fragment, 1,507,512,467,456-byte K3X set executes all 93 released Kimi K3 layers and the LM head on the local RTX 5080. Milestone 45 now measures real two-token decode with persistent KDA/MLA state and packed caches. Natural Top-16 B-0062 reaches 0.00263 tok/s and reproduces first token 9689. Lossy Top-4 with the Q8 trunk resident in RAM reaches 0.01396 tok/s, but changes the first token to 21339 and is not a quality mode. The current bottleneck is cold expert supply plus host-to-device trunk traffic, not state publication. No paid cloud resource was used.
+> The complete 96-fragment, 1,507,512,467,456-byte K3X set executes all 93 released Kimi K3 layers and the LM head on the local RTX 5080. Natural Top-16 B-0062 reaches 0.00263 tok/s and reproduces first token 9689. Lossy Top-4 B-0065 reaches 0.02264 tok/s on a fully hot 18.37 GB ext4 extent replay, but changes the first token to 21339 and is not a quality mode. Its final token still takes 41.31 seconds, proving trunk H2D, packed matvec launches, and graph orchestration now dominate over cold storage. No paid cloud resource was used.
 
 | Milestone | GitHub status | Evidence |
 |---|---|---|
@@ -73,6 +73,7 @@ flowchart LR
 | Milestone 43 | Public branch `codex/official-end-to-end-token` | B-0055 packs and retains all layer-0 Q8 projections; 7.346 s cold to 0.214 s warm median, 34.40x |
 | Milestone 44 | Public branch `codex/official-end-to-end-token` | B-0056 native MXFP4 residency, B-0060 expert-major Top-16 batching, and B-0061 full packed layer-1 residency at 0.4488 s warm median |
 | Milestone 45 | Public branch `codex/official-end-to-end-token` | B-0062 measures 0.00263 tok/s natural Top-16; B-0063 measures 0.01396 tok/s lossy Top-4 with zero second-token Q8 misses |
+| Milestone 46 | Public branch `codex/official-end-to-end-token` | B-0065 fully hot ext4 replay measures 0.02264 tok/s lossy Top-4; storage is no longer the leading bottleneck |
 
 The latest audited public implementation baseline is Milestone 34 integration head `a7ba5204`. Push correctness `31677396649`, pull-request correctness `31677408262`, and pull-request CodeQL `31677408278` passed before merge; post-merge `main` correctness `31677651704` and CodeQL `31677651706` also succeeded.
 

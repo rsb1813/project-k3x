@@ -656,8 +656,15 @@
 - [x] Select a bounded content-validated extent cache instead of copying full 16 GB fragments.
 - [x] Add focused hit, budget, and corruption regressions.
 - [x] Connect MXFP4 tensors and LM-head row slices to the optional cache.
-- [ ] Measure a three-token Top-4 session with Q8 RAM residency.
-- [ ] Record quality, cache deltas, TPS, and the next bottleneck.
+- [x] Measure a three-token Top-4 session with Q8 RAM residency.
+- [x] Record quality, cache deltas, TPS, and the next bottleneck.
+
+### Milestone 47 lower-bit trunk gate
+
+- [ ] Add an explicit Q4 trunk reference codec and packed CUDA matvec without replacing Q8.
+- [ ] Measure released-matrix Q8 versus Q4 error, resident latency, and transfer bytes.
+- [ ] Run one actual layer only if the component gate improves the measured boundary.
+- [ ] Run full decode only if layer quality and wall time justify the cost.
 
 ### 3-bit runtime correctness slice
 

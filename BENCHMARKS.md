@@ -1749,3 +1749,26 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Cache result: all 1,159 Q8 matrices fit across RAM and VRAM; the second token adds zero Q8 misses and records 41 device plus 1,118 host hits. MXFP4 records 153 second-token device hits and 951 new misses, including 4,503,797,760 rejected bytes after the device cache fills.
 - Resource result: peak CUDA allocation/reservation is 10,365,210,112/10,812,915,712 bytes. Physical NVMe/H2D traffic, utilization integration, prefill, and coding quality were not measured.
 - Evidence: implementation commit `35c2eb2`, summary SHA-256 `c51840db3f8ae3f170b1639463e52137ae657cf277919926152c61b702f46c34`.
+
+## B-0064 fixed Top-4 while populating the ext4 extent hot bank
+
+- Date: 2026-08-14.
+- Hardware/model: AMD Ryzen 7 9800X3D, RTX 5080 16 GB, 96 GB RAM, WSL2, complete sealed official K3X set on DrvFS, 64 GiB persistent ext4 cache, input token 1, three generated tokens.
+- Mode: explicitly lossy fixed Top-4, experimental direct Q8, native expert-major MXFP4, persistent in-memory state, 60 GiB Q8 host plus 2 GiB device cache, zero MXFP4 host plus 7 GiB device cache.
+- Quality: generated tokens are `[21339, 13500, 17830]`; the first token differs from exact 9689. Coding/agentic quality remains unmeasured.
+- Result: token walls are 459.182465, 78.840365, and 65.266149 seconds. The two decode tokens total 144.106514 seconds, or 0.0138786 tok/s; the last token alone is 0.0153219 tok/s.
+- Cache result: 2,782 extents occupy 18,369,727,840 bytes, with 365 hits, 2,782 misses, and zero rejected bytes at completion. All Q8 matrices remain resident across RAM/VRAM after first use.
+- Resource result: physical NVMe/H2D traffic, utilization integration, prefill, and coding quality were not measured.
+- Evidence: implementation commit `6d649d5`, canonical record SHA-256 `564713f213b437e07fd65a73bd03952eec7a081b24b8e44339bd0a0d52fcf402`, summary-file SHA-256 `f7c58fdd285536c68dd611153d8b9823b1d8a0cc21aa7ab530cdf5d5e90d51a5`.
+
+## B-0065 fixed Top-4 full ext4 hot-bank replay
+
+- Date: 2026-08-14.
+- Hardware/model: same local hardware, sealed set, cache budgets, and three-token input boundary as B-0064; the 18,369,727,840-byte ext4 extent bank is already populated.
+- Mode: same explicitly lossy fixed Top-4 path as B-0064.
+- Quality: generated tokens are again `[21339, 13500, 17830]`, proving deterministic replay but not exact or coding-quality parity.
+- Result: token walls are 416.128496, 47.048368, and 41.308851 seconds. The two decode tokens total 88.357219 seconds, yielding 0.0226354 tok/s. The last token alone is 0.0242079 tok/s. Average throughput is 1.621x B-0063 and remains about 221x below 5 tok/s.
+- Cache result: 3,147 persistent extent hits, zero misses, zero admissions, and zero rejected bytes. Q8 records 82 device and 2,236 host hits across the two decode tokens; MXFP4 records 288 device hits but still cycles nonresident experts through CUDA.
+- Resource result: peak CUDA allocation/reservation is 10,365,603,328/10,812,915,712 bytes. Physical NVMe/H2D traffic, utilization integration, prefill, and coding quality were not measured.
+- Bottleneck: the fully hot last-token wall is consistent with roughly 92 times the B-0061 resident layer boundary. Storage is no longer the leading explanation; Q8 trunk H2D, 1,159 matvec calls, expert execution, and Python orchestration are next.
+- Evidence: implementation commit `6d649d5`, canonical record SHA-256 `3bde0691f9c70f7734f566fa101349eaa32acc123df274c29dfbf08e94c8e445`, summary-file SHA-256 `d15ca5866c7ec89610d5c0ca8125fbd9c4b91d88a3bdf2e9720502c330ea0b4a`.

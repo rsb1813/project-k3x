@@ -1231,3 +1231,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Evidence: B-0063 records zero new Q8 misses on the second token, with 41 device hits and 1,118 host hits. MXFP4 still records 951 new misses. The first greedy token changes from exact 9689 to 21339, so quality divergence is directly observed.
 - Benchmark result: second-token wall falls from 380.562451 to 71.624887 seconds and throughput rises from 0.00262769 to 0.0139616 tok/s, a 5.313x speedup. The result remains 358x below 5 tok/s.
 - Revisit: fixed Top-4 may only remain behind an explicit lossy flag. Adaptive K, exact rescue, and coding-quality evaluation are required before a user-facing fast mode is selected.
+
+## D-108 — Cache authenticated tensor extents on native ext4 without copying the full set
+
+- Date: 2026-08-14.
+- Status: implemented, focused-tested, and full-model measured; optional/non-default.
+- Decision: add a bounded persistent cache for only requested MXFP4 extents and LM-head row slices. Bind each object to its logical source identity, exact length, and payload SHA-256; publish atomically; reject corruption; preserve the original K3X fragments.
+- Alternatives considered: copy the complete 1.5 TB set to WSL ext4; cache complete 16 GB fragments; continue reading every cold extent through DrvFS; treat unchecked files as trusted cache entries.
+- Evidence: focused hit, budget, corruption, real MXFP4-store, and runtime-context coverage passes. B-0065 reuses the 18,369,727,840-byte bank with 3,147 hits, zero misses, zero admissions, and the same `[21339, 13500, 17830]` sequence as B-0064.
+- Benchmark result: B-0064 records 0.0138786 tok/s across its two decode tokens while building the bank. B-0065 records 0.0226354 tok/s on full replay, 1.621x B-0063; its last token takes 41.308851 seconds or 0.0242079 tok/s in isolation.
+- Reason accepted: it removes the measured WSL 9p cold-read boundary with 18.37 GB rather than another model-sized copy and retains fail-closed source identity.
+- Revisit: production Linux should benchmark direct K3X NVMe reads against this cache. The next optimization must target trunk representation, H2D, launch count, and graph ownership because fully hot storage remains about 221x below 5 tok/s.
