@@ -8,9 +8,29 @@ import sys
 from pathlib import Path
 
 from k3x_converter.format import K3XError
+from tools.run_official_layer1 import run as run_kda_layer
+from tools.run_official_layer3 import run as run_mla_layer
 
 
-def main() -> int:
+_IN_PROCESS_RUNNERS = {
+    "kda": run_kda_layer,
+    "mla": run_mla_layer,
+}
+
+
+def _execute_layer(
+    execution_mode: str,
+    attention: str,
+    command: list[str],
+    layer_args: argparse.Namespace,
+) -> int:
+    if execution_mode == "subprocess":
+        subprocess.run(command, check=True)
+        return 0
+    return _IN_PROCESS_RUNNERS[attention](layer_args)
+
+
+def _parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--topology", type=Path, required=True)
     parser.add_argument("--object-dir", type=Path, required=True)
@@ -18,7 +38,15 @@ def main() -> int:
     parser.add_argument("--result-dir", type=Path, required=True)
     parser.add_argument("--stop-layer", type=int, default=92)
     parser.add_argument("--k3x-set", type=Path)
-    args = parser.parse_args()
+    parser.add_argument(
+        "--execution-mode",
+        choices=("subprocess", "in-process"),
+        default="subprocess",
+    )
+    return parser.parse_args(argv)
+
+
+def run(args: argparse.Namespace) -> int:
 
     topology_path = args.topology.resolve()
     topology = json.loads(topology_path.read_text(encoding="utf-8"))
@@ -60,11 +88,26 @@ def main() -> int:
         ]
         if args.k3x_set is not None:
             command.extend(("--k3x-set", str(args.k3x_set.resolve())))
+        layer_args = argparse.Namespace(
+            topology=topology_path,
+            object_dir=args.object_dir.resolve(),
+            state_dir=state_dir,
+            output=output,
+            layer_id=layer_id,
+            k3x_set=(
+                args.k3x_set.resolve() if args.k3x_set is not None else None
+            ),
+        )
         print(
             f"starting_layer={layer_id} attention={layer['attention']}",
             flush=True,
         )
-        subprocess.run(command, check=True)
+        _execute_layer(
+            args.execution_mode,
+            layer["attention"],
+            command,
+            layer_args,
+        )
         published = json.loads(output.read_text(encoding="utf-8"))
         if published.get("layer_id") != layer_id:
             raise K3XError("OFFICIAL_LAYER_PUBLICATION")
@@ -73,6 +116,10 @@ def main() -> int:
             f"output_sha256={published['layer_output_sha256']}",
             flush=True,
         )
+
+
+def main() -> int:
+    return run(_parse_args())
 
 
 if __name__ == "__main__":
