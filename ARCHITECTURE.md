@@ -592,6 +592,12 @@ One OfficialRuntimeContext now authenticates and owns the topology, snapshot, in
 
 The context intentionally retains no decoded tensor payload. B-0049 therefore isolates immutable metadata and directory ownership while leaving packed-weight I/O, CPU decode, H2D, and disk state publication unchanged. Future multi-token execution can reuse the same context, but that warm loop is not yet implemented.
 
+## Milestone 41 device-side Q8 decode
+
+`K3XTensorStore` now keeps group-128 Q8 codes and BF16 scales compressed until they reach the requested CUDA device. Scale metadata is validated on the CPU, while CUDA reconstructs the official graph's logical BF16 tensor directly. CPU loads retain the original FP32 reference decoder, and BF16/F32/MXFP4 storage paths are unchanged.
+
+This is an implemented bridge, not the final packed compute path. It removes CPU Q8 expansion and reduces transfer source bytes, but still materializes BF16 weights before the official graph's FP32 matvec. B-0050 proves complete 93-layer parity and a lower first-token wall. Direct-packed Q8/MXFP4 matvec, persistent RAM/VRAM residency, in-memory recurrent state, and warm multi-token decode remain pending.
+
 ## K3X data flow
 
 The file format is deliberately execution ordered. The converter reads bounded source chunks, copies or transforms extents, computes each extent CRC32C while writing, and publishes an atomic resume ledger after each bounded 128-extent `fsync` checkpoint. On resume it revalidates every committed extent against both the current source and partial artifact before truncating only the uncommitted suffix to the final durable extent's exact end. Final root SHA-256 generation rereads the complete output, and the strict Reader verifies the source-derived per-extent CRCs before the local Foundry ledger permits source deletion. Only then is the `.partial` artifact atomically renamed.

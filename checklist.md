@@ -603,8 +603,8 @@
 - [x] Add a witnessed CUDA parity test through `K3XTensorStore.load`.
 - [x] Transfer compressed Q8 codes/scales and decode on the target CUDA device.
 - [x] Run the focused correctness gate.
-- [ ] Measure one released tensor and the complete official token as B-0050.
-- [ ] Update the TITAN Ledger and publish the measured result.
+- [x] Measure one released tensor and the complete official token as B-0050.
+- [x] Update the TITAN Ledger and publish the measured result.
 
 ### 3-bit runtime correctness slice
 

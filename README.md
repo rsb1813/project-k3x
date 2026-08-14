@@ -34,7 +34,7 @@ flowchart LR
 ```
 
 > [!IMPORTANT]
-> The complete 96-fragment, 1,507,512,467,456-byte K3X set now executes all 93 released Kimi K3 layers and the LM head on the local RTX 5080. Input token 1 generated token 9689, matching the independent original-precision oracle. One-process execution plus shared immutable runtime context reduced measured first-token wall time from 1,891 to 913.336 seconds with identical K3X token, logit, layer outputs, and final state. This remains TTFT, not steady decode tok/s or the optimized production runtime. No paid cloud resource was used.
+> The complete 96-fragment, 1,507,512,467,456-byte K3X set now executes all 93 released Kimi K3 layers and the LM head on the local RTX 5080. Input token 1 generated token 9689, matching the independent original-precision oracle. One-process execution, shared immutable runtime context, and device-side Q8 decode reduced measured first-token wall time from 1,891 to 583.658 seconds with identical K3X token, logit, layer outputs, and final state. This remains TTFT, not steady decode tok/s or the optimized production runtime. No paid cloud resource was used.
 
 | Milestone | GitHub status | Evidence |
 |---|---|---|
@@ -62,6 +62,13 @@ flowchart LR
 | Milestone 32 | [PR #56 merged](https://github.com/rsb1813/project-k3x/pull/56) at `ab0ecb19` | Exact device residual/router preparation preserves routing and yields a mixed bounded result |
 | Milestone 33 | [PR #58 merged](https://github.com/rsb1813/project-k3x/pull/58) at `9ce513f9` | B-0034 executes official layers 1 and 2 exactly; device closure removes inter-layer copies but is 13.82% slower |
 | Milestone 34 | [PR #60 merged](https://github.com/rsb1813/project-k3x/pull/60) at `a7ba5204` | B-0035 attributes device closure to front and tail regions; routing is only 0.035% of wall time |
+| Milestone 35 | Public branch `codex/official-end-to-end-token` | B-0036 attributes existing KDA, route, and MoE CUDA events |
+| Milestone 36 | Public branch `codex/official-end-to-end-token` | B-0044 completes the 93-layer original-precision oracle and generates token 9689 |
+| Milestone 37 | Public branch `codex/official-end-to-end-token` | Local Foundry and bounded 3-bit expert experiment |
+| Milestone 38 | Public branch `codex/official-end-to-end-token` | 96-fragment quality K3X set and B-0046 complete first token |
+| Milestone 39 | Public branch `codex/official-end-to-end-token` | B-0048 removes per-layer process restarts |
+| Milestone 40 | Public branch `codex/official-end-to-end-token` | B-0049 shares immutable metadata and store directories |
+| Milestone 41 | Public branch `codex/official-end-to-end-token` | B-0050 moves Q8 reconstruction to CUDA and reduces first-token wall to 583.658 seconds |
 
 The latest audited public implementation baseline is Milestone 34 integration head `a7ba5204`. Push correctness `31677396649`, pull-request correctness `31677408262`, and pull-request CodeQL `31677408278` passed before merge; post-merge `main` correctness `31677651704` and CodeQL `31677651706` also succeeded.
 
@@ -864,6 +871,11 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Exact bounded official two-layer execution, device closure, and fixed B-0034 evidence.
 - [x] Opt-in front/route/tail/remainder attribution with fixed B-0035 evidence.
 - [x] Opt-in existing-event operation attribution with fixed B-0036 evidence.
+- [x] Complete 96-fragment official K3X manufacture and exact first-token execution.
+- [x] One-process official graph, shared immutable runtime context, and B-0049 parity.
+- [x] Device-side Q8 decode with B-0050 full-model parity and measured wall reduction.
+- [ ] Direct-packed Q8/MXFP4 matvec and persistent RAM/VRAM residency.
+- [ ] Warm multi-token decode measurement and optimization toward 5 tok/s minimum.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.

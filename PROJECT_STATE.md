@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 40 shared official runtime context is complete. All 96 Reader-valid fragments remain sealed by `model.k3xset` record SHA-256 `f5c7443fd9ea9b4a2f0c95010f148182eefaedec4f29c094ca24e6bc4e61cefe`; no source payload was downloaded and no paid cloud resource was used.
+Milestone 41 device-side Q8 decode is complete. All 96 Reader-valid fragments remain sealed by `model.k3xset` record SHA-256 `f5c7443fd9ea9b4a2f0c95010f148182eefaedec4f29c094ca24e6bc4e61cefe`; no source payload was downloaded and no paid cloud resource was used.
 
 The exact Python compatibility graph executed layer 0, all KDA/MLA-MoE layers 1–92, persisted state, and the chunked LM head from the sealed set. Input token 1 generated token 9689 at FP32 logit 8.290502548217773, matching the independent original-precision greedy token 9689 at logit 8.307021141052246. All 93 record digests and all 449 final-state tensor digests passed. This establishes one-token compatibility, not steady decode throughput or broad quality.
 
@@ -10,7 +10,7 @@ The independent original-precision reference oracle is complete. Input token ID 
 
 D-082 has made the shared IMMORTAL ledger safe for disjoint multi-process completion publication and parameterized conductor staging ranges. D-086 through D-096 combine output audits, reuse an unchanged verified source identity at deletion, account for valid resume bytes, defer prefetch until verified RAM staging, serialize cross-worker source copies and output audits, isolate Xet caches, bound downloads with kill-recoverable mutex ownership, retry stalled children without discarding partial cache state, and run prefetch in owned processes rather than stalled job runspaces. Focused lock/conversion coverage passes 1/1, helper success/failure checks pass, Python compilation passes, and all PowerShell scripts parse.
 
-The original subprocess compatibility runner measured 1,891 seconds. B-0048 one-process execution reduced this to 1,156.152598 seconds, and B-0049 shared immutable metadata/header/store ownership reduced it again to 913.336487 seconds. B-0049 matches all 93 B-0048 layer output/state digests plus token 9689, logit, final hidden, and final state digest. This is still one-token TTFT, not steady decode throughput.
+The original subprocess compatibility runner measured 1,891 seconds. B-0048 one-process execution reduced this to 1,156.152598 seconds, B-0049 shared immutable metadata/header/store ownership reduced it to 913.336487 seconds, and B-0050 device-side Q8 decode reduced it to 583.658078 seconds. B-0050 matches all 93 B-0049 layer output/state digests plus token 9689, logit, final hidden, and final state digest. This is still one-token TTFT, not steady decode throughput.
 
 D-083 removes one redundant complete source hash before conversion. D-087 later replaces the independent deletion-time full reread with a verified digest plus unchanged device/inode/size/nanosecond-mtime identity. Source mutation remains fail-closed.
 
@@ -18,10 +18,11 @@ D-084 binds every K3X layer/state/head publication to the exact sealed-set diges
 
 D-085 and D-089 use a 72 GiB WSL cap, 16 GiB swap, and 60 GiB `/dev/shm` for up to three bounded RAM workers. D-090 serializes only HDD-to-RAM staging, D-091 isolates Xet caches, D-092 serializes finalized K3X output audits, D-094 recovers download capacity after conductor death, D-095 bounds stalled HF children, and D-096 moves prefetch into owned processes. Fresh clean-path shards 8/9/40/44/45/71/72 completed in 398.151/405.581/401.198/398.970/407.314/401.689/397.259 seconds; shard 78 completed in 589.095 seconds with shared staging/audit waits. This is manufacturing evidence, not inference throughput.
 
-State synchronized on 2026-08-14 after shared-context implementation commit `6a569c1` and uninterrupted B-0049 execution. The durable ledger is 96/96, the sealed set and matching K3X token exist, and source cleanup remains complete. The next production step is direct-packed Q8/MXFP4 CUDA execution, VRAM/RAM residency, and warm multi-token measurement toward the 5 TPS minimum and 10–15 TPS recommended target.
+State synchronized on 2026-08-14 after device-side Q8 implementation commit `7cb9498` and uninterrupted B-0050 execution. The durable ledger is 96/96, the sealed set and matching K3X token exist, and source cleanup remains complete. The next production step is direct-packed Q8/MXFP4 CUDA execution, VRAM/RAM residency, and warm multi-token measurement toward the 5 TPS minimum, 10–15 TPS recommended target, and 20 TPS stretch target.
 
 ## Completed work
 
+- Milestone 41 compressed Q8 H2D plus CUDA BF16 reconstruction, CPU reference fallback, released-tensor bit parity, seven focused passing tests, and B-0050 complete 93-layer parity at 583.658078 seconds first-token wall. No steady tok/s is claimed.
 - Milestone 37 group-32 signed 3-bit K3X writer/reader ABI, strict required-feature negotiation, PyTorch and portable C++ decode, scalar direct-packed RTX 5080 matvec, synthetic CPU/CUDA layer/logit/token parity, packed-byte transfer assertions, and sanitizer coverage. No performance result is claimed.
 - Milestone 37 exact pinned-header accounting for 82,432 routed experts and the proposed selective trunk policy, plus a Reader-valid 14,471,424-byte K3X conversion of released layer-1 expert 0 and a deterministic native-MXFP4 divergence proxy.
 - Milestone 38 group-128 8-bit Python/C++ K3X ABI, portable BF16/Q8 model decode, bounded official-shard converter, authenticated conductors, all 96 completed fragments with durable output identities and verified source deletion, batched crash-safe checkpoints, source-alias/RAM staging without a model-sized persistent copy, and a published `K3XSET1` without a second payload copy.
@@ -219,7 +220,7 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 ## Next concrete tasks
 
-1. Connect direct-packed Q8 trunk and native MXFP4 expert CUDA execution to the full official set while retaining B-0048/B-0049 token, route, state, and logit gates.
+1. Connect direct-packed Q8 trunk and native MXFP4 expert CUDA execution to the full official set while retaining B-0050 token, route, state, and logit gates.
 2. Retain selected packed tensors and expert hot banks across tokens within explicit 16 GB VRAM and 96 GB RAM budgets.
 3. Keep KDA/MLA recurrent state in memory, measure warm incremental decode, then add expert-major speculation to pursue 5 TPS minimum, 10–15 TPS recommended, and 20 TPS stretch with quality ablations.
 
@@ -239,12 +240,13 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 ## Latest measured bottleneck
 
-B-0049 reduced full first-token wall from B-0048's 1,156.152598 to 913.336487 seconds by sharing immutable metadata, headers, and K3X directories. Relative to B-0046 this is a 51.700873% reduction. All correctness digests remain identical.
+B-0050 reduced full first-token wall from B-0049's 913.336487 to 583.658078 seconds by transferring group-128 Q8 codes/scales compressed and reconstructing BF16 on CUDA. Relative to B-0049 this is a 36.096052% reduction; relative to B-0046 it is 69.134951%. All correctness digests remain identical.
 
-B-0049 still spends 430.579377 seconds in recorded load/decode and 159.572791 seconds in compute. K3XTensorStore reads packed Q8 bytes, expands them on the CPU, and copies logical BF16 weights to CUDA; native MXFP4 expert matvec rebuilds decoded tensors per use. Direct-packed CUDA plus residency is therefore the next measured bottleneck. No steady decode tok/s is measured.
+B-0050 still spends 368.422976 seconds in recorded load/decode and 157.256886 seconds in compute. Q8 still materializes BF16 weights before FP32 matvec, native MXFP4 expert matvec rebuilds decoded tensors per use, and a live GPU-utilization snapshot was only 5%. Direct-packed CUDA plus residency is therefore the next measured bottleneck. No steady decode tok/s is measured.
 
 ## Last known-good state
 
+- Local device-Q8 implementation head `7cb9498` plus B-0050 produces token 9689 and zero mismatch across all 93 B-0049 layer output/state records. Seven focused tests pass, all 96 raw record digests validate, and the complete full-token evidence hashes are recorded in B-0050.
 - Local shared-context implementation head `6a569c1` plus B-0049 produces token 9689 and zero mismatch across 93 B-0048 layer output/state records. Focused official regressions pass 39/39 and all modified Python entrypoints compile.
 - Local persistent-runtime implementation head `d367487` plus B-0048 produces token 9689 and zero mismatch across 93 layer output/state records. Focused persistent-runner tests pass 3/3 and all modified Python entrypoints compile.
 - Local official first-token evidence commit `adf2c9e` passes the 93-layer/final-state/head digest audit, token comparison, seven focused transport/local-shard tests, Python compilation, and `git diff --check`. B-0046 token 9689 matches B-0044; B-0047 records the metadata-cache boundary.

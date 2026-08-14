@@ -1166,3 +1166,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: full wall fell from 1,156.152598 to 913.336487 seconds, a 21.002081% reduction or 1.265856x speedup. Relative to B-0046 the total reduction is 51.700873%. Layer load/decode still consumes 430.579377 seconds and compute 159.572791 seconds.
 - Reason accepted: immutable ownership is exact, bounded, reusable across future tokens, and removes a measured cost without hiding the much larger packed-weight bottleneck.
 - Revisit: retain the context in the production runtime, but replace Python object ownership after the official C++ graph reaches parity.
+
+## D-101 — Decode group-128 Q8 on CUDA before introducing a fused kernel
+
+- Date: 2026-08-14.
+- Status: implemented, focused-tested, released-tensor measured, and full-model measured.
+- Decision: for CUDA-targeted group-128 Q8 loads, validate metadata and BF16 scales on the CPU, transfer compressed int8 codes plus scales, and reconstruct the requested logical BF16 tensor on CUDA. Retain the existing CPU decoder as the reference path.
+- Alternatives considered: continue expanding Q8 to FP32 on the CPU; immediately replace every official matvec with an unverified custom kernel; cache all expanded trunk tensors in host RAM.
+- Evidence: the CUDA store test fails if the CPU decoder is called and proves BF16 bit equality. A released 12,288 by 7,168 q-projection is bit-exact, and all 93 B-0050 layer output/state records plus the final token, logit, hidden, and state match B-0049.
+- Benchmark result: the released tensor median fell from 0.520519 to 0.441014 seconds, a 1.180276x speedup. Full wall fell from 913.336487 to 583.658078 seconds, a 36.096052% reduction or 1.564849x speedup; recorded load/decode fell 14.435527% to 368.422976 seconds.
+- Reason accepted: it is a small exact change that removes a measured CPU expansion and compressed-transfer boundary while preserving the reference path and isolating the next packed-kernel decision.
+- Revisit: replace materialized BF16 weights with direct-packed Q8 matvec once the kernel passes released-tensor output/quality gates and improves end-to-end wall time.

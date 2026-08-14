@@ -1641,3 +1641,16 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Result: all layers 0 through 92 completed; generated token ID `9689` with FP32 logit `8.307021141052246`. Final normalized hidden SHA-256 is `84f7422be9d329bfdb0a3971f066de7c67ac137befd2e4e083afd051e1652b6a`.
 - Head boundary: 2,348,853,248 requested/downloaded payload bytes, 283 range requests, 91.725 seconds wall, and 209,960,960 peak CUDA allocated bytes. This is a one-off chunked-head correctness execution with cold payload materialization, not TTFT or steady-state throughput.
 - Decode tok/s, prefill tok/s, TTFT, end-to-end full-token wall, process-wide VRAM, RAM, physical NVMe GB/token, physical H2D GB/token, utilization, bandwidth, cache hit rate, and coding quality: not measured.
+
+## B-0050 device-side Q8 decode
+
+- Date: 2026-08-14.
+- Commit: execution used `7cb9498`.
+- Hardware/model/mode: same 9800X3D, RTX 5080 16 GB, 96 GB RAM, WSL2, sealed official K3X set, input token 1, natural Top-16, exact native MXFP4 experts, no proxy/pruning/speculation, and one-process graph as B-0049. The intended change is compressed Q8 transfer and CUDA BF16 reconstruction.
+- Released-tensor boundary: layer-0 q-projection shape 12,288 by 7,168, 88,080,384 code bytes and 1,376,256 scale bytes. CPU decode-plus-copy median was 0.520519 seconds; CUDA decode median was 0.441014 seconds, a 1.180276x speedup. BF16 output is bit-exact and CUDA peak allocation was 177,537,024 bytes. Physical H2D bytes were not measured.
+- Correctness: all 93 layer output/state records match B-0049. Token 9689, logit 8.290502548217773, final normalized hidden, and final state-manifest digest are identical. All 96 raw record digests validate.
+- Timing: 583.658078 seconds full wall versus 913.336487 seconds for B-0049, a 329.678409-second or 36.096052% reduction and 1.564849x speedup. Relative to B-0046, the reduction is 69.134951% and speedup is 3.239911x. Stage wall is 7.679511 seconds for layer 0, 567.702803 seconds for layers 1 through 92, and 6.030117 seconds for the head.
+- Attribution: recorded load/decode intervals total 368.422976 seconds, 14.435527% below B-0049. Compute intervals total 157.256886 seconds, 1.451316% below B-0049.
+- Memory/traffic: maximum tracked CUDA allocation/reservation remains 3,602,630,144/4,982,833,152 bytes. Downloaded payload is zero. Layer source-equivalent requests total 134,641,464,320 bytes and the head adds 2,348,853,248 bytes; neither is physical traffic. Complete physical NVMe/H2D traffic, host RAM peak, and average utilization were not measured.
+- Throughput/quality: this is still one-token TTFT. Decode tok/s, prefill tok/s, and coding quality remain unmeasured; no inverse-TTFT TPS is claimed.
+- Evidence: `results/b0050-device-q8-decode/summary.json` SHA-256 `7685846e780f594791bfb6e86354f5b65f91efc00d1e8cdec4d7345ff7b17c3d`; full timing SHA-256 `a8777e874e07599811623aae1f9f1281b3190e03bb054cc3f9366b85dca8443c`; full token SHA-256 `f3f84f487df462e72882c459d79688865e9de2a83d033fe3afd51e09290c1d63`; 93-file chain SHA-256 `f51ca63ea36d356b91cb46c7e7ad181320710824b2ba46dc225f365cabaa2b86`; microbenchmark SHA-256 `d3a08597ff1a021c1b8e84dbbbf3fe38327696c4bd9ab6915cb3bf21ed5645c8`.
