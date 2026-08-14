@@ -230,8 +230,10 @@ def run(args: argparse.Namespace) -> int:
     download_seconds = time.perf_counter() - download_start
 
     device = torch.device("cuda")
-    torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats(device)
+    memory_state = getattr(args, "in_memory_state", None)
+    if memory_state is None:
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats(device)
     weights = (
         {
             item["name"][len(_LAYER_PREFIX) :]: load_official_tensor(
@@ -284,8 +286,15 @@ def run(args: argparse.Namespace) -> int:
     normalized = rms_norm(
         hidden, weights["input_layernorm.weight"], config.rms_norm_eps
     ).to(torch.bfloat16)
-    zero = zero_official_kda_state(kda_config, 1, device)
-    kda = official_kda(normalized.reshape(1, 1, 7_168), kda_weights, zero, kda_config)
+    prior_attention = (
+        memory_state.attention_state(0) if memory_state is not None else None
+    )
+    attention_state = prior_attention or zero_official_kda_state(
+        kda_config, 1, device
+    )
+    kda = official_kda(
+        normalized.reshape(1, 1, 7_168), kda_weights, attention_state, kda_config
+    )
     prefix_sum = kda.output.reshape(7_168)
     ffn_hidden = prepare_official_moe_hidden(
         prefix_sum,
@@ -308,6 +317,12 @@ def run(args: argparse.Namespace) -> int:
     compute_seconds = time.perf_counter() - compute_start
     if not torch.isfinite(output).all():
         raise K3XError("OFFICIAL_LAYER0_NONFINITE")
+
+    if memory_state is not None:
+        memory_state.finish_layer(
+            0, hidden, output, kda.state, block_write=True
+        )
+        return 0
 
     state_dir = args.state_dir.resolve()
     state_tensors = {

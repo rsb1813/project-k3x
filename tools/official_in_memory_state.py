@@ -13,10 +13,12 @@ from k3x_converter.format import K3XError
 class OfficialInMemoryState:
     attention_states: dict[int, Any] = field(default_factory=dict)
     generated_tokens: list[int] = field(default_factory=list)
+    generated_logits: list[float | None] = field(default_factory=list)
     current_token_id: int | None = None
     completed_layer: int = -1
     hidden: torch.Tensor | None = None
     block_sources: tuple[torch.Tensor, ...] = ()
+    last_generated_logit: float | None = None
 
     def begin_token(self, token_id: int) -> None:
         if self.current_token_id is not None:
@@ -25,6 +27,7 @@ class OfficialInMemoryState:
         self.completed_layer = -1
         self.hidden = None
         self.block_sources = ()
+        self.last_generated_logit = None
 
     def attention_state(self, layer_id: int) -> Any | None:
         return self.attention_states.get(layer_id)
@@ -62,8 +65,10 @@ class OfficialInMemoryState:
         self.hidden = output_hidden
         self.completed_layer = layer_id
 
-    def finish_head(self, token_id: int) -> None:
+    def finish_head(self, token_id: int, logit: float | None = None) -> None:
         if self.current_token_id is None or self.completed_layer != 92:
             raise K3XError("OFFICIAL_IN_MEMORY_HEAD_SEQUENCE")
         self.generated_tokens.append(token_id)
+        self.generated_logits.append(logit)
+        self.last_generated_logit = logit
         self.current_token_id = None

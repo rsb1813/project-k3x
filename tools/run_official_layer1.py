@@ -285,13 +285,19 @@ def run(args: argparse.Namespace) -> int:
         reused_objects += len(planned)
 
     device = torch.device("cuda")
-    torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats(device)
-    prior_state, hidden, block_sources = _load_state(
-        args.state_dir.resolve() / "state.json", device, layer_id
-    )
-    if set_identity is not None:
-        require_k3x_state_identity(prior_state, set_identity)
+    memory_state = getattr(args, "in_memory_state", None)
+    if memory_state is None:
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats(device)
+    if memory_state is not None:
+        hidden, block_sources = memory_state.require_layer_input(layer_id)
+        prior_state = {"token_id": memory_state.current_token_id}
+    else:
+        prior_state, hidden, block_sources = _load_state(
+            args.state_dir.resolve() / "state.json", device, layer_id
+        )
+        if set_identity is not None:
+            require_k3x_state_identity(prior_state, set_identity)
     roles = (
         load_planned_tensors(
             store,
@@ -328,8 +334,20 @@ def run(args: argparse.Namespace) -> int:
         roles["kda_dt_bias"], roles["kda_beta"], roles["kda_output_gate"],
         roles["kda_output_norm"], roles["kda_output_proj"],
     )
-    zero = zero_official_kda_state(kda_config, 1, device)
-    kda = official_kda(kda_input.reshape(1, 1, 7_168), kda_weights, zero, kda_config)
+    prior_attention = (
+        memory_state.attention_state(layer_id)
+        if memory_state is not None
+        else None
+    )
+    attention_state = prior_attention or zero_official_kda_state(
+        kda_config, 1, device
+    )
+    kda = official_kda(
+        kda_input.reshape(1, 1, 7_168),
+        kda_weights,
+        attention_state,
+        kda_config,
+    )
     block_write = layer_id % config.attn_res_block_size == 0
     if block_write:
         prefix_sum = kda.output.reshape(-1)
@@ -462,6 +480,16 @@ def run(args: argparse.Namespace) -> int:
     compute_seconds = time.perf_counter() - compute_start
     if not torch.isfinite(output).all():
         raise K3XError("OFFICIAL_LAYER1_NONFINITE")
+
+    if memory_state is not None:
+        memory_state.finish_layer(
+            layer_id,
+            hidden,
+            output,
+            kda.state,
+            block_write=block_write,
+        )
+        return 0
 
     state_dir = args.state_dir.resolve()
     state_records = dict(prior_state["tensors"])

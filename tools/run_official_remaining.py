@@ -57,6 +57,31 @@ def run(args: argparse.Namespace) -> int:
     state_path = state_dir / "state.json"
     result_dir = args.result_dir.resolve()
     result_dir.mkdir(parents=True, exist_ok=True)
+    memory_state = getattr(args, "in_memory_state", None)
+
+    if memory_state is not None:
+        for layer_id in range(memory_state.completed_layer + 1, args.stop_layer + 1):
+            layer = topology["layers"][layer_id]
+            layer_args = argparse.Namespace(
+                topology=topology_path,
+                object_dir=args.object_dir.resolve(),
+                state_dir=state_dir,
+                output=result_dir / f"layer-{layer_id:02d}.json",
+                layer_id=layer_id,
+                k3x_set=(
+                    args.k3x_set.resolve() if args.k3x_set is not None else None
+                ),
+                runtime_context=getattr(args, "runtime_context", None),
+                in_memory_state=memory_state,
+                direct_q8=getattr(args, "direct_q8", False),
+            )
+            _execute_layer(
+                args.execution_mode,
+                layer["attention"],
+                [],
+                layer_args,
+            )
+        return 0
 
     while True:
         state = json.loads(state_path.read_text(encoding="utf-8"))

@@ -162,13 +162,19 @@ def run(args: argparse.Namespace) -> int:
         reused_objects += len(_GLOBAL_ROLES)
 
     device = torch.device("cuda")
-    torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats(device)
-    prior_state, hidden, block_sources = _load_state(
-        args.state_dir.resolve() / "state.json", device, 93
-    )
-    if set_identity is not None:
-        require_k3x_state_identity(prior_state, set_identity)
+    memory_state = getattr(args, "in_memory_state", None)
+    if memory_state is None:
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats(device)
+    if memory_state is not None:
+        hidden, block_sources = memory_state.require_layer_input(93)
+        prior_state = {"token_id": memory_state.current_token_id}
+    else:
+        prior_state, hidden, block_sources = _load_state(
+            args.state_dir.resolve() / "state.json", device, 93
+        )
+        if set_identity is not None:
+            require_k3x_state_identity(prior_state, set_identity)
     global_weights = (
         {
             role: stores[global_contract[name]["shard"]].load(
@@ -270,6 +276,10 @@ def run(args: argparse.Namespace) -> int:
     compute_and_wait_seconds = time.perf_counter() - compute_start
     if best_token < 0 or not torch.isfinite(torch.tensor(best_logit)):
         raise K3XError("OFFICIAL_HEAD_NONFINITE")
+
+    if memory_state is not None:
+        memory_state.finish_head(best_token, best_logit)
+        return 0
 
     state_dir = args.state_dir.resolve()
     normalized_path = state_dir / "final_normalized_hidden.bin"
