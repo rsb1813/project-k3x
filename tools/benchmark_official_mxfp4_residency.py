@@ -40,6 +40,20 @@ def _forward(store, plan, value: torch.Tensor) -> torch.Tensor:
     return expert_matvec(store, plan, "down", activated)
 
 
+def _timed_cuda_forward(store, plan, value: torch.Tensor):
+    events = [torch.cuda.Event(enable_timing=True) for _ in range(5)]
+    events[0].record()
+    gate = expert_matvec(store, plan, "gate", value)
+    events[1].record()
+    up = expert_matvec(store, plan, "up", value)
+    events[2].record()
+    activated = _situ(gate, up, 4.0, 25.0)
+    events[3].record()
+    output = expert_matvec(store, plan, "down", activated)
+    events[4].record()
+    return output, events
+
+
 def _digest(value: torch.Tensor) -> str:
     raw = value.detach().cpu().contiguous().view(torch.uint8).numpy().tobytes()
     return hashlib.sha256(raw).hexdigest()
@@ -90,9 +104,13 @@ def main() -> int:
     for label in ("cold", *(f"warm-{index}" for index in range(args.warm_runs))):
         torch.cuda.synchronize(device)
         started = time.perf_counter()
-        output = _forward(store, plan, device_value)
+        output, events = _timed_cuda_forward(store, plan, device_value)
         torch.cuda.synchronize(device)
         wall_seconds = time.perf_counter() - started
+        cuda_stage_milliseconds = {
+            name: events[index].elapsed_time(events[index + 1])
+            for index, name in enumerate(("gate", "up", "situ", "down"))
+        }
         output_cpu = output.cpu()
         difference = (output_cpu - oracle).abs()
         cosine = torch.nn.functional.cosine_similarity(
@@ -110,6 +128,7 @@ def main() -> int:
                 "mean_abs_error": difference.mean().item(),
                 "cosine_similarity": cosine,
                 "bf16_exact_ratio": bf16_exact_ratio,
+                "cuda_stage_milliseconds": cuda_stage_milliseconds,
                 "cache": context.packed_mxfp4_cache.snapshot(),
             }
         )
@@ -125,7 +144,7 @@ def main() -> int:
         float(run["wall_seconds"]) for run in runs[1:]
     )
     summary = {
-        "format": "k3x-official-mxfp4-residency-benchmark-v1",
+        "format": "k3x-official-mxfp4-residency-benchmark-v2",
         "implementation_commit": args.implementation_commit,
         "harness_commit": args.harness_commit,
         "device": torch.cuda.get_device_name(device),
