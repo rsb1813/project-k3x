@@ -26,12 +26,6 @@ __device__ __forceinline__ float decode_e2m1(std::uint8_t code) {
     return (code & 0x08U) != 0 ? -magnitude : magnitude;
 }
 
-__device__ __forceinline__ float decode_e8m0(std::uint8_t code) {
-    const auto bits = code == 0 ? 0x00400000U
-                                : static_cast<unsigned>(code) << 23U;
-    return __uint_as_float(bits);
-}
-
 __global__ void mxfp4_matvec_kernel(
     const float* input,
     const std::uint8_t* packed,
@@ -52,8 +46,8 @@ __global__ void mxfp4_matvec_kernel(
         const auto pair = packed[logical / 2];
         const auto code = static_cast<std::uint8_t>(
             logical % 2 == 0 ? pair & 0x0FU : pair >> 4U);
-        const auto scale = decode_e8m0(scales[logical / 32]);
-        sum = fmaf(input[column], decode_e2m1(code) * scale, sum);
+        const auto exponent = static_cast<int>(scales[logical / 32]) - 127;
+        sum = fmaf(input[column], ldexpf(decode_e2m1(code), exponent), sum);
     }
     extern __shared__ float partial[];
     partial[threadIdx.x] = sum;
