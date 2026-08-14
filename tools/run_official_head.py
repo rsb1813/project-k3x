@@ -30,6 +30,7 @@ from tools.run_official_layer0 import (
 from tools.run_official_layer1 import _load_state, _residual_input
 from tools.official_k3x_source import (
     k3x_set_identity,
+    logical_torch_dtype,
     open_official_fragment,
     require_k3x_state_identity,
 )
@@ -141,7 +142,9 @@ def main() -> int:
     global_weights = (
         {
             role: stores[global_contract[name]["shard"]].load(
-                name.removeprefix("language_model."), device=device
+                name.removeprefix("language_model."),
+                device=device,
+                dtype=logical_torch_dtype(global_contract[name]["dtype"]),
             )
             for name, role in _GLOBAL_ROLES.items()
         }

@@ -19,6 +19,14 @@ def require_k3x_state_identity(record: dict[str, object], identity: str) -> None
         raise K3XError("K3X_STATE_SET_MISMATCH")
 
 
+def logical_torch_dtype(name: str) -> torch.dtype:
+    if name == "BF16":
+        return torch.bfloat16
+    if name == "F32":
+        return torch.float32
+    raise K3XError("UNSUPPORTED_SOURCE_DTYPE", name)
+
+
 def open_official_fragment(k3x_set: Path, source_shard: str) -> K3XTensorStore:
     suffix = ".safetensors"
     if not source_shard.endswith(suffix):
@@ -33,7 +41,11 @@ def open_official_fragment(k3x_set: Path, source_shard: str) -> K3XTensorStore:
 
 def load_planned_tensors(store, planned, device: torch.device):
     return {
-        item.role: store.load(item.canonical_name, device=device)
+        item.role: store.load(
+            item.canonical_name,
+            device=device,
+            dtype=logical_torch_dtype(item.dtype),
+        )
         for item in planned
     }
 

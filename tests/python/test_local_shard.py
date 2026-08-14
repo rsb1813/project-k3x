@@ -144,7 +144,15 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
     ].quantization == Quantization.NONE
     store = K3XTensorStore.open([report.output_path])
     loaded_matrix = store.load("model.layers.0.mlp.gate_proj.weight")
+    loaded_matrix_bf16 = store.load(
+        "model.layers.0.mlp.gate_proj.weight", dtype=torch.bfloat16
+    )
     loaded_norm = store.load("model.layers.0.input_layernorm.weight")
     assert torch.max(torch.abs(matrix.float() - loaded_matrix)).item() < 0.02
+    assert loaded_matrix_bf16.dtype == torch.bfloat16
+    assert (
+        torch.max(torch.abs(matrix.float() - loaded_matrix_bf16.float())).item()
+        < 0.02
+    )
     assert loaded_norm.dtype == torch.bfloat16
     assert torch.equal(loaded_norm, torch.ones(128, dtype=torch.bfloat16))

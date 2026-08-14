@@ -51,7 +51,11 @@ class K3XTensorStore:
         return located
 
     def load(
-        self, name: str, *, device: torch.device | str = "cpu"
+        self,
+        name: str,
+        *,
+        device: torch.device | str = "cpu",
+        dtype: torch.dtype | None = None,
     ) -> torch.Tensor:
         located = self.record(name)
         record = located.record
@@ -71,7 +75,7 @@ class K3XTensorStore:
             )
         else:
             raise K3XError("TENSOR_REQUIRES_SPECIALIZED_DECODE", name)
-        return tensor.to(device)
+        return tensor.to(device=device, dtype=dtype)
 
     def load_rows(
         self,

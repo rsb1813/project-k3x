@@ -32,7 +32,11 @@ from k3x_ref.official_kda import (
     zero_official_kda_state,
 )
 from k3x_ref.ops import rms_norm
-from tools.official_k3x_source import k3x_set_identity, open_official_fragment
+from tools.official_k3x_source import (
+    k3x_set_identity,
+    logical_torch_dtype,
+    open_official_fragment,
+)
 
 
 _EMBEDDING = "language_model.model.embed_tokens.weight"
@@ -210,7 +214,9 @@ def main() -> int:
     weights = (
         {
             item["name"][len(_LAYER_PREFIX) :]: stores[item["shard"]].load(
-                item["name"].removeprefix("language_model."), device=device
+                item["name"].removeprefix("language_model."),
+                device=device,
+                dtype=logical_torch_dtype(item["dtype"]),
             )
             for item in layer_contract
         }

@@ -43,6 +43,7 @@ from tools.run_official_layer1 import (
 from tools.official_k3x_source import (
     expert_matvec,
     k3x_set_identity,
+    logical_torch_dtype,
     open_official_fragment,
     require_k3x_state_identity,
 )
@@ -178,7 +179,9 @@ def main() -> int:
     roles = (
         {
             _ROLE_BY_SUFFIX[item["name"][len(prefix) :]]: store.load(
-                item["name"].removeprefix("language_model."), device=device
+                item["name"].removeprefix("language_model."),
+                device=device,
+                dtype=logical_torch_dtype(item["dtype"]),
             )
             for item in trunk
         }
