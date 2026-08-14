@@ -48,6 +48,7 @@ from tools.run_official_layer0 import (
     _write_json_atomic,
 )
 from tools.official_k3x_source import (
+    expert_batch,
     expert_matvec,
     k3x_set_identity,
     load_planned_tensors,
@@ -404,41 +405,55 @@ def run(args: argparse.Namespace) -> int:
         config.activation_situ_beta,
         config.activation_situ_linear_beta,
     )
-    mixed = torch.zeros_like(latent, dtype=torch.float32)
-    for expert_id, contribution in zip(route.expert_ids, route.contributions):
-        expert_plan = expert_plans[expert_id]
-        gate = (
-            expert_matvec(store, expert_plan, "gate", latent)
-            if store is not None
-            else _expert_matrix(
-                expert_objects[expert_id].path, expert_plan, "gate", latent, device
+    native_batch = (
+        store is not None
+        and latent.is_cuda
+        and getattr(store, "packed_mxfp4_cache", None) is not None
+        and store.packed_mxfp4_cache.device_budget_bytes > 0
+    )
+    if native_batch:
+        mixed = expert_batch(
+            store,
+            [expert_plans[expert_id] for expert_id in route.expert_ids],
+            latent,
+            torch.tensor(route.contributions, dtype=torch.float32, device=device),
+        )
+    else:
+        mixed = torch.zeros_like(latent, dtype=torch.float32)
+        for expert_id, contribution in zip(route.expert_ids, route.contributions):
+            expert_plan = expert_plans[expert_id]
+            gate = (
+                expert_matvec(store, expert_plan, "gate", latent)
+                if store is not None
+                else _expert_matrix(
+                    expert_objects[expert_id].path, expert_plan, "gate", latent, device
+                )
             )
-        )
-        up = (
-            expert_matvec(store, expert_plan, "up", latent)
-            if store is not None
-            else _expert_matrix(
-                expert_objects[expert_id].path, expert_plan, "up", latent, device
+            up = (
+                expert_matvec(store, expert_plan, "up", latent)
+                if store is not None
+                else _expert_matrix(
+                    expert_objects[expert_id].path, expert_plan, "up", latent, device
+                )
             )
-        )
-        activated = _situ(
-            gate,
-            up,
-            config.activation_situ_beta,
-            config.activation_situ_linear_beta,
-        )
-        down = (
-            expert_matvec(store, expert_plan, "down", activated)
-            if store is not None
-            else _expert_matrix(
-                expert_objects[expert_id].path,
-                expert_plan,
-                "down",
-                activated,
-                device,
+            activated = _situ(
+                gate,
+                up,
+                config.activation_situ_beta,
+                config.activation_situ_linear_beta,
             )
-        )
-        mixed += contribution * down
+            down = (
+                expert_matvec(store, expert_plan, "down", activated)
+                if store is not None
+                else _expert_matrix(
+                    expert_objects[expert_id].path,
+                    expert_plan,
+                    "down",
+                    activated,
+                    device,
+                )
+            )
+            mixed += contribution * down
     routed_norm = _rms_norm(mixed.to(torch.bfloat16), roles["routed_norm"])
     routed = _bf16_matvec(routed_norm, roles["routed_up"])
     combined = (routed.float() + shared.float()).to(torch.bfloat16)

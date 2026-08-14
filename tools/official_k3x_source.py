@@ -89,3 +89,23 @@ def expert_matvec(store, plan, role: str, value: torch.Tensor) -> torch.Tensor:
     return store.mxfp4_matvec(
         packed.canonical_name.removesuffix(".weight_packed"), value
     )
+
+
+def expert_batch(
+    store, plans, value: torch.Tensor, contributions: torch.Tensor
+) -> torch.Tensor:
+    def base(plan, role: str) -> str:
+        packed = next(
+            item
+            for item in plan.tensors
+            if item.role == role and item.canonical_name.endswith(".weight_packed")
+        )
+        return packed.canonical_name.removesuffix(".weight_packed")
+
+    expert_bases = tuple(
+        (base(plan, "gate"), base(plan, "up"), base(plan, "down"))
+        for plan in plans
+    )
+    return store.mxfp4_expert_batch(
+        expert_bases, value, contributions.to(device=value.device)
+    )

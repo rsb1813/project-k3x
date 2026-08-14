@@ -334,32 +334,7 @@ class K3XTensorStore:
         if target.type == "cuda":
             if target.index is None:
                 target = torch.device("cuda", torch.cuda.current_device())
-
-            def load() -> tuple[torch.Tensor, torch.Tensor]:
-                packed, scale_bytes = located.reader.read_tensor_extents(record)
-                scales = torch.frombuffer(
-                    bytearray(scale_bytes), dtype=torch.uint8
-                )
-                if bool((scales == 0xFF).any()):
-                    raise K3XError("INVALID_MXFP4", name)
-                packed_tensor = torch.frombuffer(
-                    bytearray(packed), dtype=torch.uint8
-                )
-                return packed_tensor, scales
-
-            if self.packed_mxfp4_cache is None:
-                packed_tensor, scales = load()
-                packed_tensor = packed_tensor.to(target)
-                scales = scales.to(target)
-            else:
-                key = (
-                    str(located.reader.path.resolve()),
-                    record.tensor_id,
-                    str(target),
-                )
-                packed_tensor, scales = self.packed_mxfp4_cache.acquire(
-                    key, load, target
-                )
+            packed_tensor, scales, _, _ = self._mxfp4_cuda_tensors(name, target)
             from .mxfp4_cuda import mxfp4_matvec
 
             return mxfp4_matvec(
@@ -388,3 +363,74 @@ class K3XTensorStore:
         )
         weight = (decoded * scale_values.repeat_interleave(32)).reshape(rows, columns)
         return weight @ value.to(device=target, dtype=torch.float32).reshape(columns)
+
+    def _mxfp4_cuda_tensors(
+        self, name: str, target: torch.device
+    ) -> tuple[torch.Tensor, torch.Tensor, int, int]:
+        located = self.record(name)
+        record = located.record
+        if (
+            target.type != "cuda"
+            or record.quantization != Quantization.MXFP4
+            or len(record.dimensions) != 2
+        ):
+            raise K3XError("INVALID_MXFP4_TENSOR", name)
+        rows, columns = record.dimensions
+
+        def load() -> tuple[torch.Tensor, torch.Tensor]:
+            packed, scale_bytes = located.reader.read_tensor_extents(record)
+            scales = torch.frombuffer(bytearray(scale_bytes), dtype=torch.uint8)
+            if bool((scales == 0xFF).any()):
+                raise K3XError("INVALID_MXFP4", name)
+            packed_tensor = torch.frombuffer(bytearray(packed), dtype=torch.uint8)
+            return packed_tensor, scales
+
+        if self.packed_mxfp4_cache is None:
+            host_tensors = load()
+            packed_tensor, scales = (
+                tensor.to(target) for tensor in host_tensors
+            )
+        else:
+            key = (
+                str(located.reader.path.resolve()),
+                record.tensor_id,
+                str(target),
+            )
+            packed_tensor, scales = self.packed_mxfp4_cache.acquire(
+                key, load, target
+            )
+        return packed_tensor, scales, rows, columns
+
+    def mxfp4_expert_batch(
+        self,
+        expert_bases: Iterable[tuple[str, str, str]],
+        value: torch.Tensor,
+        contributions: torch.Tensor,
+    ) -> torch.Tensor:
+        target = value.device
+        if target.type != "cuda":
+            raise K3XError("INVALID_MXFP4_CUDA_EXPERT_BATCH")
+        experts = []
+        latent_size = value.numel()
+        intermediate_size = None
+        for bases in expert_bases:
+            if len(bases) != 3:
+                raise K3XError("INVALID_MXFP4_CUDA_EXPERT_BATCH")
+            gate = self._mxfp4_cuda_tensors(bases[0], target)
+            up = self._mxfp4_cuda_tensors(bases[1], target)
+            down = self._mxfp4_cuda_tensors(bases[2], target)
+            if (
+                gate[2:] != up[2:]
+                or gate[3] != latent_size
+                or down[2] != latent_size
+                or down[3] != gate[2]
+            ):
+                raise K3XError("INVALID_MXFP4_CUDA_EXPERT_BATCH")
+            if intermediate_size is None:
+                intermediate_size = gate[2]
+            elif intermediate_size != gate[2]:
+                raise K3XError("INVALID_MXFP4_CUDA_EXPERT_BATCH")
+            experts.append((gate[:2], up[:2], down[:2]))
+        from .mxfp4_cuda import mxfp4_expert_batch
+
+        return mxfp4_expert_batch(value, experts, contributions)
