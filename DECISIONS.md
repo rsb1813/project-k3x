@@ -1122,3 +1122,25 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: shard 78 completed under the process-prefetch path in 589.095 seconds, published 16,373,248,256 bytes with SHA-256 `8fac53b47f135c758f7151bb8159ae3b8617a1f64c1a9437e388988f9ccd2749`, deleted its authenticated source, and increased the ledger to 35/96. The elapsed includes shared staging/audit waits and is not an isolated prefetch speedup.
 - Reason accepted: a real child process preserves independent Xet initialization and OS-owned mutex abandonment semantics while retaining download/conversion overlap.
 - Revisit: remove the redundant foreground cached-target check only if HF CLI exposes a stable local-only completion API.
+
+## D-097 — Accept the completed quality K3X set as the official compatibility baseline
+
+- Date: 2026-08-14.
+- Status: implemented, checksum-verified, and executed end to end.
+- Decision: publish the 96 Reader-valid native-MXFP4-expert/group-128-Q8-trunk fragments as one sealed `K3XSET1`, retain the original-precision run as an independent oracle, and use the Python graph only as the first full-checkpoint correctness baseline.
+- Alternatives considered: wait for the production C++ runtime before executing any token; accept the smaller 3-bit expert recipe; retain all 96 source shards after verified conversion.
+- Evidence: the set contains 1,507,512,467,456 payload bytes and has canonical record SHA-256 `f5c7443fd9ea9b4a2f0c95010f148182eefaedec4f29c094ca24e6bc4e61cefe`. All 93 layer records, 449 final-state tensor digests, and the head record passed verification. Input token 1 generated token 9689 in both K3X and original precision; logits were 8.290502548217773 and 8.307021141052246.
+- Benchmark result: observed compatibility TTFT was 1,891 seconds. Layer load/compute intervals sum to 563.791264/161.543706 seconds, peak tracked CUDA allocation/reservation was 3,602,630,144/4,982,833,152 bytes, and downloaded model payload was zero. No steady decode tok/s, physical NVMe bytes, H2D bytes, or broad quality result is claimed.
+- Reason accepted: it proves the complete local artifact and execution graph before production optimization while preserving the quality-first native expert path and an independent comparison token.
+- Revisit: replace the Python baseline with a persistent C++ full-model token loop only after token, route, state, and logit comparisons pass.
+
+## D-098 — Persist and digest-validate repeated official HTTP metadata
+
+- Date: 2026-08-14.
+- Status: implemented, focused-tested, and component-benchmarked.
+- Decision: cache official HTTP metadata responses by URL plus normalized request headers, publish body and metadata atomically, validate the cached body SHA-256 before use, and refetch on corruption. Official compatibility entrypoints share the cache below their object directory.
+- Alternatives considered: redownload the 59.8 MB index in every layer subprocess; trust an unchecked local response cache; immediately refactor all 93 layers into one persistent process.
+- Evidence: the transport regression proves a second instance performs no request and that a corrupted body is rejected and refetched. Existing source/topology/index/config/header validation remains unchanged.
+- Benchmark result: snapshot, index, config, and one shard header fell from 10.191660 seconds, nine requests, and 60,618,467 bytes cold to 1.751957 seconds, zero requests, and zero response bytes warm, an 82.809896% elapsed reduction. No token throughput result is inferred.
+- Reason accepted: it removes a measured repeated external dependency with a small fail-closed change while the larger persistent-runtime refactor remains pending.
+- Revisit: eliminate the remaining 1.75-second parse/hash cost by owning immutable metadata in one persistent process rather than weakening cache validation.

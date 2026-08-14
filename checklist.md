@@ -573,10 +573,11 @@
 - [x] Replace kill-leaky semaphore capacity with process-owned abandoned-mutex recovery and restart at 25/96.
 - [x] Add bounded HF child timeout and partial-cache retries, then verify a complete official shard through source deletion.
 - [x] Replace stalled PowerShell job prefetch with an owned process and verify conversion/download overlap on an official shard.
-- [ ] Complete and verify all 96 K3X fragments.
+- [x] Complete and verify all 96 K3X fragments.
 - [x] Complete the resumed original-precision reference oracle and record greedy token 9689.
-- [ ] Assemble the final executable checkpoint and generate the first token.
-- [ ] Measure and optimize the actual end-to-end bottleneck.
+- [x] Assemble the final executable checkpoint and generate the first token.
+- [x] Measure the first-token bottleneck and remove repeated HTTP metadata downloads with a digest-validated persistent cache.
+- [ ] Replace the per-layer Python process boundary with the persistent production token loop and measure steady decode.
 
 ### 3-bit runtime correctness slice
 

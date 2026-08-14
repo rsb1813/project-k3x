@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2033-two--layer%20closure-20a46b?style=flat-square)](#milestone-33--official-two-layer-closure)
+[![Milestone](https://img.shields.io/badge/milestone%2038-first%20official%20K3X%20token-20a46b?style=flat-square)](#current-limitations)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -34,7 +34,7 @@ flowchart LR
 ```
 
 > [!IMPORTANT]
-> The executable token graph still uses a tiny synthetic model, but Milestones 29–32 execute and optimize one bounded official layer-1 KDA + natural Top-16 MoE sequence on RTX 5080. Milestone 33 closes real official layers 1 and 2 over two positions and measures both the host-round-trip reference and the experimental device-resident inter-layer path. This is a bounded layer fixture, not token generation or full-model throughput. No complete shard, full checkpoint, or paid cloud resource was used.
+> The complete 96-fragment, 1,507,512,467,456-byte K3X set now executes all 93 released Kimi K3 layers and the LM head on the local RTX 5080. Input token 1 generated token 9689, matching the independent original-precision oracle; the K3X and reference logits were 8.2905025482 and 8.3070211411. This 1,891-second Python compatibility TTFT is a correctness baseline, not steady-state tok/s or the optimized production runtime. No paid cloud resource was used.
 
 | Milestone | GitHub status | Evidence |
 |---|---|---|
@@ -901,7 +901,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Separate strict manufacture verification from millisecond sealed-set directory opening without changing the Reader default.
 - [x] Add bounded RAM-staging workers, combined output audits, immutable source-deletion identities, resume-byte accounting, serialized staging, and independent Xet caches.
 - [x] Make the IMMORTAL ledger safe for disjoint multi-worker Local Foundry publication.
-- [ ] Complete all 96 quality fragments, publish the official set manifest, and generate the first released-model token.
+- [x] Complete all 96 quality fragments, publish the official set manifest, and generate the first released-model token.
 - [x] Generate the independent original-precision released-model oracle token: input 1 produced greedy token 9689.
 - [ ] Grouped/resident/fused 3-bit CUDA FFN and complete official manufacturing.
 - [ ] SKYFORGE shard compiler for explicitly provisioned cloud jobs.
@@ -926,13 +926,13 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 ## Current limitations
 
 - The executable model is synthetic and text-only.
-- The optimized production C++ runtime remains synthetic. The exact Python compatibility graph now connects K3X embeddings, layer 0, all KDA/MLA-MoE layers, persisted prefix state, chunked LM head, and greedy selection through a sealed set, but it cannot execute end to end until all 96 fragments exist.
+- The optimized production C++ runtime remains synthetic. The exact Python compatibility graph executes the complete sealed official set, but its per-layer subprocess, metadata, dense-Q8 expansion, and literal MXFP4 paths are correctness infrastructure rather than a usable token loop.
 - Reusable scratch, bounded static weight residency, and same-input grouping are implemented, but activations and results still cross the host/device boundary and asynchronous overlap is not implemented.
 - Static residency has no eviction and is not the future three-tier expert cache.
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
 - Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0025 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; transient, bounded-resident, resident-grid, resident MoE-layer, admission-validation, and CUDA Graph paths are exact opt-in experiments. B-0025 finds mixed stable/alternating deltas and rotating churn 6.09%–11.57% slower, so no graph default changes. There is no learned DSpark drafter, reduced-precision draft path, eviction-capable draft residency, device-resident whole-token graph, or full-model speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
-- The quality Local Foundry has produced 60 Reader-valid, ledger-complete, source-cleaned official fragments: shards 1–22, 37–54, and 67–86. Three bounded RAM conductors continue at shards 23, 55, and 87. Cross-worker HDD-to-RAM staging and finalized-output audits are serialized while conversion and two-slot Xet prefetch remain concurrent. The checksum-bound fragment-set format, Reader, and compatibility graph binding are implemented, but the official sealed set and K3X first token do not exist yet. Provenance is pinned official shard SHA-256 plus K3X roots and the local ledger, not signed publisher provenance.
+- The quality Local Foundry completed all 96 Reader-valid fragments and deleted every official source shard only after checksum and ledger publication. `K3XSET1` record SHA-256 is `f5c7443fd9ea9b4a2f0c95010f148182eefaedec4f29c094ca24e6bc4e61cefe`; provenance remains pinned official shard SHA-256 plus K3X roots and the local ledger, not signed publisher provenance.
 - RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.
 - No open-source license has been selected yet; public visibility does not itself grant reuse rights.
 

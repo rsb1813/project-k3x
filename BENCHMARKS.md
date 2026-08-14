@@ -1576,6 +1576,34 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - The same three-conductor path subsequently completed shards 14–17, 47–50, and 79–82. At the 2026-08-14 checkpoint the durable ledger contains 47/96 Reader-valid fragments totaling 751,990,071,040 bytes; every corresponding source shard was deleted only after official source SHA-256, finalized K3X root/file SHA-256, and ledger publication passed. Shards 50 and 82 completed in 1,019.505 and 1,017.078 seconds with output SHA-256 `1a506c7eac15ef789f4e4371b3f4072b2613ccc6da264c5eecac42b88660ead6` and `13d20f31c9db27f6035df5e6117a8c066cd605b78e82fe3cb9a748a3fff37752`. These elapsed values include serialized RAM staging and finalized-output audit waits; they are manufacturing wall times, not inference throughput or isolated optimization results.
 - The durable ledger later reached 60/96 Reader-valid fragments totaling 964,196,305,920 bytes, covering shards 1–22, 37–54, and 67–86. Shards 22, 54, and 86 completed in 989.893, 1,005.372, and 975.209 seconds with output SHA-256 `f15cbb60e53acaeb548198975a560284d18340e2f55dc4009a59daa7ae0defc3`, `f2664455caa76be6f0639522eda95f039b6f36542b1b3501e54ed8544de51eb1`, and `1f9963653e45c712c5750ea4bed0f031567307b23f99cec9e6c19929d20c841d`. All corresponding source files were removed only after the unchanged correctness gates. These are manufacturing wall times with shared waits, not inference measurements.
 
+## B-0046 complete official K3X first token
+
+- Date: 2026-08-14.
+- Commit: execution used `bd3bb5f`; result and documentation are committed in the following evidence commit.
+- Hardware: AMD Ryzen 7 9800X3D, NVIDIA RTX 5080 16 GB, 96 GB host RAM, WSL2, K3X fragments on the local C-drive P44 Pro volume.
+- Model/checkpoint: `moonshotai/Kimi-K3` revision `9f62e4e9fffbd0a83ddd60e1c209d828994b3569`; 96-fragment `K3XSET1`, 1,507,512,467,456 payload bytes, manifest record SHA-256 `f5c7443fd9ea9b4a2f0c95010f148182eefaedec4f29c094ca24e6bc4e61cefe`.
+- Mode: natural Top-16, native MXFP4 routed experts, selected group-128 Q8 trunk matrices restored to their logical BF16 graph dtype, exact cold expert selection, no proxy, no pruning, Python compatibility execution.
+- Context: one input token, ID 1. All layers 0–92 and the complete LM head executed.
+- Correctness: K3X greedy token 9689 matches the independent original-precision token 9689. Selected logits are 8.290502548217773 and 8.307021141052246, for 0.016518592834472656 absolute and 0.1988509786% relative difference. All 93 layer records, the set identity, 449 final-state tensor digests, and the head record were verified.
+- TTFT: 1,891 seconds from observed process start to result publication, with one-second timestamp resolution. This includes set finalization, per-layer Python processes, repeated metadata retrieval, state publication, storage, transfer, compute, and head scan.
+- Layer intervals: 563.791264 seconds summed pre-expert load/attention/routing and 161.543706 seconds summed expert/dense compute. The remaining wall time is uninstrumented orchestration and repeated metadata/process overhead.
+- CUDA memory: peak tracked allocation 3,602,630,144 bytes; peak tracked reservation 4,982,833,152 bytes. An eight-second diagnostic observed 4–7% SM utilization but is not an average utilization measurement.
+- Traffic: downloaded model payload 0 bytes. The 136,990,317,568-byte sum is source-equivalent logical request accounting, not physical K3X/NVMe traffic. Physical NVMe GB/token, H2D GB/token, host RAM peak, cache hit rate, speculation, and memory bandwidth were not measured.
+- Throughput and quality: decode tok/s and prefill tok/s were not measured; one TTFT token must not be reported as steady throughput. Token agreement is not a coding-quality or perplexity result.
+- Evidence: head file SHA-256 `a9b3b32ffb65f4c4c341fd18defc9c613d18e3fa746bfe58a9258ab53439fb27`; comparison record SHA-256 `2ff90f75a63dfa467b67b60e3c0fefeac648aba9bdaf047820743545600c6dee`; layer-file chain SHA-256 `7fd29743f541b7c8c9f9817193df4f5cabbd77c5a04cd8f3eebd6f7c008869ab`.
+
+## B-0047 official metadata cache boundary
+
+- Date: 2026-08-14.
+- Hardware: same local host under WSL2; cache stored below the D-drive first-token object directory.
+- Boundary: official snapshot, 59.8 MB index, config, and the 5,404-tensor `model-00002-of-000096` header.
+- Cold: 10.191660 seconds, nine HTTP requests, 60,618,467 response bytes.
+- Warm: 1.751957 seconds, zero HTTP requests, zero response bytes.
+- Change: 82.809896% lower elapsed at this isolated metadata boundary. Index/config digests and header tensor count are identical.
+- Correctness: cached bodies are SHA-256 validated; the focused regression proves reuse across transport instances and corruption-triggered refetch. Seven focused transport/local-shard tests pass.
+- Scope: component timing only. No token, tok/s, physical storage traffic, or full-run speedup is claimed.
+- Evidence: `results/b0047-official-metadata-cache/summary.json`, record SHA-256 `a35a12b65b9057885cf2a045a5c6fa8237a471ff82f9e44db972bf98782f43c5`.
+
 ## B-0044 official original-precision first token
 
 - Date: 2026-08-14.

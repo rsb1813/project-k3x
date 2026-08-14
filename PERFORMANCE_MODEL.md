@@ -264,6 +264,16 @@ Formal B-0033 confirms these formulas. Host/device route medians are 64.210407/6
 
 The device row holds exactly 12,888,064 more resident weights and 13,006,336 more tracked peak VRAM, transfers 7,168 additional logical D2H bytes per sequence, and retains zero warm weight H2D. These are one-layer WSL2 counters, not physical PCIe traffic or bytes/token. A multi-layer boundary is required to determine whether activation residency and fewer API transitions can amortize the added kernel/synchronization cost.
 
+## Milestone 38 full K3X first-token boundary
+
+The completed 96-fragment quality set contains 1,507,512,467,456 payload bytes. A cold Python compatibility execution of input token 1 traversed all 93 layers and the 163,840-row LM head in 1,891 seconds from the observed process start to result publication. The 93 layer records sum to 563.791264 seconds in their pre-expert load/attention/routing interval and 161.543706 seconds in their expert/dense compute interval. The remaining wall time includes repeated Python startup, official metadata discovery, state publication, and uninstrumented orchestration.
+
+The layer records account for 136,990,317,568 source-equivalent bytes for the selected natural Top-16 path plus head. This is a logical source-contract quantity, not measured K3X physical reads, OS page-cache misses, NVMe traffic, or H2D traffic. Physical NVMe GB/token and RAM-to-GPU GB/token therefore remain unmeasured. Peak tracked CUDA allocation/reservation was 3,602,630,144/4,982,833,152 bytes. An eight-second diagnostic sample observed 4–7% SM utilization and 1.65–3.68 GB framebuffer use, but it is not an end-to-end utilization average.
+
+The mixed K3X token matches the independent original-precision greedy token at ID 9689. Its FP32 selected logit is 8.290502548217773 versus 8.307021141052246, an absolute difference of 0.016518592834472656 or 0.1988509786%. One token agreement is a correctness milestone, not coding-quality, perplexity, or broad quantization-quality evidence.
+
+B-0047 isolates the repeated official metadata boundary. The cold snapshot, 59.8 MB index, config, and one 5,404-tensor shard header required 10.191660 seconds, nine HTTP requests, and 60,618,467 response bytes. The digest-validated persistent cache reduced the identical warm boundary to 1.751957 seconds, zero HTTP requests, and zero response bytes, an 82.809896% elapsed reduction. This is a component optimization; steady decode tok/s remains unmeasured.
+
 ## Required production measurements
 
 Before selecting a default storage or kernel path, the Linux target must record decode and prefill rates, TTFT, GPU utilization and memory bandwidth, VRAM and host RAM, NVMe and RAM-to-GPU GB/token, expert-cache hit rate, speculative acceptance, unique experts per block, adaptive Top-K, cold rescues, per-kernel time, and I/O stall time. Every result must carry an ablation configuration and quality mode.
