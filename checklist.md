@@ -597,6 +597,15 @@
 - [x] Route all in-process official stages through the shared context.
 - [x] Re-run full-token parity and record B-0049.
 
+### Milestone 41 device-side Q8 decode
+
+- [x] Write the bounded design and implementation plan.
+- [ ] Add a witnessed CUDA parity test through `K3XTensorStore.load`.
+- [ ] Transfer compressed Q8 codes/scales and decode on the target CUDA device.
+- [ ] Run the focused correctness gate.
+- [ ] Measure one released tensor and the complete official token as B-0050.
+- [ ] Update the TITAN Ledger and publish the measured result.
+
 ### 3-bit runtime correctness slice
 
 - [x] Re-read the accepted Local Foundry design and implementation plan.
