@@ -184,6 +184,7 @@ def test_official_kda_recurrence_decays_key_axis_before_delta_update() -> None:
         replace(_weights(), a_log=torch.zeros(2, dtype=torch.bfloat16)),
         replace(_weights(), a_log=torch.zeros(3, dtype=torch.float32)),
         replace(_weights(), q_proj=torch.eye(3, dtype=torch.bfloat16)),
+        replace(_weights(), q_proj=object()),
     ),
 )
 def test_official_kda_rejects_dtype_or_shape_drift(weights: OfficialKdaWeights) -> None:
@@ -244,3 +245,35 @@ def test_official_kda_projection_is_sequence_partition_invariant() -> None:
     )
 
     assert torch.equal(full, incremental)
+
+
+def test_official_kda_accepts_matvec_projection_weights() -> None:
+    class MatvecWeight:
+        def __init__(self, tensor: torch.Tensor) -> None:
+            self.tensor = tensor
+            self.shape = tensor.shape
+            self.dtype = tensor.dtype
+            self.device = tensor.device
+
+        def matvec(self, value: torch.Tensor) -> torch.Tensor:
+            return torch.nn.functional.linear(
+                value.reshape(1, -1), self.tensor
+            ).reshape(-1)
+
+    cfg = _config()
+    tokens = _tokens()
+    weights = _weights()
+    zero = zero_official_kda_state(cfg, batch_size=1, device=tokens.device)
+    expected = official_kda(tokens, weights, zero, cfg)
+    actual = official_kda(
+        tokens,
+        replace(weights, q_proj=MatvecWeight(weights.q_proj)),
+        zero,
+        cfg,
+    )
+
+    assert torch.equal(actual.output, expected.output)
+    assert torch.equal(actual.state.conv_q, expected.state.conv_q)
+    assert torch.equal(
+        actual.state.recurrent_v_first, expected.state.recurrent_v_first
+    )

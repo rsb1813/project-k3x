@@ -11,7 +11,7 @@ from k3x_converter.fragment_set import (
     FragmentSetManifest,
     read_fragment_set_manifest,
 )
-from k3x_converter.fragment_tensor_store import K3XTensorStore
+from k3x_converter.fragment_tensor_store import K3XTensorStore, PackedQ8Cache
 from k3x_converter.official_source import (
     OfficialConfig,
     OfficialIndex,
@@ -46,6 +46,9 @@ class OfficialRuntimeContext:
     index: OfficialIndex
     config: OfficialConfig
     set_manifest: FragmentSetManifest | None
+    packed_q8_cache: PackedQ8Cache = field(
+        default_factory=lambda: PackedQ8Cache(0, 0)
+    )
     _headers: dict[str, OfficialShardHeader] = field(default_factory=dict)
     _stores: dict[str, K3XTensorStore] = field(default_factory=dict)
 
@@ -56,6 +59,8 @@ class OfficialRuntimeContext:
         topology_path: Path,
         object_dir: Path,
         k3x_set: Path | None,
+        q8_host_cache_bytes: int = 0,
+        q8_device_cache_bytes: int = 0,
     ) -> "OfficialRuntimeContext":
         topology = load_official_topology(topology_path.resolve())
         object_dir = object_dir.resolve()
@@ -85,6 +90,7 @@ class OfficialRuntimeContext:
             index,
             config,
             manifest,
+            PackedQ8Cache(q8_host_cache_bytes, q8_device_cache_bytes),
         )
 
     @property
@@ -116,7 +122,10 @@ class OfficialRuntimeContext:
         if fragment is None:
             raise K3XError("K3X_FRAGMENT_NOT_FOUND", filename)
         store = K3XTensorStore.open(
-            [fragment], verify_root=False, verify_payload=False
+            [fragment],
+            verify_root=False,
+            verify_payload=False,
+            packed_q8_cache=self.packed_q8_cache,
         )
         self._stores[source_shard] = store
         return store

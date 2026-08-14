@@ -77,19 +77,26 @@ def _invalid(message: str) -> ValueError:
 
 def _require_tensor(
     name: str,
-    tensor: torch.Tensor,
+    tensor: object,
     shape: tuple[int, ...],
     dtype: torch.dtype,
     device: torch.device,
 ) -> None:
+    if not all(
+        hasattr(tensor, attribute) for attribute in ("shape", "dtype", "device")
+    ):
+        raise _invalid(f"{name} must expose shape, dtype, and device")
     if tensor.shape != shape:
         raise _invalid(f"{name} shape must be {shape}, got {tuple(tensor.shape)}")
     if tensor.dtype != dtype:
         raise _invalid(f"{name} dtype must be {dtype}, got {tensor.dtype}")
     if tensor.device != device:
         raise _invalid(f"{name} device must be {device}, got {tensor.device}")
-    if not torch.isfinite(tensor).all():
-        raise _invalid(f"{name} contains a non-finite value")
+    if isinstance(tensor, torch.Tensor):
+        if not torch.isfinite(tensor).all():
+            raise _invalid(f"{name} contains a non-finite value")
+    elif not callable(getattr(tensor, "matvec", None)):
+        raise _invalid(f"{name} must be a tensor or matvec weight")
 
 
 def _validate_config(config: OfficialKdaConfig) -> None:
@@ -190,7 +197,21 @@ def zero_official_kda_state(
     )
 
 
-def _project(hidden: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
+def _project(hidden: torch.Tensor, weight: object) -> torch.Tensor:
+    if not isinstance(weight, torch.Tensor):
+        return torch.stack(
+            tuple(
+                torch.stack(
+                    tuple(
+                        weight.matvec(hidden[batch, index])
+                        for batch in range(hidden.shape[0])
+                    ),
+                    dim=0,
+                )
+                for index in range(hidden.shape[1])
+            ),
+            dim=1,
+        ).to(torch.bfloat16)
     return torch.cat(
         tuple(
             functional.linear(hidden[:, index : index + 1], weight).to(

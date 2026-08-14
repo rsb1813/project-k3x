@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 import torch
 
@@ -63,11 +63,89 @@ def _decode_groupwise_8bit_cuda(
     return decoded.reshape(-1)[: value.values].reshape(value.shape)
 
 
+@dataclass
+class PackedQ8Cache:
+    host_budget_bytes: int
+    device_budget_bytes: int
+    _host: dict[tuple[str, int], tuple[torch.Tensor, torch.Tensor]] = field(
+        default_factory=dict, init=False
+    )
+    _device: dict[tuple[str, int, str], tuple[torch.Tensor, torch.Tensor]] = field(
+        default_factory=dict, init=False
+    )
+    host_resident_bytes: int = field(default=0, init=False)
+    device_resident_bytes: int = field(default=0, init=False)
+    host_hits: int = field(default=0, init=False)
+    device_hits: int = field(default=0, init=False)
+    misses: int = field(default=0, init=False)
+    host_admissions: int = field(default=0, init=False)
+    device_admissions: int = field(default=0, init=False)
+    rejected_bytes: int = field(default=0, init=False)
+
+    def __post_init__(self) -> None:
+        for value in (self.host_budget_bytes, self.device_budget_bytes):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise K3XError("INVALID_Q8_CACHE_BUDGET")
+
+    @staticmethod
+    def _bytes(tensors: tuple[torch.Tensor, torch.Tensor]) -> int:
+        return sum(tensor.numel() * tensor.element_size() for tensor in tensors)
+
+    def acquire(
+        self,
+        key: tuple[str, int, str],
+        loader: Callable[[], tuple[torch.Tensor, torch.Tensor]],
+        device: torch.device,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        cached_device = self._device.get(key)
+        if cached_device is not None:
+            self.device_hits += 1
+            return cached_device
+
+        host_key = key[:2]
+        cached_host = self._host.get(host_key)
+        if cached_host is not None:
+            self.host_hits += 1
+            return tuple(tensor.to(device) for tensor in cached_host)
+
+        self.misses += 1
+        host_tensors = loader()
+        size = self._bytes(host_tensors)
+        if self.device_resident_bytes + size <= self.device_budget_bytes:
+            device_tensors = tuple(tensor.to(device) for tensor in host_tensors)
+            self._device[key] = device_tensors
+            self.device_resident_bytes += size
+            self.device_admissions += 1
+            return device_tensors
+        if self.host_resident_bytes + size <= self.host_budget_bytes:
+            self._host[host_key] = host_tensors
+            self.host_resident_bytes += size
+            self.host_admissions += 1
+        else:
+            self.rejected_bytes += size
+        return tuple(tensor.to(device) for tensor in host_tensors)
+
+    def snapshot(self) -> dict[str, int]:
+        return {
+            "host_budget_bytes": self.host_budget_bytes,
+            "device_budget_bytes": self.device_budget_bytes,
+            "host_resident_bytes": self.host_resident_bytes,
+            "device_resident_bytes": self.device_resident_bytes,
+            "host_hits": self.host_hits,
+            "device_hits": self.device_hits,
+            "misses": self.misses,
+            "host_admissions": self.host_admissions,
+            "device_admissions": self.device_admissions,
+            "rejected_bytes": self.rejected_bytes,
+        }
+
+
 @dataclass(frozen=True)
 class PackedQ8Matrix:
     located: _LocatedTensor
     name: str
     device: torch.device
+    cache: PackedQ8Cache | None = None
 
     @property
     def shape(self) -> tuple[int, int]:
@@ -87,16 +165,29 @@ class PackedQ8Matrix:
         rows, columns = self.shape
         if value.numel() != columns:
             raise K3XError("INVALID_Q8_CUDA_INPUT", self.name)
-        data, auxiliary = self.located.reader.read_tensor_extents(
-            self.located.record
-        )
-        codes, scales = _quant8_host_tensors(
-            Quant8Tensor(self.shape, rows * columns, 128, data, auxiliary)
-        )
+        def load() -> tuple[torch.Tensor, torch.Tensor]:
+            data, auxiliary = self.located.reader.read_tensor_extents(
+                self.located.record
+            )
+            return _quant8_host_tensors(
+                Quant8Tensor(self.shape, rows * columns, 128, data, auxiliary)
+            )
+
+        if self.cache is None:
+            codes, scales = load()
+            codes = codes.to(self.device)
+            scales = scales.to(self.device)
+        else:
+            key = (
+                str(self.located.reader.path.resolve()),
+                self.located.record.tensor_id,
+                str(self.device),
+            )
+            codes, scales = self.cache.acquire(key, load, self.device)
         return q8_matvec(
             value.to(self.device),
-            codes.to(self.device),
-            scales.to(self.device),
+            codes,
+            scales,
             rows,
             columns,
         )
@@ -105,6 +196,7 @@ class PackedQ8Matrix:
 @dataclass(frozen=True)
 class K3XTensorStore:
     tensors: dict[int, _LocatedTensor]
+    packed_q8_cache: PackedQ8Cache | None = None
 
     @classmethod
     def open(
@@ -113,6 +205,7 @@ class K3XTensorStore:
         *,
         verify_root: bool = True,
         verify_payload: bool = True,
+        packed_q8_cache: PackedQ8Cache | None = None,
     ) -> "K3XTensorStore":
         tensors: dict[int, _LocatedTensor] = {}
         for path in paths:
@@ -123,7 +216,7 @@ class K3XTensorStore:
                 if record.tensor_id in tensors:
                     raise K3XError("DUPLICATE_TENSOR_ID", f"{record.tensor_id:016x}")
                 tensors[record.tensor_id] = _LocatedTensor(reader, record)
-        return cls(tensors)
+        return cls(tensors, packed_q8_cache)
 
     def record(self, name: str) -> _LocatedTensor:
         tensor_id = fnv1a64(name)
@@ -181,7 +274,7 @@ class K3XTensorStore:
             raise K3XError("INVALID_Q8_CUDA_DEVICE", name)
         if target.index is None:
             target = torch.device("cuda", torch.cuda.current_device())
-        return PackedQ8Matrix(located, name, target)
+        return PackedQ8Matrix(located, name, target, self.packed_q8_cache)
 
     def load_rows(
         self,

@@ -35,6 +35,8 @@ def _parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--stop-layer", type=int, default=92)
     parser.add_argument("--k3x-set", type=Path)
     parser.add_argument("--direct-q8", action="store_true")
+    parser.add_argument("--q8-host-cache-bytes", type=int, default=0)
+    parser.add_argument("--q8-device-cache-bytes", type=int, default=0)
     parser.add_argument(
         "--execution-mode",
         choices=("subprocess", "in-process"),
@@ -87,6 +89,8 @@ def run(args: argparse.Namespace) -> int:
             topology_path=topology,
             object_dir=object_dir,
             k3x_set=k3x_set,
+            q8_host_cache_bytes=getattr(args, "q8_host_cache_bytes", 0),
+            q8_device_cache_bytes=getattr(args, "q8_device_cache_bytes", 0),
         )
         if args.execution_mode == "in-process"
         else None
@@ -213,6 +217,11 @@ def run(args: argparse.Namespace) -> int:
         "wall_seconds": time.perf_counter() - total_start,
         "throughput_measured": False,
         "direct_q8": getattr(args, "direct_q8", False),
+        "q8_cache": (
+            runtime_context.packed_q8_cache.snapshot()
+            if runtime_context is not None
+            else None
+        ),
     }
     encoded = json.dumps(timing, sort_keys=True, separators=(",", ":")).encode()
     timing["record_sha256"] = hashlib.sha256(encoded).hexdigest()
