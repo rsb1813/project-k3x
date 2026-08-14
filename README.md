@@ -34,7 +34,7 @@ flowchart LR
 ```
 
 > [!IMPORTANT]
-> The complete 96-fragment, 1,507,512,467,456-byte K3X set now executes all 93 released Kimi K3 layers and the LM head on the local RTX 5080. The exact B-0050 path reduced measured first-token wall time from 1,891 to 583.658 seconds with identical K3X token, logit, layer outputs, and final state. Experimental direct-packed Q8 reaches 566.002 seconds and the same token, but changes nine Top-16 expert sets and remains non-default. These are TTFT measurements, not steady decode tok/s. No paid cloud resource was used.
+> The complete 96-fragment, 1,507,512,467,456-byte K3X set now executes all 93 released Kimi K3 layers and the LM head on the local RTX 5080. The exact B-0050 path reduced measured first-token wall time from 1,891 to 583.658 seconds with identical K3X token, logit, layer outputs, and final state. Experimental direct-packed Q8 reaches 566.002 seconds and the same token, but changes nine Top-16 expert sets and remains non-default. Packed residency now measures official layer 0 at a 0.2136-second five-run warm median with 11/11 Q8 L0 hits; this is not yet full-model decode TPS. No paid cloud resource was used.
 
 | Milestone | GitHub status | Evidence |
 |---|---|---|
@@ -70,6 +70,7 @@ flowchart LR
 | Milestone 40 | Public branch `codex/official-end-to-end-token` | B-0049 shares immutable metadata and store directories |
 | Milestone 41 | Public branch `codex/official-end-to-end-token` | B-0050 moves Q8 reconstruction to CUDA and reduces first-token wall to 583.658 seconds |
 | Milestone 42 | Public branch `codex/official-end-to-end-token` | B-0051 direct-packed Q8 cuts resident matvec 40.30x but cold full wall only 3.03%; experimental non-default |
+| Milestone 43 | Public branch `codex/official-end-to-end-token` | B-0055 packs and retains all layer-0 Q8 projections; 7.346 s cold to 0.214 s warm median, 34.40x |
 
 The latest audited public implementation baseline is Milestone 34 integration head `a7ba5204`. Push correctness `31677396649`, pull-request correctness `31677408262`, and pull-request CodeQL `31677408278` passed before merge; post-merge `main` correctness `31677651704` and CodeQL `31677651706` also succeeded.
 
@@ -876,7 +877,8 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] One-process official graph, shared immutable runtime context, and B-0049 parity.
 - [x] Device-side Q8 decode with B-0050 full-model parity and measured wall reduction.
 - [x] Experimental direct-packed Q8 matvec with released and full-model B-0051 measurements.
-- [ ] Persistent packed RAM/VRAM residency and native direct-packed MXFP4 execution.
+- [x] Explicit-budget packed Q8 RAM/VRAM residency with B-0052/B-0055 layer-0 measurements.
+- [ ] Native direct-packed MXFP4 residency and execution.
 - [ ] Warm multi-token decode measurement and optimization toward 5 tok/s minimum.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.

@@ -1188,3 +1188,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: cold full wall falls only 3.025017%, from 583.658078 to 566.002323 seconds. The resident q-projection kernel is 40.298662x faster, and peak CUDA allocation falls from 3,602,630,144 to 1,381,369,344 bytes.
 - Reason accepted: the kernel removes the compute/materialization bottleneck once weights are resident, but cold storage and transfer hide that benefit and route changes prevent an exact-default claim.
 - Revisit: consider direct Q8 in BALANCED only after resident warm multi-token and coding-quality ablations quantify end-to-end gain and divergence.
+
+## D-103 — Use stable first admission for the initial packed-Q8 L0/L1 cache
+
+- Date: 2026-08-14.
+- Status: implemented and released layer-0 measured; experimental/non-default.
+- Decision: give one `OfficialRuntimeContext` explicit host and device byte budgets, admit each validated packed-Q8 matrix to L0 first and L1 second, and do not evict admitted entries in the first implementation. Extend the matvec handle to layer-0 KDA while retaining the tensor reference path.
+- Alternatives considered: LRU eviction across the complete sequential layer scan; caching reconstructed BF16 matrices in host RAM; immediately caching every trunk and expert tensor without a bounded measurement.
+- Evidence: a zero-budget test retains repeated misses, the L0 test reads once across two matvecs, and shared-context tests bind one cache to every fragment store. B-0052 admits three dense-MLP matrices and records 3/3 warm hits. B-0055 admits all eleven layer-0 Q8 projections and records 11/11 hits in each of five warm runs.
+- Benchmark result: B-0052 layer-0 wall falls from 11.149552 to 2.638550 seconds, or 4.2256x. Direct KDA B-0055 measures 7.345563 seconds cold and a 0.213557-second five-run warm median, or 34.3963x, with 1,188,528,640 device-resident bytes. Final-hidden cosine versus B-0052 is 0.9999964 and maximum absolute error is 0.000244141.
+- Reason accepted: residency exposes the already measured fast packed kernel and stable admission guarantees reuse for a bounded subset instead of scan-thrash. The default remains zero-budget and exact B-0050 remains the quality reference.
+- Revisit: replace static admission with profile/deadline-aware placement after real multi-token traces; promote direct KDA only after complete-token routing and coding-quality gates.

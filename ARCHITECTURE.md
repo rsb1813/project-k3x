@@ -600,9 +600,15 @@ This is an implemented bridge, not the final packed compute path. It removes CPU
 
 ## Milestone 42 direct-packed Q8 matvec
 
-An experimental native `sm_120` PyTorch CUDA extension now multiplies group-128 Q8 matrices directly from int8 codes and BF16 scales. Large dense-MLP and Stable LatentMoE matrices can be represented by lazy packed handles, and `_bf16_matvec` dispatches those handles without materializing BF16/FP32 weights. `--direct-q8` is explicit and off by default; KDA/MLA attention projections remain on the B-0050 tensor path.
+An experimental native `sm_120` PyTorch CUDA extension now multiplies group-128 Q8 matrices directly from int8 codes and BF16 scales. Large dense-MLP and Stable LatentMoE matrices can be represented by lazy packed handles, and `_bf16_matvec` dispatches those handles without materializing BF16/FP32 weights. `--direct-q8` is explicit and off by default. Milestone 43 extends the same handle protocol to layer-0 KDA projections; MLA and later-layer attention remain on the materialized B-0050 path.
 
 B-0051 shows why packed compute and residency must be combined. The released resident q-projection kernel is 40.30x faster than the resident materialized path, but cold full-token wall improves only 3.03% because file reads, Python byte copies, and H2D dominate. The mode also changes floating-point reduction order: token 9689 remains unchanged, but nine of 92 MoE layers select a different Top-16 set and broad quality is unmeasured. The kernel is therefore implemented and experimental, while the exact B-0050 path remains the default.
+
+## Milestone 43 packed Q8 residency
+
+`OfficialRuntimeContext` now owns an explicit-budget packed-Q8 cache shared by all lazily opened fragment stores. L0 retains validated int8 codes and BF16 scales on one CUDA device; L1 retains the same validated representation in host RAM when L0 cannot admit it. Stable first admission is intentional because a 93-layer sequential scan can make a capacity-limited LRU cache thrash on every later token. Zero-byte defaults preserve the prior path, and timing output records budgets, resident bytes, hits, misses, and admissions.
+
+The official KDA projector now accepts a validated matvec-capable weight while preserving its tensor reference path. This allows all eleven layer-0 Q8 projection matrices to remain packed and resident. B-0055 measures layer 0 at 7.345563 seconds cold and a 0.213557-second median across five warm runs, a 34.3963x ratio, with 1,188,528,640 resident bytes and 11/11 L0 hits per warm run. Every output and KDA-state digest matches; versus the prior materialized-attention B-0052 output, final-hidden cosine is 0.9999964 and maximum absolute error is 0.000244141. This is a layer boundary, not token throughput, and direct KDA remains experimental until complete-token quality is measured.
 
 ## K3X data flow
 

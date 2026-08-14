@@ -621,11 +621,12 @@
 
 - [x] Reject LRU as the initial sequential-scan policy and select stable first admission.
 - [x] Write the bounded design and implementation plan.
-- [ ] Add RED L0-hit and zero-budget fallback tests.
-- [ ] Implement shared L0/L1 packed Q8 cache with byte budgets and telemetry.
-- [ ] Propagate explicit cache budgets through the persistent official context.
-- [ ] Measure two official layer-0 executions in one process.
-- [ ] Update the TITAN Ledger and publish the measured result.
+- [x] Add RED L0-hit and zero-budget fallback tests.
+- [x] Implement shared L0/L1 packed Q8 cache with byte budgets and telemetry.
+- [x] Propagate explicit cache budgets through the persistent official context.
+- [x] Measure two official layer-0 executions in one process.
+- [x] Extend packed handles to official layer-0 KDA and measure the quality delta.
+- [x] Update the TITAN Ledger and publish the measured result.
 
 ### 3-bit runtime correctness slice
 

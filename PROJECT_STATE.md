@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 42 direct-packed Q8 matvec is complete and remains experimental/non-default. All 96 Reader-valid fragments remain sealed by `model.k3xset` record SHA-256 `f5c7443fd9ea9b4a2f0c95010f148182eefaedec4f29c094ca24e6bc4e61cefe`; no source payload was downloaded and no paid cloud resource was used.
+Milestone 43 explicit-budget packed Q8 residency and layer-0 direct KDA are implemented and measured. They remain experimental/non-default. All 96 Reader-valid fragments remain sealed by `model.k3xset` record SHA-256 `f5c7443fd9ea9b4a2f0c95010f148182eefaedec4f29c094ca24e6bc4e61cefe`; no source payload was downloaded and no paid cloud resource was used.
 
 The exact Python compatibility graph executed layer 0, all KDA/MLA-MoE layers 1–92, persisted state, and the chunked LM head from the sealed set. Input token 1 generated token 9689 at FP32 logit 8.290502548217773, matching the independent original-precision greedy token 9689 at logit 8.307021141052246. All 93 record digests and all 449 final-state tensor digests passed. This establishes one-token compatibility, not steady decode throughput or broad quality.
 
@@ -18,10 +18,11 @@ D-084 binds every K3X layer/state/head publication to the exact sealed-set diges
 
 D-085 and D-089 use a 72 GiB WSL cap, 16 GiB swap, and 60 GiB `/dev/shm` for up to three bounded RAM workers. D-090 serializes only HDD-to-RAM staging, D-091 isolates Xet caches, D-092 serializes finalized K3X output audits, D-094 recovers download capacity after conductor death, D-095 bounds stalled HF children, and D-096 moves prefetch into owned processes. Fresh clean-path shards 8/9/40/44/45/71/72 completed in 398.151/405.581/401.198/398.970/407.314/401.689/397.259 seconds; shard 78 completed in 589.095 seconds with shared staging/audit waits. This is manufacturing evidence, not inference throughput.
 
-State synchronized on 2026-08-14 after direct-Q8 implementation commit `f06d078` and uninterrupted B-0051 execution. The durable ledger is 96/96, the sealed set and matching K3X token exist, and source cleanup remains complete. The next production step is packed RAM/VRAM residency, native direct-packed MXFP4 execution, and warm multi-token measurement toward the 5 TPS minimum, 10–15 TPS recommended target, and 20 TPS stretch target.
+State synchronized on 2026-08-14 after B-0052/B-0055 packed-Q8 residency measurements. The durable ledger is 96/96, the sealed set and matching K3X token exist, and source cleanup remains complete. The next production step is native direct-packed MXFP4 expert residency plus a persistent multi-token state loop, followed by actual warm decode measurement toward the 5 TPS minimum, 10–15 TPS recommended target, and 20 TPS stretch target.
 
 ## Completed work
 
+- Milestone 43 shared stable-admission Q8 L0/L1 cache, explicit runtime budgets and telemetry, layer-0 KDA packed projection protocol, focused tests, B-0052 4.2256x dense-residency ratio, and B-0055 34.3963x all-Q8 layer-0 cold/median ratio. This remains a layer measurement, not token TPS.
 - Milestone 42 native `sm_120` direct-packed Q8 CUDA matvec, lazy packed handles, explicit `--direct-q8`, eight focused passing tests, released resident 40.298662x component speedup, and B-0051 full-model measurement. The mode remains experimental because routing diverges and coding quality is unmeasured.
 - Milestone 41 compressed Q8 H2D plus CUDA BF16 reconstruction, CPU reference fallback, released-tensor bit parity, seven focused passing tests, and B-0050 complete 93-layer parity at 583.658078 seconds first-token wall. No steady tok/s is claimed.
 - Milestone 37 group-32 signed 3-bit K3X writer/reader ABI, strict required-feature negotiation, PyTorch and portable C++ decode, scalar direct-packed RTX 5080 matvec, synthetic CPU/CUDA layer/logit/token parity, packed-byte transfer assertions, and sanitizer coverage. No performance result is claimed.
@@ -221,9 +222,9 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 ## Next concrete tasks
 
-1. Add explicit-budget packed Q8/MXFP4 RAM and VRAM residency so warm matvecs avoid file reads, Python byte copies, and repeated H2D.
-2. Keep KDA/MLA recurrent state and the runtime context alive across multiple generated tokens, then measure actual warm decode tok/s.
-3. Add expert hot-bank policy, adaptive Top-K/rescue, and expert-major speculation only after the warm exact/resident baseline is measured.
+1. Add native direct-packed MXFP4 expert handles and a bounded VRAM/RAM hot bank so routed expert weights are not decoded and transferred on every token.
+2. Extend packed projection support through released KDA/MLA layers and keep recurrent state plus the runtime context alive across multiple generated tokens.
+3. Measure actual warm decode tok/s, then add adaptive Top-K/rescue and expert-major speculation only against that resident baseline.
 
 ## Hardware assumptions
 
@@ -241,12 +242,13 @@ The task bullets below describe the gate reached at each named commit; later M33
 
 ## Latest measured bottleneck
 
-B-0051 experimental direct Q8 reduces cold full-token wall only 3.025017%, from B-0050's 583.658078 to 566.002323 seconds. It reduces peak CUDA allocation/reservation to 1,381,369,344/1,589,641,216 bytes, retains token 9689, and changes nine Top-16 sets. B-0050 remains the exact default.
+B-0055 measures official layer 0 at 7.345563 seconds cold and a 0.213557-second median across five warm passes, a 34.3963x ratio. Eleven packed Q8 projections occupy 1,188,528,640 device bytes and all eleven hit on every warm pass. Final-hidden cosine versus B-0052 is 0.9999964 with 0.000244141 maximum absolute error.
 
-The released q-projection direct kernel is 40.298662x faster when packed weights are already resident, but only 1.165607x faster on the cold read/H2D path. B-0051 shifts recorded time from load/decode into lazy compute and leaves full wall nearly unchanged. Packed RAM/VRAM residency and direct-packed MXFP4 are therefore the next measured bottlenecks. No steady decode tok/s is measured.
+The remaining full-model bottleneck is now outside layer-0 packed Q8: 92 MoE layers still read and expand native MXFP4 experts per route, later KDA/MLA projections remain materialized, and prefix state is still published to disk between token drivers. Native expert residency and the persistent multi-token loop are required before a steady decode TPS exists. B-0050 remains the exact default; no steady decode tok/s is measured.
 
 ## Last known-good state
 
+- Local packed-residency implementation `7f8fc05` and median harness `300fb75` pass 17 focused tests and Python compilation. B-0055 records five warm layer-0 runs with identical output/KDA-state digests, 11/11 L0 hits per run, and a 0.213557-second median. This is not full-token TPS.
 - Local direct-Q8 implementation head `f06d078` plus B-0051 produces token 9689 in 566.002323 seconds, final-hidden cosine 0.9999314 versus B-0050, and 83/92 exact Top-16 sets. Eight focused tests and all 96 primary raw record digests pass. The feature is explicitly non-default.
 - Local device-Q8 implementation head `7cb9498` plus B-0050 produces token 9689 and zero mismatch across all 93 B-0049 layer output/state records. Seven focused tests pass, all 96 raw record digests validate, and the complete full-token evidence hashes are recorded in B-0050.
 - Local shared-context implementation head `6a569c1` plus B-0049 produces token 9689 and zero mismatch across 93 B-0048 layer output/state records. Focused official regressions pass 39/39 and all modified Python entrypoints compile.

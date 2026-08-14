@@ -1668,3 +1668,22 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Memory/traffic: layer peak CUDA allocation/reservation falls from 3,602,630,144/4,982,833,152 to 1,381,369,344/1,589,641,216 bytes. Downloaded model payload is zero. Complete physical NVMe/H2D traffic and host RAM peak are not measured.
 - Throughput: this is one-token TTFT, not steady decode. Decode/prefill tok/s remain unmeasured.
 - Evidence: `results/b0051-direct-q8-matvec/summary.json` SHA-256 `8af87c939adde4abd312dfc4a79dc3b3b20c734869fa30c43b21939ea6b3c0cd`; full timing SHA-256 `eb9aca8d0b1593473e0fe6fc1f5fd9ef767d817ea800a95a1bf93719ad84d2f1`; full token SHA-256 `588a12bc8ca8a449a6c27644181b0ab96953fc474f936831ac09b6b412366b57`; 93-file chain SHA-256 `95b5a88107ced328ed319d842d717fe76ac6b6969b1b305c609e2847378ebc39`; q-projection SHA-256 `8c5ea2eaa270577f2fd3a360899763869b583e5ee1157b6420b6cddddc5d95cb`.
+
+## B-0052 packed Q8 residency
+
+- Date: 2026-08-14.
+- Hardware/model: AMD Ryzen 7 9800X3D, RTX 5080 16 GB, 96 GB RAM, WSL2, sealed official K3X set, input token 1, official layer 0.
+- Mode: experimental direct-Q8 dense MLP, 1 GiB device budget, zero host budget, stable first admission, one shared runtime context, no eviction.
+- Result: cold/warm wall is 11.149552/2.638550 seconds, a 4.2256x ratio. Three packed matrices occupy 738,017,280 bytes; the cold pass records three misses and three admissions, and the warm pass records three device hits with no new miss. Output and KDA-state digests match across the two runs.
+- Scope: layer-0 boundary only. Physical NVMe/H2D bytes, token throughput, prefill, TTFT, and coding quality were not measured.
+- Evidence: `results/b0052-packed-q8-residency/summary.json` SHA-256 `3442625c2b13a43bb39f59e214b05c001de757a744d29ee77b070e72f93637e5`.
+
+## B-0055 layer-0 direct KDA and packed Q8 residency
+
+- Date: 2026-08-14.
+- Hardware/model: same local hardware, sealed checkpoint, input token, and layer boundary as B-0052.
+- Mode: experimental direct-packed group-128 Q8 for the eight KDA and three dense-MLP projection matrices, 4 GiB device budget, zero host budget, stable first admission, one shared runtime context.
+- Result: cold wall is 7.345563 seconds. Five warm walls are 0.213557, 0.209281, 0.210865, 0.217803, and 0.215707 seconds; the median is 0.213557 seconds and the cold/median ratio is 34.3963x. Eleven matrices occupy 1,188,528,640 bytes; every warm pass records 11/11 L0 hits. All six output/KDA-state digests match. Peak tracked CUDA allocation/reservation is 1,259,244,032/1,272,971,264 bytes on warm passes.
+- Quality versus B-0052: final-hidden cosine 0.9999964, exact-element ratio 54.4224%, maximum absolute error 0.000244141, and mean absolute error 0.0000201179. Recurrent-state maximum/mean absolute error is 0.00170143/0.000000437602. Coding quality and full-token routing are unmeasured, so this remains experimental.
+- Scope: layer-0 boundary only; no decode/prefill tok/s, TTFT, physical NVMe/H2D traffic, utilization, or bandwidth claim.
+- Evidence: implementation commit `7f8fc05`, median-harness commit `300fb75`, summary SHA-256 `8de699de6aca2c0ff21f9dc93e50fcfa44112b1dd3a97a691f8fcb7736260b54`, and quality record canonical SHA-256 `f097abfcc6db8cec2a97a144bfbb7ec7b36b2f62cbb5884c0ecec8fa4ccf42cb`.
