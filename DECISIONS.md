@@ -1155,3 +1155,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: full wall fell from 1,891 seconds to 1,156.152598 seconds, a 38.860254% reduction or 1.635597x speedup. Layer load/decode intervals still sum to 529.554997 seconds and compute intervals to 159.084610 seconds. Decode tok/s remains unmeasured.
 - Reason accepted: it removes a large observed boundary while retaining the validated graph and creates the process lifetime required for shared metadata, state, and CUDA residency.
 - Revisit: retire the Python bridge only after the official C++/CUDA graph matches token, route, state, and logit gates and reports warm multi-token throughput.
+
+## D-100 — Share only immutable official metadata before caching decoded weights
+
+- Date: 2026-08-14.
+- Status: implemented, focused-tested, and full-model measured.
+- Decision: create one authenticated OfficialRuntimeContext per in-process token and lazy-cache shard headers and K3X store directories. Do not retain decoded weights in this change.
+- Alternatives considered: retain per-stage metadata parsing; cache every decoded trunk tensor in RAM; move directly to CUDA kernels without separating metadata overhead.
+- Evidence: B-0049 matches all 93 B-0048 layer output/state records plus token, logit, final hidden, and final state digest.
+- Benchmark result: full wall fell from 1,156.152598 to 913.336487 seconds, a 21.002081% reduction or 1.265856x speedup. Relative to B-0046 the total reduction is 51.700873%. Layer load/decode still consumes 430.579377 seconds and compute 159.572791 seconds.
+- Reason accepted: immutable ownership is exact, bounded, reusable across future tokens, and removes a measured cost without hiding the much larger packed-weight bottleneck.
+- Revisit: retain the context in the production runtime, but replace Python object ownership after the official C++ graph reaches parity.

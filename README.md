@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2039-persistent%20official%20runtime-20a46b?style=flat-square)](#current-limitations)
+[![Milestone](https://img.shields.io/badge/milestone%2040-shared%20official%20context-20a46b?style=flat-square)](#current-limitations)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -34,7 +34,7 @@ flowchart LR
 ```
 
 > [!IMPORTANT]
-> The complete 96-fragment, 1,507,512,467,456-byte K3X set now executes all 93 released Kimi K3 layers and the LM head on the local RTX 5080. Input token 1 generated token 9689, matching the independent original-precision oracle. A one-process compatibility driver reduced measured first-token wall time from 1,891 to 1,156.153 seconds with identical K3X token, logit, layer outputs, and final state. This remains TTFT, not steady decode tok/s or the optimized production runtime. No paid cloud resource was used.
+> The complete 96-fragment, 1,507,512,467,456-byte K3X set now executes all 93 released Kimi K3 layers and the LM head on the local RTX 5080. Input token 1 generated token 9689, matching the independent original-precision oracle. One-process execution plus shared immutable runtime context reduced measured first-token wall time from 1,891 to 913.336 seconds with identical K3X token, logit, layer outputs, and final state. This remains TTFT, not steady decode tok/s or the optimized production runtime. No paid cloud resource was used.
 
 | Milestone | GitHub status | Evidence |
 |---|---|---|
@@ -904,7 +904,8 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Complete all 96 quality fragments, publish the official set manifest, and generate the first released-model token.
 - [x] Generate the independent original-precision released-model oracle token: input 1 produced greedy token 9689.
 - [x] Replace the 93-process compatibility chain with an opt-in one-process official graph and record exact B-0048 parity.
-- [ ] Retain official metadata, prefix state, and packed CUDA resources across layers and tokens.
+- [x] Retain authenticated official metadata, shard headers, and K3X directories across all layers in one process.
+- [ ] Retain prefix state and packed CUDA resources across layers and tokens.
 - [ ] Grouped/resident/fused 3-bit CUDA FFN and complete official manufacturing.
 - [ ] SKYFORGE shard compiler for explicitly provisioned cloud jobs.
 - [ ] Full ablation and coding-quality suite.

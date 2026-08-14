@@ -1619,6 +1619,18 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Throughput and quality: decode tok/s and prefill tok/s remain unmeasured because this is still one first token. No inverse-TTFT TPS or broad coding-quality claim is made.
 - Evidence: results/b0048-persistent-official-runtime/summary.json SHA-256 a951b00ecc530359369f6181631f81c99950cc4d7f389ca2ea25ac84e01d60d1; full timing SHA-256 0776d86c1af9d1166b613109040fab0ef38a389e0a78e3c0b9010725732f29ea; full token SHA-256 fa108dfe21aecf25eed6acd0057f5526e21f527cd3bca67f8b76f6293892f8ec; 93-file chain SHA-256 75cc7591b02baeaf326a45a095376ee0ad8fa58eb070bfb5ee75c91d2dd06a53.
 
+## B-0049 shared official runtime context
+
+- Date: 2026-08-14.
+- Commit: execution used 6a569c1.
+- Hardware/model/mode: same host, sealed official K3X set, input token, natural Top-16, Q8 trunk, native MXFP4 experts, exact rescue, and one-process Python graph as B-0048. The only intended change is shared immutable metadata/header/store ownership.
+- Correctness: zero mismatch across all 93 layer output/state records. Token 9689, logit 8.290502548217773, final normalized hidden, and final state digest match B-0048.
+- Timing: 913.336487 seconds full wall, down 242.816110 seconds or 21.002081% from B-0048, for 1.265856x speedup. Relative to B-0046 the measured reduction is 51.700873% and speedup is 2.070431x.
+- Attribution: layer load/decode intervals total 430.579377 seconds and compute intervals total 159.572791 seconds. Stage wall is 14.853027 seconds for layer 0, 883.793521 seconds for layers 1 through 92, and 6.248858 seconds for the head.
+- Memory/traffic: maximum tracked CUDA allocation/reservation remains 3,602,630,144/4,982,833,152 bytes. Downloaded payload is zero. Requested source-equivalent bytes are 134,641,464,320 and are not physical traffic. Complete physical NVMe/H2D traffic and average utilization were not measured.
+- Throughput/quality: this remains one-token TTFT. Decode tok/s, prefill tok/s, and coding quality are not measured, and no inverse-TTFT TPS is claimed.
+- Evidence: summary SHA-256 a30f81225d8b699dfe11c529d832874984733fe7d8e762a0ac235a757284e6fb; full timing SHA-256 61fdc4e76b5184f7a8267215c98c6950c93fa9332171a17c9655ce1b3bcbb633; full token SHA-256 8fab7bb4565d144eac54e4e0f47a2468fd26b72206aca0f42a6e4c93ab4d46e7; 93-file chain SHA-256 ff23ff5eabd394997bf44e2a97dcb85b2401344c937981645902459c35ace90d.
+
 ## B-0044 official original-precision first token
 
 - Date: 2026-08-14.

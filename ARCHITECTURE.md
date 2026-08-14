@@ -586,6 +586,12 @@ The official Python compatibility stages now expose callable layer-0, KDA-MoE, M
 
 This is a bridge to the production runtime, not its final compute architecture. The current stage functions still reopen immutable metadata, decode group-128 Q8 trunk matrices on the CPU, copy expanded tensors to CUDA, read native MXFP4 experts for each use, and publish state to disk. B-0048 removes interpreter restarts without changing graph math and therefore isolates those remaining costs before the packed CUDA and residency work.
 
+## Milestone 40 shared official runtime context
+
+One OfficialRuntimeContext now authenticates and owns the topology, snapshot, index, config, and K3XSET manifest for the complete in-process token. Shard headers and K3XTensorStore directories are opened lazily and cached by official shard identity. Standalone and subprocess stages retain the original independent validation path.
+
+The context intentionally retains no decoded tensor payload. B-0049 therefore isolates immutable metadata and directory ownership while leaving packed-weight I/O, CPU decode, H2D, and disk state publication unchanged. Future multi-token execution can reuse the same context, but that warm loop is not yet implemented.
+
 ## K3X data flow
 
 The file format is deliberately execution ordered. The converter reads bounded source chunks, copies or transforms extents, computes each extent CRC32C while writing, and publishes an atomic resume ledger after each bounded 128-extent `fsync` checkpoint. On resume it revalidates every committed extent against both the current source and partial artifact before truncating only the uncommitted suffix to the final durable extent's exact end. Final root SHA-256 generation rereads the complete output, and the strict Reader verifies the source-derived per-extent CRCs before the local Foundry ledger permits source deletion. Only then is the `.partial` artifact atomically renamed.
