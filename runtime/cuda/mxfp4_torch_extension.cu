@@ -26,12 +26,6 @@ __device__ __forceinline__ float decode_e2m1(std::uint8_t code) {
     return (code & 0x08U) != 0 ? -magnitude : magnitude;
 }
 
-__device__ __forceinline__ float decode_e8m0(std::uint8_t code) {
-    const auto bits = code == 0 ? 0x00400000U
-                                : static_cast<unsigned>(code) << 23U;
-    return __uint_as_float(bits);
-}
-
 __global__ void mxfp4_matvec_kernel(
     const float* input,
     const std::uint8_t* packed,
@@ -52,27 +46,20 @@ __global__ void mxfp4_matvec_kernel(
         const auto pair = packed[logical / 2];
         const auto code = static_cast<std::uint8_t>(
             logical % 2 == 0 ? pair & 0x0FU : pair >> 4U);
-        const auto scale = decode_e8m0(scales[logical / 32]);
-        sum = fmaf(input[column], decode_e2m1(code) * scale, sum);
+        const auto exponent = static_cast<int>(scales[logical / 32]) - 127;
+        sum = fmaf(input[column], ldexpf(decode_e2m1(code), exponent), sum);
     }
-    for (unsigned offset = 16; offset; offset >>= 1U) {
-        sum += __shfl_down_sync(0xFFFFFFFFU, sum, offset);
-    }
-    __shared__ float warp_sums[4];
-    const auto lane = threadIdx.x & 31U;
-    const auto warp = threadIdx.x >> 5U;
-    if (lane == 0) {
-        warp_sums[warp] = sum;
-    }
+    extern __shared__ float partial[];
+    partial[threadIdx.x] = sum;
     __syncthreads();
-    if (warp == 0) {
-        sum = lane < 4 ? warp_sums[lane] : 0.0F;
-        for (unsigned offset = 16; offset; offset >>= 1U) {
-            sum += __shfl_down_sync(0xFFFFFFFFU, sum, offset);
+    for (unsigned stride = blockDim.x / 2; stride; stride >>= 1U) {
+        if (threadIdx.x < stride) {
+            partial[threadIdx.x] += partial[threadIdx.x + stride];
         }
-        if (lane == 0) {
-            output[row] = sum;
-        }
+        __syncthreads();
+    }
+    if (threadIdx.x == 0) {
+        output[row] = partial[0];
     }
 }
 
@@ -96,8 +83,9 @@ torch::Tensor mxfp4_matvec(
     const c10::cuda::CUDAGuard guard(input.device());
     auto output = torch::empty({rows}, input.options());
     const auto stream = at::cuda::getCurrentCUDAStream(input.device().index());
-    constexpr unsigned threads = 128;
-    mxfp4_matvec_kernel<<<static_cast<unsigned>(rows), threads, 0, stream>>>(
+    constexpr unsigned threads = 256;
+    mxfp4_matvec_kernel<<<static_cast<unsigned>(rows), threads,
+                           threads * sizeof(float), stream>>>(
         input.data_ptr<float>(),
         packed.data_ptr<std::uint8_t>(),
         scales.data_ptr<std::uint8_t>(),
