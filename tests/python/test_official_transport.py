@@ -12,7 +12,10 @@ from k3x_converter.official_transport import UrllibTransport
 
 
 class _Handler(BaseHTTPRequestHandler):
+    requests = 0
+
     def do_GET(self) -> None:  # noqa: N802
+        type(self).requests += 1
         if self.path == "/ok":
             self.send_response(200)
             self.send_header("Content-Length", "5")
@@ -46,6 +49,7 @@ class _Handler(BaseHTTPRequestHandler):
 
 @pytest.fixture
 def local_server() -> str:
+    _Handler.requests = 0
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -70,6 +74,36 @@ def test_transport_returns_bounded_body_and_real_counters(local_server: str) -> 
     assert transport.stats.requests == 1
     assert transport.stats.response_bytes == 5
     assert transport.stats.maximum_response_bytes == 5
+
+
+def test_transport_reuses_digest_validated_persistent_cache(
+    local_server: str, tmp_path: Path
+) -> None:
+    first = UrllibTransport(
+        allowed_hosts=frozenset({"127.0.0.1"}), cache_directory=tmp_path
+    )
+    assert first.get(
+        f"{local_server}/ok", headers={}, max_bytes=5, timeout_seconds=2.0
+    ).body == b"hello"
+    assert _Handler.requests == 1
+
+    second = UrllibTransport(
+        allowed_hosts=frozenset({"127.0.0.1"}), cache_directory=tmp_path
+    )
+    assert second.get(
+        f"{local_server}/ok", headers={}, max_bytes=5, timeout_seconds=2.0
+    ).body == b"hello"
+    assert _Handler.requests == 1
+    assert second.stats.requests == 0
+
+    next(tmp_path.glob("*.body")).write_bytes(b"jello")
+    third = UrllibTransport(
+        allowed_hosts=frozenset({"127.0.0.1"}), cache_directory=tmp_path
+    )
+    assert third.get(
+        f"{local_server}/ok", headers={}, max_bytes=5, timeout_seconds=2.0
+    ).body == b"hello"
+    assert _Handler.requests == 2
 
 
 def test_transport_rejects_body_one_byte_over_limit(local_server: str) -> None:
@@ -129,4 +163,3 @@ def test_transport_rejects_untrusted_initial_host_before_network() -> None:
             max_bytes=1,
             timeout_seconds=2.0,
         )
-

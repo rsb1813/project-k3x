@@ -190,7 +190,8 @@ def main() -> int:
         raise K3XError("CUDA_UNAVAILABLE")
 
     topology = _load_topology(args.topology.resolve())
-    transport = UrllibTransport()
+    object_dir = args.object_dir.resolve()
+    transport = UrllibTransport(cache_directory=object_dir / "official-metadata-cache")
     snapshot = discover_official_snapshot(transport)
     index = load_official_index(snapshot, transport)
     config = load_official_config(snapshot, transport)
@@ -208,7 +209,7 @@ def main() -> int:
         raise K3XError("OFFICIAL_KDA_LAYER_SEQUENCE")
     prefix = f"language_model.model.layers.{layer_id}."
     shard = topology["layers"][layer_id]["shards"][0]
-    header = inspect_official_shard_header(snapshot, shard, UrllibTransport())
+    header = inspect_official_shard_header(snapshot, shard, transport)
     plan = plan_official_kda_layer(
         index,
         header,
@@ -217,7 +218,6 @@ def main() -> int:
         layer_id=layer_id,
     )
 
-    object_dir = args.object_dir.resolve()
     download_start = time.perf_counter()
     objects = {}
     requests = 0

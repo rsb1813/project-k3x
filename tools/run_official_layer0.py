@@ -123,7 +123,8 @@ def main() -> int:
         raise K3XError("CUDA_UNAVAILABLE")
 
     topology = _load_topology(args.topology.resolve())
-    transport = UrllibTransport()
+    object_dir = args.object_dir.resolve()
+    transport = UrllibTransport(cache_directory=object_dir / "official-metadata-cache")
     snapshot = discover_official_snapshot(transport)
     index = load_official_index(snapshot, transport)
     config = load_official_config(snapshot, transport)
@@ -140,15 +141,12 @@ def main() -> int:
     layer_contract = contracts["dense_layer_0"]
     shard_paths = {item["shard"] for item in (*globals_contract, *layer_contract)}
     headers = {
-        shard: inspect_official_shard_header(
-            snapshot, shard, UrllibTransport()
-        )
+        shard: inspect_official_shard_header(snapshot, shard, transport)
         for shard in sorted(shard_paths)
     }
     _validate_contract(globals_contract, index, headers)
     _validate_contract(layer_contract, index, headers)
 
-    object_dir = args.object_dir.resolve()
     download_start = time.perf_counter()
     objects = {}
     requests = 0

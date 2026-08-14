@@ -68,7 +68,8 @@ def main() -> int:
         raise K3XError("CUDA_UNAVAILABLE")
 
     topology = _load_topology(args.topology.resolve())
-    transport = UrllibTransport()
+    object_dir = args.object_dir.resolve()
+    transport = UrllibTransport(cache_directory=object_dir / "official-metadata-cache")
     snapshot = discover_official_snapshot(transport)
     index = load_official_index(snapshot, transport)
     config = load_official_config(snapshot, transport)
@@ -87,7 +88,7 @@ def main() -> int:
         raise K3XError("OFFICIAL_HEAD_CONTRACT")
     head = global_contract[_HEAD]
     shard = head["shard"]
-    header = inspect_official_shard_header(snapshot, shard, UrllibTransport())
+    header = inspect_official_shard_header(snapshot, shard, transport)
     for name in (*_GLOBAL_ROLES, _HEAD):
         item = global_contract[name]
         tensor = header.tensors.get(name)
@@ -103,7 +104,6 @@ def main() -> int:
     if head["dtype"] != "BF16" or head["shape"] != [163_840, 7_168]:
         raise K3XError("OFFICIAL_HEAD_SHAPE")
 
-    object_dir = args.object_dir.resolve()
     download_start = time.perf_counter()
     requests = downloaded_bytes = reused_objects = 0
     small_objects = {}

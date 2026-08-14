@@ -99,7 +99,8 @@ def main() -> int:
         raise K3XError("CUDA_UNAVAILABLE")
 
     topology = _load_topology(args.topology.resolve())
-    transport = UrllibTransport()
+    object_dir = args.object_dir.resolve()
+    transport = UrllibTransport(cache_directory=object_dir / "official-metadata-cache")
     snapshot = discover_official_snapshot(transport)
     index = load_official_index(snapshot, transport)
     config = load_official_config(snapshot, transport)
@@ -118,7 +119,7 @@ def main() -> int:
         raise K3XError("OFFICIAL_MLA_LAYER_SEQUENCE")
     prefix = f"language_model.model.layers.{layer_id}."
     shard = topology["layers"][layer_id]["shards"][0]
-    header = inspect_official_shard_header(snapshot, shard, UrllibTransport())
+    header = inspect_official_shard_header(snapshot, shard, transport)
     trunk = []
     for name in sorted(header.tensors):
         if not name.startswith(prefix) or ".experts." in name:
@@ -136,7 +137,6 @@ def main() -> int:
         )
     if {item["name"][len(prefix) :] for item in trunk} != set(_ROLE_BY_SUFFIX):
         raise K3XError("OFFICIAL_MLA_CONTRACT")
-    object_dir = args.object_dir.resolve()
     download_start = time.perf_counter()
     objects = {}
     requests = downloaded_bytes = reused_objects = 0

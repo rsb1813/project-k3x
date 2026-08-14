@@ -1,8 +1,13 @@
 # 공식 가중치 HTTP 요청의 호스트와 바이트 한도를 강제합니다.
 from __future__ import annotations
 
+import hashlib
+import json
+import os
+import uuid
 from dataclasses import dataclass
 from email.message import Message
+from pathlib import Path
 from types import MappingProxyType
 from typing import Mapping
 from urllib.error import HTTPError, URLError
@@ -62,6 +67,7 @@ class UrllibTransport:
         *,
         max_redirects: int = 5,
         allowed_hosts: frozenset[str] | None = None,
+        cache_directory: Path | None = None,
     ) -> None:
         if max_redirects < 0:
             raise ValueError("max_redirects must be non-negative")
@@ -71,9 +77,88 @@ class UrllibTransport:
             if allowed_hosts is not None
             else None
         )
+        self._cache_directory = Path(cache_directory) if cache_directory else None
         self._requests = 0
         self._response_bytes = 0
         self._maximum_response_bytes = 0
+
+    def _cache_key(self, url: str, headers: Mapping[str, str]) -> str:
+        request = {
+            "url": url,
+            "headers": sorted(
+                (key.lower(), value.strip()) for key, value in headers.items()
+            ),
+        }
+        encoded = json.dumps(request, sort_keys=True, separators=(",", ":")).encode()
+        return hashlib.sha256(encoded).hexdigest()
+
+    def _read_cache(
+        self, key: str, *, max_bytes: int, expected_status: int
+    ) -> HttpResponse | None:
+        if self._cache_directory is None:
+            return None
+        metadata_path = self._cache_directory / f"{key}.json"
+        body_path = self._cache_directory / f"{key}.body"
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            body = body_path.read_bytes()
+            if (
+                metadata.get("format") != "k3x-official-http-cache-v1"
+                or metadata.get("status") != expected_status
+                or metadata.get("body_sha256") != hashlib.sha256(body).hexdigest()
+                or not isinstance(metadata.get("final_url"), str)
+                or not isinstance(metadata.get("headers"), dict)
+                or not all(
+                    isinstance(name, str) and isinstance(value, str)
+                    for name, value in metadata["headers"].items()
+                )
+            ):
+                return None
+            if len(body) > max_bytes:
+                raise K3XError("OFFICIAL_BODY_LIMIT")
+            self._validate_url(metadata["final_url"])
+            return HttpResponse(
+                expected_status,
+                metadata["final_url"],
+                MappingProxyType(metadata["headers"]),
+                body,
+            )
+        except K3XError:
+            raise
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            return None
+
+    def _write_cache(self, key: str, response: HttpResponse) -> None:
+        if self._cache_directory is None:
+            return
+        self._cache_directory.mkdir(parents=True, exist_ok=True)
+        body_path = self._cache_directory / f"{key}.body"
+        metadata_path = self._cache_directory / f"{key}.json"
+        nonce = f".{os.getpid()}.{uuid.uuid4().hex}.partial"
+        body_partial = body_path.with_name(body_path.name + nonce)
+        metadata_partial = metadata_path.with_name(metadata_path.name + nonce)
+        metadata = {
+            "format": "k3x-official-http-cache-v1",
+            "status": response.status,
+            "final_url": response.final_url,
+            "headers": dict(response.headers),
+            "body_sha256": hashlib.sha256(response.body).hexdigest(),
+        }
+        try:
+            with body_partial.open("wb") as stream:
+                stream.write(response.body)
+                stream.flush()
+                os.fsync(stream.fileno())
+            with metadata_partial.open("w", encoding="utf-8", newline="\n") as stream:
+                json.dump(metadata, stream, sort_keys=True, separators=(",", ":"))
+                stream.write("\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(body_partial, body_path)
+            os.replace(metadata_partial, metadata_path)
+        finally:
+            body_partial.unlink(missing_ok=True)
+            metadata_partial.unlink(missing_ok=True)
 
     @property
     def stats(self) -> TransportStats:
@@ -103,6 +188,12 @@ class UrllibTransport:
         if max_bytes < 0 or timeout_seconds <= 0:
             raise ValueError("invalid HTTP bound")
         self._validate_url(url)
+        cache_key = self._cache_key(url, headers)
+        cached = self._read_cache(
+            cache_key, max_bytes=max_bytes, expected_status=expected_status
+        )
+        if cached is not None:
+            return cached
         handler = _ValidatingRedirectHandler(self)
         opener = build_opener(handler)
         request = Request(url, headers=dict(headers), method="GET")
@@ -136,5 +227,6 @@ class UrllibTransport:
             )
             self._response_bytes += len(body)
             self._maximum_response_bytes = max(self._maximum_response_bytes, len(body))
-            return HttpResponse(status, response.geturl(), normalized, body)
-
+            result = HttpResponse(status, response.geturl(), normalized, body)
+        self._write_cache(cache_key, result)
+        return result
