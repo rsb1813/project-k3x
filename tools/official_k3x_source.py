@@ -7,7 +7,7 @@ import torch
 
 from k3x_converter.fragment_tensor_store import K3XTensorStore
 from k3x_converter.fragment_set import read_fragment_set_manifest
-from k3x_converter.format import K3XError
+from k3x_converter.format import K3XError, Quantization
 
 
 def k3x_set_identity(k3x_set: Path) -> str:
@@ -39,12 +39,38 @@ def open_official_fragment(k3x_set: Path, source_shard: str) -> K3XTensorStore:
     return K3XTensorStore.open([path], verify_root=False, verify_payload=False)
 
 
-def load_planned_tensors(store, planned, device: torch.device):
+def load_official_tensor(
+    store,
+    name: str,
+    dtype: torch.dtype,
+    device: torch.device,
+    *,
+    direct_q8: bool,
+):
+    record = store.record(name).record
+    if (
+        direct_q8
+        and (".mlp." in name or ".block_sparse_moe." in name)
+        and dtype == torch.bfloat16
+        and record.quantization == Quantization.GROUPWISE_8BIT
+        and len(record.dimensions) == 2
+        and record.dimensions[1] >= 128
+        and record.dimensions[1] % 128 == 0
+    ):
+        return store.packed_q8_matrix(name, device=device)
+    return store.load(name, device=device, dtype=dtype)
+
+
+def load_planned_tensors(
+    store, planned, device: torch.device, *, direct_q8: bool = False
+):
     return {
-        item.role: store.load(
+        item.role: load_official_tensor(
+            store,
             item.canonical_name,
-            device=device,
-            dtype=logical_torch_dtype(item.dtype),
+            logical_torch_dtype(item.dtype),
+            device,
+            direct_q8=direct_q8,
         )
         for item in planned
     }

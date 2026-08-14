@@ -20,11 +20,9 @@ class _LocatedTensor:
     record: TensorRecord
 
 
-def _decode_groupwise_8bit_cuda(
+def _quant8_host_tensors(
     value: Quant8Tensor,
-    device: torch.device,
-    dtype: torch.dtype | None,
-) -> torch.Tensor:
+) -> tuple[torch.Tensor, torch.Tensor]:
     if (
         value.group_size != 128
         or value.values <= 0
@@ -43,6 +41,16 @@ def _decode_groupwise_8bit_cuda(
     if not torch.isfinite(scales).all() or torch.any(scales <= 0):
         raise K3XError("INVALID_QUANT8_SCALE")
     codes = torch.frombuffer(bytearray(value.codes), dtype=torch.int8)
+    return codes, scales
+
+
+def _decode_groupwise_8bit_cuda(
+    value: Quant8Tensor,
+    device: torch.device,
+    dtype: torch.dtype | None,
+) -> torch.Tensor:
+    codes, scales = _quant8_host_tensors(value)
+    groups = math.ceil(value.values / value.group_size)
     device_scales = scales.to(device)
     if dtype == torch.bfloat16:
         decoded = codes.to(device=device, dtype=torch.bfloat16).reshape(
@@ -53,6 +61,45 @@ def _decode_groupwise_8bit_cuda(
         decoded = codes.to(device).float().reshape(groups, value.group_size)
         decoded *= device_scales.float().unsqueeze(1)
     return decoded.reshape(-1)[: value.values].reshape(value.shape)
+
+
+@dataclass(frozen=True)
+class PackedQ8Matrix:
+    located: _LocatedTensor
+    name: str
+    device: torch.device
+
+    @property
+    def shape(self) -> tuple[int, int]:
+        return self.located.record.dimensions
+
+    @property
+    def ndim(self) -> int:
+        return 2
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return torch.bfloat16
+
+    def matvec(self, value: torch.Tensor) -> torch.Tensor:
+        from .q8_cuda import q8_matvec
+
+        rows, columns = self.shape
+        if value.numel() != columns:
+            raise K3XError("INVALID_Q8_CUDA_INPUT", self.name)
+        data, auxiliary = self.located.reader.read_tensor_extents(
+            self.located.record
+        )
+        codes, scales = _quant8_host_tensors(
+            Quant8Tensor(self.shape, rows * columns, 128, data, auxiliary)
+        )
+        return q8_matvec(
+            value.to(self.device),
+            codes.to(self.device),
+            scales.to(self.device),
+            rows,
+            columns,
+        )
 
 
 @dataclass(frozen=True)
@@ -114,6 +161,27 @@ class K3XTensorStore:
         else:
             raise K3XError("TENSOR_REQUIRES_SPECIALIZED_DECODE", name)
         return tensor.to(device=target, dtype=dtype)
+
+    def packed_q8_matrix(
+        self,
+        name: str,
+        *,
+        device: torch.device | str,
+    ) -> PackedQ8Matrix:
+        located = self.record(name)
+        record = located.record
+        if (
+            record.quantization != Quantization.GROUPWISE_8BIT
+            or len(record.dimensions) != 2
+            or record.dimensions[1] % 128
+        ):
+            raise K3XError("INVALID_Q8_CUDA_MATRIX", name)
+        target = torch.device(device)
+        if target.type != "cuda":
+            raise K3XError("INVALID_Q8_CUDA_DEVICE", name)
+        if target.index is None:
+            target = torch.device("cuda", torch.cuda.current_device())
+        return PackedQ8Matrix(located, name, target)
 
     def load_rows(
         self,

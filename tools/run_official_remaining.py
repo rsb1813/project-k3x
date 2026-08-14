@@ -38,6 +38,7 @@ def _parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--result-dir", type=Path, required=True)
     parser.add_argument("--stop-layer", type=int, default=92)
     parser.add_argument("--k3x-set", type=Path)
+    parser.add_argument("--direct-q8", action="store_true")
     parser.add_argument(
         "--execution-mode",
         choices=("subprocess", "in-process"),
@@ -88,6 +89,8 @@ def run(args: argparse.Namespace) -> int:
         ]
         if args.k3x_set is not None:
             command.extend(("--k3x-set", str(args.k3x_set.resolve())))
+        if getattr(args, "direct_q8", False):
+            command.append("--direct-q8")
         layer_args = argparse.Namespace(
             topology=topology_path,
             object_dir=args.object_dir.resolve(),
@@ -98,6 +101,7 @@ def run(args: argparse.Namespace) -> int:
                 args.k3x_set.resolve() if args.k3x_set is not None else None
             ),
             runtime_context=getattr(args, "runtime_context", None),
+            direct_q8=getattr(args, "direct_q8", False),
         )
         print(
             f"starting_layer={layer_id} attention={layer['attention']}",

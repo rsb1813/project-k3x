@@ -23,6 +23,7 @@ from k3x_ref.official_kda import (
 )
 
 from .format import K3XError
+from .fragment_tensor_store import PackedQ8Matrix
 from .official_layer import (
     OFFICIAL_KDA_SOURCE_BLOB_ID,
     OfficialLayerInput,
@@ -366,7 +367,11 @@ def _decode_source_tensor(source: OfficialSourceTensorBytes) -> torch.Tensor:
     ).clone()
 
 
-def _bf16_matvec(value: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
+def _bf16_matvec(
+    value: torch.Tensor, weight: torch.Tensor | PackedQ8Matrix
+) -> torch.Tensor:
+    if isinstance(weight, PackedQ8Matrix):
+        return weight.matvec(value)
     if (
         value.ndim != 1
         or weight.ndim != 2

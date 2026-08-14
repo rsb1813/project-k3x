@@ -34,6 +34,7 @@ def _parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--token-id", type=int, default=1)
     parser.add_argument("--stop-layer", type=int, default=92)
     parser.add_argument("--k3x-set", type=Path)
+    parser.add_argument("--direct-q8", action="store_true")
     parser.add_argument(
         "--execution-mode",
         choices=("subprocess", "in-process"),
@@ -110,6 +111,7 @@ def run(args: argparse.Namespace) -> int:
             token_id=args.token_id,
             k3x_set=k3x_set,
             runtime_context=runtime_context,
+            direct_q8=getattr(args, "direct_q8", False),
         )
         command = [
             sys.executable,
@@ -127,6 +129,8 @@ def run(args: argparse.Namespace) -> int:
         ]
         if k3x_set is not None:
             command.extend(("--k3x-set", str(k3x_set)))
+        if getattr(args, "direct_q8", False):
+            command.append("--direct-q8")
         start = time.perf_counter()
         _invoke(args.execution_mode, "layer0", layer0_args, command)
         stage_seconds["layer0"] = time.perf_counter() - start
@@ -142,6 +146,7 @@ def run(args: argparse.Namespace) -> int:
         k3x_set=k3x_set,
         execution_mode=args.execution_mode,
         runtime_context=runtime_context,
+        direct_q8=getattr(args, "direct_q8", False),
     )
     command = [
         sys.executable,
@@ -159,6 +164,8 @@ def run(args: argparse.Namespace) -> int:
     ]
     if k3x_set is not None:
         command.extend(("--k3x-set", str(k3x_set)))
+    if getattr(args, "direct_q8", False):
+        command.append("--direct-q8")
     start = time.perf_counter()
     _invoke(args.execution_mode, "remaining", remaining_args, command)
     stage_seconds["remaining"] = time.perf_counter() - start
@@ -205,6 +212,7 @@ def run(args: argparse.Namespace) -> int:
         "stage_seconds": stage_seconds,
         "wall_seconds": time.perf_counter() - total_start,
         "throughput_measured": False,
+        "direct_q8": getattr(args, "direct_q8", False),
     }
     encoded = json.dumps(timing, sort_keys=True, separators=(",", ":")).encode()
     timing["record_sha256"] = hashlib.sha256(encoded).hexdigest()

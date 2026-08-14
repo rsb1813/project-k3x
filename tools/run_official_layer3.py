@@ -43,6 +43,7 @@ from tools.run_official_layer1 import (
 from tools.official_k3x_source import (
     expert_matvec,
     k3x_set_identity,
+    load_official_tensor,
     logical_torch_dtype,
     open_official_fragment,
     require_k3x_state_identity,
@@ -94,6 +95,7 @@ def _parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--layer-id", type=int, required=True)
     parser.add_argument("--k3x-set", type=Path)
+    parser.add_argument("--direct-q8", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -208,10 +210,12 @@ def run(args: argparse.Namespace) -> int:
         require_k3x_state_identity(prior_state, set_identity)
     roles = (
         {
-            _ROLE_BY_SUFFIX[item["name"][len(prefix) :]]: store.load(
+            _ROLE_BY_SUFFIX[item["name"][len(prefix) :]]: load_official_tensor(
+                store,
                 item["name"].removeprefix("language_model."),
-                device=device,
-                dtype=logical_torch_dtype(item["dtype"]),
+                logical_torch_dtype(item["dtype"]),
+                device,
+                direct_q8=getattr(args, "direct_q8", False),
             )
             for item in trunk
         }
@@ -436,6 +440,7 @@ def run(args: argparse.Namespace) -> int:
         "peak_cuda_allocated_bytes": torch.cuda.max_memory_allocated(device),
         "peak_cuda_reserved_bytes": torch.cuda.max_memory_reserved(device),
         "token_generated": False,
+        "direct_q8": getattr(args, "direct_q8", False),
     }
     if set_identity is not None:
         result["weight_source"] = "k3x-set"

@@ -185,6 +185,7 @@ def _parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--layer-id", type=int, required=True)
     parser.add_argument("--k3x-set", type=Path)
+    parser.add_argument("--direct-q8", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -291,7 +292,12 @@ def run(args: argparse.Namespace) -> int:
     if set_identity is not None:
         require_k3x_state_identity(prior_state, set_identity)
     roles = (
-        load_planned_tensors(store, planned, device)
+        load_planned_tensors(
+            store,
+            planned,
+            device,
+            direct_q8=getattr(args, "direct_q8", False),
+        )
         if store is not None
         else {
             item.role: _load_tensor(
@@ -510,6 +516,7 @@ def run(args: argparse.Namespace) -> int:
         "peak_cuda_allocated_bytes": torch.cuda.max_memory_allocated(device),
         "peak_cuda_reserved_bytes": torch.cuda.max_memory_reserved(device),
         "token_generated": False,
+        "direct_q8": getattr(args, "direct_q8", False),
     }
     if set_identity is not None:
         result["weight_source"] = "k3x-set"

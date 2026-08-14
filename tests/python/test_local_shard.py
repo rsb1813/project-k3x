@@ -12,6 +12,7 @@ import k3x_converter.local_shard as local_shard
 from k3x_converter.format import Quantization, fnv1a64
 from k3x_converter.fragment_tensor_store import K3XTensorStore
 from k3x_converter.local_shard import convert_local_official_shard
+from k3x_converter.official_two_layer import _bf16_matvec
 from k3x_converter.reader import K3XReader
 from k3x_ref.fixtures import write_source_checkpoint
 from k3x_ref.quant8 import Quant8Tensor, decode_groupwise_8bit
@@ -172,3 +173,12 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
             dtype=torch.bfloat16,
         )
         assert torch.equal(loaded_cuda, expected_cuda)
+        value = torch.linspace(-1.0, 1.0, 128, dtype=torch.bfloat16, device="cuda")
+        expected_matvec = _bf16_matvec(value, expected_cuda)
+        packed = store.packed_q8_matrix(
+            "model.layers.0.mlp.gate_proj.weight", device="cuda"
+        )
+        actual_matvec = _bf16_matvec(value, packed)
+        assert torch.allclose(
+            actual_matvec.float(), expected_matvec.float(), atol=0.125, rtol=0.01
+        )

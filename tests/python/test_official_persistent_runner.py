@@ -75,6 +75,7 @@ def test_token_driver_runs_stages_in_process_and_resumes_completed_prefix(
 
     def layer0(args: argparse.Namespace) -> int:
         assert args.runtime_context is shared_context
+        assert args.direct_q8 is True
         calls.append("layer0")
         args.state_dir.mkdir(parents=True, exist_ok=True)
         (args.state_dir / "state.json").write_text(
@@ -88,6 +89,7 @@ def test_token_driver_runs_stages_in_process_and_resumes_completed_prefix(
 
     def remaining(args: argparse.Namespace) -> int:
         assert args.runtime_context is shared_context
+        assert args.direct_q8 is True
         calls.append("remaining")
         (args.state_dir / "state.json").write_text(
             json.dumps({"completed_layer": 92}), encoding="utf-8"
@@ -121,6 +123,7 @@ def test_token_driver_runs_stages_in_process_and_resumes_completed_prefix(
         stop_layer=92,
         k3x_set=None,
         execution_mode="in-process",
+        direct_q8=True,
     )
 
     assert run_official_token.run(args) == 0
