@@ -1727,3 +1727,25 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Quality: route overlap is 16/16. The batch output is bit-exact to scalar direct. Against exact Q8, cosine is 0.9999961257, maximum absolute error is 0.0009765625, mean absolute error is 0.0000491009, and BF16 exact-element ratio is 56.3058%.
 - Scope: one layer boundary, not a complete token. Decode/prefill tok/s, TTFT, full-model cache behavior, physical traffic, and coding quality remain unmeasured.
 - Evidence: implementation commit `ad48c9a`, harness commit `a82bd05`, summary SHA-256 `7e58a75115ba4c737386eccb815a7e6f1ec7fb5e54c679086a1363e561d688ab`.
+
+## B-0062 natural Top-16 in-memory decode
+
+- Date: 2026-08-14.
+- Hardware/model: AMD Ryzen 7 9800X3D, RTX 5080 16 GB, 96 GB RAM, WSL2, complete sealed official K3X set, input token 1, two generated tokens.
+- Mode: experimental direct Q8, native expert-major MXFP4, natural Top-16, persistent in-memory KDA/MLA/hidden/block state, 20 GiB Q8 host plus 3 GiB device cache, and 20 GiB MXFP4 host plus 6 GiB device cache.
+- Correctness: generated tokens are `[9689, 10]`; the first token matches B-0050. All 93 attention states persist and maximum MLA length is two. The direct-Q8 path remains experimental and coding quality is unmeasured.
+- Result: first-token wall is 824.624471 seconds. The second token is 380.562451 seconds, yielding measured decode throughput of 0.00262769 tok/s.
+- Cache result: final Q8 counters are 65 device hits, 456 host hits, 1,797 misses, and 59,868,323,840 rejected bytes. Final MXFP4 counters are 126 device hits, 498 host hits, 8,208 misses, and 20,097,466,368 rejected bytes.
+- Resource result: peak CUDA allocation/reservation is 10,472,534,016/11,765,022,720 bytes. Physical NVMe/H2D traffic, utilization integration, prefill, and coding quality were not measured.
+- Evidence: implementation commit `57bc29f`, summary SHA-256 `78b30848356e39cc609c801ac28b739a9908c1b2e43e526ab6ca0e96a02e1949`.
+
+## B-0063 fixed Top-4 with RAM-resident Q8 trunk
+
+- Date: 2026-08-14.
+- Hardware/model: same local hardware and complete sealed official K3X set as B-0062, input token 1, two generated tokens.
+- Mode: explicitly lossy fixed Top-4, experimental direct Q8, native expert-major MXFP4, persistent in-memory state, 60 GiB Q8 host plus 2 GiB device cache, zero MXFP4 host plus 7 GiB device cache.
+- Quality: generated tokens are `[21339, 13500]`. The first token differs from B-0050's 9689, so this mode fails exact greedy-token parity. Coding/agentic quality remains unmeasured.
+- Result: first-token wall is 445.455813 seconds. The second token is 71.624887 seconds, yielding 0.0139616 tok/s. This is 5.313x B-0062 throughput and remains 358x below the 5 tok/s target.
+- Cache result: all 1,159 Q8 matrices fit across RAM and VRAM; the second token adds zero Q8 misses and records 41 device plus 1,118 host hits. MXFP4 records 153 second-token device hits and 951 new misses, including 4,503,797,760 rejected bytes after the device cache fills.
+- Resource result: peak CUDA allocation/reservation is 10,365,210,112/10,812,915,712 bytes. Physical NVMe/H2D traffic, utilization integration, prefill, and coding quality were not measured.
+- Evidence: implementation commit `35c2eb2`, summary SHA-256 `c51840db3f8ae3f170b1639463e52137ae657cf277919926152c61b702f46c34`.

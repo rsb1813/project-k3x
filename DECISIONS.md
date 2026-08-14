@@ -1215,3 +1215,19 @@ Post-review note: final read-only review found that partial-submit or completion
 - Evidence: B-0061 preserves the complete 16-expert route and matches the scalar direct output exactly. Against exact Q8 it records cosine 0.9999961257, maximum absolute error 0.0009765625, and mean absolute error 0.0000491009; broad coding quality remains unmeasured.
 - Benchmark result: B-0061 reduces the official layer-1 warm wall from B-0060's 2.845790 seconds to 0.448773 seconds, or 6.341x. Warm compute median is 0.240653 seconds. The shared cache contains 1,825,408,000 Q8 bytes across the layer-0 setup and layer-1 path plus 280,756,224 MXFP4 bytes.
 - Revisit: do not promote this path until the full-token route, greedy token, recurrent/KV state, and coding-quality gates pass.
+
+## D-106 — Keep official decode state in process before porting the full graph to C++
+
+- Decision: reuse the verified Python stage math while retaining KDA, MLA, hidden, Attention Residual, runtime-context, and packed-cache state in one process. Keep disk publication as the switchable reference path.
+- Alternatives considered: move the existing state directory to tmpfs, or port the complete official 93-layer graph to C++ before measuring decode.
+- Evidence: the official layer 0→1 in-memory smoke produces layer-1 SHA-256 `89e8d48f6e97f4578eaecbf94c66316d3e03cfee9f3878d7baad947d4c00d9ad`, exactly matching B-0061. B-0062 retains 93 attention states, advances MLA length to two, and reproduces first token 9689.
+- Benchmark result: B-0062 measures the second natural Top-16 token at 380.562451 seconds, or 0.00262769 tok/s. This is the first steady-decode measurement, not a target achievement.
+- Revisit: replace the bridge with a C++ or persistent-kernel graph after the measured storage and packed-compute boundaries are reduced.
+
+## D-107 — Prioritize the Q8 trunk in RAM and keep fixed Top-4 explicitly lossy
+
+- Decision: allocate enough host cache for all observed Q8 trunk matrices and measure fixed Top-4 as a separate lossy mode. Do not present it as Balanced or Quality.
+- Alternatives considered: split RAM equally between trunk and experts, retain exact Top-16 only, or lower K without checking the greedy token.
+- Evidence: B-0063 records zero new Q8 misses on the second token, with 41 device hits and 1,118 host hits. MXFP4 still records 951 new misses. The first greedy token changes from exact 9689 to 21339, so quality divergence is directly observed.
+- Benchmark result: second-token wall falls from 380.562451 to 71.624887 seconds and throughput rises from 0.00262769 to 0.0139616 tok/s, a 5.313x speedup. The result remains 358x below 5 tok/s.
+- Revisit: fixed Top-4 may only remain behind an explicit lossy flag. Adaptive K, exact rescue, and coding-quality evaluation are required before a user-facing fast mode is selected.

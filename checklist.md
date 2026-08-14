@@ -647,8 +647,8 @@
 - [x] Add a focused lifecycle regression before implementation.
 - [x] Route layer 0, KDA, MLA, and LM head through the shared in-memory state.
 - [x] Add a multi-token driver with explicit cache budgets and decode telemetry.
-- [ ] Run a two-token official measurement and report actual warm decode tok/s.
-- [ ] Synchronize the TITAN Ledger and publish the measured result.
+- [x] Run a two-token official measurement and report actual warm decode tok/s.
+- [x] Synchronize the TITAN Ledger and publish the measured result.
 
 ### 3-bit runtime correctness slice
 

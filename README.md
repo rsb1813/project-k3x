@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2044-native%20expert%20batch-20a46b?style=flat-square)](#current-limitations)
+[![Milestone](https://img.shields.io/badge/milestone%2045-measured%20decode-20a46b?style=flat-square)](#current-limitations)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -34,7 +34,7 @@ flowchart LR
 ```
 
 > [!IMPORTANT]
-> The complete 96-fragment, 1,507,512,467,456-byte K3X set executes all 93 released Kimi K3 layers and the LM head on the local RTX 5080. The exact B-0050 path reduced measured first-token wall time from 1,891 to 583.658 seconds with identical K3X token, logit, layer outputs, and final state. Milestone 44 adds opt-in packed-Q8 attention residency and native MXFP4 expert-major execution. B-0061 measures official layer 1 at a 0.4488-second five-run warm median with the full Top-16 route preserved and cosine 0.9999961 versus exact Q8. This remains a single-layer boundary, not full-model decode TPS. No paid cloud resource was used.
+> The complete 96-fragment, 1,507,512,467,456-byte K3X set executes all 93 released Kimi K3 layers and the LM head on the local RTX 5080. Milestone 45 now measures real two-token decode with persistent KDA/MLA state and packed caches. Natural Top-16 B-0062 reaches 0.00263 tok/s and reproduces first token 9689. Lossy Top-4 with the Q8 trunk resident in RAM reaches 0.01396 tok/s, but changes the first token to 21339 and is not a quality mode. The current bottleneck is cold expert supply plus host-to-device trunk traffic, not state publication. No paid cloud resource was used.
 
 | Milestone | GitHub status | Evidence |
 |---|---|---|
@@ -72,6 +72,7 @@ flowchart LR
 | Milestone 42 | Public branch `codex/official-end-to-end-token` | B-0051 direct-packed Q8 cuts resident matvec 40.30x but cold full wall only 3.03%; experimental non-default |
 | Milestone 43 | Public branch `codex/official-end-to-end-token` | B-0055 packs and retains all layer-0 Q8 projections; 7.346 s cold to 0.214 s warm median, 34.40x |
 | Milestone 44 | Public branch `codex/official-end-to-end-token` | B-0056 native MXFP4 residency, B-0060 expert-major Top-16 batching, and B-0061 full packed layer-1 residency at 0.4488 s warm median |
+| Milestone 45 | Public branch `codex/official-end-to-end-token` | B-0062 measures 0.00263 tok/s natural Top-16; B-0063 measures 0.01396 tok/s lossy Top-4 with zero second-token Q8 misses |
 
 The latest audited public implementation baseline is Milestone 34 integration head `a7ba5204`. Push correctness `31677396649`, pull-request correctness `31677408262`, and pull-request CodeQL `31677408278` passed before merge; post-merge `main` correctness `31677651704` and CodeQL `31677651706` also succeeded.
 
@@ -880,7 +881,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Experimental direct-packed Q8 matvec with released and full-model B-0051 measurements.
 - [x] Explicit-budget packed Q8 RAM/VRAM residency with B-0052/B-0055 layer-0 measurements.
 - [x] Native direct-packed MXFP4 residency and expert-major execution with B-0056/B-0060/B-0061 measurements.
-- [ ] Warm multi-token decode measurement and optimization toward 5 tok/s minimum.
+- [x] First warm multi-token decode measurement with B-0062/B-0063; optimization toward 5 tok/s remains active.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
 - [x] Reusable CUDA allocation, bounded exact static residency, grouped projection ablation, and split H2D profiling.
@@ -945,15 +946,15 @@ The graph and roadmap were checked against the official Kimi K3 release and repo
 
 ## Current limitations
 
-- The executable model is synthetic and text-only.
-- The optimized production C++ runtime remains synthetic. The exact Python compatibility graph executes the complete sealed official set in one process, but repeated metadata parsing, disk state publication, dense-Q8 CPU expansion, and literal MXFP4 paths remain correctness infrastructure rather than a usable token loop.
+- The optimized production C++ runtime remains synthetic and text-only; the official 93-layer executable path is still the experimental Python/CUDA compatibility runtime.
+- The official path now retains recurrent/KV state and packed caches across tokens, but its Q8 trunk and dynamically routed experts still exceed VRAM. B-0062/B-0063 measure the resulting WSL2 storage and H2D bottleneck directly.
 - Reusable scratch, bounded static weight residency, and same-input grouping are implemented, but activations and results still cross the host/device boundary and asynchronous overlap is not implemented.
 - Static residency has no eviction and is not the future three-tier expert cache.
 - The bounded io_uring batch reader, current-layer deadline worker, exact expert eviction policies, persistent task/session frequency profiles, and experimental adaptive/fixed Top-K are implemented, but there is no cross-layer asynchronous storage pipeline or future-layer predictor.
 - Exact token-major plus CPU/CUDA expert-major verification, AURORA replay/persistent draft modes, and B-0014 through B-0025 are implemented. Persistent AURORA defaults to CPU fixed-reduced-Top-K; transient, bounded-resident, resident-grid, resident MoE-layer, admission-validation, and CUDA Graph paths are exact opt-in experiments. B-0025 finds mixed stable/alternating deltas and rotating churn 6.09%–11.57% slower, so no graph default changes. There is no learned DSpark drafter, reduced-precision draft path, eviction-capable draft residency, device-resident whole-token graph, or full-model speculative speedup claim.
 - Reduced K is explicitly lossy. B-0012 shows synthetic speed and logical-traffic gains together with token/logit/state divergence; natural Top-K remains the default and no full-model quality claim exists.
 - The quality Local Foundry completed all 96 Reader-valid fragments and deleted every official source shard only after checksum and ledger publication. `K3XSET1` record SHA-256 is `f5c7443fd9ea9b4a2f0c95010f148182eefaedec4f29c094ca24e6bc4e61cefe`; provenance remains pinned official shard SHA-256 plus K3X roots and the local ledger, not signed publisher provenance.
-- RTX 5080 correctness and synthetic performance are measured under WSL2; native-Linux storage and full-model performance remain unmeasured.
+- RTX 5080 full-model decode is measured under WSL2; native-Linux storage performance, physical NVMe/H2D traffic, and coding quality remain unmeasured.
 - No open-source license has been selected yet; public visibility does not itself grant reuse rights.
 
 ---

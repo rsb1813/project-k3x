@@ -618,6 +618,14 @@ The accepted CUDA batch boundary executes one natural routed set as an expert-ma
 
 Milestone 44 also extends opt-in direct Q8 handles to every official attention projection. With all layer-1 Q8 attention matrices and 48 MXFP4 expert matrices resident, B-0061 reduces the official layer-1 warm wall from B-0060's 2.845790 seconds to 0.448773 seconds. The batched result is bit-exact to the scalar direct path; versus the exact-Q8 path it preserves all 16 routed expert IDs, reaches cosine 0.9999961, and has maximum absolute error 0.0009765625. This remains an experimental single-layer boundary, not end-to-end decode TPS. Persistent in-memory recurrent/KV state and a measured 93-layer warm token loop remain the next runtime boundary.
 
+## Milestone 45 persistent in-memory official decode
+
+One `OfficialInMemoryState` now owns per-layer KDA recurrent state, MLA KV state, current-token hidden state, the current Attention Residual block bank, and generated-token history. Attention state persists across generated tokens; hidden and block sources reset at each token boundary. The existing disk-published reference stages remain unchanged when no in-memory state is supplied.
+
+The in-process driver retains one authenticated `OfficialRuntimeContext`, packed Q8/MXFP4 caches, and CUDA allocator across the complete 93-layer graph and LM head. It records TTFT separately and computes decode tok/s only from later generated tokens. B-0062 is the first measured full-token decode result at natural Top-16. B-0063 adds an explicit lossy fixed Top-4 route and reallocates RAM toward the complete Q8 trunk working set. Neither path is a production default.
+
+The measurements establish the next architecture boundary. Q8 trunk residency in system RAM eliminates second-token Q8 storage misses, but pageable host-to-device projection supply remains large and nonresident routed experts still require cold reads. The next production design must combine lower-bit trunk execution, native-Linux storage, deadline overlap, and a quality-gated reduction or amortization of expert bytes per token.
+
 ## K3X data flow
 
 The file format is deliberately execution ordered. The converter reads bounded source chunks, copies or transforms extents, computes each extent CRC32C while writing, and publishes an atomic resume ledger after each bounded 128-extent `fsync` checkpoint. On resume it revalidates every committed extent against both the current source and partial artifact before truncating only the uncommitted suffix to the final durable extent's exact end. Final root SHA-256 generation rereads the complete output, and the strict Reader verifies the source-derived per-extent CRCs before the local Foundry ledger permits source deletion. Only then is the `.partial` artifact atomically renamed.
