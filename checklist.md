@@ -606,6 +606,17 @@
 - [x] Measure one released tensor and the complete official token as B-0050.
 - [x] Update the TITAN Ledger and publish the measured result.
 
+### Milestone 42 direct-packed Q8 matvec
+
+- [x] Compare the full C++ port, C ABI bridge, and PyTorch CUDA extension.
+- [x] Write the bounded design and implementation plan.
+- [ ] Add a witnessed direct-packed CUDA parity test.
+- [ ] Implement the native `sm_120` group-128 Q8 matvec extension.
+- [ ] Add packed handles and an explicit `--direct-q8` reference switch.
+- [ ] Measure the released q-projection and official layer 0.
+- [ ] Run a complete token only if the bounded gates pass.
+- [ ] Update the TITAN Ledger and publish the measured result.
+
 ### 3-bit runtime correctness slice
 
 - [x] Re-read the accepted Local Foundry design and implementation plan.
