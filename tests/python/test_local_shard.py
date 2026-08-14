@@ -7,6 +7,7 @@ import json
 import torch
 from safetensors.torch import save_file
 
+import k3x_converter.fragment_tensor_store as fragment_tensor_store
 import k3x_converter.local_shard as local_shard
 from k3x_converter.format import Quantization, fnv1a64
 from k3x_converter.fragment_tensor_store import K3XTensorStore
@@ -156,3 +157,18 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
     )
     assert loaded_norm.dtype == torch.bfloat16
     assert torch.equal(loaded_norm, torch.ones(128, dtype=torch.bfloat16))
+    if torch.cuda.is_available():
+        expected_cuda = loaded_matrix_bf16.to("cuda")
+
+        def reject_cpu_decode(*_args, **_kwargs):
+            raise AssertionError("CUDA Q8 load used the CPU decoder")
+
+        monkeypatch.setattr(
+            fragment_tensor_store, "decode_groupwise_8bit", reject_cpu_decode
+        )
+        loaded_cuda = store.load(
+            "model.layers.0.mlp.gate_proj.weight",
+            device="cuda",
+            dtype=torch.bfloat16,
+        )
+        assert torch.equal(loaded_cuda, expected_cuda)

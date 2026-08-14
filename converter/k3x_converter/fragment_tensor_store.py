@@ -20,6 +20,33 @@ class _LocatedTensor:
     record: TensorRecord
 
 
+def _decode_groupwise_8bit_cuda(
+    value: Quant8Tensor, device: torch.device
+) -> torch.Tensor:
+    if (
+        value.group_size != 128
+        or value.values <= 0
+        or math.prod(value.shape) != value.values
+    ):
+        raise K3XError("INVALID_QUANT8_METADATA")
+    groups = math.ceil(value.values / value.group_size)
+    if (
+        len(value.codes) != groups * value.group_size
+        or len(value.scales_bf16) != groups * 2
+    ):
+        raise K3XError("INVALID_QUANT8_LENGTH")
+    scales = torch.frombuffer(
+        bytearray(value.scales_bf16), dtype=torch.bfloat16
+    )
+    if not torch.isfinite(scales).all() or torch.any(scales <= 0):
+        raise K3XError("INVALID_QUANT8_SCALE")
+    codes = torch.frombuffer(bytearray(value.codes), dtype=torch.int8).to(device)
+    device_scales = scales.to(device)
+    decoded = codes.float().reshape(groups, value.group_size)
+    decoded *= device_scales.float().unsqueeze(1)
+    return decoded.reshape(-1)[: value.values].reshape(value.shape)
+
+
 @dataclass(frozen=True)
 class K3XTensorStore:
     tensors: dict[int, _LocatedTensor]
@@ -61,10 +88,13 @@ class K3XTensorStore:
         record = located.record
         data, auxiliary = located.reader.read_tensor_extents(record)
         values = math.prod(record.dimensions)
+        target = torch.device(device)
         if record.quantization == Quantization.GROUPWISE_8BIT:
-            tensor = decode_groupwise_8bit(
-                Quant8Tensor(record.dimensions, values, 128, data, auxiliary)
-            )
+            encoded = Quant8Tensor(record.dimensions, values, 128, data, auxiliary)
+            if target.type == "cuda":
+                tensor = _decode_groupwise_8bit_cuda(encoded, target)
+            else:
+                tensor = decode_groupwise_8bit(encoded)
         elif record.quantization == Quantization.NONE and record.dtype == DType.BF16:
             tensor = torch.frombuffer(bytearray(data), dtype=torch.bfloat16).reshape(
                 record.dimensions
@@ -75,7 +105,7 @@ class K3XTensorStore:
             )
         else:
             raise K3XError("TENSOR_REQUIRES_SPECIALIZED_DECODE", name)
-        return tensor.to(device=device, dtype=dtype)
+        return tensor.to(device=target, dtype=dtype)
 
     def load_rows(
         self,
