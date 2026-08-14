@@ -56,6 +56,26 @@ def empty_mla_state(
     )
 
 
+def _project(hidden: torch.Tensor, weight: object) -> torch.Tensor:
+    if isinstance(weight, torch.Tensor):
+        return functional.linear(hidden, weight)
+    if not callable(getattr(weight, "matvec", None)):
+        raise TypeError("MLA projection weight must be a tensor or expose matvec")
+    return torch.stack(
+        tuple(
+            torch.stack(
+                tuple(
+                    weight.matvec(hidden[batch, index])
+                    for index in range(hidden.shape[1])
+                ),
+                dim=0,
+            )
+            for batch in range(hidden.shape[0])
+        ),
+        dim=0,
+    ).to(weight.dtype)
+
+
 def mla_decode(
     x_one: torch.Tensor,
     weights: MLAWeights,
@@ -70,23 +90,23 @@ def mla_decode(
     batch_size = x_one.shape[0]
     query_width = cfg.qk_nope_head_dim + cfg.qk_rope_head_dim
     q_latent = rms_norm(
-        functional.linear(x_one, weights.q_a_proj),
+        _project(x_one, weights.q_a_proj),
         weights.q_a_norm,
         cfg.rms_norm_eps,
     )
-    query = functional.linear(q_latent, weights.q_b_proj).reshape(
+    query = _project(q_latent, weights.q_b_proj).reshape(
         batch_size, 1, cfg.mla_heads, query_width
     ).transpose(1, 2)
     query_main, query_extra = torch.split(
         query, (cfg.qk_nope_head_dim, cfg.qk_rope_head_dim), dim=-1
     )
 
-    compressed = functional.linear(x_one, weights.kv_a_proj)
+    compressed = _project(x_one, weights.kv_a_proj)
     kv_latent, shared_key = torch.split(
         compressed, (cfg.kv_lora_rank, cfg.qk_rope_head_dim), dim=-1
     )
     kv_latent = rms_norm(kv_latent, weights.kv_a_norm, cfg.rms_norm_eps)
-    expanded = functional.linear(kv_latent, weights.kv_b_proj).reshape(
+    expanded = _project(kv_latent, weights.kv_b_proj).reshape(
         batch_size,
         1,
         cfg.mla_heads,
@@ -114,9 +134,9 @@ def mla_decode(
     merged = attended.transpose(1, 2).reshape(
         batch_size, 1, cfg.mla_heads * cfg.v_head_dim
     )
-    output_gate = torch.sigmoid(functional.linear(x_one, weights.g_proj).to(torch.float32))
+    output_gate = torch.sigmoid(_project(x_one, weights.g_proj).to(torch.float32))
     gated = (merged * output_gate).to(weights.o_proj.dtype)
-    output = functional.linear(gated, weights.o_proj)
+    output = _project(gated, weights.o_proj)
     return output, MLAState(keys, values, shared_keys, state.length + 1)
 
 

@@ -72,3 +72,35 @@ def test_mla_decode_preserves_bfloat16_projection_contract() -> None:
 
     assert output.dtype == torch.bfloat16
     assert state.keys.dtype == torch.bfloat16
+
+
+def test_mla_decode_accepts_matvec_capable_projection_weights() -> None:
+    cfg = SyntheticK3Config.default()
+    tensor_weights = _weights(cfg)
+
+    class MatvecWeight:
+        def __init__(self, tensor: torch.Tensor) -> None:
+            self.tensor = tensor
+            self.shape = tensor.shape
+            self.dtype = tensor.dtype
+
+        def matvec(self, value: torch.Tensor) -> torch.Tensor:
+            return self.tensor @ value
+
+    packed_weights = MLAWeights(
+        *(
+            value if value.ndim == 1 else MatvecWeight(value)
+            for value in tensor_weights.__dict__.values()
+        )
+    )
+    hidden = torch.ones((1, 1, cfg.hidden_size))
+    empty = empty_mla_state(1, cfg, hidden.dtype, hidden.device)
+
+    expected, expected_state = mla_decode(hidden, tensor_weights, empty, cfg)
+    actual, actual_state = mla_decode(hidden, packed_weights, empty, cfg)
+
+    assert torch.allclose(actual, expected, atol=1e-5, rtol=1e-5)
+    assert torch.allclose(actual_state.keys, expected_state.keys, atol=1e-5, rtol=1e-5)
+    assert torch.allclose(
+        actual_state.values, expected_state.values, atol=1e-5, rtol=1e-5
+    )
