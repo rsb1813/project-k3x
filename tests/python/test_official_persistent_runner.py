@@ -66,7 +66,9 @@ def test_token_driver_runs_stages_in_process_and_resumes_completed_prefix(
             json.dumps({"completed_layer": 0}), encoding="utf-8"
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps({"layer_id": 0}), encoding="utf-8")
+        args.output.write_text(
+            json.dumps({"completed_layers": [0]}), encoding="utf-8"
+        )
         return 0
 
     def remaining(args: argparse.Namespace) -> int:

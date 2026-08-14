@@ -119,7 +119,7 @@ def run(args: argparse.Namespace) -> int:
         start = time.perf_counter()
         _invoke(args.execution_mode, "layer0", layer0_args, command)
         stage_seconds["layer0"] = time.perf_counter() - start
-        if _published(layer0_output).get("layer_id") != 0:
+        if _published(layer0_output).get("completed_layers") != [0]:
             raise K3XError("OFFICIAL_LAYER_PUBLICATION")
 
     remaining_args = argparse.Namespace(
