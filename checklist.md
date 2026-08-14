@@ -650,6 +650,15 @@
 - [x] Run a two-token official measurement and report actual warm decode tok/s.
 - [x] Synchronize the TITAN Ledger and publish the measured result.
 
+### Milestone 46 persistent ext4 extent hot bank
+
+- [x] Confirm 936 GiB free WSL ext4 capacity and isolate the WSL 9p read bottleneck.
+- [x] Select a bounded content-validated extent cache instead of copying full 16 GB fragments.
+- [x] Add focused hit, budget, and corruption regressions.
+- [x] Connect MXFP4 tensors and LM-head row slices to the optional cache.
+- [ ] Measure a three-token Top-4 session with Q8 RAM residency.
+- [ ] Record quality, cache deltas, TPS, and the next bottleneck.
+
 ### 3-bit runtime correctness slice
 
 - [x] Re-read the accepted Local Foundry design and implementation plan.

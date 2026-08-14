@@ -1,7 +1,10 @@
 # K3X fragment 집합에서 이름으로 dense 텐서를 읽고 역양자화하는 저장소입니다.
 from __future__ import annotations
 
+import hashlib
 import math
+import os
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable
@@ -14,10 +17,133 @@ from .format import DType, K3XError, Quantization, TensorRecord, fnv1a64
 from .reader import K3XReader
 
 
+_EXTENT_CACHE_MAGIC = b"K3XEC1\0\0"
+_EXTENT_CACHE_HEADER_BYTES = 80
+
+
+@dataclass
+class PersistentExtentCache:
+    directory: Path
+    budget_bytes: int
+    resident_bytes: int = field(default=0, init=False)
+    hits: int = field(default=0, init=False)
+    misses: int = field(default=0, init=False)
+    admissions: int = field(default=0, init=False)
+    rejected_bytes: int = field(default=0, init=False)
+    _guard: threading.Lock = field(default_factory=threading.Lock, init=False)
+    _key_locks: dict[str, threading.Lock] = field(default_factory=dict, init=False)
+
+    def __post_init__(self) -> None:
+        if (
+            isinstance(self.budget_bytes, bool)
+            or not isinstance(self.budget_bytes, int)
+            or self.budget_bytes < 0
+        ):
+            raise K3XError("INVALID_PERSISTENT_EXTENT_CACHE_BUDGET")
+        self.directory = self.directory.resolve()
+        if self.directory.exists():
+            self.resident_bytes = sum(
+                path.stat().st_size for path in self.directory.glob("*.k3xec")
+            )
+
+    def _read(self, path: Path, key_hash: bytes) -> bytes:
+        encoded = path.read_bytes()
+        if (
+            len(encoded) < _EXTENT_CACHE_HEADER_BYTES
+            or encoded[:8] != _EXTENT_CACHE_MAGIC
+            or encoded[8:40] != key_hash
+        ):
+            raise K3XError("PERSISTENT_EXTENT_CACHE_CORRUPT", str(path))
+        payload_bytes = int.from_bytes(encoded[72:80], "little")
+        payload = encoded[_EXTENT_CACHE_HEADER_BYTES:]
+        if (
+            len(payload) != payload_bytes
+            or hashlib.sha256(payload).digest() != encoded[40:72]
+        ):
+            raise K3XError("PERSISTENT_EXTENT_CACHE_CORRUPT", str(path))
+        return payload
+
+    def acquire(self, key: bytes, loader: Callable[[], bytes]) -> bytes:
+        key_hash = hashlib.sha256(key).digest()
+        name = key_hash.hex()
+        with self._guard:
+            key_lock = self._key_locks.setdefault(name, threading.Lock())
+        with key_lock:
+            path = self.directory / f"{name}.k3xec"
+            if path.exists():
+                payload = self._read(path, key_hash)
+                with self._guard:
+                    self.hits += 1
+                return payload
+
+            payload = loader()
+            if not isinstance(payload, bytes):
+                raise K3XError("INVALID_PERSISTENT_EXTENT_PAYLOAD")
+            encoded = b"".join(
+                (
+                    _EXTENT_CACHE_MAGIC,
+                    key_hash,
+                    hashlib.sha256(payload).digest(),
+                    len(payload).to_bytes(8, "little"),
+                    payload,
+                )
+            )
+            with self._guard:
+                self.misses += 1
+                if self.resident_bytes + len(encoded) > self.budget_bytes:
+                    self.rejected_bytes += len(encoded)
+                    return payload
+                self.resident_bytes += len(encoded)
+                self.admissions += 1
+            try:
+                self.directory.mkdir(parents=True, exist_ok=True)
+                partial = path.with_suffix(".partial")
+                with partial.open("wb") as stream:
+                    stream.write(encoded)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(partial, path)
+            except BaseException:
+                with self._guard:
+                    self.resident_bytes -= len(encoded)
+                    self.admissions -= 1
+                raise
+            return payload
+
+    def snapshot(self) -> dict[str, int]:
+        with self._guard:
+            return {
+                "budget_bytes": self.budget_bytes,
+                "resident_bytes": self.resident_bytes,
+                "hits": self.hits,
+                "misses": self.misses,
+                "admissions": self.admissions,
+                "rejected_bytes": self.rejected_bytes,
+            }
+
+
 @dataclass(frozen=True)
 class _LocatedTensor:
     reader: K3XReader
     record: TensorRecord
+
+
+def _read_cached_tensor_extents(
+    located: _LocatedTensor,
+    cache: PersistentExtentCache | None,
+) -> tuple[bytes, bytes]:
+    if cache is None:
+        return located.reader.read_tensor_extents(located.record)
+    record = located.record
+    key = b"tensor\0" + located.reader.superblock.root_sha256 + record.encode()
+    payload = cache.acquire(
+        key,
+        lambda: b"".join(located.reader.read_tensor_extents(record)),
+    )
+    expected = record.data_length + record.auxiliary_length
+    if len(payload) != expected:
+        raise K3XError("PERSISTENT_EXTENT_CACHE_CORRUPT")
+    return payload[: record.data_length], payload[record.data_length :]
 
 
 def _quant8_host_tensors(
@@ -206,6 +332,7 @@ class K3XTensorStore:
     tensors: dict[int, _LocatedTensor]
     packed_q8_cache: PackedQ8Cache | None = None
     packed_mxfp4_cache: PackedMxfp4Cache | None = None
+    persistent_extent_cache: PersistentExtentCache | None = None
 
     @classmethod
     def open(
@@ -216,6 +343,7 @@ class K3XTensorStore:
         verify_payload: bool = True,
         packed_q8_cache: PackedQ8Cache | None = None,
         packed_mxfp4_cache: PackedMxfp4Cache | None = None,
+        persistent_extent_cache: PersistentExtentCache | None = None,
     ) -> "K3XTensorStore":
         tensors: dict[int, _LocatedTensor] = {}
         for path in paths:
@@ -226,7 +354,12 @@ class K3XTensorStore:
                 if record.tensor_id in tensors:
                     raise K3XError("DUPLICATE_TENSOR_ID", f"{record.tensor_id:016x}")
                 tensors[record.tensor_id] = _LocatedTensor(reader, record)
-        return cls(tensors, packed_q8_cache, packed_mxfp4_cache)
+        return cls(
+            tensors,
+            packed_q8_cache,
+            packed_mxfp4_cache,
+            persistent_extent_cache,
+        )
 
     def record(self, name: str) -> _LocatedTensor:
         tensor_id = fnv1a64(name)
@@ -307,9 +440,23 @@ class K3XTensorStore:
             raise K3XError("INVALID_TENSOR_ROW_SLICE", name)
         columns = record.dimensions[1]
         length = rows * columns * 2
-        with located.reader.path.open("rb") as stream:
-            stream.seek(record.data_offset + first_row * columns * 2)
-            data = stream.read(length)
+        def load() -> bytes:
+            with located.reader.path.open("rb") as stream:
+                stream.seek(record.data_offset + first_row * columns * 2)
+                return stream.read(length)
+
+        if self.persistent_extent_cache is None:
+            data = load()
+        else:
+            key = b"rows\0" + b"".join(
+                (
+                    located.reader.superblock.root_sha256,
+                    record.encode(),
+                    first_row.to_bytes(8, "little"),
+                    rows.to_bytes(8, "little"),
+                )
+            )
+            data = self.persistent_extent_cache.acquire(key, load)
         if len(data) != length:
             raise K3XError("TRUNCATED_FILE")
         return torch.frombuffer(bytearray(data), dtype=torch.bfloat16).reshape(
@@ -341,7 +488,9 @@ class K3XTensorStore:
                 value.to(target), packed_tensor, scales, rows, columns
             )
 
-        packed, scale_bytes = located.reader.read_tensor_extents(record)
+        packed, scale_bytes = _read_cached_tensor_extents(
+            located, self.persistent_extent_cache
+        )
         scales = torch.frombuffer(bytearray(scale_bytes), dtype=torch.uint8)
         if bool((scales == 0xFF).any()):
             raise K3XError("INVALID_MXFP4", name)
@@ -378,7 +527,9 @@ class K3XTensorStore:
         rows, columns = record.dimensions
 
         def load() -> tuple[torch.Tensor, torch.Tensor]:
-            packed, scale_bytes = located.reader.read_tensor_extents(record)
+            packed, scale_bytes = _read_cached_tensor_extents(
+                located, self.persistent_extent_cache
+            )
             scales = torch.frombuffer(bytearray(scale_bytes), dtype=torch.uint8)
             if bool((scales == 0xFF).any()):
                 raise K3XError("INVALID_MXFP4", name)

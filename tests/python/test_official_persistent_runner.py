@@ -164,7 +164,9 @@ def test_official_runtime_context_caches_headers_and_stores(
     header = object()
     store = object()
     header_calls: list[str] = []
-    store_calls: list[tuple[tuple[Path, ...], bool, bool, object, object]] = []
+    store_calls: list[
+        tuple[tuple[Path, ...], bool, bool, object, object, object]
+    ] = []
 
     def inspect(snapshot, shard, transport):
         header_calls.append(shard)
@@ -177,6 +179,7 @@ def test_official_runtime_context_caches_headers_and_stores(
         verify_payload,
         packed_q8_cache,
         packed_mxfp4_cache,
+        persistent_extent_cache,
     ):
         store_calls.append(
             (
@@ -185,6 +188,7 @@ def test_official_runtime_context_caches_headers_and_stores(
                 verify_payload,
                 packed_q8_cache,
                 packed_mxfp4_cache,
+                persistent_extent_cache,
             )
         )
         return store
@@ -219,5 +223,6 @@ def test_official_runtime_context_caches_headers_and_stores(
             False,
             context.packed_q8_cache,
             context.packed_mxfp4_cache,
+            None,
         )
     ]

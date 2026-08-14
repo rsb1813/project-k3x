@@ -32,6 +32,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--q8-device-cache-bytes", type=int, default=0)
     parser.add_argument("--mxfp4-host-cache-bytes", type=int, default=0)
     parser.add_argument("--mxfp4-device-cache-bytes", type=int, default=0)
+    parser.add_argument("--extent-cache-dir", type=Path)
+    parser.add_argument("--extent-cache-bytes", type=int, default=0)
     return parser.parse_args()
 
 
@@ -47,6 +49,12 @@ def main() -> int:
         q8_device_cache_bytes=args.q8_device_cache_bytes,
         mxfp4_host_cache_bytes=args.mxfp4_host_cache_bytes,
         mxfp4_device_cache_bytes=args.mxfp4_device_cache_bytes,
+        persistent_extent_cache_directory=(
+            args.extent_cache_dir.resolve()
+            if args.extent_cache_dir is not None
+            else None
+        ),
+        persistent_extent_cache_bytes=args.extent_cache_bytes,
     )
     state = OfficialInMemoryState()
     device = torch.device("cuda", torch.cuda.current_device())
@@ -144,6 +152,11 @@ def main() -> int:
         "maximum_mla_length": max(mla_lengths, default=0),
         "q8_cache": context.packed_q8_cache.snapshot(),
         "mxfp4_cache": context.packed_mxfp4_cache.snapshot(),
+        "persistent_extent_cache": (
+            context.persistent_extent_cache.snapshot()
+            if context.persistent_extent_cache is not None
+            else None
+        ),
         "token_cache_snapshots": token_cache_snapshots,
         "peak_cuda_allocated_bytes": torch.cuda.max_memory_allocated(device),
         "peak_cuda_reserved_bytes": torch.cuda.max_memory_reserved(device),

@@ -15,6 +15,7 @@ from k3x_converter.fragment_tensor_store import (
     K3XTensorStore,
     PackedMxfp4Cache,
     PackedQ8Cache,
+    PersistentExtentCache,
 )
 from k3x_converter.official_source import (
     OfficialConfig,
@@ -56,6 +57,7 @@ class OfficialRuntimeContext:
     packed_mxfp4_cache: PackedMxfp4Cache = field(
         default_factory=lambda: PackedMxfp4Cache(0, 0)
     )
+    persistent_extent_cache: PersistentExtentCache | None = None
     _headers: dict[str, OfficialShardHeader] = field(default_factory=dict)
     _stores: dict[str, K3XTensorStore] = field(default_factory=dict)
 
@@ -70,6 +72,8 @@ class OfficialRuntimeContext:
         q8_device_cache_bytes: int = 0,
         mxfp4_host_cache_bytes: int = 0,
         mxfp4_device_cache_bytes: int = 0,
+        persistent_extent_cache_directory: Path | None = None,
+        persistent_extent_cache_bytes: int = 0,
     ) -> "OfficialRuntimeContext":
         topology = load_official_topology(topology_path.resolve())
         object_dir = object_dir.resolve()
@@ -91,6 +95,18 @@ class OfficialRuntimeContext:
             if k3x_set is not None
             else None
         )
+        if (persistent_extent_cache_directory is None) != (
+            persistent_extent_cache_bytes == 0
+        ):
+            raise K3XError("INVALID_PERSISTENT_EXTENT_CACHE_CONFIG")
+        extent_cache = (
+            PersistentExtentCache(
+                persistent_extent_cache_directory,
+                persistent_extent_cache_bytes,
+            )
+            if persistent_extent_cache_directory is not None
+            else None
+        )
         return cls(
             topology,
             object_dir,
@@ -101,6 +117,7 @@ class OfficialRuntimeContext:
             manifest,
             PackedQ8Cache(q8_host_cache_bytes, q8_device_cache_bytes),
             PackedMxfp4Cache(mxfp4_host_cache_bytes, mxfp4_device_cache_bytes),
+            extent_cache,
         )
 
     @property
@@ -137,6 +154,7 @@ class OfficialRuntimeContext:
             verify_payload=False,
             packed_q8_cache=self.packed_q8_cache,
             packed_mxfp4_cache=self.packed_mxfp4_cache,
+            persistent_extent_cache=self.persistent_extent_cache,
         )
         self._stores[source_shard] = store
         return store

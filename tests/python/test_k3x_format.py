@@ -9,7 +9,7 @@ import google_crc32c
 import pytest
 import torch
 
-from k3x_converter.fragment_tensor_store import K3XTensorStore
+from k3x_converter.fragment_tensor_store import K3XTensorStore, PersistentExtentCache
 from k3x_converter.format import (
     OPTIONAL_OFFICIAL_MOE_FIXTURE,
     OPTIONAL_STORAGE_FIXTURE,
@@ -309,6 +309,17 @@ def test_native_mxfp4_payload_round_trips_byte_for_byte(
     )
     actual = K3XTensorStore.open([artifact]).mxfp4_matvec(base, value)
     assert torch.equal(actual, expected)
+    extent_cache = PersistentExtentCache(
+        tmp_path / "extent-cache",
+        record.data_length + record.auxiliary_length + 80,
+    )
+    persistent_store = K3XTensorStore.open(
+        [artifact], persistent_extent_cache=extent_cache
+    )
+    assert torch.equal(persistent_store.mxfp4_matvec(base, value), expected)
+    assert torch.equal(persistent_store.mxfp4_matvec(base, value), expected)
+    assert extent_cache.snapshot()["misses"] == 1
+    assert extent_cache.snapshot()["hits"] == 1
     if torch.cuda.is_available():
         from k3x_converter.fragment_tensor_store import PackedMxfp4Cache
 
@@ -411,3 +422,34 @@ def test_storage_fixture_manifest_rejects_malformed_identity(
 
     with pytest.raises(K3XError, match=error_code):
         convert(source, tmp_path / f"{mutation}.k3x", chunk_bytes=193 * 1024)
+
+
+def test_persistent_extent_cache_hits_respects_budget_and_rejects_corruption(
+    tmp_path: Path,
+) -> None:
+    calls = 0
+
+    def load() -> bytes:
+        nonlocal calls
+        calls += 1
+        return b"verified-extent-payload"
+
+    directory = tmp_path / "hot-bank"
+    cache = PersistentExtentCache(directory, 4096)
+    assert cache.acquire(b"tensor-a", load) == b"verified-extent-payload"
+    assert cache.acquire(b"tensor-a", load) == b"verified-extent-payload"
+    assert calls == 1
+    assert cache.snapshot()["hits"] == 1
+    assert cache.snapshot()["admissions"] == 1
+
+    cache_file = next(directory.glob("*.k3xec"))
+    payload = bytearray(cache_file.read_bytes())
+    payload[-1] ^= 1
+    cache_file.write_bytes(payload)
+    with pytest.raises(K3XError, match="PERSISTENT_EXTENT_CACHE_CORRUPT"):
+        cache.acquire(b"tensor-a", load)
+
+    bounded = PersistentExtentCache(tmp_path / "bounded", 16)
+    assert bounded.acquire(b"tensor-b", load) == b"verified-extent-payload"
+    assert bounded.snapshot()["admissions"] == 0
+    assert bounded.snapshot()["rejected_bytes"] > 0
