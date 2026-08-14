@@ -368,7 +368,7 @@ def run(args: argparse.Namespace) -> int:
         ffn_hidden,
         roles["router"],
         roles["router_correction"],
-        top_k=config.top_k,
+        top_k=getattr(args, "top_k", config.top_k),
     )
     print(
         f"layer{layer_id}_route={','.join(map(str, route.expert_ids))}",

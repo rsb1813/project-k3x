@@ -74,6 +74,7 @@ def run(args: argparse.Namespace) -> int:
                 runtime_context=getattr(args, "runtime_context", None),
                 in_memory_state=memory_state,
                 direct_q8=getattr(args, "direct_q8", False),
+                top_k=getattr(args, "top_k", None) or 16,
             )
             _execute_layer(
                 args.execution_mode,

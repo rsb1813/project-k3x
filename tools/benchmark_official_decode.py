@@ -27,6 +27,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--implementation-commit", required=True)
     parser.add_argument("--input-token-id", type=int, default=1)
     parser.add_argument("--generate", type=int, default=2)
+    parser.add_argument("--top-k", type=int, choices=(4, 6, 8, 12, 16), default=16)
     parser.add_argument("--q8-host-cache-bytes", type=int, default=0)
     parser.add_argument("--q8-device-cache-bytes", type=int, default=0)
     parser.add_argument("--mxfp4-host-cache-bytes", type=int, default=0)
@@ -52,6 +53,7 @@ def main() -> int:
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats(device)
     token_walls: list[float] = []
+    token_cache_snapshots: list[dict[str, object]] = []
     input_tokens: list[int] = []
     current_token = args.input_token_id
 
@@ -72,6 +74,7 @@ def main() -> int:
                 "runtime_context": context,
                 "in_memory_state": state,
                 "direct_q8": True,
+                "top_k": args.top_k,
             }
             if run_layer0(
                 argparse.Namespace(
@@ -100,6 +103,12 @@ def main() -> int:
             torch.cuda.synchronize(device)
             wall = time.perf_counter() - started
             token_walls.append(wall)
+            token_cache_snapshots.append(
+                {
+                    "q8": context.packed_q8_cache.snapshot(),
+                    "mxfp4": context.packed_mxfp4_cache.snapshot(),
+                }
+            )
             current_token = state.generated_tokens[-1]
             print(
                 f"completed_token={token_index + 1}/{args.generate} "
@@ -128,12 +137,14 @@ def main() -> int:
         "decode_tokens_per_second": decode_tokens / decode_seconds,
         "throughput_measured": True,
         "direct_q8": True,
-        "natural_top_k": 16,
+        "top_k": args.top_k,
+        "quality_mode": "natural-top16" if args.top_k == 16 else "lossy-fixed-top-k",
         "first_token_matches_b0050": state.generated_tokens[0] == 9689,
         "attention_state_count": len(state.attention_states),
         "maximum_mla_length": max(mla_lengths, default=0),
         "q8_cache": context.packed_q8_cache.snapshot(),
         "mxfp4_cache": context.packed_mxfp4_cache.snapshot(),
+        "token_cache_snapshots": token_cache_snapshots,
         "peak_cuda_allocated_bytes": torch.cuda.max_memory_allocated(device),
         "peak_cuda_reserved_bytes": torch.cuda.max_memory_reserved(device),
         "physical_h2d_bytes_measured": False,
