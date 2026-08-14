@@ -13,6 +13,7 @@ from k3x_converter.format import K3XError
 from tools.run_official_head import run as run_head
 from tools.run_official_layer0 import _write_json_atomic, run as run_layer0
 from tools.run_official_remaining import run as run_remaining
+from tools.official_runtime_context import OfficialRuntimeContext
 
 
 _IN_PROCESS_STAGES = {
@@ -79,6 +80,16 @@ def run(args: argparse.Namespace) -> int:
     state_dir.mkdir(parents=True, exist_ok=True)
     result_dir.mkdir(parents=True, exist_ok=True)
     state_path = state_dir / "state.json"
+    total_start = time.perf_counter()
+    runtime_context = (
+        OfficialRuntimeContext.create(
+            topology_path=topology,
+            object_dir=object_dir,
+            k3x_set=k3x_set,
+        )
+        if args.execution_mode == "in-process"
+        else None
+    )
 
     resumed_from_layer = -1
     if state_path.exists():
@@ -89,7 +100,6 @@ def run(args: argparse.Namespace) -> int:
         resumed_from_layer = completed
 
     stage_seconds: dict[str, float] = {}
-    total_start = time.perf_counter()
     layer0_output = result_dir / "layer-00.json"
     if resumed_from_layer < 0:
         layer0_args = argparse.Namespace(
@@ -99,6 +109,7 @@ def run(args: argparse.Namespace) -> int:
             output=layer0_output,
             token_id=args.token_id,
             k3x_set=k3x_set,
+            runtime_context=runtime_context,
         )
         command = [
             sys.executable,
@@ -130,6 +141,7 @@ def run(args: argparse.Namespace) -> int:
         stop_layer=92,
         k3x_set=k3x_set,
         execution_mode=args.execution_mode,
+        runtime_context=runtime_context,
     )
     command = [
         sys.executable,
@@ -159,6 +171,7 @@ def run(args: argparse.Namespace) -> int:
         state_dir=state_dir,
         output=output,
         k3x_set=k3x_set,
+        runtime_context=runtime_context,
     )
     command = [
         sys.executable,

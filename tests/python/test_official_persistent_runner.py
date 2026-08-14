@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from tools import (
     run_official_head,
@@ -12,6 +13,7 @@ from tools import (
     run_official_layer3,
     run_official_remaining,
 )
+from tools import official_runtime_context
 
 
 def test_official_stages_expose_callable_run_entrypoints() -> None:
@@ -58,8 +60,21 @@ def test_token_driver_runs_stages_in_process_and_resumes_completed_prefix(
     output = tmp_path / "token.json"
     timing = tmp_path / "timing.json"
     calls: list[str] = []
+    shared_context = object()
+    events: list[str] = []
+
+    def clock() -> float:
+        events.append("clock")
+        return float(len(events))
+
+    class ContextFactory:
+        @classmethod
+        def create(cls, **kwargs):
+            events.append("context")
+            return shared_context
 
     def layer0(args: argparse.Namespace) -> int:
+        assert args.runtime_context is shared_context
         calls.append("layer0")
         args.state_dir.mkdir(parents=True, exist_ok=True)
         (args.state_dir / "state.json").write_text(
@@ -72,6 +87,7 @@ def test_token_driver_runs_stages_in_process_and_resumes_completed_prefix(
         return 0
 
     def remaining(args: argparse.Namespace) -> int:
+        assert args.runtime_context is shared_context
         calls.append("remaining")
         (args.state_dir / "state.json").write_text(
             json.dumps({"completed_layer": 92}), encoding="utf-8"
@@ -79,6 +95,7 @@ def test_token_driver_runs_stages_in_process_and_resumes_completed_prefix(
         return 0
 
     def head(args: argparse.Namespace) -> int:
+        assert args.runtime_context is shared_context
         calls.append("head")
         args.output.write_text(
             json.dumps({"token_generated": True, "generated_token_id": 9689}),
@@ -91,6 +108,8 @@ def test_token_driver_runs_stages_in_process_and_resumes_completed_prefix(
         "_IN_PROCESS_STAGES",
         {"layer0": layer0, "remaining": remaining, "head": head},
     )
+    monkeypatch.setattr(run_official_token, "OfficialRuntimeContext", ContextFactory)
+    monkeypatch.setattr(run_official_token.time, "perf_counter", clock)
     args = argparse.Namespace(
         topology=Path("topology.json"),
         object_dir=tmp_path / "objects",
@@ -105,6 +124,7 @@ def test_token_driver_runs_stages_in_process_and_resumes_completed_prefix(
     )
 
     assert run_official_token.run(args) == 0
+    assert events[0] == "clock"
     assert calls == ["layer0", "remaining", "head"]
     assert json.loads(timing.read_text(encoding="utf-8"))["resumed_from_layer"] == -1
 
@@ -112,3 +132,47 @@ def test_token_driver_runs_stages_in_process_and_resumes_completed_prefix(
     assert run_official_token.run(args) == 0
     assert calls == ["remaining", "head"]
     assert json.loads(timing.read_text(encoding="utf-8"))["resumed_from_layer"] == 92
+
+
+def test_official_runtime_context_caches_headers_and_stores(
+    tmp_path, monkeypatch
+) -> None:
+    source_shard = "model-00001-of-000096.safetensors"
+    fragment = tmp_path / "model-00001-of-000096.k3x"
+    header = object()
+    store = object()
+    header_calls: list[str] = []
+    store_calls: list[tuple[tuple[Path, ...], bool, bool]] = []
+
+    def inspect(snapshot, shard, transport):
+        header_calls.append(shard)
+        return header
+
+    def open_store(paths, *, verify_root, verify_payload):
+        store_calls.append((tuple(paths), verify_root, verify_payload))
+        return store
+
+    monkeypatch.setattr(
+        official_runtime_context, "inspect_official_shard_header", inspect
+    )
+    monkeypatch.setattr(
+        official_runtime_context.K3XTensorStore, "open", open_store
+    )
+    context = official_runtime_context.OfficialRuntimeContext(
+        topology={},
+        object_dir=tmp_path,
+        transport=object(),
+        snapshot=object(),
+        index=object(),
+        config=object(),
+        set_manifest=SimpleNamespace(
+            fragments=(fragment,), record_sha256="a" * 64
+        ),
+    )
+
+    assert context.header(source_shard) is header
+    assert context.header(source_shard) is header
+    assert context.store(source_shard) is store
+    assert context.store(source_shard) is store
+    assert header_calls == [source_shard]
+    assert store_calls == [((fragment,), False, False)]

@@ -37,6 +37,9 @@ from tools.official_k3x_source import (
     logical_torch_dtype,
     open_official_fragment,
 )
+from tools.official_runtime_context import (
+    load_official_topology as _load_topology,
+)
 
 
 _EMBEDDING = "language_model.model.embed_tokens.weight"
@@ -67,18 +70,6 @@ def _write_bytes_atomic(path: Path, payload: bytes) -> str:
 
 def _tensor_payload(tensor: torch.Tensor) -> bytes:
     return tensor.detach().cpu().contiguous().view(torch.uint8).numpy().tobytes()
-
-
-def _load_topology(path: Path) -> dict[str, object]:
-    record = json.loads(path.read_text(encoding="utf-8"))
-    digest = record.pop("record_sha256", None)
-    encoded = json.dumps(record, sort_keys=True, separators=(",", ":")).encode()
-    if digest != hashlib.sha256(encoded).hexdigest():
-        raise K3XError("OFFICIAL_TOPOLOGY_DIGEST")
-    record["record_sha256"] = digest
-    if record.get("format") != "k3x-official-topology-v2":
-        raise K3XError("OFFICIAL_TOPOLOGY_FORMAT")
-    return record
 
 
 def _validate_contract(
@@ -125,12 +116,25 @@ def run(args: argparse.Namespace) -> int:
     if not torch.cuda.is_available():
         raise K3XError("CUDA_UNAVAILABLE")
 
-    topology = _load_topology(args.topology.resolve())
-    object_dir = args.object_dir.resolve()
-    transport = UrllibTransport(cache_directory=object_dir / "official-metadata-cache")
-    snapshot = discover_official_snapshot(transport)
-    index = load_official_index(snapshot, transport)
-    config = load_official_config(snapshot, transport)
+    context = getattr(args, "runtime_context", None)
+    topology = context.topology if context is not None else _load_topology(
+        args.topology.resolve()
+    )
+    object_dir = context.object_dir if context is not None else args.object_dir.resolve()
+    transport = (
+        context.transport
+        if context is not None
+        else UrllibTransport(cache_directory=object_dir / "official-metadata-cache")
+    )
+    snapshot = (
+        context.snapshot if context is not None else discover_official_snapshot(transport)
+    )
+    index = context.index if context is not None else load_official_index(
+        snapshot, transport
+    )
+    config = context.config if context is not None else load_official_config(
+        snapshot, transport
+    )
     if (
         topology["resolved_revision"] != snapshot.resolved_revision
         or topology["snapshot_sha256"] != snapshot.canonical_sha256
@@ -144,7 +148,11 @@ def run(args: argparse.Namespace) -> int:
     layer_contract = contracts["dense_layer_0"]
     shard_paths = {item["shard"] for item in (*globals_contract, *layer_contract)}
     headers = {
-        shard: inspect_official_shard_header(snapshot, shard, transport)
+        shard: (
+            context.header(shard)
+            if context is not None
+            else inspect_official_shard_header(snapshot, shard, transport)
+        )
         for shard in sorted(shard_paths)
     }
     _validate_contract(globals_contract, index, headers)
@@ -157,14 +165,24 @@ def run(args: argparse.Namespace) -> int:
     reused_objects = 0
     stores = (
         {
-            shard: open_official_fragment(args.k3x_set, shard)
+            shard: (
+                context.store(shard)
+                if context is not None
+                else open_official_fragment(args.k3x_set, shard)
+            )
             for shard in sorted(shard_paths)
         }
         if args.k3x_set is not None
         else {}
     )
     set_identity = (
-        k3x_set_identity(args.k3x_set) if args.k3x_set is not None else None
+        (
+            context.set_identity
+            if context is not None
+            else k3x_set_identity(args.k3x_set)
+        )
+        if args.k3x_set is not None
+        else None
     )
     if not stores:
         for position, item in enumerate(layer_contract, 1):

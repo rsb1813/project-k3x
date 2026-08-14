@@ -592,9 +592,9 @@
 ### Milestone 40 shared official runtime context
 
 - [x] Write the bounded shared-context design and implementation plan.
-- [ ] Create one authenticated metadata/set context per token process.
-- [ ] Cache shard headers and K3X stores without retaining decoded weights.
-- [ ] Route all in-process official stages through the shared context.
+- [x] Create one authenticated metadata/set context per token process.
+- [x] Cache shard headers and K3X stores without retaining decoded weights.
+- [x] Route all in-process official stages through the shared context.
 - [ ] Re-run full-token parity and record B-0049.
 
 ### 3-bit runtime correctness slice

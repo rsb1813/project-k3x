@@ -97,6 +97,7 @@ def run(args: argparse.Namespace) -> int:
             k3x_set=(
                 args.k3x_set.resolve() if args.k3x_set is not None else None
             ),
+            runtime_context=getattr(args, "runtime_context", None),
         )
         print(
             f"starting_layer={layer_id} attention={layer['attention']}",

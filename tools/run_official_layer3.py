@@ -101,12 +101,25 @@ def run(args: argparse.Namespace) -> int:
     if not torch.cuda.is_available():
         raise K3XError("CUDA_UNAVAILABLE")
 
-    topology = _load_topology(args.topology.resolve())
-    object_dir = args.object_dir.resolve()
-    transport = UrllibTransport(cache_directory=object_dir / "official-metadata-cache")
-    snapshot = discover_official_snapshot(transport)
-    index = load_official_index(snapshot, transport)
-    config = load_official_config(snapshot, transport)
+    context = getattr(args, "runtime_context", None)
+    topology = context.topology if context is not None else _load_topology(
+        args.topology.resolve()
+    )
+    object_dir = context.object_dir if context is not None else args.object_dir.resolve()
+    transport = (
+        context.transport
+        if context is not None
+        else UrllibTransport(cache_directory=object_dir / "official-metadata-cache")
+    )
+    snapshot = (
+        context.snapshot if context is not None else discover_official_snapshot(transport)
+    )
+    index = context.index if context is not None else load_official_index(
+        snapshot, transport
+    )
+    config = context.config if context is not None else load_official_config(
+        snapshot, transport
+    )
     if (
         topology["resolved_revision"] != snapshot.resolved_revision
         or topology["index_sha256"] != index.sha256
@@ -122,7 +135,11 @@ def run(args: argparse.Namespace) -> int:
         raise K3XError("OFFICIAL_MLA_LAYER_SEQUENCE")
     prefix = f"language_model.model.layers.{layer_id}."
     shard = topology["layers"][layer_id]["shards"][0]
-    header = inspect_official_shard_header(snapshot, shard, transport)
+    header = (
+        context.header(shard)
+        if context is not None
+        else inspect_official_shard_header(snapshot, shard, transport)
+    )
     trunk = []
     for name in sorted(header.tensors):
         if not name.startswith(prefix) or ".experts." in name:
@@ -144,12 +161,22 @@ def run(args: argparse.Namespace) -> int:
     objects = {}
     requests = downloaded_bytes = reused_objects = 0
     store = (
-        open_official_fragment(args.k3x_set, shard)
+        (
+            context.store(shard)
+            if context is not None
+            else open_official_fragment(args.k3x_set, shard)
+        )
         if args.k3x_set is not None
         else None
     )
     set_identity = (
-        k3x_set_identity(args.k3x_set) if args.k3x_set is not None else None
+        (
+            context.set_identity
+            if context is not None
+            else k3x_set_identity(args.k3x_set)
+        )
+        if args.k3x_set is not None
+        else None
     )
     if store is None:
         with ThreadPoolExecutor(max_workers=8) as executor:
