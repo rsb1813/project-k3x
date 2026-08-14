@@ -589,6 +589,14 @@
 - [x] Re-run the sealed K3X token correctness gate and measure the new wall-time boundary.
 - [x] Record architecture, decision, benchmark, and final project state.
 
+### Milestone 40 shared official runtime context
+
+- [x] Write the bounded shared-context design and implementation plan.
+- [ ] Create one authenticated metadata/set context per token process.
+- [ ] Cache shard headers and K3X stores without retaining decoded weights.
+- [ ] Route all in-process official stages through the shared context.
+- [ ] Re-run full-token parity and record B-0049.
+
 ### 3-bit runtime correctness slice
 
 - [x] Re-read the accepted Local Foundry design and implementation plan.
