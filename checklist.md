@@ -636,6 +636,8 @@
 - [x] Dispatch K3X MXFP4 CUDA calls without FP32 expansion.
 - [x] Add explicit shared RAM/VRAM residency budgets and telemetry.
 - [ ] Measure one released expert triplet cold and warm.
+- [ ] Batch one natural routed expert set through the verified expert-major CUDA grid.
+- [ ] Measure the released natural Top-16 MoE layer against the C++ resident control.
 - [ ] Update the TITAN Ledger and publish the measured result.
 
 ### 3-bit runtime correctness slice

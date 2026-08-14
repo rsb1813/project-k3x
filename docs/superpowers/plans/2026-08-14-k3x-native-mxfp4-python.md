@@ -69,3 +69,22 @@
 - [ ] Run focused regressions, Python compilation, and `git diff --check`.
 - [ ] Update the TITAN Ledger with measured values only and `PROJECT_STATE.md` last.
 - [ ] Commit and push the evidence.
+
+### Task 4: Expert-major Python CUDA boundary
+
+**Files:**
+- Modify: `runtime/cuda/mxfp4_torch_extension.cu`
+- Modify: `converter/k3x_converter/mxfp4_cuda.py`
+- Modify: `converter/k3x_converter/fragment_tensor_store.py`
+- Modify: `tools/official_k3x_source.py`
+- Modify: official MoE layer runners
+- Test: `tests/python/test_mxfp4_cuda_extension.py`
+
+**Interfaces:**
+- Produces: one exact selected-expert batch call using resident matrix tensors and ordered contribution mixing.
+
+- [ ] Add RED two-expert batch parity coverage against the scalar portable oracle.
+- [ ] Implement gate/up grids, batched SiTU, down grid, and ordered contribution reduction.
+- [ ] Expose cached expert tensors without restacking weight payloads.
+- [ ] Replace per-expert Python dispatch only in the explicit native CUDA mode.
+- [ ] Measure the released natural Top-16 layer and retain the faster verified path.
