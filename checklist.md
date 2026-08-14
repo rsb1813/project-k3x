@@ -610,12 +610,12 @@
 
 - [x] Compare the full C++ port, C ABI bridge, and PyTorch CUDA extension.
 - [x] Write the bounded design and implementation plan.
-- [ ] Add a witnessed direct-packed CUDA parity test.
-- [ ] Implement the native `sm_120` group-128 Q8 matvec extension.
-- [ ] Add packed handles and an explicit `--direct-q8` reference switch.
-- [ ] Measure the released q-projection and official layer 0.
-- [ ] Run a complete token only if the bounded gates pass.
-- [ ] Update the TITAN Ledger and publish the measured result.
+- [x] Add a witnessed direct-packed CUDA parity test.
+- [x] Implement the native `sm_120` group-128 Q8 matvec extension.
+- [x] Add packed handles and an explicit `--direct-q8` reference switch.
+- [x] Measure the released q-projection and official layer 0.
+- [x] Run a complete token only if the bounded gates pass.
+- [x] Update the TITAN Ledger and publish the measured result.
 
 ### 3-bit runtime correctness slice
 

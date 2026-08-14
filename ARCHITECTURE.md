@@ -598,6 +598,12 @@ The context intentionally retains no decoded tensor payload. B-0049 therefore is
 
 This is an implemented bridge, not the final packed compute path. It removes CPU Q8 expansion and reduces transfer source bytes, but still materializes BF16 weights before the official graph's FP32 matvec. B-0050 proves complete 93-layer parity and a lower first-token wall. Direct-packed Q8/MXFP4 matvec, persistent RAM/VRAM residency, in-memory recurrent state, and warm multi-token decode remain pending.
 
+## Milestone 42 direct-packed Q8 matvec
+
+An experimental native `sm_120` PyTorch CUDA extension now multiplies group-128 Q8 matrices directly from int8 codes and BF16 scales. Large dense-MLP and Stable LatentMoE matrices can be represented by lazy packed handles, and `_bf16_matvec` dispatches those handles without materializing BF16/FP32 weights. `--direct-q8` is explicit and off by default; KDA/MLA attention projections remain on the B-0050 tensor path.
+
+B-0051 shows why packed compute and residency must be combined. The released resident q-projection kernel is 40.30x faster than the resident materialized path, but cold full-token wall improves only 3.03% because file reads, Python byte copies, and H2D dominate. The mode also changes floating-point reduction order: token 9689 remains unchanged, but nine of 92 MoE layers select a different Top-16 set and broad quality is unmeasured. The kernel is therefore implemented and experimental, while the exact B-0050 path remains the default.
+
 ## K3X data flow
 
 The file format is deliberately execution ordered. The converter reads bounded source chunks, copies or transforms extents, computes each extent CRC32C while writing, and publishes an atomic resume ledger after each bounded 128-extent `fsync` checkpoint. On resume it revalidates every committed extent against both the current source and partial artifact before truncating only the uncommitted suffix to the final durable extent's exact end. Final root SHA-256 generation rereads the complete output, and the strict Reader verifies the source-derived per-extent CRCs before the local Foundry ledger permits source deletion. Only then is the `.partial` artifact atomically renamed.

@@ -1177,3 +1177,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: the released tensor median fell from 0.520519 to 0.441014 seconds, a 1.180276x speedup. Full wall fell from 913.336487 to 583.658078 seconds, a 36.096052% reduction or 1.564849x speedup; recorded load/decode fell 14.435527% to 368.422976 seconds.
 - Reason accepted: it is a small exact change that removes a measured CPU expansion and compressed-transfer boundary while preserving the reference path and isolating the next packed-kernel decision.
 - Revisit: replace materialized BF16 weights with direct-packed Q8 matvec once the kernel passes released-tensor output/quality gates and improves end-to-end wall time.
+
+## D-102 — Keep direct Q8 experimental and prioritize packed residency
+
+- Date: 2026-08-14.
+- Status: implemented and full-model measured; non-default.
+- Decision: retain `--direct-q8` as an explicit lossy experiment, keep B-0050 device decode as the exact default, and make RAM/VRAM packed residency the next optimization.
+- Alternatives considered: enable direct Q8 by default from same-token evidence; reject and delete the kernel; optimize its arithmetic before addressing weight movement.
+- Evidence: the released q-projection has 57.48% BF16 exact elements, 0.03125 maximum and 0.001473 mean absolute error. The complete run retains token 9689 and final-hidden cosine 0.9999314, but nine of 92 MoE layers change their Top-16 set and coding quality is unmeasured.
+- Benchmark result: cold full wall falls only 3.025017%, from 583.658078 to 566.002323 seconds. The resident q-projection kernel is 40.298662x faster, and peak CUDA allocation falls from 3,602,630,144 to 1,381,369,344 bytes.
+- Reason accepted: the kernel removes the compute/materialization bottleneck once weights are resident, but cold storage and transfer hide that benefit and route changes prevent an exact-default claim.
+- Revisit: consider direct Q8 in BALANCED only after resident warm multi-token and coding-quality ablations quantify end-to-end gain and divergence.
