@@ -586,8 +586,8 @@
 - [x] Expose callable layer 0, KDA, MLA, and head entrypoints through witnessed RED/GREEN tests.
 - [x] Add the opt-in in-process remaining-layer dispatcher.
 - [x] Add the resumable one-process token driver.
-- [ ] Re-run the sealed K3X token correctness gate and measure the new wall-time boundary.
-- [ ] Record architecture, decision, benchmark, and final project state.
+- [x] Re-run the sealed K3X token correctness gate and measure the new wall-time boundary.
+- [x] Record architecture, decision, benchmark, and final project state.
 
 ### 3-bit runtime correctness slice
 

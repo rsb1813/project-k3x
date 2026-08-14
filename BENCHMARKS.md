@@ -1604,6 +1604,21 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Scope: component timing only. No token, tok/s, physical storage traffic, or full-run speedup is claimed.
 - Evidence: `results/b0047-official-metadata-cache/summary.json`, record SHA-256 `a35a12b65b9057885cf2a045a5c6fa8237a471ff82f9e44db972bf98782f43c5`.
 
+## B-0048 persistent official K3X first-token runtime
+
+- Date: 2026-08-14.
+- Commit: execution used d367487; implementation was committed through that head before the uninterrupted run.
+- Hardware: AMD Ryzen 7 9800X3D, NVIDIA RTX 5080 16 GB, 96 GB host RAM, WSL2; sealed K3X fragments on the local C-drive P44 Pro volume and prefix-state files on D.
+- Model/checkpoint: the same 96-fragment official K3X set and pinned Kimi K3 revision as B-0046.
+- Mode: one Python process, natural Top-16, native MXFP4 experts, group-128 Q8 trunk restored to logical graph dtype, exact rescue, no proxy, no pruning, no speculation.
+- Context: one input token, ID 1; layers 0 through 92 and the complete LM head.
+- Correctness: all 93 layer output and state-manifest digests match B-0046. Greedy token 9689, selected logit 8.290502548217773, final normalized-hidden digest, and final state-manifest digest are identical.
+- Timing: 1,156.152598 seconds full wall versus the 1,891-second compatibility baseline, a 734.847402-second or 38.860254% reduction and 1.635597x speedup. Stage wall was 21.898687 seconds for layer 0, 1,125.904976 seconds for layers 1 through 92, and 8.339971 seconds for the head.
+- Layer attribution: recorded load/decode intervals sum to 529.554997 seconds and expert/dense compute intervals to 159.084610 seconds.
+- Memory and traffic: maximum tracked CUDA allocation/reservation was 3,602,630,144/4,982,833,152 bytes. Downloaded payload was zero. A live process-I/O sample after layer 82 showed 79,236,866,016 physical read bytes; it is only a lower bound, not complete NVMe GB/token. Source-equivalent requested bytes were 134,641,464,320 and are not physical traffic. H2D bytes, bandwidth, average utilization, and complete host RAM peak were not measured.
+- Throughput and quality: decode tok/s and prefill tok/s remain unmeasured because this is still one first token. No inverse-TTFT TPS or broad coding-quality claim is made.
+- Evidence: results/b0048-persistent-official-runtime/summary.json SHA-256 a951b00ecc530359369f6181631f81c99950cc4d7f389ca2ea25ac84e01d60d1; full timing SHA-256 0776d86c1af9d1166b613109040fab0ef38a389e0a78e3c0b9010725732f29ea; full token SHA-256 fa108dfe21aecf25eed6acd0057f5526e21f527cd3bca67f8b76f6293892f8ec; 93-file chain SHA-256 75cc7591b02baeaf326a45a095376ee0ad8fa58eb070bfb5ee75c91d2dd06a53.
+
 ## B-0044 official original-precision first token
 
 - Date: 2026-08-14.

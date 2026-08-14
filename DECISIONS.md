@@ -1144,3 +1144,14 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: snapshot, index, config, and one shard header fell from 10.191660 seconds, nine requests, and 60,618,467 bytes cold to 1.751957 seconds, zero requests, and zero response bytes warm, an 82.809896% elapsed reduction. No token throughput result is inferred.
 - Reason accepted: it removes a measured repeated external dependency with a small fail-closed change while the larger persistent-runtime refactor remains pending.
 - Revisit: eliminate the remaining 1.75-second parse/hash cost by owning immutable metadata in one persistent process rather than weakening cache validation.
+
+## D-099 — Use a callable one-process Python bridge before the full C++ graph port
+
+- Date: 2026-08-14.
+- Status: implemented, focused-tested, and executed across the complete sealed set.
+- Decision: expose the already verified official Python stages as callable functions and add an opt-in one-process driver. Preserve the subprocess chain as the reference mode and keep disk state publication until its cost is separately measured.
+- Alternatives considered: immediately port all 93 official layers into the synthetic-only C++ runtime; add more subprocess caches without shared ownership; combine process removal, in-memory state, packed CUDA, and residency in one unreviewable change.
+- Evidence: B-0048 produced all 93 layer publications in one process with zero layer output/state mismatch against B-0046. Token 9689, logit 8.290502548217773, final hidden digest, and final state-manifest digest are identical.
+- Benchmark result: full wall fell from 1,891 seconds to 1,156.152598 seconds, a 38.860254% reduction or 1.635597x speedup. Layer load/decode intervals still sum to 529.554997 seconds and compute intervals to 159.084610 seconds. Decode tok/s remains unmeasured.
+- Reason accepted: it removes a large observed boundary while retaining the validated graph and creates the process lifetime required for shared metadata, state, and CUDA residency.
+- Revisit: retire the Python bridge only after the official C++/CUDA graph matches token, route, state, and logit gates and reports warm multi-token throughput.
