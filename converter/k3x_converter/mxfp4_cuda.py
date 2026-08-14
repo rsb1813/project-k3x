@@ -56,4 +56,4 @@ def mxfp4_matvec(
         rows,
         columns,
     )
-    return output.to(torch.bfloat16)
+    return output

@@ -309,6 +309,34 @@ def test_native_mxfp4_payload_round_trips_byte_for_byte(
     )
     actual = K3XTensorStore.open([artifact]).mxfp4_matvec(base, value)
     assert torch.equal(actual, expected)
+    if torch.cuda.is_available():
+        from k3x_converter.fragment_tensor_store import PackedMxfp4Cache
+
+        resident_bytes = record.data_length + record.auxiliary_length
+        cache = PackedMxfp4Cache(0, resident_bytes)
+        resident_store = K3XTensorStore.open(
+            [artifact], packed_mxfp4_cache=cache
+        )
+        first = resident_store.mxfp4_matvec(base, value.to("cuda"))
+        second = resident_store.mxfp4_matvec(base, value.to("cuda"))
+
+        assert torch.equal(first, second)
+        assert torch.allclose(
+            first.cpu(), expected,
+            atol=1e-5, rtol=1e-5,
+        )
+        assert cache.snapshot() == {
+            "host_budget_bytes": 0,
+            "device_budget_bytes": resident_bytes,
+            "host_resident_bytes": 0,
+            "device_resident_bytes": resident_bytes,
+            "host_hits": 0,
+            "device_hits": 1,
+            "misses": 1,
+            "host_admissions": 0,
+            "device_admissions": 1,
+            "rejected_bytes": 0,
+        }
 
 
 def test_full_dimension_storage_fixture_round_trips_with_optional_identity(

@@ -140,6 +140,14 @@ class PackedQ8Cache:
         }
 
 
+@dataclass
+class PackedMxfp4Cache(PackedQ8Cache):
+    def __post_init__(self) -> None:
+        for value in (self.host_budget_bytes, self.device_budget_bytes):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise K3XError("INVALID_MXFP4_CACHE_BUDGET")
+
+
 @dataclass(frozen=True)
 class PackedQ8Matrix:
     located: _LocatedTensor
@@ -197,6 +205,7 @@ class PackedQ8Matrix:
 class K3XTensorStore:
     tensors: dict[int, _LocatedTensor]
     packed_q8_cache: PackedQ8Cache | None = None
+    packed_mxfp4_cache: PackedMxfp4Cache | None = None
 
     @classmethod
     def open(
@@ -206,6 +215,7 @@ class K3XTensorStore:
         verify_root: bool = True,
         verify_payload: bool = True,
         packed_q8_cache: PackedQ8Cache | None = None,
+        packed_mxfp4_cache: PackedMxfp4Cache | None = None,
     ) -> "K3XTensorStore":
         tensors: dict[int, _LocatedTensor] = {}
         for path in paths:
@@ -216,7 +226,7 @@ class K3XTensorStore:
                 if record.tensor_id in tensors:
                     raise K3XError("DUPLICATE_TENSOR_ID", f"{record.tensor_id:016x}")
                 tensors[record.tensor_id] = _LocatedTensor(reader, record)
-        return cls(tensors, packed_q8_cache)
+        return cls(tensors, packed_q8_cache, packed_mxfp4_cache)
 
     def record(self, name: str) -> _LocatedTensor:
         tensor_id = fnv1a64(name)
@@ -321,11 +331,46 @@ class K3XTensorStore:
         if value.numel() != columns:
             raise K3XError("INVALID_MXFP4_INPUT", name)
         target = value.device if device is None else torch.device(device)
+        if target.type == "cuda":
+            if target.index is None:
+                target = torch.device("cuda", torch.cuda.current_device())
+
+            def load() -> tuple[torch.Tensor, torch.Tensor]:
+                packed, scale_bytes = located.reader.read_tensor_extents(record)
+                scales = torch.frombuffer(
+                    bytearray(scale_bytes), dtype=torch.uint8
+                )
+                if bool((scales == 0xFF).any()):
+                    raise K3XError("INVALID_MXFP4", name)
+                packed_tensor = torch.frombuffer(
+                    bytearray(packed), dtype=torch.uint8
+                )
+                return packed_tensor, scales
+
+            if self.packed_mxfp4_cache is None:
+                packed_tensor, scales = load()
+                packed_tensor = packed_tensor.to(target)
+                scales = scales.to(target)
+            else:
+                key = (
+                    str(located.reader.path.resolve()),
+                    record.tensor_id,
+                    str(target),
+                )
+                packed_tensor, scales = self.packed_mxfp4_cache.acquire(
+                    key, load, target
+                )
+            from .mxfp4_cuda import mxfp4_matvec
+
+            return mxfp4_matvec(
+                value.to(target), packed_tensor, scales, rows, columns
+            )
+
         packed, scale_bytes = located.reader.read_tensor_extents(record)
-        scales = torch.frombuffer(bytearray(scale_bytes), dtype=torch.uint8).to(target)
+        scales = torch.frombuffer(bytearray(scale_bytes), dtype=torch.uint8)
         if bool((scales == 0xFF).any()):
             raise K3XError("INVALID_MXFP4", name)
-        packed_tensor = torch.frombuffer(bytearray(packed), dtype=torch.uint8).to(target)
+        packed_tensor = torch.frombuffer(bytearray(packed), dtype=torch.uint8)
         lookup = torch.tensor(
             (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0,
              -0.0, -0.5, -1.0, -1.5, -2.0, -3.0, -4.0, -6.0),

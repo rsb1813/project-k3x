@@ -37,6 +37,8 @@ def _parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--direct-q8", action="store_true")
     parser.add_argument("--q8-host-cache-bytes", type=int, default=0)
     parser.add_argument("--q8-device-cache-bytes", type=int, default=0)
+    parser.add_argument("--mxfp4-host-cache-bytes", type=int, default=0)
+    parser.add_argument("--mxfp4-device-cache-bytes", type=int, default=0)
     parser.add_argument(
         "--execution-mode",
         choices=("subprocess", "in-process"),
@@ -91,6 +93,8 @@ def run(args: argparse.Namespace) -> int:
             k3x_set=k3x_set,
             q8_host_cache_bytes=getattr(args, "q8_host_cache_bytes", 0),
             q8_device_cache_bytes=getattr(args, "q8_device_cache_bytes", 0),
+            mxfp4_host_cache_bytes=getattr(args, "mxfp4_host_cache_bytes", 0),
+            mxfp4_device_cache_bytes=getattr(args, "mxfp4_device_cache_bytes", 0),
         )
         if args.execution_mode == "in-process"
         else None
@@ -219,6 +223,11 @@ def run(args: argparse.Namespace) -> int:
         "direct_q8": getattr(args, "direct_q8", False),
         "q8_cache": (
             runtime_context.packed_q8_cache.snapshot()
+            if runtime_context is not None
+            else None
+        ),
+        "mxfp4_cache": (
+            runtime_context.packed_mxfp4_cache.snapshot()
             if runtime_context is not None
             else None
         ),

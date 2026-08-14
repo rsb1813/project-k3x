@@ -66,7 +66,8 @@ def test_token_driver_runs_stages_in_process_and_resumes_completed_prefix(
         "misses": 1,
     }
     shared_context = SimpleNamespace(
-        packed_q8_cache=SimpleNamespace(snapshot=lambda: cache_record)
+        packed_q8_cache=SimpleNamespace(snapshot=lambda: cache_record),
+        packed_mxfp4_cache=SimpleNamespace(snapshot=lambda: cache_record),
     )
     events: list[str] = []
 
@@ -79,6 +80,8 @@ def test_token_driver_runs_stages_in_process_and_resumes_completed_prefix(
         def create(cls, **kwargs):
             assert kwargs["q8_host_cache_bytes"] == 1_024
             assert kwargs["q8_device_cache_bytes"] == 2_048
+            assert kwargs["mxfp4_host_cache_bytes"] == 4_096
+            assert kwargs["mxfp4_device_cache_bytes"] == 8_192
             events.append("context")
             return shared_context
 
@@ -135,6 +138,8 @@ def test_token_driver_runs_stages_in_process_and_resumes_completed_prefix(
         direct_q8=True,
         q8_host_cache_bytes=1_024,
         q8_device_cache_bytes=2_048,
+        mxfp4_host_cache_bytes=4_096,
+        mxfp4_device_cache_bytes=8_192,
     )
 
     assert run_official_token.run(args) == 0
@@ -143,6 +148,7 @@ def test_token_driver_runs_stages_in_process_and_resumes_completed_prefix(
     timing_record = json.loads(timing.read_text(encoding="utf-8"))
     assert timing_record["resumed_from_layer"] == -1
     assert timing_record["q8_cache"] == cache_record
+    assert timing_record["mxfp4_cache"] == cache_record
 
     calls.clear()
     assert run_official_token.run(args) == 0
@@ -158,15 +164,28 @@ def test_official_runtime_context_caches_headers_and_stores(
     header = object()
     store = object()
     header_calls: list[str] = []
-    store_calls: list[tuple[tuple[Path, ...], bool, bool, object]] = []
+    store_calls: list[tuple[tuple[Path, ...], bool, bool, object, object]] = []
 
     def inspect(snapshot, shard, transport):
         header_calls.append(shard)
         return header
 
-    def open_store(paths, *, verify_root, verify_payload, packed_q8_cache):
+    def open_store(
+        paths,
+        *,
+        verify_root,
+        verify_payload,
+        packed_q8_cache,
+        packed_mxfp4_cache,
+    ):
         store_calls.append(
-            (tuple(paths), verify_root, verify_payload, packed_q8_cache)
+            (
+                tuple(paths),
+                verify_root,
+                verify_payload,
+                packed_q8_cache,
+                packed_mxfp4_cache,
+            )
         )
         return store
 
@@ -194,5 +213,11 @@ def test_official_runtime_context_caches_headers_and_stores(
     assert context.store(source_shard) is store
     assert header_calls == [source_shard]
     assert store_calls == [
-        ((fragment,), False, False, context.packed_q8_cache)
+        (
+            (fragment,),
+            False,
+            False,
+            context.packed_q8_cache,
+            context.packed_mxfp4_cache,
+        )
     ]

@@ -14,13 +14,11 @@ def test_native_mxfp4_cuda_matvec_matches_portable_reference() -> None:
     packed_bytes = bytes((index * 29 + 7) & 0xFF for index in range(128))
     scale_bytes = bytes((126, 127, 128, 129, 127, 128, 126, 129))
     value = torch.linspace(-1.0, 1.0, columns, dtype=torch.bfloat16)
-    expected = mxfp4_matmul(
-        value, packed_bytes, scale_bytes, rows, columns
-    ).to(torch.bfloat16)
+    expected = mxfp4_matmul(value, packed_bytes, scale_bytes, rows, columns)
     packed = torch.frombuffer(bytearray(packed_bytes), dtype=torch.uint8).to("cuda")
     scales = torch.frombuffer(bytearray(scale_bytes), dtype=torch.uint8).to("cuda")
 
     actual = mxfp4_matvec(value.to("cuda"), packed, scales, rows, columns).cpu()
 
-    assert actual.dtype == torch.bfloat16
-    assert torch.allclose(actual.float(), expected.float(), atol=0.125, rtol=0.01)
+    assert actual.dtype == torch.float32
+    assert torch.allclose(actual, expected, atol=1e-5, rtol=1e-5)

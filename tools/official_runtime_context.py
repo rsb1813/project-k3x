@@ -11,7 +11,11 @@ from k3x_converter.fragment_set import (
     FragmentSetManifest,
     read_fragment_set_manifest,
 )
-from k3x_converter.fragment_tensor_store import K3XTensorStore, PackedQ8Cache
+from k3x_converter.fragment_tensor_store import (
+    K3XTensorStore,
+    PackedMxfp4Cache,
+    PackedQ8Cache,
+)
 from k3x_converter.official_source import (
     OfficialConfig,
     OfficialIndex,
@@ -49,6 +53,9 @@ class OfficialRuntimeContext:
     packed_q8_cache: PackedQ8Cache = field(
         default_factory=lambda: PackedQ8Cache(0, 0)
     )
+    packed_mxfp4_cache: PackedMxfp4Cache = field(
+        default_factory=lambda: PackedMxfp4Cache(0, 0)
+    )
     _headers: dict[str, OfficialShardHeader] = field(default_factory=dict)
     _stores: dict[str, K3XTensorStore] = field(default_factory=dict)
 
@@ -61,6 +68,8 @@ class OfficialRuntimeContext:
         k3x_set: Path | None,
         q8_host_cache_bytes: int = 0,
         q8_device_cache_bytes: int = 0,
+        mxfp4_host_cache_bytes: int = 0,
+        mxfp4_device_cache_bytes: int = 0,
     ) -> "OfficialRuntimeContext":
         topology = load_official_topology(topology_path.resolve())
         object_dir = object_dir.resolve()
@@ -91,6 +100,7 @@ class OfficialRuntimeContext:
             config,
             manifest,
             PackedQ8Cache(q8_host_cache_bytes, q8_device_cache_bytes),
+            PackedMxfp4Cache(mxfp4_host_cache_bytes, mxfp4_device_cache_bytes),
         )
 
     @property
@@ -126,6 +136,7 @@ class OfficialRuntimeContext:
             verify_root=False,
             verify_payload=False,
             packed_q8_cache=self.packed_q8_cache,
+            packed_mxfp4_cache=self.packed_mxfp4_cache,
         )
         self._stores[source_shard] = store
         return store
