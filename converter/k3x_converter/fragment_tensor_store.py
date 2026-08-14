@@ -21,7 +21,9 @@ class _LocatedTensor:
 
 
 def _decode_groupwise_8bit_cuda(
-    value: Quant8Tensor, device: torch.device
+    value: Quant8Tensor,
+    device: torch.device,
+    dtype: torch.dtype | None,
 ) -> torch.Tensor:
     if (
         value.group_size != 128
@@ -40,10 +42,16 @@ def _decode_groupwise_8bit_cuda(
     )
     if not torch.isfinite(scales).all() or torch.any(scales <= 0):
         raise K3XError("INVALID_QUANT8_SCALE")
-    codes = torch.frombuffer(bytearray(value.codes), dtype=torch.int8).to(device)
+    codes = torch.frombuffer(bytearray(value.codes), dtype=torch.int8)
     device_scales = scales.to(device)
-    decoded = codes.float().reshape(groups, value.group_size)
-    decoded *= device_scales.float().unsqueeze(1)
+    if dtype == torch.bfloat16:
+        decoded = codes.to(device=device, dtype=torch.bfloat16).reshape(
+            groups, value.group_size
+        )
+        decoded *= device_scales.unsqueeze(1)
+    else:
+        decoded = codes.to(device).float().reshape(groups, value.group_size)
+        decoded *= device_scales.float().unsqueeze(1)
     return decoded.reshape(-1)[: value.values].reshape(value.shape)
 
 
@@ -92,7 +100,7 @@ class K3XTensorStore:
         if record.quantization == Quantization.GROUPWISE_8BIT:
             encoded = Quant8Tensor(record.dimensions, values, 128, data, auxiliary)
             if target.type == "cuda":
-                tensor = _decode_groupwise_8bit_cuda(encoded, target)
+                tensor = _decode_groupwise_8bit_cuda(encoded, target, dtype)
             else:
                 tensor = decode_groupwise_8bit(encoded)
         elif record.quantization == Quantization.NONE and record.dtype == DType.BF16:
