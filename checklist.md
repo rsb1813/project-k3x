@@ -583,7 +583,7 @@
 
 - [x] Select the hybrid one-process bridge while retaining subprocess reference mode.
 - [x] Write and self-review the design and implementation plan.
-- [ ] Expose callable layer 0, KDA, MLA, and head entrypoints through witnessed RED/GREEN tests.
+- [x] Expose callable layer 0, KDA, MLA, and head entrypoints through witnessed RED/GREEN tests.
 - [ ] Add the opt-in in-process remaining-layer dispatcher.
 - [ ] Add the resumable one-process token driver.
 - [ ] Re-run the sealed K3X token correctness gate and measure the new wall-time boundary.

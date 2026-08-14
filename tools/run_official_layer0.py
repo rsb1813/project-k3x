@@ -108,7 +108,7 @@ def _load_tensor(path: Path, dtype: str, shape: list[int], device: torch.device)
     ).reshape(shape).to(device)
 
 
-def main() -> int:
+def _parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--topology", type=Path, required=True)
     parser.add_argument("--object-dir", type=Path, required=True)
@@ -116,7 +116,10 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--token-id", type=int, default=1)
     parser.add_argument("--k3x-set", type=Path)
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def run(args: argparse.Namespace) -> int:
     if args.token_id < 0 or args.token_id >= 163_840:
         raise K3XError("OFFICIAL_TOKEN_ID")
     if not torch.cuda.is_available():
@@ -358,6 +361,10 @@ def main() -> int:
     _write_json_atomic(args.output.resolve(), result)
     print(json.dumps(result, sort_keys=True, separators=(",", ":")))
     return 0
+
+
+def main() -> int:
+    return run(_parse_args())
 
 
 if __name__ == "__main__":

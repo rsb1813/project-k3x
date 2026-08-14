@@ -86,7 +86,7 @@ def _fetch(snapshot, shard: str, item, object_dir: Path):
     )
 
 
-def main() -> int:
+def _parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--topology", type=Path, required=True)
     parser.add_argument("--object-dir", type=Path, required=True)
@@ -94,7 +94,10 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--layer-id", type=int, required=True)
     parser.add_argument("--k3x-set", type=Path)
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def run(args: argparse.Namespace) -> int:
     if not torch.cuda.is_available():
         raise K3XError("CUDA_UNAVAILABLE")
 
@@ -415,6 +418,10 @@ def main() -> int:
     _write_json_atomic(args.output.resolve(), result)
     print(json.dumps(result, sort_keys=True, separators=(",", ":")))
     return 0
+
+
+def main() -> int:
+    return run(_parse_args())
 
 
 if __name__ == "__main__":
