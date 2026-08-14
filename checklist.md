@@ -640,6 +640,16 @@
 - [x] Measure the released natural Top-16 MoE layer and attribute the attention-residency boundary.
 - [x] Update the TITAN Ledger and publish the measured result.
 
+### Milestone 45 persistent in-memory decode
+
+- [x] Compare tmpfs state publication, a full C++ graph port, and a minimal in-memory Python state boundary.
+- [x] Define the persistent KDA/MLA, current-hidden, block-bank, and generated-token lifecycle.
+- [ ] Add a focused lifecycle regression before implementation.
+- [ ] Route layer 0, KDA, MLA, and LM head through the shared in-memory state.
+- [ ] Add a multi-token driver with explicit cache budgets and decode telemetry.
+- [ ] Run a two-token official measurement and report actual warm decode tok/s.
+- [ ] Synchronize the TITAN Ledger and publish the measured result.
+
 ### 3-bit runtime correctness slice
 
 - [x] Re-read the accepted Local Foundry design and implementation plan.
