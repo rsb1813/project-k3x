@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import statistics
 import time
 from pathlib import Path
 
@@ -22,12 +23,17 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--q8-host-cache-bytes", type=int, default=0)
     parser.add_argument("--q8-device-cache-bytes", type=int, required=True)
+    parser.add_argument("--warm-runs", type=int, default=3)
     return parser.parse_args()
 
 
 def main() -> int:
     args = _parse_args()
-    if not torch.cuda.is_available() or args.q8_device_cache_bytes <= 0:
+    if (
+        not torch.cuda.is_available()
+        or args.q8_device_cache_bytes <= 0
+        or args.warm_runs <= 0
+    ):
         raise K3XError("Q8_RESIDENCY_BENCHMARK_UNAVAILABLE")
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=False)
@@ -40,7 +46,7 @@ def main() -> int:
     )
 
     runs = []
-    for label in ("cold", "warm"):
+    for label in ("cold", *(f"warm-{index}" for index in range(args.warm_runs))):
         state_dir = output_dir / f"{label}-state"
         result_path = output_dir / f"{label}-layer0.json"
         torch.cuda.synchronize()
@@ -80,19 +86,24 @@ def main() -> int:
             }
         )
 
-    if (
-        runs[0]["layer0_output_sha256"] != runs[1]["layer0_output_sha256"]
-        or runs[0]["layer0_kda_state_sha256"]
-        != runs[1]["layer0_kda_state_sha256"]
+    if any(
+        run["layer0_output_sha256"] != runs[0]["layer0_output_sha256"]
+        or run["layer0_kda_state_sha256"]
+        != runs[0]["layer0_kda_state_sha256"]
+        for run in runs[1:]
     ):
         raise K3XError("Q8_RESIDENCY_OUTPUT_MISMATCH")
+    warm_wall_seconds = [run["wall_seconds"] for run in runs[1:]]
+    warm_median_wall_seconds = statistics.median(warm_wall_seconds)
     summary = {
-        "format": "k3x-official-q8-residency-benchmark-v1",
+        "format": "k3x-official-q8-residency-benchmark-v2",
         "device": torch.cuda.get_device_name(),
         "q8_host_cache_bytes": args.q8_host_cache_bytes,
         "q8_device_cache_bytes": args.q8_device_cache_bytes,
         "runs": runs,
-        "warm_speedup": runs[0]["wall_seconds"] / runs[1]["wall_seconds"],
+        "warm_runs": args.warm_runs,
+        "warm_median_wall_seconds": warm_median_wall_seconds,
+        "warm_speedup": runs[0]["wall_seconds"] / warm_median_wall_seconds,
         "output_and_kda_state_match": True,
         "physical_nvme_bytes_measured": False,
         "physical_h2d_bytes_measured": False,
