@@ -579,6 +579,16 @@
 - [x] Measure the first-token bottleneck and remove repeated HTTP metadata downloads with a digest-validated persistent cache.
 - [ ] Replace the per-layer Python process boundary with the persistent production token loop and measure steady decode.
 
+### Milestone 39 persistent official runtime
+
+- [x] Select the hybrid one-process bridge while retaining subprocess reference mode.
+- [x] Write and self-review the design and implementation plan.
+- [ ] Expose callable layer 0, KDA, MLA, and head entrypoints through witnessed RED/GREEN tests.
+- [ ] Add the opt-in in-process remaining-layer dispatcher.
+- [ ] Add the resumable one-process token driver.
+- [ ] Re-run the sealed K3X token correctness gate and measure the new wall-time boundary.
+- [ ] Record architecture, decision, benchmark, and final project state.
+
 ### 3-bit runtime correctness slice
 
 - [x] Re-read the accepted Local Foundry design and implementation plan.
