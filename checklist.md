@@ -628,6 +628,16 @@
 - [x] Extend packed handles to official layer-0 KDA and measure the quality delta.
 - [x] Update the TITAN Ledger and publish the measured result.
 
+### Milestone 44 native MXFP4 Python residency
+
+- [x] Select the bounded PyTorch-extension bridge over a full backend binding or subprocess path.
+- [x] Write the design and implementation plan.
+- [ ] Add a witnessed native-byte CUDA parity test.
+- [ ] Dispatch K3X MXFP4 CUDA calls without FP32 expansion.
+- [ ] Add explicit shared RAM/VRAM residency budgets and telemetry.
+- [ ] Measure one released expert triplet cold and warm.
+- [ ] Update the TITAN Ledger and publish the measured result.
+
 ### 3-bit runtime correctness slice
 
 - [x] Re-read the accepted Local Foundry design and implementation plan.
