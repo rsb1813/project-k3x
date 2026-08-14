@@ -41,7 +41,9 @@ def _context(args, *, mxfp4_device_cache_bytes: int) -> OfficialRuntimeContext:
     )
 
 
-def _layer_args(args, state_dir: Path, output: Path, context):
+def _layer_args(
+    args, state_dir: Path, output: Path, context, *, direct_q8: bool = True
+):
     return argparse.Namespace(
         topology=args.topology,
         object_dir=args.object_dir,
@@ -51,7 +53,7 @@ def _layer_args(args, state_dir: Path, output: Path, context):
         layer_id=1,
         k3x_set=args.k3x_set,
         runtime_context=context,
-        direct_q8=True,
+        direct_q8=direct_q8,
     )
 
 
@@ -90,6 +92,26 @@ def main() -> int:
         setup_seconds = time.perf_counter() - setup_started
         layer0_state = (state_dir / "state.json").read_bytes()
 
+        exact_context = _context(args, mxfp4_device_cache_bytes=0)
+        exact_output = output_dir / "exact-q8-layer1.json"
+        torch.cuda.synchronize(device)
+        exact_started = time.perf_counter()
+        if run_layer1(
+            _layer_args(
+                args,
+                state_dir,
+                exact_output,
+                exact_context,
+                direct_q8=False,
+            )
+        ) != 0:
+            raise K3XError("MXFP4_LAYER_EXACT_REFERENCE")
+        torch.cuda.synchronize(device)
+        exact_seconds = time.perf_counter() - exact_started
+        exact_hidden = _hidden(state_dir)
+        exact_record = json.loads(exact_output.read_text(encoding="utf-8"))
+
+        (state_dir / "state.json").write_bytes(layer0_state)
         scalar_context = _context(args, mxfp4_device_cache_bytes=0)
         scalar_output = output_dir / "scalar-layer1.json"
         torch.cuda.synchronize(device)
@@ -121,6 +143,7 @@ def main() -> int:
             result = json.loads(result_path.read_text(encoding="utf-8"))
             hidden = _hidden(state_dir)
             difference = (hidden.float() - scalar_hidden.float()).abs()
+            exact_difference = (hidden.float() - exact_hidden.float()).abs()
             runs.append(
                 {
                     "label": label,
@@ -137,6 +160,18 @@ def main() -> int:
                     "bf16_exact_ratio_vs_scalar": (
                         hidden == scalar_hidden
                     ).float().mean().item(),
+                    "maximum_absolute_error_vs_exact_q8": exact_difference.max().item(),
+                    "mean_absolute_error_vs_exact_q8": exact_difference.mean().item(),
+                    "cosine_similarity_vs_exact_q8": torch.nn.functional.cosine_similarity(
+                        hidden.float(), exact_hidden.float(), dim=0
+                    ).item(),
+                    "bf16_exact_ratio_vs_exact_q8": (
+                        hidden == exact_hidden
+                    ).float().mean().item(),
+                    "route_overlap_vs_exact_q8": len(
+                        set(result["route_expert_ids"])
+                        & set(exact_record["route_expert_ids"])
+                    ),
                     "q8_cache": batch_context.packed_q8_cache.snapshot(),
                     "mxfp4_cache": batch_context.packed_mxfp4_cache.snapshot(),
                 }
@@ -160,6 +195,9 @@ def main() -> int:
         "harness_commit": args.harness_commit,
         "device": torch.cuda.get_device_name(device),
         "setup_layer0_seconds": setup_seconds,
+        "exact_q8_reference_seconds": exact_seconds,
+        "exact_q8_layer_output_sha256": exact_record["layer_output_sha256"],
+        "exact_q8_route_expert_ids": exact_record["route_expert_ids"],
         "scalar_reference_seconds": scalar_seconds,
         "scalar_layer_output_sha256": scalar_record["layer_output_sha256"],
         "route_expert_ids": scalar_record["route_expert_ids"],
