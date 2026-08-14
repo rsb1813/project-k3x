@@ -53,7 +53,7 @@ def load_official_tensor(
         and (
             ".mlp." in name
             or ".block_sparse_moe." in name
-            or name.startswith("model.layers.0.self_attn.")
+            or ".self_attn." in name
         )
         and dtype == torch.bfloat16
         and record.quantization == Quantization.GROUPWISE_8BIT

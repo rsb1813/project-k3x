@@ -32,6 +32,7 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
             ),
             "language_model.model.layers.0.mlp.gate_proj.weight": matrix,
             "language_model.model.layers.0.self_attn.q_proj.weight": matrix.clone(),
+            "language_model.model.layers.1.self_attn.q_proj.weight": matrix.clone(),
             "language_model.model.layers.0.self_attn.A_log": torch.zeros(
                 2, dtype=torch.float32
             ),
@@ -121,7 +122,7 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
 
     assert report.source_sha256 == source_sha256
     assert staging_ready.is_file()
-    assert report.quant8_tensor_count == 2
+    assert report.quant8_tensor_count == 3
     assert report.native_expert_tensor_count == 6
     assert [path.name for path in inspected_paths] == ["official.safetensors"]
     assert [path.name for path in hashed_paths] == ["official.safetensors"]
@@ -129,7 +130,7 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
         report.output_path.read_bytes()
     ).hexdigest()
     assert "copy" not in written_kinds
-    assert report.tensor_count == 7
+    assert report.tensor_count == 8
     assert not any((tmp_path / "staging-work").iterdir())
     reader = K3XReader.open(report.output_path)
     by_id = {record.tensor_id: record for record in reader.tensor_records}
@@ -193,6 +194,16 @@ def test_local_shard_quantizes_matrix_and_preserves_sensitive_tensors(
             direct_q8=True,
         )
         assert isinstance(attention_packed, fragment_tensor_store.PackedQ8Matrix)
+        later_attention_packed = load_official_tensor(
+            store,
+            "model.layers.1.self_attn.q_proj.weight",
+            torch.bfloat16,
+            torch.device("cuda"),
+            direct_q8=True,
+        )
+        assert isinstance(
+            later_attention_packed, fragment_tensor_store.PackedQ8Matrix
+        )
         from k3x_converter.fragment_tensor_store import PackedQ8Cache
 
         cache = PackedQ8Cache(host_budget_bytes=0, device_budget_bytes=260)
