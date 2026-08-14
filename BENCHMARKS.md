@@ -1687,3 +1687,43 @@ The measured next bottleneck is no longer official single-expert compatibility. 
 - Quality versus B-0052: final-hidden cosine 0.9999964, exact-element ratio 54.4224%, maximum absolute error 0.000244141, and mean absolute error 0.0000201179. Recurrent-state maximum/mean absolute error is 0.00170143/0.000000437602. Coding quality and full-token routing are unmeasured, so this remains experimental.
 - Scope: layer-0 boundary only; no decode/prefill tok/s, TTFT, physical NVMe/H2D traffic, utilization, or bandwidth claim.
 - Evidence: implementation commit `7f8fc05`, median-harness commit `300fb75`, summary SHA-256 `8de699de6aca2c0ff21f9dc93e50fcfa44112b1dd3a97a691f8fcb7736260b54`, and quality record canonical SHA-256 `f097abfcc6db8cec2a97a144bfbb7ec7b36b2f62cbb5884c0ecec8fa4ccf42cb`.
+
+## B-0056 native MXFP4 expert residency
+
+- Date: 2026-08-14.
+- Hardware/model: AMD Ryzen 7 9800X3D, RTX 5080 16 GB, 96 GB RAM, WSL2, sealed official K3X set, layer 1 expert 0.
+- Mode: experimental native packed MXFP4 CUDA matvec, three matrix-granular admissions, explicit device cache, one CPU oracle, one cold call, and five warm calls.
+- Result: CPU oracle wall is 0.229109 seconds and cold CUDA wall is 0.305275 seconds. Warm walls are 0.013616, 0.013732, 0.014179, 0.013833, and 0.013668 seconds; median is 0.013732 seconds and cold/median ratio is 22.2308x. Three matrices occupy 17,547,264 bytes and every warm call records three device hits.
+- Quality: cosine is 0.9999999999998764, maximum absolute error is 0.0000014007, and BF16 exact-element ratio is 99.9721% against the CPU oracle.
+- Scope: one expert FFN only. No token throughput, TTFT, physical traffic, utilization, or coding quality was measured.
+- Evidence: implementation commit `7f72416`, harness commit `42b0e17`, summary SHA-256 `06d45f8ea8bc2e6ac34b25e08880a876637343b49caed68eb26a896f7a331797`.
+
+## B-0057 through B-0059 native MXFP4 scalar experiments
+
+- Date: 2026-08-14.
+- Hardware/model: same official expert boundary and local hardware as B-0056.
+- B-0057: warp reduction plus bitwise E8M0 records a 0.013952-second warm median, 1.60% slower than B-0056. It was rejected and reverted. Evidence SHA-256 is `326d4662e9bb3a5facabb6e2c9fd2e176100ea6ca7d253ef17bf072e70d722e1`.
+- B-0058: stage attribution reports roughly 4–5 ms each for gate, up, and down projection events and below 0.1 ms for SiTU on warm calls. Its cold wall is invalid for comparison because source reversion triggered lazy extension rebuild. Evidence SHA-256 is `5d47f614f0b11ea419186b3a17a06f573e564f5ebfeed2343d029ec4ef4192c5`.
+- B-0059: isolated bitwise E8M0 records a 0.013976-second warm median, also slower than B-0056. It was rejected and reverted. Evidence SHA-256 is `61f16a8c391ab283df04782b05d99f062d39f62826d8224cdb1135069d103710`.
+- Scope: scalar kernel diagnostics only. None is a tok/s result.
+
+## B-0060 official layer-1 expert-major MXFP4 batch
+
+- Date: 2026-08-14.
+- Hardware/model: same local hardware and sealed official K3X set, input token 1, official KDA-MoE layer 1, natural Top-16 route.
+- Mode: experimental direct Q8 where previously supported plus one native MXFP4 expert-major batch; 48 expert matrices resident in 280,756,224 bytes.
+- Result: scalar direct reference wall is 6.639758 seconds. Five-run batch warm median is 2.845790 seconds and measured batch compute median is 0.239126 seconds, yielding a 2.333x scalar/warm ratio. Every warm pass records 48 MXFP4 cache hits.
+- Quality: the batched output is BF16 bit-exact to the scalar direct reference for route `[498, 730, 748, 15, 14, 66, 873, 104, 394, 303, 236, 635, 162, 212, 814, 5]`.
+- Scope: one layer only. Decode/prefill tok/s, TTFT, physical NVMe/H2D traffic, and coding quality were not measured.
+- Evidence: implementation commit `fa92e40`, harness commit `5bf0313`, summary SHA-256 `d7f7c8404d5532a7d783d15bc765741d85ceedad88664afa5c18c9452f30ea2d`.
+
+## B-0061 official layer-1 full packed residency
+
+- Date: 2026-08-14.
+- Hardware/model: same local hardware, sealed official K3X set, input token 1, official layer 1, natural Top-16 routing.
+- Mode: experimental direct-packed Q8 for every self-attention projection plus native expert-major MXFP4. The shared context also executes layer 0 for recurrent-state setup.
+- Result: exact-Q8 layer-1 reference wall is 5.449819 seconds and scalar-direct wall is 5.114390 seconds. Batch cold wall is 5.290414 seconds. Five warm walls are 0.458119, 0.453030, 0.448773, 0.425937, and 0.427000 seconds; median is 0.448773 seconds. Warm compute median is 0.240653 seconds. The B-0060-to-B-0061 warm-wall ratio is 6.341x and scalar-direct/warm ratio is 11.396x.
+- Residency: 24 Q8 matrices across setup and layer execution occupy 1,825,408,000 bytes; layer 1 records 13 Q8 hits per warm pass. Forty-eight MXFP4 matrices occupy 280,756,224 bytes and record 48 hits per warm pass.
+- Quality: route overlap is 16/16. The batch output is bit-exact to scalar direct. Against exact Q8, cosine is 0.9999961257, maximum absolute error is 0.0009765625, mean absolute error is 0.0000491009, and BF16 exact-element ratio is 56.3058%.
+- Scope: one layer boundary, not a complete token. Decode/prefill tok/s, TTFT, full-model cache behavior, physical traffic, and coding quality remain unmeasured.
+- Evidence: implementation commit `ad48c9a`, harness commit `a82bd05`, summary SHA-256 `7e58a75115ba4c737386eccb815a7e6f1ec7fb5e54c679086a1363e561d688ab`.

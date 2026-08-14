@@ -1199,3 +1199,19 @@ Post-review note: final read-only review found that partial-submit or completion
 - Benchmark result: B-0052 layer-0 wall falls from 11.149552 to 2.638550 seconds, or 4.2256x. Direct KDA B-0055 measures 7.345563 seconds cold and a 0.213557-second five-run warm median, or 34.3963x, with 1,188,528,640 device-resident bytes. Final-hidden cosine versus B-0052 is 0.9999964 and maximum absolute error is 0.000244141.
 - Reason accepted: residency exposes the already measured fast packed kernel and stable admission guarantees reuse for a bounded subset instead of scan-thrash. The default remains zero-budget and exact B-0050 remains the quality reference.
 - Revisit: replace static admission with profile/deadline-aware placement after real multi-token traces; promote direct KDA only after complete-token routing and coding-quality gates.
+
+## D-104 — Batch native MXFP4 experts instead of further scalar-kernel tuning
+
+- Decision: retain the native packed MXFP4 CUDA cache and execute one routed expert set through an expert-major batch grid. Keep the scalar native path as a switchable oracle and keep both caches disabled by default.
+- Alternatives considered: continue optimizing one-matrix scalar kernels, bind the existing C++ backend wholesale, or invoke it through subprocesses.
+- Evidence: B-0056 establishes a 13.732 ms resident scalar expert median with effectively unit cosine and 0.0000014 maximum absolute error. B-0057's warp-reduction variant measures 13.952 ms and B-0059's bitwise E8M0 variant measures 13.976 ms, so both were reverted. B-0060 batches the natural official layer-1 Top-16 route and is BF16 bit-exact to the scalar direct path.
+- Benchmark result: B-0060 reduces official layer-1 wall from 6.639758 seconds scalar reference to a 2.845790-second warm median, or 2.333x. Its measured compute median is 0.239126 seconds; 48 resident MXFP4 matrices occupy 280,756,224 bytes.
+- Revisit: whole-expert atomic admission, wider token batches, and C++ ownership should be revisited after a measured warm 93-layer token loop identifies cache churn and Python orchestration cost.
+
+## D-105 — Extend direct Q8 residency to all attention projections only as an opt-in path
+
+- Decision: allow `--direct-q8` to return packed handles for every official self-attention projection, while retaining the exact materialized-Q8 reference as the default.
+- Alternatives considered: restrict direct Q8 to layer 0, materialize later attention weights on every layer call, or make direct Q8 the default immediately.
+- Evidence: B-0061 preserves the complete 16-expert route and matches the scalar direct output exactly. Against exact Q8 it records cosine 0.9999961257, maximum absolute error 0.0009765625, and mean absolute error 0.0000491009; broad coding quality remains unmeasured.
+- Benchmark result: B-0061 reduces the official layer-1 warm wall from B-0060's 2.845790 seconds to 0.448773 seconds, or 6.341x. Warm compute median is 0.240653 seconds. The shared cache contains 1,825,408,000 Q8 bytes across the layer-0 setup and layer-1 path plus 280,756,224 MXFP4 bytes.
+- Revisit: do not promote this path until the full-token route, greedy token, recurrent/KV state, and coding-quality gates pass.

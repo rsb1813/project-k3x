@@ -4,7 +4,7 @@
 
 ### Kimi K3, engineered for one consumer PC
 
-[![Milestone](https://img.shields.io/badge/milestone%2040-shared%20official%20context-20a46b?style=flat-square)](#current-limitations)
+[![Milestone](https://img.shields.io/badge/milestone%2044-native%20expert%20batch-20a46b?style=flat-square)](#current-limitations)
 [![correctness](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsb1813/project-k3x/actions/workflows/ci.yml?query=branch%3Amain)
 [![Target](https://img.shields.io/badge/target-RTX%205080%20%2B%20Linux-76b900?style=flat-square)](#target-machine)
 [![Runtime](https://img.shields.io/badge/runtime-C%2B%2B20%20%7C%20PyTorch-356fa1?style=flat-square)](#repository-map)
@@ -34,7 +34,7 @@ flowchart LR
 ```
 
 > [!IMPORTANT]
-> The complete 96-fragment, 1,507,512,467,456-byte K3X set now executes all 93 released Kimi K3 layers and the LM head on the local RTX 5080. The exact B-0050 path reduced measured first-token wall time from 1,891 to 583.658 seconds with identical K3X token, logit, layer outputs, and final state. Experimental direct-packed Q8 reaches 566.002 seconds and the same token, but changes nine Top-16 expert sets and remains non-default. Packed residency now measures official layer 0 at a 0.2136-second five-run warm median with 11/11 Q8 L0 hits; this is not yet full-model decode TPS. No paid cloud resource was used.
+> The complete 96-fragment, 1,507,512,467,456-byte K3X set executes all 93 released Kimi K3 layers and the LM head on the local RTX 5080. The exact B-0050 path reduced measured first-token wall time from 1,891 to 583.658 seconds with identical K3X token, logit, layer outputs, and final state. Milestone 44 adds opt-in packed-Q8 attention residency and native MXFP4 expert-major execution. B-0061 measures official layer 1 at a 0.4488-second five-run warm median with the full Top-16 route preserved and cosine 0.9999961 versus exact Q8. This remains a single-layer boundary, not full-model decode TPS. No paid cloud resource was used.
 
 | Milestone | GitHub status | Evidence |
 |---|---|---|
@@ -71,6 +71,7 @@ flowchart LR
 | Milestone 41 | Public branch `codex/official-end-to-end-token` | B-0050 moves Q8 reconstruction to CUDA and reduces first-token wall to 583.658 seconds |
 | Milestone 42 | Public branch `codex/official-end-to-end-token` | B-0051 direct-packed Q8 cuts resident matvec 40.30x but cold full wall only 3.03%; experimental non-default |
 | Milestone 43 | Public branch `codex/official-end-to-end-token` | B-0055 packs and retains all layer-0 Q8 projections; 7.346 s cold to 0.214 s warm median, 34.40x |
+| Milestone 44 | Public branch `codex/official-end-to-end-token` | B-0056 native MXFP4 residency, B-0060 expert-major Top-16 batching, and B-0061 full packed layer-1 residency at 0.4488 s warm median |
 
 The latest audited public implementation baseline is Milestone 34 integration head `a7ba5204`. Push correctness `31677396649`, pull-request correctness `31677408262`, and pull-request CodeQL `31677408278` passed before merge; post-merge `main` correctness `31677651704` and CodeQL `31677651706` also succeeded.
 
@@ -878,7 +879,7 @@ The first meaningful engineering target is at least 5 warm coding decode tok/s i
 - [x] Device-side Q8 decode with B-0050 full-model parity and measured wall reduction.
 - [x] Experimental direct-packed Q8 matvec with released and full-model B-0051 measurements.
 - [x] Explicit-budget packed Q8 RAM/VRAM residency with B-0052/B-0055 layer-0 measurements.
-- [ ] Native direct-packed MXFP4 residency and execution.
+- [x] Native direct-packed MXFP4 residency and expert-major execution with B-0056/B-0060/B-0061 measurements.
 - [ ] Warm multi-token decode measurement and optimization toward 5 tok/s minimum.
 - [x] Explicit RTX 5080 cuBLASLt and native-byte MXFP4 CUDA correctness baselines.
 - [x] End-to-end CPU/CUDA synthetic parity and measured comparison.
