@@ -57,3 +57,41 @@ def mxfp4_matvec(
         columns,
     )
     return output
+
+
+def mxfp4_expert_batch(
+    value: torch.Tensor,
+    experts: list[
+        tuple[
+            tuple[torch.Tensor, torch.Tensor],
+            tuple[torch.Tensor, torch.Tensor],
+            tuple[torch.Tensor, torch.Tensor],
+        ]
+    ],
+    contributions: torch.Tensor,
+) -> torch.Tensor:
+    if (
+        not value.is_cuda
+        or not contributions.is_cuda
+        or value.device != contributions.device
+        or not experts
+        or contributions.numel() != len(experts)
+    ):
+        raise K3XError("INVALID_MXFP4_CUDA_EXPERT_BATCH")
+    latent_size = value.numel()
+    intermediate_size = experts[0][0][1].numel() * 32 // latent_size
+    if latent_size <= 0 or intermediate_size <= 0:
+        raise K3XError("INVALID_MXFP4_CUDA_EXPERT_BATCH")
+    roles = tuple(tuple(expert[role] for expert in experts) for role in range(3))
+    return _extension().mxfp4_expert_batch(
+        value.to(dtype=torch.float32).contiguous(),
+        [item[0] for item in roles[0]],
+        [item[1] for item in roles[0]],
+        [item[0] for item in roles[1]],
+        [item[1] for item in roles[1]],
+        [item[0] for item in roles[2]],
+        [item[1] for item in roles[2]],
+        contributions.to(dtype=torch.float32).contiguous(),
+        latent_size,
+        intermediate_size,
+    )
